@@ -65,9 +65,11 @@ const Sidebar = () => {
         <div className={`flex gap-3 justify-between md:justify-normal items-center pt-8 ${
                 isSidebarCollapsed ? "px-5" : "px-8"
         }`}>
-            <div>LOGO</div>
-            <h1 className={`${isSidebarCollapsed ? "hidden" : "block"} font-extrabold text-2xl`}>INSIGHT-INVEST</h1>
-
+            <div>
+                <div className='w-10 h-10'>LOGO</div>
+                <h1 className={`${isSidebarCollapsed ? "hidden" : "block"} font-extrabold text-xl`}>INSIGHT-INVEST</h1>
+            </div>
+            
             <button 
                 className='md:hidden px-3 py-3 bg-gray-100 rounded-full hover:bg-blue-100'
                 onClick={toggleSidebar}
