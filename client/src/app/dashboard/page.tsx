@@ -1,7 +1,5 @@
 "use client"
 
-import TableMeta from "../stocksearch/table_meta";
-
 const Dashboard = () => {
   return (
     <div className="grid grid-cols-1 xl:overflow-auto gap-10 pb-4 custom-grid-rows">

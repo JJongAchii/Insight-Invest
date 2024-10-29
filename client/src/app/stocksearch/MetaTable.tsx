@@ -1,6 +1,6 @@
 import { useFetch } from '@/state/api';
 import { DataGrid, GridColDef, GridToolbar } from '@mui/x-data-grid';
-import React, { useEffect, useState } from 'react'
+import React from 'react'
 
 
 const columns: GridColDef[] = [
@@ -16,7 +16,7 @@ const columns: GridColDef[] = [
     { field: "fee", headerName: "FEE", width: 90, type: "number", valueGetter: (value, row) => row.fee ? row.fee : "N/A" },
 ]
 
-const TableMeta = () => {
+const MetaTable = () => {
 
     const { data, loading, error } = useFetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/meta`)
 
@@ -40,4 +40,4 @@ const TableMeta = () => {
     )
 }
 
-export default TableMeta
+export default MetaTable
