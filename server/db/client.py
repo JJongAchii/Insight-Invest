@@ -38,3 +38,11 @@ def session_local():
         raise
     finally:
         session.close()
+
+
+def get_db():
+    db = session_maker()
+    try:
+        yield db
+    finally:
+        db.close()
