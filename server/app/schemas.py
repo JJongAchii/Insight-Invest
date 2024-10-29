@@ -25,3 +25,6 @@ class TbPrice(BaseModel):
     close : float
     adj_close : float
     gross_return : float
+    
+    class Config:
+        orm_mode = True
