@@ -1,6 +1,6 @@
 import { useFetch } from '@/state/api';
 import { DataGrid, GridColDef, GridToolbar } from '@mui/x-data-grid';
-import React from 'react'
+import React, { useState } from 'react'
 
 
 const columns: GridColDef[] = [
@@ -16,9 +16,16 @@ const columns: GridColDef[] = [
     { field: "fee", headerName: "FEE", width: 90, type: "number", valueGetter: (value, row) => row.fee ? row.fee : "N/A" },
 ]
 
-const MetaTable = () => {
+const MetaTable = ({ onSelectionChange }) => {
 
-    const { data, loading, error } = useFetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/meta`)
+    const { data, loading, error } = useFetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/meta`);
+    const [selectedRows, setSelectedRows] = useState([]);
+
+    const handleSelectionChange = (selectionModel) => {
+        const selectedData = selectionModel.map((id) => data.find(row => row.meta_id === id));
+        setSelectedRows(selectedData);
+        onSelectionChange(selectedData); // Pass data to parent
+    };
 
     if (loading) return <p>Loading...</p>;
     if (error) return <p>Error: {error}</p>;
@@ -34,7 +41,9 @@ const MetaTable = () => {
                 getRowId={(row) => row.meta_id}
                 slots={{ toolbar: GridToolbar}}
                 slotProps={{toolbar: {showQuickFilter: true}}}
+                checkboxSelection
                 className="bg-white shadow rounded-lg border border-gray-200 mt-5 !text-gray-700"
+                onRowSelectionModelChange={handleSelectionChange}
             />
         </div>
     )

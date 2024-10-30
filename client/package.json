@@ -20,8 +20,10 @@
     "next": "^14.2.16",
     "numeral": "^2.0.6",
     "react": "^18.3.1",
+    "react-datepicker": "^7.5.0",
     "react-dom": "^18.3.1",
     "react-redux": "^9.1.2",
+    "react-select": "^5.8.2",
     "recharts": "^2.13.0",
     "redux-persist": "^6.0.0",
     "uuid": "^11.0.1"

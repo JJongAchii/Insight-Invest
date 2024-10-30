@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import meta
+from .routers import meta, price
 
 app = FastAPI()
 
@@ -14,3 +14,4 @@ app.add_middleware(
 )
 
 app.include_router(meta.router)
+app.include_router(price.router)

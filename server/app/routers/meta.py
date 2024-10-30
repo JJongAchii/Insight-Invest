@@ -15,7 +15,13 @@ router = APIRouter(
 )
 
 
-@router.get("/", response_model=List[schemas.TbMeta])
+@router.get("/", response_model=List[schemas.Meta])
 def get_meta(db: Session = Depends(get_db)):
     
-    return db.query(TbMeta).all()
+    return db.query(TbMeta).order_by(TbMeta.meta_id.asc()).all()
+
+
+@router.get("/tickers", response_model=List[schemas.Ticker])
+def get_meta_tickers(db: Session = Depends(get_db)):
+    
+    return db.query(TbMeta).order_by(TbMeta.meta_id.asc()).all()

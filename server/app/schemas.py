@@ -1,8 +1,8 @@
-from pydantic import BaseModel
-from datetime import datetime
+from pydantic import BaseModel, validator
+from datetime import datetime, date
 from typing import Optional
 
-class TbMeta(BaseModel):
+class Meta(BaseModel):
     meta_id : int
     ticker : str
     name : Optional[str] = None
@@ -19,12 +19,26 @@ class TbMeta(BaseModel):
         orm_mode = True
     
 
-class TbPrice(BaseModel):
+class Ticker(BaseModel):
+    meta_id: int
+    ticker: str
+
+    class Config:
+        orm_mode = True
+        
+
+class Price(BaseModel):
     meta_id : int
     trade_date : datetime
-    close : float
-    adj_close : float
-    gross_return : float
+    close : Optional[float] = None
+    adj_close : Optional[float] = None
+    gross_return : Optional[float] = None
+    
+    @validator("trade_date", pre=True)
+    def parse_trade_date(cls, value):
+        if isinstance(value, date):  # Check if `value` is of type `date`
+            return datetime(value.year, value.month, value.day)
+        return value
     
     class Config:
         orm_mode = True
