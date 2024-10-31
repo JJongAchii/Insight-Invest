@@ -13,6 +13,7 @@ const SetStrategy = () => {
     const [selectedSecurityType, setSelectedSecurityType] = useState(null);
     const [selectedTickers, setSelectedTickers] = useState([]);
     const [selectedAlgorithm, setSelectedAlgorithm] = useState(null);
+    const [backtestResult, setBacktestResult] = useState([]);
 
     const isoCodeOptions = useMemo(() => (
         data ? Array.from(new Set(data.map(item => item.iso_code))).map(code => ({
@@ -63,96 +64,106 @@ const SetStrategy = () => {
                 throw new Error('Failed to run backtest');
             }
     
-            const data = await response.json();
-            console.log("Backtest result:", data);
+            const result = await response.json();
+            setBacktestResult(result); 
+            setErrorMessage(null);
         } catch (error) {
             console.error("Error running backtest:", error);
+            setErrorMessage("Failed to run backtest. Please try again.");
+            setBacktestResult(null);
         }
     }
         
 
 
     return (
-        <div className='flex flex-col bg-white shadow-md rounded-2xl pb-12'>
-            <div className='flex gap-3 px-5 py-5'>
-                <div>
-                    <h4 className='text-md font-semibold'>
-                        Country
-                    </h4>
-                    <Select 
-                        options={isoCodeOptions}
-                        placeholder="Select Country..."
-                        onChange={setSelectedIsoCode}
-                    />
+        <div>
+            <div className='flex flex-col bg-white shadow-md rounded-2xl pb-12'>
+                <div className='flex gap-3 px-5 py-5'>
+                    <div>
+                        <h4 className='text-md font-semibold'>
+                            Country
+                        </h4>
+                        <Select 
+                            options={isoCodeOptions}
+                            placeholder="Select Country..."
+                            onChange={setSelectedIsoCode}
+                        />
+                    </div>
+                    <div>
+                        <h4 className='text-md font-semibold'>
+                            Security Type
+                        </h4>
+                        <Select 
+                            options={securityTypeOptions}
+                            placeholder="Select Security Type..."
+                            onChange={setSelectedSecurityType}
+                        />
+                    </div>
+                    <div>
+                        <h4 className='text-md font-semibold'>
+                            Tickers
+                        </h4>
+                        <Select 
+                            isMulti
+                            options={tickerOptions}
+                            placeholder="Select tickers..."
+                            onChange={setSelectedTickers}
+                        />
+                    </div>
                 </div>
-                <div>
-                    <h4 className='text-md font-semibold'>
-                        Security Type
-                    </h4>
-                    <Select 
-                        options={securityTypeOptions}
-                        placeholder="Select Security Type..."
-                        onChange={setSelectedSecurityType}
-                    />
+                <div className='flex gap-3 px-5 py-5'>
+                    <div>
+                        <h4 className='text-md font-semibold'>
+                            Choose Algorithm
+                        </h4>
+                        <Select 
+                            placeholder="Select algorithm"
+                            options={[
+                                { value: 'dual_mmt', label: 'Dual Momentum' },
+                                { value: 'algorithm2', label: 'Algorithm 2' },
+                            ]}
+                            onChange={setSelectedAlgorithm}
+                        />
+                    </div>
                 </div>
-                <div>
-                    <h4 className='text-md font-semibold'>
-                        Tickers
-                    </h4>
-                    <Select 
-                        isMulti
-                        options={tickerOptions}
-                        placeholder="Select tickers..."
-                        onChange={setSelectedTickers}
-                    />
+                <div className='flex gap-3 px-5 py-5'>
+                    <div>
+                        <h4 className='text-md font-semibold'>
+                            Start Date
+                        </h4>
+                        <DatePicker 
+                            selected={startDate}
+                            onChange={(date) => setStartDate(date)}
+                            placeholderText="Select start date"
+                            className='w-full px-3 py-3 border border-gray-300 rounded-md text-sm text-gray-500'
+                        />
+                    </div>
+                    <div>
+                        <h4 className='text-md font-semibold'>
+                            End Date
+                        </h4>
+                        <DatePicker 
+                            selected={endDate}
+                            onChange={(date) => setEndDate(date)}
+                            placeholderText="Select end date"
+                            className='w-full px-3 py-3 border border-gray-300 rounded-md text-sm text-gray-500'
+                        />
+                    </div>
+                </div>
+                <div className='flex px-5'>
+                    <button 
+                        className='px-5 py-3 rounded-md bg-red-300 font-semibold hover:bg-red-500'
+                        onClick={handleRunBacktest}
+                    >
+                        Run backtest
+                    </button>
                 </div>
             </div>
-            <div className='flex gap-3 px-5 py-5'>
-                <div>
-                    <h4 className='text-md font-semibold'>
-                        Choose Algorithm
-                    </h4>
-                    <Select 
-                        placeholder="Select algorithm"
-                        options={[
-                            { value: 'dual_mmt', label: 'Dual Momentum' },
-                            { value: 'algorithm2', label: 'Algorithm 2' },
-                        ]}
-                        onChange={setSelectedAlgorithm}
-                    />
-                </div>
-            </div>
-            <div className='flex gap-3 px-5 py-5'>
-                <div>
-                    <h4 className='text-md font-semibold'>
-                        Start Date
-                    </h4>
-                    <DatePicker 
-                        selected={startDate}
-                        onChange={(date) => setStartDate(date)}
-                        placeholderText="Select start date"
-                        className='w-full px-3 py-3 border border-gray-300 rounded-md text-sm text-gray-500'
-                    />
-                </div>
-                <div>
-                    <h4 className='text-md font-semibold'>
-                        End Date
-                    </h4>
-                    <DatePicker 
-                        selected={endDate}
-                        onChange={(date) => setEndDate(date)}
-                        placeholderText="Select end date"
-                        className='w-full px-3 py-3 border border-gray-300 rounded-md text-sm text-gray-500'
-                    />
-                </div>
-            </div>
-            <div className='flex px-5'>
-                <button 
-                    className='px-5 py-3 rounded-md bg-red-300 font-semibold hover:bg-red-500'
-                    onClick={handleRunBacktest}
-                >
-                    Run backtest
-                </button>
+            <div className='flex flex-col bg-white shadow-md rounded-2xl pb-12'>
+                {backtestResult}
+
+                
             </div>
         </div>
     );

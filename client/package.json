@@ -26,6 +26,7 @@
     "react-select": "^5.8.2",
     "recharts": "^2.13.0",
     "redux-persist": "^6.0.0",
+    "tw-colors": "^3.3.2",
     "uuid": "^11.0.1"
   },
   "devDependencies": {

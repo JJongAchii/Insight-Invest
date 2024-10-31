@@ -29,5 +29,4 @@ async def run_backtest(request: schemas.BacktestRequest):
         end=end_date
     )
     
-    print(weights)
-    return 
+    return weights.to_json(orient="split")
