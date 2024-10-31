@@ -1,6 +1,6 @@
 from pydantic import BaseModel, validator
 from datetime import datetime, date
-from typing import Optional
+from typing import Optional, List
 
 class Meta(BaseModel):
     meta_id : int
@@ -22,6 +22,10 @@ class Meta(BaseModel):
 class Ticker(BaseModel):
     meta_id: int
     ticker: str
+    name: Optional[str] = None
+    iso_code: Optional[str] = None
+    security_type: Optional[str] = None
+    sector: Optional[str] = None
 
     class Config:
         orm_mode = True
@@ -42,3 +46,10 @@ class Price(BaseModel):
     
     class Config:
         orm_mode = True
+        
+        
+class BacktestRequest(BaseModel):
+    meta_id: List[int]
+    algorithm: Optional[str]
+    startDate: date
+    endDate: date
