@@ -2,10 +2,10 @@ import React from 'react';
 import { Line } from 'react-chartjs-2';
 import 'chart.js/auto';
 
-const StrategyResult = ({ backtestResult }) => {
-    if (!backtestResult || !backtestResult.nav) return <p>No data available</p>; 
+const StrategyResult = ({ navResult }) => {
+    if (!navResult) return <p>No data available</p>; 
     
-    const navData = JSON.parse(backtestResult.nav);
+    const navData = JSON.parse(navResult);
 
     if (!navData.index || !navData.columns || !navData.data) return <p>Invalid data format</p>;
 
