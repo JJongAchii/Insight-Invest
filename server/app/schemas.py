@@ -49,6 +49,7 @@ class Price(BaseModel):
         
         
 class BacktestRequest(BaseModel):
+    strategy_name: str
     meta_id: List[int]
     algorithm: Optional[str]
     startDate: date

@@ -21,6 +21,49 @@ def resample_data(price: pd.DataFrame, freq: str = "M", type: str = "head") -> p
     return res_price
 
 
+def store_nav_results(func):
+    """Decorator for storing nav results"""
+    weights_results = {}
+    nav_results = {}
+    
+    def wrapper(
+        weight: pd.DataFrame,
+        strategy_name: Optional[str] = None,
+        price: Optional[pd.DataFrame] = None,
+        start_date: ... = None,
+        end_date: ... = None,
+    ):
+        weights, nav = func(weight, price, start_date, end_date)
+        
+        if strategy_name:
+            params = f"{strategy_name}"
+        else:
+            params = f"strategy_{wrapper.count}"
+            wrapper.count += 1
+
+        weights_results[params] = weights
+        nav_results[params] = nav
+        
+        return weights_results, nav_results
+    
+    def delete_strategy(strategy_name: str):
+        """Delete a specific strategy by name."""
+        if strategy_name in weights_results:
+            del weights_results[strategy_name]
+        if strategy_name in nav_results:
+            del nav_results[strategy_name]
+
+    def clear_strategies():
+        """Clear all saved strategies."""
+        weights_results.clear()
+        nav_results.clear()
+    
+    wrapper.delete_strategy = delete_strategy
+    wrapper.clear_strategies = clear_strategies
+    wrapper.count = 1
+    return wrapper
+
+
 def calculate_nav(
     weight: pd.DataFrame,
     price: Optional[pd.DataFrame] = None,
@@ -159,3 +202,21 @@ def calculate_nav(
 #     }, index=nav.columns)
     
 #     return results
+
+
+@store_nav_results
+def backtest_result(
+    weight: pd.DataFrame,
+    price: pd.DataFrame,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+):
+    book, nav = calculate_nav(
+        weight=weight,
+        price=price,
+        start_date=start_date,
+        end_date=end_date
+    )
+    
+    return  weight, nav
+    

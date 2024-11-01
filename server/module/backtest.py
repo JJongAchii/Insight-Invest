@@ -6,7 +6,7 @@ from typing import Union, List
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../..")))
 import db
 from module.strategy import DualMomentum
-from module.util import calculate_nav
+from module.util import backtest_result
 
 class Backtest:
     
@@ -141,18 +141,19 @@ class Backtest:
         end: ... = None,
     ) -> pd.DataFrame:
         
-        book, nav = calculate_nav(
-                        price=price, 
-                        weight=weight, 
-                        strategy_name=self.strategy_name,
-                        start_date=start,
-                        end_date=end        
-                    )
+        weight, nav = backtest_result(
+            weight=weight,
+            price=price,
+            strategy_name=self.strategy_name,
+            start_date=start,
+            end_date=end    
+        )
+        
         merge = pd.concat(nav.values(), axis=1)
         merge.columns = nav.keys()
         nav = merge.fillna(method='ffill')
         
-        return nav
+        return weight, nav
 
 
     # def report(
