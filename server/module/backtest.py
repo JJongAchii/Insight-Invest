@@ -141,7 +141,7 @@ class Backtest:
         end: ... = None,
     ) -> pd.DataFrame:
         
-        weight, nav = backtest_result(
+        weight, nav, metrics = backtest_result(
             weight=weight,
             price=price,
             strategy_name=self.strategy_name,
@@ -153,7 +153,11 @@ class Backtest:
         merge.columns = nav.keys()
         nav = merge.fillna(method='ffill')
         
-        return weight, nav
+        mg_metrics = pd.concat(metrics.values(), axis=1)
+        mg_metrics.columns = metrics.keys()
+        mg_metrics = mg_metrics.T.reset_index().rename(columns={'index': 'strategy'})
+        
+        return weight, nav, mg_metrics
 
 
     # def report(

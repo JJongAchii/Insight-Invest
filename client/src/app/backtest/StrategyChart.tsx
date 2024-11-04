@@ -2,7 +2,7 @@ import React from 'react';
 import { Line } from 'react-chartjs-2';
 import 'chart.js/auto';
 
-const StrategyResult = ({ navResult }) => {
+const StrategyChart = ({ navResult }) => {
     if (!navResult) return <p>No data available</p>; 
     
     const navData = JSON.parse(navResult);
@@ -97,9 +97,10 @@ const StrategyResult = ({ navResult }) => {
 
     return (
         <div className="flex flex-col bg-white shadow-lg rounded-2xl p-8" style={{ height: 450 }}>
+            <h4 className='text-lg font-semibold'>Performance Chart</h4>
             <Line data={data} options={options} />
         </div>
     );
 };
 
-export default StrategyResult;
+export default StrategyChart;

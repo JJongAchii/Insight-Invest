@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 from fastapi import APIRouter
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../../../")))
@@ -31,12 +32,14 @@ async def run_backtest(request: schemas.BacktestRequest):
         end=end_date
     )
     
-    weights, nav = bt.result(price=price, weight=weight)
+    weights, nav, metrics = bt.result(price=price, weight=weight)
     
     weights_json = weights.get(strategy_name).to_json(orient="split")
     nav_json = nav.to_json(orient="split")
+    metrics_json = metrics.to_json(orient="records")
     
     return {
         "weights": weights_json,
-        "nav": nav_json
+        "nav": nav_json,
+        "metrics": metrics_json
     }
