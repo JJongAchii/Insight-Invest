@@ -6,7 +6,7 @@ from typing import List
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../../..")))
 from db.client import get_db
-from db import TbMeta
+from db.models import TbMeta
 from app import schemas
 
 router = APIRouter(

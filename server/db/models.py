@@ -47,3 +47,14 @@ class TbPrice(StaticBase):
     close = sa.Column(sa.Float, nullable=True)
     adj_close = sa.Column(sa.Float, nullable=True)
     gross_return = sa.Column(sa.Float, nullable=True)
+
+
+class TbStrategy(StaticBase):
+    """strategy table"""
+    
+    __tablename__ = "tb_strategy"
+    
+    strategy_id = sa.Column(sa.Integer, sa.Identity(start=1), primary_key=True)
+    strategy = sa.Column(sa.String(255), nullable=False)
+    strategy_name = sa.Column(sa.String(255), nullable=False)
+    

@@ -7,6 +7,7 @@ import "react-datepicker/dist/react-datepicker.css";
 
 const SetStrategy = ({ onRunBacktest  }) => {
     const { data, loading, error } = useFetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/meta/tickers`);
+    const { data: algorithmData } = useFetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/backtest/algorithm`)
     const [startDate, setStartDate] = useState(new Date("2000-01-01"));
     const [endDate, setEndDate] = useState(new Date());
     const [selectedIsoCode, setSelectedIsoCode] = useState(null);
@@ -43,6 +44,13 @@ const SetStrategy = ({ onRunBacktest  }) => {
         : []
     ), [data, selectedIsoCode, selectedSecurityType]);
 
+    const algorithmOptions = useMemo(() => (
+        algorithmData ? algorithmData.map(alg => ({
+            value: alg.strategy,
+            label: alg.strategy_name
+        })) : []
+    ), [algorithmData]);
+
     const handleButtonClick = () => {
         const payload = {
             strategy_name: strategyName,
@@ -54,7 +62,6 @@ const SetStrategy = ({ onRunBacktest  }) => {
         onRunBacktest(payload);
     }
         
-
 
     return (
         <div className='flex flex-col bg-white shadow-md rounded-2xl pb-12'>
@@ -111,10 +118,7 @@ const SetStrategy = ({ onRunBacktest  }) => {
                     </h4>
                     <Select 
                         placeholder="Select algorithm"
-                        options={[
-                            { value: 'dual_mmt', label: 'Dual Momentum' },
-                            { value: 'algorithm2', label: 'Algorithm 2' },
-                        ]}
+                        options={algorithmOptions}
                         onChange={setSelectedAlgorithm}
                     />
                 </div>

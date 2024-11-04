@@ -88,48 +88,6 @@ class Backtest:
         if method == "dual_mmt":
             weights = DualMomentum().simulate(price=price)
         
-        # if method == "eq":
-        #     """equal weights all assets"""
-        #     weights = resample_data(price=price, freq=freq)
-        #     weights[:] = 1 / len(price.columns)
-            
-        # elif method == "custom":
-        #     """defined weights each assets"""
-        #     weights = resample_data(price=price, freq=freq)
-        #     weights[:] = np.nan
-        #     for key, value in custom_weight.items():
-        #         weights[key] = value
-                
-        # elif method == "target_vol":
-        #     weights = TargetVol().simulate(price=price)
-
-        # elif method == "abs_mmt":
-        #     weights = AbsoluteMomentum().simulate(price=price)
-
-        # elif method == "dual_mmt":
-        #     weights = DualMomentum().simulate(price=price)
-
-        # elif method == "dual_mmt2":
-        #     weights = DualMomentum2().simulate(price=price)
-
-        # elif method == "weighted_mmt":
-        #     weights = WeightedMomentum().simulate(price=price)
-        
-        # elif method == "meb_mmt":
-        #     weights = MebFaberMomentum().simulate(price=price)
-        
-        # elif method == "GTAA":
-            
-        #     weights = GTAA().simulate(price=price)
-            
-        # elif method == "VAA_agg":
-
-        #     weights = VAA().aggressive_vaa(
-        #         price=price, 
-        #         offensive=offensive, 
-        #         defensive=defensive
-        #     )
-            
         return weights
             
             

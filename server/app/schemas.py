@@ -29,6 +29,15 @@ class Ticker(BaseModel):
 
     class Config:
         orm_mode = True
+
+
+class Strategy(BaseModel):
+    strategy_id: int
+    strategy: str
+    strategy_name: str
+    
+    class Config:
+        orm_mode = True
         
 
 class Price(BaseModel):

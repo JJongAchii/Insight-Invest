@@ -1,17 +1,26 @@
 import os
 import sys
-import json
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from typing import List
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../../../")))
+from db.client import get_db
+from db.models import TbStrategy
 from app import schemas
 from module.backtest import Backtest
-from module.util import calculate_nav
+
 
 router = APIRouter(
     prefix="/backtest",
     tags=["Backtest"]
 )
+
+
+@router.get("/algorithm", response_model=List[schemas.Strategy])
+async def get_strategy(db: Session = Depends(get_db)):
+    
+    return db.query(TbStrategy).all()
 
 
 @router.post("/")
