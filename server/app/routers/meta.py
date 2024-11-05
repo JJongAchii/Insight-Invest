@@ -5,8 +5,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../../..")))
-from db.client import get_db
-from db.models import TbMeta
+import db
 from app import schemas
 
 router = APIRouter(
@@ -16,12 +15,12 @@ router = APIRouter(
 
 
 @router.get("/", response_model=List[schemas.Meta])
-def get_meta(db: Session = Depends(get_db)):
+def get_meta(ss: Session = Depends(db.get_db)):
     
-    return db.query(TbMeta).order_by(TbMeta.meta_id.asc()).all()
+    return ss.query(db.TbMeta).order_by(db.TbMeta.meta_id.asc()).all()
 
 
 @router.get("/tickers", response_model=List[schemas.Ticker])
-def get_meta_tickers(db: Session = Depends(get_db)):
+def get_meta_tickers(ss: Session = Depends(db.get_db)):
     
-    return db.query(TbMeta).order_by(TbMeta.meta_id.asc()).all()
+    return ss.query(db.TbMeta).order_by(db.TbMeta.meta_id.asc()).all()

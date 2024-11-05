@@ -16,5 +16,5 @@ router = APIRouter(
 
 
 @router.get("/", response_model=List[schemas.Price])
-def get_price(meta_id: List[int] = Query(...), db: Session = Depends(get_db)):
-    return db.query(TbPrice.meta_id, TbPrice.trade_date, TbPrice.adj_close).filter(TbPrice.meta_id.in_(meta_id)).all()
+def get_price(meta_id: List[int] = Query(...), ss: Session = Depends(get_db)):
+    return ss.query(TbPrice.meta_id, TbPrice.trade_date, TbPrice.adj_close).filter(TbPrice.meta_id.in_(meta_id)).all()

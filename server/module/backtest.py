@@ -117,16 +117,10 @@ class Backtest:
         
         return weight, nav, mg_metrics
 
-
-    # def report(
-    #     self,
-    #     nav: pd.DataFrame,
-    #     start: ... = None,
-    #     end: ... = None
-    # ):
-    #     nav_slice = nav.loc[start:end]
-    #     nav_slice = nav_slice.pct_change().add(1).cumprod() * 1000
+    def delete_backtest_result(self, strategy_name: str):
         
-    #     result = result_metrics(nav=nav_slice)
-
-    #     return result
+        backtest_result.delete_strategy(strategy_name)
+        
+    def clear_backtest_result(self):
+        
+        backtest_result.clear_strategies()
