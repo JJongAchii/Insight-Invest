@@ -6,7 +6,7 @@ from .routers import meta, price, backtest
 app = FastAPI()
 
 origins = [
-    "http://localhost:8000",  # 로컬 개발용
+    "http://localhost:3000",  # 로컬 개발용
     "https://insight-invest-ten.vercel.app",  # 배포된 프론트엔드 도메인
 ]
 

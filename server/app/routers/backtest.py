@@ -25,7 +25,7 @@ async def get_strategy(ss: Session = Depends(db.get_db)):
     return ss.query(db.TbStrategy).all()
 
 
-@router.post("/")
+@router.post("")
 async def run_backtest(request: schemas.BacktestRequest):
     
     strategy_name = request.strategy_name

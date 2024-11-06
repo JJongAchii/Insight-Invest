@@ -14,7 +14,7 @@ router = APIRouter(
 )
 
 
-@router.get("/", response_model=List[schemas.Meta])
+@router.get("", response_model=List[schemas.Meta])
 def get_meta(ss: Session = Depends(db.get_db)):
     
     return ss.query(db.TbMeta).order_by(db.TbMeta.meta_id.asc()).all()
