@@ -3,11 +3,11 @@ import React from 'react';
 import { SaveStrategy } from './BacktestFetcher';
 
 
-const StrategyMetrics = ({ backtestResult, selectedTicker }) => {
+const StrategyMetrics = ({ backtestResult, selectedTicker }: { backtestResult: any; selectedTicker: any }) => {
     if (!backtestResult?.metrics) return <p>No data available</p>; 
     const metricData = JSON.parse(backtestResult?.metrics);
 
-    const handleSave = (strategy) => {
+    const handleSave = (strategy: any) => {
         const strategyData = selectedTicker[strategy];
         SaveStrategy(strategyData);
     };

@@ -1,19 +1,20 @@
 import React from 'react';
 import { Line } from 'react-chartjs-2';
+import { ChartOptions } from 'chart.js';
 import 'chart.js/auto';
 
-const StrategyChart = ({ navResult }) => {
+const StrategyChart = ({ navResult }: { navResult: any }) => {
     if (!navResult) return <p>No data available</p>; 
     
     const navData = JSON.parse(navResult);
 
     if (!navData.index || !navData.columns || !navData.data) return <p>Invalid data format</p>;
 
-    const chartLabels = navData.index.map((date) => new Date(date).toISOString().split('T')[0]);
+    const chartLabels = navData.index.map((date: any) => new Date(date).toISOString().split('T')[0]);
     
-    const datasets = navData.columns.map((column, index) => ({
+    const datasets = navData.columns.map((column: any, index: any) => ({
         label: column,
-        data: navData.data.map((row) => row[index]),
+        data: navData.data.map((row: any) => row[index]),
         borderColor: ['#4A90E2', '#50E3C2', '#F5A623', '#D0021B', '#BD10E0'][index % 5], 
         backgroundColor: 'rgba(74, 144, 226, 0.1)', 
         borderWidth: 2.5,
@@ -28,7 +29,7 @@ const StrategyChart = ({ navResult }) => {
         datasets: datasets,
     };
 
-    const options = {
+    const options: ChartOptions<'line'> = {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
@@ -45,7 +46,7 @@ const StrategyChart = ({ navResult }) => {
                 },
             },
             tooltip: {
-                mode: 'index',
+                mode: 'index' as const, // Ensures 'mode' is one of the allowed types
                 intersect: false,
                 backgroundColor: 'rgba(0, 0, 0, 0.7)',
                 titleFont: {
@@ -80,12 +81,17 @@ const StrategyChart = ({ navResult }) => {
                     font: {
                         size: 12,
                     },
-                    callback: (value) => `${value}`, // Format y-axis values as currency
+                    callback: (tickValue: string | number) => {
+                        if (typeof tickValue === 'number') {
+                            return `${tickValue}`; // Format numeric values
+                        }
+                        return tickValue; // For string values, return as-is
+                    }, 
                 },
             },
         },
         interaction: {
-            mode: 'nearest',
+            mode: 'nearest' as const, // Explicitly set as one of the allowed values
             axis: 'x',
             intersect: false,
         },

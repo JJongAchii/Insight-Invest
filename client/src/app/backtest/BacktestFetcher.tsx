@@ -1,6 +1,6 @@
 import React from 'react';
 
-export const BacktestFetcher = async (payload, setBacktestResult) => {
+export const BacktestFetcher = async (payload: any, setBacktestResult: any) => {
     try {
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/backtest`, {
             method: 'POST',
@@ -23,7 +23,7 @@ export const BacktestFetcher = async (payload, setBacktestResult) => {
 };
 
 
-export const SaveStrategy = async (strategyData) => {
+export const SaveStrategy = async (strategyData: any) => {
     try {
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/backtest/savestrategy`, {
             method: 'POST',

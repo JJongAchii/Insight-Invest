@@ -1,4 +1,4 @@
-import { useFetch } from '@/state/api';
+import { useFetchMetaDataQuery } from '@/state/api';
 import { DataGrid, GridColDef, GridToolbar } from '@mui/x-data-grid';
 import React, { useState } from 'react'
 
@@ -16,19 +16,18 @@ const columns: GridColDef[] = [
     { field: "fee", headerName: "FEE", width: 90, type: "number", valueGetter: (value, row) => row.fee ? row.fee : "N/A" },
 ]
 
-const MetaTable = ({ onSelectionChange }) => {
+const MetaTable = ({ onSelectionChange }: { onSelectionChange: any }) => {
 
-    const { data, loading, error } = useFetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/meta`);
+    const { data } = useFetchMetaDataQuery({});
     const [selectedRows, setSelectedRows] = useState([]);
 
-    const handleSelectionChange = (selectionModel) => {
-        const selectedData = selectionModel.map((id) => data.find(row => row.meta_id === id));
+    const handleSelectionChange = (selectionModel: any) => {
+        const selectedData = selectionModel.map((id: any) => data.find((row: any) => row.meta_id === id));
         setSelectedRows(selectedData);
         onSelectionChange(selectedData); // Pass data to parent
     };
 
-    if (loading) return <p>Loading...</p>;
-    if (error) return <p>Error: {error}</p>;
+    if (!data) return <p>No data available</p>; 
 
     return (
         <div className="row-span-3 xl:row-span-6 bg-white shadow-md rounded-2xl pb-16">

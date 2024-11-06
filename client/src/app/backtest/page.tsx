@@ -18,9 +18,9 @@ const Backtest = () => {
         return savedResult ? JSON.parse(savedResult) : [];
     });
 
-    const handleRunBacktest = (payload) => {
+    const handleRunBacktest = (payload: any) => {
         BacktestFetcher(payload, setBacktestResult);
-        setSelectedTicker((prevSelectedTicker) => ({
+        setSelectedTicker((prevSelectedTicker: any) => ({
             ...prevSelectedTicker,
             [payload.strategy_name]: payload // Use strategy_name as the key
         }));

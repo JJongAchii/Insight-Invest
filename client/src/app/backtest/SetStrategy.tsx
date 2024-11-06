@@ -1,43 +1,59 @@
-import React, { useMemo, useState } from 'react'
-import { useFetch } from "@/state/api";
-import Select from "react-select"
+import React, { useMemo, useState } from 'react';
+import { useFetchAlgorithmsQuery, useFetchTickersQuery } from "@/state/api";
+import Select, { SingleValue, MultiValue, ActionMeta } from "react-select";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
+interface TickerData {
+    iso_code: string;
+    security_type: string;
+    meta_id: string;
+    ticker: string;
+}
 
-const SetStrategy = ({ onRunBacktest  }) => {
-    const { data, loading, error } = useFetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/meta/tickers`);
-    const { data: algorithmData } = useFetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/backtest/algorithm`)
+interface AlgorithmData {
+    strategy: string;
+    strategy_name: string;
+}
+
+interface SelectOption {
+    value: string;
+    label: string;
+}
+
+const SetStrategy = ({ onRunBacktest }: { onRunBacktest: any }) => {
+    const { data, isLoading, error } = useFetchTickersQuery({});
+    const { data: algorithmData } = useFetchAlgorithmsQuery({});
     const [startDate, setStartDate] = useState(new Date("2000-01-01"));
     const [endDate, setEndDate] = useState(new Date());
-    const [selectedIsoCode, setSelectedIsoCode] = useState(null);
-    const [selectedSecurityType, setSelectedSecurityType] = useState(null);
-    const [selectedTickers, setSelectedTickers] = useState([]);
-    const [selectedAlgorithm, setSelectedAlgorithm] = useState(null);
+    const [selectedIsoCode, setSelectedIsoCode] = useState<SelectOption | null>(null);
+    const [selectedSecurityType, setSelectedSecurityType] = useState<SelectOption | null>(null);
+    const [selectedTickers, setSelectedTickers] = useState<SelectOption[]>([]);
+    const [selectedAlgorithm, setSelectedAlgorithm] = useState<SelectOption | null>(null);
     const [strategyName, setStrategyName] = useState("");
 
     const isoCodeOptions = useMemo(() => (
-        data ? Array.from(new Set(data.map(item => item.iso_code))).map(code => ({
+        data ? Array.from(new Set(data.map((item: TickerData) => item.iso_code))).map(code => ({
             value: code,
             label: code
-        })) : []
-    ), [data])
+        } as SelectOption)) : []
+    ), [data]);
 
     const securityTypeOptions = useMemo(() => (
-        data ? Array.from(new Set(data.map(item => item.security_type))).map(type => ({
+        data ? Array.from(new Set(data.map((item: TickerData) => item.security_type))).map(type => ({
             value: type,
             label: type
-        })) : []
-    ), [data])
+        } as SelectOption)) : []
+    ), [data]);
 
     const tickerOptions = useMemo(() => (
         data 
         ? data
-            .filter(item =>
-                (!selectedIsoCode || item.iso_code == selectedIsoCode.value) &&
-                (!selectedSecurityType || item.security_type == selectedSecurityType.value)
+            .filter((item: TickerData) =>
+                (!selectedIsoCode || item.iso_code === selectedIsoCode.value) &&
+                (!selectedSecurityType || item.security_type === selectedSecurityType.value)
             )
-            .map((item) => ({
+            .map((item: TickerData) => ({
                 value: item.meta_id,
                 label: item.ticker
             })) 
@@ -45,12 +61,28 @@ const SetStrategy = ({ onRunBacktest  }) => {
     ), [data, selectedIsoCode, selectedSecurityType]);
 
     const algorithmOptions = useMemo(() => (
-        algorithmData ? algorithmData.map(alg => ({
+        algorithmData ? algorithmData.map((alg: AlgorithmData) => ({
             value: alg.strategy,
             label: alg.strategy_name
         })) : []
     ), [algorithmData]);
 
+    const handleIsoCodeChange = (newValue: SingleValue<SelectOption>, _: ActionMeta<SelectOption>) => {
+        setSelectedIsoCode(newValue);
+    };
+
+    const handleSecurityTypeChange = (newValue: SingleValue<SelectOption>, _: ActionMeta<SelectOption>) => {
+        setSelectedSecurityType(newValue);
+    };
+
+    const handleAlgorithmChange = (newValue: SingleValue<SelectOption>, _: ActionMeta<SelectOption>) => {
+        setSelectedAlgorithm(newValue);
+    };
+
+    const handleTickersChange = (newValue: MultiValue<SelectOption>, _: ActionMeta<SelectOption>) => {
+        setSelectedTickers(newValue as SelectOption[]);
+    };
+    
     const handleButtonClick = () => {
         const payload = {
             strategy_name: strategyName,
@@ -58,9 +90,9 @@ const SetStrategy = ({ onRunBacktest  }) => {
             algorithm: selectedAlgorithm?.value,
             startDate: startDate.toISOString().split("T")[0],
             endDate: endDate.toISOString().split("T")[0],
-        }
+        };
         onRunBacktest(payload);
-    }
+    };
         
 
     return (
@@ -83,31 +115,31 @@ const SetStrategy = ({ onRunBacktest  }) => {
                     <h4 className='text-md font-semibold'>
                         Country
                     </h4>
-                    <Select 
+                    <Select<SelectOption> 
                         options={isoCodeOptions}
                         placeholder="Select Country..."
-                        onChange={setSelectedIsoCode}
+                        onChange={handleIsoCodeChange}
                     />
                 </div>
                 <div>
                     <h4 className='text-md font-semibold'>
                         Security Type
                     </h4>
-                    <Select 
+                    <Select<SelectOption>
                         options={securityTypeOptions}
                         placeholder="Select Security Type..."
-                        onChange={setSelectedSecurityType}
+                        onChange={handleSecurityTypeChange}
                     />
                 </div>
                 <div>
                     <h4 className='text-md font-semibold'>
                         Tickers
                     </h4>
-                    <Select 
+                    <Select<SelectOption, true>
                         isMulti
                         options={tickerOptions}
                         placeholder="Select tickers..."
-                        onChange={setSelectedTickers}
+                        onChange={handleTickersChange}
                     />
                 </div>
             </div>
@@ -116,10 +148,10 @@ const SetStrategy = ({ onRunBacktest  }) => {
                     <h4 className='text-md font-semibold'>
                         Choose Algorithm
                     </h4>
-                    <Select 
+                    <Select<SelectOption>
                         placeholder="Select algorithm"
                         options={algorithmOptions}
-                        onChange={setSelectedAlgorithm}
+                        onChange={handleAlgorithmChange}
                     />
                 </div>
             </div>
@@ -128,9 +160,9 @@ const SetStrategy = ({ onRunBacktest  }) => {
                     <h4 className='text-md font-semibold'>
                         Start Date
                     </h4>
-                    <DatePicker 
+                    <DatePicker
                         selected={startDate}
-                        onChange={(date) => setStartDate(date)}
+                        onChange={(date) => setStartDate(date || new Date())}
                         placeholderText="Select start date"
                         className='w-full px-3 py-3 border border-gray-300 rounded-md text-sm text-gray-500'
                     />
@@ -141,7 +173,7 @@ const SetStrategy = ({ onRunBacktest  }) => {
                     </h4>
                     <DatePicker 
                         selected={endDate}
-                        onChange={(date) => setEndDate(date)}
+                        onChange={(date) => setEndDate(date || new Date())}
                         placeholderText="Select end date"
                         className='w-full px-3 py-3 border border-gray-300 rounded-md text-sm text-gray-500'
                     />
@@ -157,6 +189,6 @@ const SetStrategy = ({ onRunBacktest  }) => {
             </div>
         </div>
     );
-}
+};
 
-export default SetStrategy
+export default SetStrategy;
