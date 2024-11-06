@@ -1,6 +1,7 @@
 annotated-types==0.7.0
 anyio==4.6.2.post1
 asttokens==2.4.1
+click==8.1.7
 colorama==0.4.6
 comm==0.2.2
 debugpy==1.8.7
@@ -9,6 +10,7 @@ exceptiongroup==1.2.2
 executing==2.1.0
 fastapi==0.115.4
 greenlet==3.1.1
+h11==0.14.0
 idna==3.10
 ipykernel==6.29.5
 ipython==8.29.0
@@ -43,4 +45,5 @@ tornado==6.4.1
 traitlets==5.14.3
 typing_extensions==4.12.2
 tzdata==2024.2
+uvicorn==0.32.0
 wcwidth==0.2.13
