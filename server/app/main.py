@@ -7,7 +7,7 @@ app = FastAPI()
 
 origins = [
     "http://localhost:8000",  # 로컬 개발용
-    "insight-invest-ten.vercel.app",  # 배포된 프론트엔드 도메인
+    "https://insight-invest-ten.vercel.app",  # 배포된 프론트엔드 도메인
 ]
 
 app.add_middleware(
