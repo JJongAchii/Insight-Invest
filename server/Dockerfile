@@ -6,7 +6,7 @@ ARG GID=1000
 RUN groupadd -g "${GID}" appgroup && \
     useradd --create-home --no-log-init -u "${UID}" -g "${GID}" appuser
 
-WORKDIR /app
+WORKDIR /server
 
 RUN apt-get update && \
     pip install --upgrade pip
