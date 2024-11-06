@@ -5,9 +5,14 @@ from .routers import meta, price, backtest
 
 app = FastAPI()
 
+origins = [
+    "http://localhost:8000",  # 로컬 개발용
+    "insight-invest-ten.vercel.app",  # 배포된 프론트엔드 도메인
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
