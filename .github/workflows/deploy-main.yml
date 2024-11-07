@@ -22,7 +22,7 @@ jobs:
           stage: main
           yaml: >
             name: backend-server
-            app: server/Dockefile
+            app: server/dockefile
 
             context:
               git:
