@@ -2,17 +2,22 @@
 
 import { useAppDispatch, useAppSelector } from '@/app/redux';
 import { setIsSidebarCollapsed } from '@/state';
-import { Binoculars, ChartNoAxesCombined, Layout, Lightbulb, LucideIcon, Menu, Search } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import React from 'react'
+import React, { useState } from 'react';
+import { IoHome, IoMenu, IoSearch, IoBarChart, IoTelescope, IoInformationCircle } from "react-icons/io5";
+import { FcAlphabeticalSortingAz } from "react-icons/fc";
+import { FaRunning } from "react-icons/fa";
+import { IconType } from 'react-icons'; 
 
 
 interface SidebarLinkProps {
     href: string;
-    icon: LucideIcon;
+    icon: IconType;
     label: string;
     isCollapsed: boolean;
+    isDropdown?: boolean;
+    onClick?: () => void;
 }
 
 const SidebarLink = ({
@@ -20,28 +25,30 @@ const SidebarLink = ({
     icon: Icon,
     label,
     isCollapsed,
+    isDropdown = false,
+    onClick,
 }: SidebarLinkProps) => {
     const pathname = usePathname();
     const isActive =
-        pathname === href || (pathname === "/" && href === "/dashboard");
+        pathname === href || (pathname === "/" && href === "/home") ;
     
     return (
         <Link href={href}>
-            <div className={`cursor-pointer flex items-center ${
-                    isCollapsed ? "justify-center py-4" : "justify-start px-8 py-4"
-                }
-                hover:text-blue-500 hover:bg-blue-100 gap-3 transition-colors ${
-                    isActive ? "bg-blue-200 text-white" : ""
-                }
+            <div onClick={onClick} className={`cursor-pointer flex items-center ${
+                isCollapsed ? "justify-center py-4" : "justify-start px-8 py-4"
+            }
+            hover:text-blue-500 hover:bg-blue-100 gap-3 transition-colors ${
+                isActive ? "bg-blue-200 text-white" : ""
+            }
+            ${isDropdown ? "pl-12" : ""}  // 하위 디렉토리일 경우 들여쓰기 적용
             `}>
-                <Icon className='w-6 h-6 !text-gray-700'/>
-
-                <span className={`${isCollapsed ? "hidden": "block"} font-medium text-gray-700`}>
-                    {label}
-                </span>
+                    <Icon className='w-6 h-6 !text-gray-700'/>
+                    <span className={`${isCollapsed ? "hidden": "block"} font-medium text-gray-700`}>
+                        {label}
+                    </span>
             </div>
         </Link>
-    )
+    );
 }
 
 const Sidebar = () => {
@@ -51,73 +58,102 @@ const Sidebar = () => {
         (state) => state.global.isSidebarCollapsed
     );
 
+    // Backtest 하위 디렉토리 표시 상태
+    const [isBacktestDropdownOpen, setIsBacktestDropdownOpen] = useState(false);
+
     const toggleSidebar = () => {
         dispatch(setIsSidebarCollapsed(!isSidebarCollapsed))
+    };
+
+    const toggleBacktestDropdown = () => {
+        setIsBacktestDropdownOpen(!isBacktestDropdownOpen);
     };
 
     const sidebarClassNames = `fixed flex flex-col ${
         isSidebarCollapsed ? "w-0 md:w-16" : "w-72 md:w-64"
     } bg-white transition-all duration-300 overflow-hidden h-full shadow-md z-40`;
 
-  return (
-    <div className={sidebarClassNames}>
-        {/* TOP LOGO */}
-        <div className={`flex gap-3 justify-between md:justify-normal items-center pt-8 ${
-                isSidebarCollapsed ? "px-5" : "px-8"
-        }`}>
-            <div>
-                <div className='w-10 h-10'>LOGO</div>
-                <h1 className={`${isSidebarCollapsed ? "hidden" : "block"} font-extrabold text-xl`}>INSIGHT-INVEST</h1>
+    return (
+        <div className={sidebarClassNames}>
+            {/* TOP LOGO */}
+            <div className={`flex gap-3 justify-between md:justify-normal items-center pt-8 ${
+                    isSidebarCollapsed ? "px-5" : "px-8"
+            }`}>
+                <div>
+                    <div className='w-10 h-10'>LOGO</div>
+                    <h1 className={`${isSidebarCollapsed ? "hidden" : "block"} font-extrabold text-xl`}>INSIGHT-INVEST</h1>
+                </div>
+                
+                <button 
+                    className='md:hidden px-3 py-3 bg-gray-100 rounded-full hover:bg-blue-100'
+                    onClick={toggleSidebar}
+                >
+                    <IoMenu className='w-4 h-4'/>
+                </button>
             </div>
-            
-            <button 
-                className='md:hidden px-3 py-3 bg-gray-100 rounded-full hover:bg-blue-100'
-                onClick={toggleSidebar}
-            >
-                <Menu className='w-4 h-4'/>
-            </button>
-        </div>
 
-        {/* Links */}
-        <div className='flex-grow mt-8'>
-            <SidebarLink 
-                href="/dashboard"
-                icon={Layout}
-                label="Dashboard"
-                isCollapsed={isSidebarCollapsed}
-            />
-            <SidebarLink 
-                href="/stocksearch"
-                icon={Search}
-                label="Stock Search"
-                isCollapsed={isSidebarCollapsed}
-            />
-            <SidebarLink 
-                href="/backtest"
-                icon={ChartNoAxesCombined}
-                label="Backtest"
-                isCollapsed={isSidebarCollapsed}
-            />
-            <SidebarLink 
-                href="/regime"
-                icon={Binoculars}
-                label="Regime"
-                isCollapsed={isSidebarCollapsed}
-            />
-            <SidebarLink 
-                href="/insight"
-                icon={Lightbulb}
-                label="Insight"
-                isCollapsed={isSidebarCollapsed}
-            />
-        </div>
+            {/* Links */}
+            <div className='flex-grow mt-8'>
+                <SidebarLink 
+                    href="/home"
+                    icon={IoHome}
+                    label="Home"
+                    isCollapsed={isSidebarCollapsed}
+                />
+                <SidebarLink 
+                    href="/stocksearch"
+                    icon={IoSearch}
+                    label="Stock Search"
+                    isCollapsed={isSidebarCollapsed}
+                />
+                
+                {/* Backtest 탭과 드롭다운 */}
+                <SidebarLink 
+                    href="/backtest"
+                    icon={IoBarChart}
+                    label="Backtest"
+                    isCollapsed={isSidebarCollapsed}
+                    onClick={toggleBacktestDropdown}
+                />
+                {isBacktestDropdownOpen && !isSidebarCollapsed && (
+                    <div>
+                        <SidebarLink 
+                            href="/backtest/simulation"
+                            icon={FaRunning}
+                            label="Simulation"
+                            isCollapsed={isSidebarCollapsed}
+                            isDropdown
+                        />
+                        <SidebarLink 
+                            href="/backtest/strategy_list"
+                            icon={FcAlphabeticalSortingAz}
+                            label="Strategy List"
+                            isCollapsed={isSidebarCollapsed}
+                            isDropdown
+                        />
+                    </div>
+                )}
+                
+                <SidebarLink 
+                    href="/regime"
+                    icon={IoTelescope}
+                    label="Regime"
+                    isCollapsed={isSidebarCollapsed}
+                />
+                <SidebarLink 
+                    href="/insight"
+                    icon={IoInformationCircle}
+                    label="Insight"
+                    isCollapsed={isSidebarCollapsed}
+                />
+            </div>
 
-        {/* FOOTER */}
-        <div className={`${isSidebarCollapsed ? "hidden" : "block"} mb-10`}>
-            <p className='text-center text-xs text-gray-500'>&copy; 2024 Achii</p>
+            {/* FOOTER */}
+            <div className={`${isSidebarCollapsed ? "hidden" : "block"} mb-10`}>
+                <p className='text-center text-xs text-gray-500'>&copy; 2024 Achii</p>
+            </div>
         </div>
-    </div>
-  );
+    );
 }
 
-export default Sidebar
+export default Sidebar;

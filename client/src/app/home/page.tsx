@@ -1,6 +1,6 @@
 "use client"
 
-const Dashboard = () => {
+const Home = () => {
   return (
     <div className="grid grid-cols-1 xl:overflow-auto gap-10 pb-4 custom-grid-rows">
       <div className="row-span-3 xl:row-span-6 bg-gray-500"/>
@@ -10,4 +10,4 @@ const Dashboard = () => {
   );
 }
 
-export default Dashboard
+export default Home
