@@ -25,12 +25,6 @@ jobs:
 
             app: dockerfile
 
-            options:
-              ports: "8000"
-              env:
-                - name: DATABASE_URL
-                  value: postgresql://jjong:1586@svc.sel3.cloudtype.app:32590/STRATEGY
-              args: []
             context:
               git:
                 url: git@github.com:${{ github.repository }}.git
