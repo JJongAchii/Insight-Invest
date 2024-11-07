@@ -23,8 +23,6 @@ jobs:
           yaml: >
             name: backend-server
 
-            app: dockerfile
-
             context:
               git:
                 url: git@github.com:${{ github.repository }}.git
