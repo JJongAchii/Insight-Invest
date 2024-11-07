@@ -22,7 +22,8 @@ jobs:
           stage: main
           yaml: >
             name: backend-server
-            app: server/dockefile
+            
+            app: dockefile
 
             context:
               git:
