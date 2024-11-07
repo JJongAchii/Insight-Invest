@@ -16,7 +16,7 @@ class Meta(BaseModel):
     remark : Optional[str] = None
     
     class Config:
-        orm_mode = True
+        from_attributes  = True
     
 
 class Ticker(BaseModel):
@@ -28,7 +28,7 @@ class Ticker(BaseModel):
     sector: Optional[str] = None
 
     class Config:
-        orm_mode = True
+        from_attributes  = True
 
 
 class Strategy(BaseModel):
@@ -37,7 +37,7 @@ class Strategy(BaseModel):
     strategy_name: str
     
     class Config:
-        orm_mode = True
+        from_attributes  = True
         
 
 class Price(BaseModel):
@@ -54,7 +54,7 @@ class Price(BaseModel):
         return value
     
     class Config:
-        orm_mode = True
+        from_attributes  = True
         
         
 class BacktestRequest(BaseModel):

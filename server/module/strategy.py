@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from datetime import timedelta
 from .util import resample_data
 
@@ -18,7 +19,7 @@ def cal_monthly_momentum(price: pd.DataFrame):
 
 def binary_from_momentum(momentum: pd.DataFrame):
     
-    return momentum.applymap(lambda x: 1 if x > 0 else 0)
+    return momentum.apply(lambda x: np.where(x > 0, 1, 0))
 
 
 def absolute_momentum(price: pd.DataFrame):

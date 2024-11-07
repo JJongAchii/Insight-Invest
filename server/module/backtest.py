@@ -109,7 +109,7 @@ class Backtest:
         
         merge = pd.concat(nav.values(), axis=1)
         merge.columns = nav.keys()
-        nav = merge.fillna(method='ffill')
+        nav = merge.ffill()
         
         mg_metrics = pd.concat(metrics.values(), axis=1)
         mg_metrics.columns = metrics.keys()

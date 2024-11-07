@@ -1,5 +1,5 @@
 import pandas as pd
-from typing import Optional
+from typing import Optional, Tuple, Union
 from datetime import date
 from . import metrics
 
@@ -72,74 +72,97 @@ def store_nav_results(func):
 def calculate_nav(
     weight: pd.DataFrame,
     price: Optional[pd.DataFrame] = None,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
-) -> pd.DataFrame:
+    start_date: Optional[Union[str, pd.Timestamp]] = None,
+    end_date: Optional[Union[str, pd.Timestamp]] = None,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Calculate the net asset value (NAV) and portfolio holdings 
     based on the provided weight DataFrame and price data.
 
     Args:
         weight (pd.DataFrame): DataFrame containing the portfolio weights with tickers as columns and dates as index.
-        price (Optional[pd.DataFrame], optional): DataFrame containing the price data. Defaults to None, which retrieves prices from a database.
-        start_date (Optional[Union[str, pd.Timestamp]], optional): Start date of the analysis. Defaults to None, which uses the earliest date in the weight DataFrame.
-        end_date (Optional[Union[str, pd.Timestamp]], optional): End date of the analysis. Defaults to None, which uses the latest date in the price data.
+        price (Optional[pd.DataFrame], optional): DataFrame containing the price data. Must be provided.
+        start_date (Optional[Union[str, pd.Timestamp]], optional): Start date of the analysis. Defaults to the earliest date in the weight DataFrame.
+        end_date (Optional[Union[str, pd.Timestamp]], optional): End date of the analysis. Defaults to the latest date in the price data.
 
     Returns:
-        pd.DataFrame: A tuple containing the portfolio holdings (book) DataFrame and the NAV (nav) DataFrame.
+        Tuple[pd.DataFrame, pd.DataFrame]: A tuple containing the portfolio holdings (book) DataFrame and the NAV (nav) DataFrame.
     """
-    
-    weight.columns = [str(column).zfill(6) if isinstance(column, int) else column for column in weight.columns]
-    
-    start_date = start_date or weight.index[0]
-    start_date = pd.to_datetime(start_date)
-    price.index = pd.to_datetime(price.index)
+    if price is None:
+        raise ValueError("Price data must be provided.")
+
+    # Ensure the ticker symbols are strings with leading zeros if necessary
+    weight.columns = [str(column).zfill(6) if isinstance(column, int) else str(column) for column in weight.columns]
+
+    # Convert indices to datetime
     weight.index = pd.to_datetime(weight.index)
+    price.index = pd.to_datetime(price.index)
 
-    
-    price = price.loc[start_date:end_date]
+    # Determine start and end dates
+    start_date = pd.to_datetime(start_date or weight.index.min())
+    end_date = pd.to_datetime(end_date or price.index.max())
+
+    # Filter data based on the date range
     weight = weight.loc[start_date:end_date]
-    
-    book = pd.DataFrame(columns=["Date", "ticker", "weights"])
-    nav = pd.DataFrame([[start_date, 1000]], columns=["Date", "value"])
-    
-    rebal_list = weight.index.unique()
-    
-    for i, rebal_date in enumerate(rebal_list):
-        
-        last_nav = nav.value.iloc[-1]
-        
-        rebal_weights = weight[weight.index == rebal_date].stack()
-        rebal_weights.index = rebal_weights.index.droplevel(0)
-        
-        if i == len(rebal_list) - 1:
-            next_rebal = price.index[-1]
-        else:
-            next_rebal = rebal_list[i+1]
+    price = price.loc[start_date:end_date]
 
-        price_slice = price[(price.index >= rebal_date) & (price.index <= next_rebal)][rebal_weights.index]
+    if weight.empty:
+        raise ValueError("No weight data after filtering by dates.")
+    if price.empty:
+        raise ValueError("No price data after filtering by dates.")
+
+    # Initialize NAV and book lists
+    nav_list = [{'Date': start_date, 'value': 1000}]
+    book_list = []
+
+    # Get sorted unique rebalancing dates
+    rebal_dates = sorted(weight.index.unique())
+
+    nav_value = 1000  # Initial NAV
+
+    for i, rebal_date in enumerate(rebal_dates):
+        # Get weights for the rebalancing date
+        rebal_weights = weight.loc[rebal_date]
+        if isinstance(rebal_weights, pd.DataFrame):
+            rebal_weights = rebal_weights.mean()  # Average weights if multiple entries
+        rebal_weights = rebal_weights.dropna()
+
+        # Determine the next rebalancing date
+        next_rebal = rebal_dates[i + 1] if i + 1 < len(rebal_dates) else end_date
+
+        # Slice price data between rebalancing dates
+        price_slice = price.loc[rebal_date:next_rebal, rebal_weights.index]
         if price_slice.empty:
             continue
-        price_returns = price_slice / price_slice.iloc[0]
-        price_weights = price_returns.multiply(rebal_weights, axis=1)
-        
-        cash = last_nav * (1 - rebal_weights.sum())
 
-        weights = price_weights.div(price_weights.sum(axis=1), axis=0)[:-1]
-        value = last_nav * price_weights.sum(axis=1) + cash
-        value = value[1:].reset_index()
-        value.columns = ["Date", "value"]
-        
-        weights = weights.stack().reset_index()
-        weights.columns = ["Date", "ticker", "weights"]
-        
-        book = book.append(weights)
-        nav = nav.append(value)
-        
-    book = book.set_index("Date")
-    nav = nav.set_index("Date")
+        # Calculate price relatives
+        price_returns = price_slice.div(price_slice.iloc[0])
+
+        # Calculate weighted returns
+        weighted_returns = price_returns.multiply(rebal_weights, axis=1)
+
+        # Calculate cash position
+        cash = nav_value * (1 - rebal_weights.sum())
+
+        # Calculate portfolio values
+        portfolio_values = nav_value * weighted_returns.sum(axis=1) + cash
+
+        # Update NAV list
+        nav_value = portfolio_values.iloc[-1]
+        nav_list.extend([{'Date': date, 'value': val} for date, val in portfolio_values.iloc[1:].items()])
+
+        # Calculate weights over time
+        weights_over_time = weighted_returns.div(weighted_returns.sum(axis=1), axis=0).iloc[:-1]
+        weights_stacked = weights_over_time.stack().reset_index()
+        weights_stacked.columns = ['Date', 'ticker', 'weights']
+        book_list.append(weights_stacked)
+
+    # Combine all weights and NAV data
+    book = pd.concat(book_list, ignore_index=True).set_index('Date')
+    nav = pd.DataFrame(nav_list).drop_duplicates('Date').set_index('Date')
 
     return book, nav
+
 
 
 def result_metrics(nav: pd.DataFrame) -> pd.Series:
