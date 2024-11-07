@@ -72,13 +72,6 @@ class Backtest:
             weight (dict, optional): 
                 using when method == "custom"
                 ex) weight={"SPY": 0.6, "IEF":0.4}. Defaults to None.
-            offensive (List, optional): 
-                using when method == "VAA_agg"
-                ex) offensive=["SPY", "EFA", "EEM", "AGG"]. Defaults to None.
-            defensive (List, optional): 
-                using when method == "VAA_agg"
-                ex) defensive=["LQD", "IEF", "SHY"]. Defaults to None.
-
         Returns:
             pd.DataFrame: _description_
         """
