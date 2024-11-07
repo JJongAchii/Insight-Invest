@@ -5,7 +5,7 @@ from typing import Union, List
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../..")))
 import db
-from module.strategy import DualMomentum
+from module.strategy import EqualWeight, DualMomentum
 from module.util import backtest_result
 
 class Backtest:
@@ -85,6 +85,10 @@ class Backtest:
         
         price = price.loc[start:end].dropna()
         
+        if method == "eq":
+            """equal weights all assets"""
+            weights = EqualWeight().simulate(price=price)
+            
         if method == "dual_mmt":
             weights = DualMomentum().simulate(price=price)
         

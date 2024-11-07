@@ -33,6 +33,13 @@ def absolute_momentum(price: pd.DataFrame):
     return abs_mmt_score
 
 
+class EqualWeight:
+    def simulate(self, price: pd.DataFrame):
+        weights = resample_data(price=price)
+        weights[:] = 1 / len(price.columns)
+        
+        return weights
+
 class DualMomentum:
     def simulate(self, price: pd.DataFrame):
         
