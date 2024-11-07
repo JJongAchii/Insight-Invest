@@ -73,9 +73,9 @@ class Mixins(Base):
         """insert bulk"""
         print("start insert.")
         if isinstance(records, pd.DataFrame):
-            records = records.replace({np.NaN: None}).to_dict("records")
+            records = records.replace({np.nan: None}).to_dict("records")
         elif isinstance(records, pd.Series):
-            records = [records.replace({np.NaN: None}).to_dict()]
+            records = [records.replace({np.nan: None}).to_dict()]
         elif isinstance(records, list):
             ...
         elif isinstance(records, dict):

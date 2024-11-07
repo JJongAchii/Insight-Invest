@@ -127,7 +127,7 @@ const SetStrategy = ({ onRunBacktest }: { onRunBacktest: any }) => {
                     </h4>
                     <Select<SelectOption>
                         options={securityTypeOptions}
-                        placeholder="Select Security Type..."
+                        placeholder="Select Type..."
                         onChange={handleSecurityTypeChange}
                     />
                 </div>
@@ -136,6 +136,7 @@ const SetStrategy = ({ onRunBacktest }: { onRunBacktest: any }) => {
                         Tickers
                     </h4>
                     <Select<SelectOption, true>
+                        closeMenuOnSelect={false}
                         isMulti
                         options={tickerOptions}
                         placeholder="Select tickers..."
