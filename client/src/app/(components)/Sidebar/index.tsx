@@ -5,7 +5,8 @@ import { setIsSidebarCollapsed } from '@/state';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import React, { useState } from 'react';
-import { IoHome, IoMenu, IoSearch, IoBarChart, IoTelescope, IoInformationCircle } from "react-icons/io5";
+import { IoHome, IoMenu, IoSearch, IoBarChart, IoTelescope } from "react-icons/io5";
+import { HiOutlineLightBulb } from "react-icons/hi";
 import { FcAlphabeticalSortingAz } from "react-icons/fc";
 import { FaRunning } from "react-icons/fa";
 import { IconType } from 'react-icons'; 
@@ -142,7 +143,7 @@ const Sidebar = () => {
                 />
                 <SidebarLink 
                     href="/insight"
-                    icon={IoInformationCircle}
+                    icon={HiOutlineLightBulb}
                     label="Insight"
                     isCollapsed={isSidebarCollapsed}
                 />

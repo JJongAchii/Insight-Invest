@@ -20,10 +20,19 @@ router = APIRouter(
 BACKTEST_RESULT = {}
 
 @router.get("/algorithm", response_model=List[schemas.Strategy])
-async def get_strategy(ss: Session = Depends(db.get_db)):
+async def get_algorithm():
     
-    return ss.query(db.TbStrategy).all()
+    return db.TbStrategy.query_df().to_dict(orient="records")
 
+@router.get("/strategy", response_model=List[schemas.Portfolio])
+async def get_strategy():
+    
+    return db.get_port_summary().to_dict(orient="records")
+
+@router.get("/strategy/nav", response_model=List[schemas.PortNav])
+async def get_strategy_nav():
+    
+    return db.get_last_nav().to_dict(orient="records")
 
 @router.post("")
 async def run_backtest(request: schemas.BacktestRequest):

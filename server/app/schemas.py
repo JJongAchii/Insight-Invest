@@ -40,6 +40,24 @@ class Strategy(BaseModel):
         from_attributes  = True
         
 
+class Portfolio(BaseModel):
+    port_id: int
+    port_name: str
+    strategy_name: str
+    ann_ret: float
+    ann_vol: float
+    sharpe: float
+    
+    class Config:
+        from_attributes = True
+        
+
+class PortNav(BaseModel):
+    port_id: int
+    trade_date: datetime
+    value: float
+
+
 class Price(BaseModel):
     meta_id : int
     trade_date : datetime

@@ -14,7 +14,19 @@ export const api = createApi({
     fetchAlgorithms: builder.query({
       query: () => "/backtest/algorithm",
     }),
+    fetchStrategies: builder.query({
+      query: () => "/backtest/strategy",
+    }),
+    fetchStrategyNav: builder.query({
+      query: () => "/backtest/strategy/nav",
+    }),
   }),
 });
 
-export const { useFetchMetaDataQuery, useFetchTickersQuery, useFetchAlgorithmsQuery } = api;
+export const { 
+  useFetchMetaDataQuery, 
+  useFetchTickersQuery, 
+  useFetchAlgorithmsQuery, 
+  useFetchStrategiesQuery,
+  useFetchStrategyNavQuery,
+} = api;

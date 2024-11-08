@@ -4,8 +4,7 @@ import { SaveStrategy } from './BacktestFetcher';
 
 
 const StrategyMetrics = ({ backtestResult, selectedTicker }: { backtestResult: any; selectedTicker: any }) => {
-    if (!backtestResult?.metrics) return <p>No data available</p>; 
-    const metricData = JSON.parse(backtestResult?.metrics);
+    const metricData = backtestResult?.metrics ? JSON.parse(backtestResult.metrics) : [];
 
     const handleSave = (strategy: any) => {
         const strategyData = selectedTicker[strategy];
@@ -41,15 +40,28 @@ const StrategyMetrics = ({ backtestResult, selectedTicker }: { backtestResult: a
     
 
     return (
-        <div className="flex flex-col bg-white shadow-lg rounded-2xl p-8">
+        <div className="flex flex-col bg-white shadow-lg rounded-2xl p-8 relative" style={{ height: 450 }}>
             <h4 className='text-lg font-semibold'>Metrics</h4>
-            <DataGrid
-                rows={metricData}
-                columns={columns}
-                getRowId={(row) => row.strategy}
-                slotProps={{ toolbar: { showQuickFilter: true } }}
-                className="bg-white shadow rounded-lg border border-gray-200 mt-5 !text-gray-700"
-            />
+            {backtestResult?.metrics ? (
+                <DataGrid
+                    rows={metricData}
+                    columns={columns}
+                    getRowId={(row) => row.strategy}
+                    slotProps={{ toolbar: { showQuickFilter: true } }}
+                    className="bg-white shadow rounded-lg border border-gray-200 mt-5 !text-gray-700"
+                />    
+            ) : (
+                <div style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    fontSize: '1.5rem',
+                    color: '#555'
+                }}>
+                    No data available...
+                </div>
+            )}
         </div>
     );
 }

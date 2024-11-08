@@ -1,11 +1,23 @@
+"use client"
+
 import React from 'react'
+import Searchbar from './Searchbar'
+import Contents from './Contents';
+import { useFetchStrategiesQuery, useFetchStrategyNavQuery } from '@/state/api';
 
-type Props = {}
 
-const page = (props: Props) => {
+const StrategyList = () => {
+
+  const { data: strategyInfo } = useFetchStrategiesQuery({});
+  const { data: strategyNav } = useFetchStrategyNavQuery({});
+  
   return (
-    <div>page</div>
-  )
+    <div className="flex flex-col bg-white shadow-lg rounded-2xl p-8 gap-5">
+      <h4 className='text-lg font-semibold'>Strategy List</h4>
+      <Searchbar />
+      <Contents strategyList={strategyInfo} strategyNav={strategyNav} />
+    </div>
+  );
 }
 
-export default page
+export default StrategyList

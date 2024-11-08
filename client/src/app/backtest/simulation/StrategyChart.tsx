@@ -4,11 +4,8 @@ import { ChartOptions } from 'chart.js';
 import 'chart.js/auto';
 
 const StrategyChart = ({ navResult }: { navResult: any }) => {
-    if (!navResult) return <p>No data available</p>; 
     
-    const navData = JSON.parse(navResult);
-
-    if (!navData.index || !navData.columns || !navData.data) return <p>Invalid data format</p>;
+    const navData = navResult ? JSON.parse(navResult) : { index: [], columns: [], data: [] };
 
     const chartLabels = navData.index.map((date: any) => new Date(date).toISOString().split('T')[0]);
     
@@ -46,7 +43,7 @@ const StrategyChart = ({ navResult }: { navResult: any }) => {
                 },
             },
             tooltip: {
-                mode: 'index' as const, // Ensures 'mode' is one of the allowed types
+                mode: 'index' as const,
                 intersect: false,
                 backgroundColor: 'rgba(0, 0, 0, 0.7)',
                 titleFont: {
@@ -83,15 +80,15 @@ const StrategyChart = ({ navResult }: { navResult: any }) => {
                     },
                     callback: (tickValue: string | number) => {
                         if (typeof tickValue === 'number') {
-                            return `${tickValue}`; // Format numeric values
+                            return `${tickValue}`;
                         }
-                        return tickValue; // For string values, return as-is
+                        return tickValue;
                     }, 
                 },
             },
         },
         interaction: {
-            mode: 'nearest' as const, // Explicitly set as one of the allowed values
+            mode: 'nearest' as const,
             axis: 'x',
             intersect: false,
         },
@@ -102,9 +99,22 @@ const StrategyChart = ({ navResult }: { navResult: any }) => {
     };
 
     return (
-        <div className="flex flex-col bg-white shadow-lg rounded-2xl p-8" style={{ height: 450 }}>
+        <div className="flex flex-col bg-white shadow-lg rounded-2xl p-8 relative" style={{ height: 450 }}>
             <h4 className='text-lg font-semibold'>Performance Chart</h4>
-            <Line data={data} options={options} />
+            {navResult ? (
+                <Line data={data} options={options} />
+            ) : (
+                <div style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    fontSize: '1.5rem',
+                    color: '#555'
+                }}>
+                    No data available...
+                </div>
+            )}
         </div>
     );
 };

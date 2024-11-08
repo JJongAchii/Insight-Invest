@@ -3,6 +3,7 @@ import sys
 from fastapi import Depends, APIRouter
 from sqlalchemy.orm import Session
 from typing import List
+import pandas as pd
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../../..")))
 import db
@@ -15,12 +16,17 @@ router = APIRouter(
 
 
 @router.get("", response_model=List[schemas.Meta])
-def get_meta(ss: Session = Depends(db.get_db)):
+def get_meta():
+    df = db.TbMeta.query_df().sort_values("meta_id")
+    # Replace NaN values with None
+    df = df.replace({pd.NA: None, float("nan"): None})
     
-    return ss.query(db.TbMeta).order_by(db.TbMeta.meta_id.asc()).all()
-
+    return df.to_dict(orient="records")
 
 @router.get("/tickers", response_model=List[schemas.Ticker])
-def get_meta_tickers(ss: Session = Depends(db.get_db)):
+def get_meta_tickers():
+    df = db.TbMeta.query_df().sort_values("meta_id")
+    # Replace NaN values with None
+    df = df.replace({pd.NA: None, float("nan"): None})
     
-    return ss.query(db.TbMeta).order_by(db.TbMeta.meta_id.asc()).all()
+    return df.to_dict(orient="records")

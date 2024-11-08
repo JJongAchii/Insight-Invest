@@ -1,4 +1,5 @@
 import pandas as pd
+import sqlalchemy as sa
 from sqlalchemy.orm import Query
 
 from .client import session_local
@@ -86,3 +87,57 @@ def upload_metrics(
     metrics["port_id"] = port_id
     
     return TbMetrics.insert(metrics)
+
+def get_port_summary():
+    with session_local() as session:
+        query = (
+            session.query(
+                TbPortfolio.port_id,
+                TbPortfolio.port_name,
+                TbStrategy.strategy_name,
+                TbMetrics.ann_ret,
+                TbMetrics.ann_vol,
+                TbMetrics.sharpe,
+            )
+            .join(
+                TbStrategy,
+                TbStrategy.strategy_id == TbPortfolio.strategy_id
+            )
+            .join(
+                TbMetrics,
+                TbMetrics.port_id == TbPortfolio.port_id
+            )
+        )
+        
+        return read_sql_query(query=query)
+    
+def get_last_nav():
+    with session_local() as session:
+        subq = (
+            session.query(
+                TbNav.port_id,
+                sa.func.extract('year', TbNav.trade_date).label("year"),
+                sa.func.extract('month', TbNav.trade_date).label("month"),
+                sa.func.max(TbNav.trade_date).label("last_trade_date"),
+            )
+            .group_by("year", "month", TbNav.port_id)
+            .subquery()
+        )
+        
+        query = (
+            session.query(
+                TbNav.port_id,
+                TbNav.trade_date,
+                TbNav.value
+            )
+            .join(
+                subq,
+                sa.and_(
+                    subq.c.last_trade_date == TbNav.trade_date,
+                    subq.c.port_id == TbNav.port_id
+                )
+            )
+            .order_by(subq.c.year, subq.c.month)
+        )
+        
+        return read_sql_query(query=query)
