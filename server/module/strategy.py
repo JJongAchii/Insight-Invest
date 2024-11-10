@@ -35,8 +35,8 @@ def absolute_momentum(price: pd.DataFrame):
 
 class EqualWeight:
     def simulate(self, price: pd.DataFrame):
-        weights = pd.DataFrame(1 / len(price.columns), index=price.index, columns=price.columns)
-        
+        weights = resample_data(price=price).copy()
+        weights[:] = 1 / len(price.columns)
         return weights
 
 class DualMomentum:
