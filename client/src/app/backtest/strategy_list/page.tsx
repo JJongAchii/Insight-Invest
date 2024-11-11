@@ -3,13 +3,13 @@
 import React from 'react'
 import Searchbar from './Searchbar'
 import Contents from './Contents';
-import { useFetchStrategiesQuery, useFetchStrategyNavQuery } from '@/state/api';
+import { useFetchStrategiesQuery, useFetchStrategyMonthlyNavQuery } from '@/state/api';
 
 
 const StrategyList = () => {
 
   const { data: strategyInfo } = useFetchStrategiesQuery({});
-  const { data: strategyNav } = useFetchStrategyNavQuery({});
+  const { data: strategyNav } = useFetchStrategyMonthlyNavQuery({});
   
   return (
     <div className="flex flex-col bg-white shadow-lg rounded-2xl p-8 gap-5">

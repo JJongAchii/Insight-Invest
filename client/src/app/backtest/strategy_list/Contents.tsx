@@ -2,6 +2,7 @@ import React from 'react'
 import { Line } from 'react-chartjs-2'
 import { Chart as ChartJS, LineElement, CategoryScale, LinearScale, PointElement, Tooltip } from 'chart.js'
 import { FaChartLine } from 'react-icons/fa'
+import { useRouter } from 'next/navigation'
 
 ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Tooltip)
 
@@ -23,13 +24,20 @@ interface StrategyNav {
 
 const Contents = ({ strategyList, strategyNav }: {strategyList: Strategy[]; strategyNav: StrategyNav[]}) => {
 
+    const router = useRouter();
+    const handleGridClick = (port_id: number) => {
+        router.push(`/backtest/strategy_list/${port_id}`)
+    }
+
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {
                 strategyList?.map((strategy) => (
                     <div 
                         key={strategy.port_id} 
-                        className='flex bg-gradient-to-br from-sky-100 to-white p-6 rounded-xl shadow-md border border-gray-200 hover:shadow-lg transition-shadow duration-200 transform hover:scale-105'>
+                        className='flex bg-gradient-to-br from-sky-100 to-white p-6 rounded-xl shadow-md border border-gray-200 hover:shadow-lg transition-shadow duration-200 transform hover:scale-105'
+                        onClick={() => handleGridClick(strategy.port_id)}
+                    >
                         <div className='w-1/2'>
                             <div className='flex items-center gap-2 text-sky-500 mb-2'>
                                 <FaChartLine size={18} />

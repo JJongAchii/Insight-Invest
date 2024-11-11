@@ -111,7 +111,7 @@ def get_port_summary():
         
         return read_sql_query(query=query)
     
-def get_last_nav():
+def get_monthly_nav():
     with session_local() as session:
         subq = (
             session.query(
@@ -138,6 +138,56 @@ def get_last_nav():
                 )
             )
             .order_by(subq.c.year, subq.c.month)
+        )
+        
+        return read_sql_query(query=query)
+    
+
+def get_port_id_info(port_id: int):
+    with session_local() as session:
+        query = (
+            session.query(
+                TbPortfolio.port_id,
+                TbPortfolio.port_name,
+                TbStrategy.strategy_name,
+                TbMetrics.ann_ret,
+                TbMetrics.ann_vol,
+                TbMetrics.sharpe,
+                TbMetrics.mdd,
+                TbMetrics.skew,
+                TbMetrics.kurt,
+                TbMetrics.var,
+                TbMetrics.cvar
+            )
+            .join(
+                TbStrategy,
+                TbStrategy.strategy_id == TbPortfolio.strategy_id
+            )
+            .join(
+                TbMetrics,
+                TbMetrics.port_id == TbPortfolio.port_id
+            )
+            .filter(TbPortfolio.port_id == port_id)
+        )
+        
+        return read_sql_query(query=query)
+        
+        
+def get_port_id_rebal(port_id: int):
+    with session_local() as session:
+        query = (
+            session.query(
+                TbRebalance.rebal_date,
+                TbRebalance.port_id,
+                TbMeta.ticker,
+                TbMeta.name,
+                TbRebalance.weight
+            )
+            .join(
+                TbMeta,
+                TbMeta.meta_id == TbRebalance.meta_id
+            )
+            .filter(TbRebalance.port_id == port_id)
         )
         
         return read_sql_query(query=query)

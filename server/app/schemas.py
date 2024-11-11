@@ -81,3 +81,20 @@ class BacktestRequest(BaseModel):
     algorithm: Optional[str]
     startDate: date
     endDate: date
+    
+    
+class PortIdInfo(BaseModel):
+    port_id: int
+    port_name: str
+    strategy_name: str
+    ann_retr: float
+    ann_vol: float
+    sharpe: float
+    mdd: float
+    skew: float
+    kurt: float
+    var: float
+    cvar: float
+    
+    class Config:
+        from_attributes  = True

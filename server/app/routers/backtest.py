@@ -29,11 +29,26 @@ async def get_strategy():
     
     return db.get_port_summary().to_dict(orient="records")
 
-@router.get("/strategy/nav", response_model=List[schemas.PortNav])
-async def get_strategy_nav():
+@router.get("/strategy/monthlynav", response_model=List[schemas.PortNav])
+async def get_all_monthly_nav():
     
-    return db.get_last_nav().to_dict(orient="records")
+    return db.get_monthly_nav().to_dict(orient="records")
 
+@router.get("/strategy/{port_id}")
+async def get_strategy_id_info(port_id: int):
+    
+    return db.get_port_id_info(port_id=port_id).to_dict(orient="records")
+
+@router.get("/strategy/nav/{port_id}")
+async def get_strategy_id_nav(port_id: int):
+    
+    return db.TbNav.query_df(port_id=port_id).to_dict(orient="records")
+    
+@router.get("/strategy/rebal/{port_id}")
+async def get_strategy_id_rebal(port_id: int):
+    
+    return db.get_port_id_rebal(port_id=port_id).to_dict(orient="records")    
+    
 @router.post("")
 async def run_backtest(request: schemas.BacktestRequest):
     

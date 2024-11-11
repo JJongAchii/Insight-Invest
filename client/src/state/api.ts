@@ -17,8 +17,17 @@ export const api = createApi({
     fetchStrategies: builder.query({
       query: () => "/backtest/strategy",
     }),
-    fetchStrategyNav: builder.query({
-      query: () => "/backtest/strategy/nav",
+    fetchStrategyMonthlyNav: builder.query({
+      query: () => "/backtest/strategy/monthlynav",
+    }),
+    fetchStrategyById: builder.query({
+      query: (port_id) => `backtest/strategy/${port_id}`
+    }),
+    fetchStNavById: builder.query({
+      query: (port_id) => `backtest/strategy/nav/${port_id}`
+    }),
+    fetchStRebalById: builder.query({
+      query: (port_id) => `backtest/strategy/rebal/${port_id}`
     }),
   }),
 });
@@ -28,5 +37,8 @@ export const {
   useFetchTickersQuery, 
   useFetchAlgorithmsQuery, 
   useFetchStrategiesQuery,
-  useFetchStrategyNavQuery,
+  useFetchStrategyMonthlyNavQuery,
+  useFetchStrategyByIdQuery,
+  useFetchStNavByIdQuery,
+  useFetchStRebalByIdQuery,
 } = api;
