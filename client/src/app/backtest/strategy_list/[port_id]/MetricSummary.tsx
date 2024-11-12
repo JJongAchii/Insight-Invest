@@ -20,7 +20,14 @@ interface RebalData {
     weight: number;
 }
 
-const MetricSummary = ({ strategyInfo, rebalWeight }: { strategyInfo: InfoData; rebalWeight: RebalData[] }) => {
+interface BmData {
+    ann_returns: number;
+}
+
+const MetricSummary = ({ strategyInfo, rebalWeight, bmMetrics }: { strategyInfo: InfoData; rebalWeight: RebalData[]; bmMetrics: string; }) => {
+    const bmData: BmData[] = JSON.parse(bmMetrics);
+    const excessReturn = parseFloat((strategyInfo.ann_ret - bmData[0].ann_returns).toFixed(2));
+    
     const ReturnBgColor = (value: number) => (value >= 0 ? "bg-red-300" : "bg-blue-300");
 
     const lastDate = rebalWeight?.reduce(
@@ -33,7 +40,7 @@ const MetricSummary = ({ strategyInfo, rebalWeight }: { strategyInfo: InfoData; 
         labels: recentRebalData?.map(data => data.ticker),
         datasets: [
             {
-                label: 'Weight Distribution',
+                label: 'Weight',
                 data: recentRebalData?.map(data => data.weight),
                 backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'],
                 hoverBackgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40']
@@ -48,7 +55,6 @@ const MetricSummary = ({ strategyInfo, rebalWeight }: { strategyInfo: InfoData; 
                 {/* Annual Returns and Volatility/Drawdown section */}
                 <div className="grid grid-cols-1 gap-6">
                     {/* Section 1: Annual Returns */}
-                    <div className="bg-green-100 rounded-xl p-6 shadow-lg flex flex-col gap-4 h-full">
                         <h4 className="text-lg font-semibold text-green-700">Annual Returns</h4>
                         <div className="flex justify-between items-center">
                             <div className="flex flex-col items-center gap-2">
@@ -64,9 +70,9 @@ const MetricSummary = ({ strategyInfo, rebalWeight }: { strategyInfo: InfoData; 
                             </div>
                             <div className="flex flex-col items-center gap-2">
                                 <p className="text-gray-600 font-semibold">Benchmark Relative</p>
-                                <div className={`${ReturnBgColor(20)} text-white text-2xl font-semibold px-6 py-3 rounded-md shadow-lg`}>
-                                    20%
-                                    {20 > 0 ? (
+                                <div className={`${ReturnBgColor(excessReturn)} text-white text-2xl font-semibold px-6 py-3 rounded-md shadow-lg`}>
+                                    {excessReturn}
+                                    {excessReturn > 0 ? (
                                         <FaArrowUp className="inline text-red-700" />
                                     ) : (
                                         <FaArrowDown className="inline text-blue-700" />
@@ -74,32 +80,28 @@ const MetricSummary = ({ strategyInfo, rebalWeight }: { strategyInfo: InfoData; 
                                 </div>
                             </div>
                         </div>
-                    </div>
-
-                    {/* Section 2: Volatility and Drawdown */}
-                    <div className="bg-orange-100 rounded-xl p-6 shadow-lg flex flex-col gap-4 h-full">
+                        <hr className="h-px my-8 bg-gray-300 border-0"></hr>
                         <h4 className="text-lg font-semibold text-orange-700">Volatility and Drawdown</h4>
                         <div className="flex justify-between items-center">
                             <div className="flex flex-col items-center gap-2">
                                 <p className="text-gray-600 font-semibold">Standard Deviation</p>
-                                <div className="bg-orange-300 text-red-700 text-2xl font-semibold px-6 py-3 rounded-md shadow-lg">
+                                <div className="bg-orange-200 text-red-700 text-2xl font-semibold px-6 py-3 rounded-md shadow-lg">
                                     {strategyInfo.ann_vol}%
                                 </div>
                             </div>
                             <div className="flex flex-col items-center gap-2">
                                 <p className="text-gray-600 font-semibold">Max DrawDown</p>
-                                <div className="bg-orange-300 text-red-700 text-2xl font-semibold px-6 py-3 rounded-md shadow-lg">
+                                <div className="bg-orange-200 text-red-700 text-2xl font-semibold px-6 py-3 rounded-md shadow-lg">
                                     {strategyInfo.mdd}%
                                     <FaArrowDown aria-label="Negative drawdown" className="inline text-red-700" />
                                 </div>
                             </div>
                         </div>
-                    </div>
                 </div>
 
                 {/* Pie Chart section with auto-fit height */}
                 <div className="flex flex-col justify-center">
-                    <h4 className="text-lg font-semibold text-gray-700 mb-4">Rebalancing Weights</h4>
+                    <h4 className="text-lg font-semibold text-gray-700 mb-4">Rebalancing Weights(Recent)</h4>
                     <div style={{ position: 'relative', height: '100%' }}>
                         <Pie data={pieData} options={{ maintainAspectRatio: false }} />
                     </div>

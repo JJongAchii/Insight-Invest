@@ -1,6 +1,6 @@
 "use client"
 
-import { useFetchStNavByIdQuery, useFetchStRebalByIdQuery, useFetchStrategyByIdQuery } from '@/state/api'
+import { useFetchBmByIdQuery, useFetchStNavByIdQuery, useFetchStRebalByIdQuery, useFetchStrategyByIdQuery } from '@/state/api'
 import React from 'react'
 import MetricSummary from './MetricSummary'
 import LineChart from './LineChart'
@@ -16,16 +16,17 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
   const { data: strategyInfo } = useFetchStrategyByIdQuery(port_id)
   const { data: strategyNav } = useFetchStNavByIdQuery(port_id)
   const { data: strategyRebal } = useFetchStRebalByIdQuery(port_id)
+  const { data: bmDetails } = useFetchBmByIdQuery(port_id)
 
-  if (!strategyInfo) return <p>No data available</p>
+  if (!strategyInfo || !bmDetails || !bmDetails.metrics || !bmDetails.nav) return <p>No data available</p>
 
 
   return (
     <div className="flex flex-col xl:overflow-auto gap-5 pb-36">
-      <MetricSummary strategyInfo={strategyInfo[0]} rebalWeight={strategyRebal}/>
-      <LineChart strategyNav={strategyNav} />
-      <YearlyBarChart strategyNav={strategyNav}/>
-      <MonthlyBarChart strategyNav={strategyNav}/>
+      <MetricSummary strategyInfo={strategyInfo[0]} rebalWeight={strategyRebal} bmMetrics={bmDetails.metrics}/>
+      <LineChart strategyName={strategyInfo[0].port_name} strategyNav={strategyNav} bmNav={bmDetails.nav}/>
+      <YearlyBarChart strategyName={strategyInfo[0].port_name} strategyNav={strategyNav} bmNav={bmDetails.nav}/>
+      <MonthlyBarChart strategyName={strategyInfo[0].port_name} strategyNav={strategyNav} bmNav={bmDetails.nav}/>
     </div>
   )
 }

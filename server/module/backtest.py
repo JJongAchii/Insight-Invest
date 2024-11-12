@@ -44,8 +44,12 @@ class Backtest:
                     )
                 )
                 if meta_id:
+                    if isinstance(meta_id, int):
+                        meta_id = [meta_id]
                     query = query.filter(db.TbMeta.meta_id.in_(meta_id))
                 if tickers:
+                    if isinstance(tickers, str):
+                        tickers = [tickers]
                     query = query.filter(db.TbMeta.ticker.in_(tickers))
                 
                 data = db.read_sql_query(query=query, parse_dates="trade_date").pivot(index="trade_date", columns="ticker", values="adj_close")

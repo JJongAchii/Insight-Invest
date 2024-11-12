@@ -29,6 +29,9 @@ export const api = createApi({
     fetchStRebalById: builder.query({
       query: (port_id) => `backtest/strategy/rebal/${port_id}`
     }),
+    fetchBmById: builder.query({
+      query: (port_id) => `backtest/strategy/bm/${port_id}`
+    }),
   }),
 });
 
@@ -41,4 +44,5 @@ export const {
   useFetchStrategyByIdQuery,
   useFetchStNavByIdQuery,
   useFetchStRebalByIdQuery,
+  useFetchBmByIdQuery,
 } = api;

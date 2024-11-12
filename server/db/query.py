@@ -191,3 +191,16 @@ def get_port_id_rebal(port_id: int):
         )
         
         return read_sql_query(query=query)
+    
+    
+def get_port_start_end_date(port_id: int):
+    with session_local() as session:
+        query = (
+            session.query(
+                sa.func.min(TbNav.trade_date).label("start_date"),
+                sa.func.max(TbNav.trade_date).label("end_date"),
+            )
+            .filter(TbNav.port_id == port_id)
+        )
+        
+        return read_sql_query(query=query)

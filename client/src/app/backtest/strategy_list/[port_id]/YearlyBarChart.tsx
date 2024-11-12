@@ -46,21 +46,31 @@ const calculateReturns = (data: NavData[], period: 'year' | 'month'): ReturnData
     return returnData;
 };
 
-const YearlyBarChart = ({ strategyNav }: { strategyNav: NavData[] }) => {
+const YearlyBarChart = ({ strategyName, strategyNav, bmNav }: { strategyName: string; strategyNav: NavData[];  bmNav: string;}) => {
+    const bmNavData: NavData[] = JSON.parse(bmNav);
+
     if (!strategyNav || strategyNav.length === 0) {
         return <p>No data available for chart.</p>;
     }
 
     const yearlyReturns = calculateReturns(strategyNav, 'year');
+    const bMYearlyReturns = calculateReturns(bmNavData, 'year');
 
     const yearlyData = {
         labels: yearlyReturns.map((item) => item.period),
         datasets: [
             {
-                label: 'Yearly Return (%)',
+                label: `${strategyName} (%)`,
                 data: yearlyReturns.map((item) => item.return),
                 backgroundColor: 'rgba(75, 192, 192, 0.6)',
                 borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 1,
+            },
+            {
+                label: 'Benchmark (%)',
+                data: bMYearlyReturns.map((item) => item.return),
+                backgroundColor: 'rgba(192, 75, 192, 0.2)',
+                borderColor: 'rgb(192, 75, 192)',
                 borderWidth: 1,
             },
         ],

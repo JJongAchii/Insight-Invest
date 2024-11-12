@@ -1,5 +1,6 @@
 import os
 import sys
+import pandas as pd
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from typing import List
@@ -47,7 +48,30 @@ async def get_strategy_id_nav(port_id: int):
 @router.get("/strategy/rebal/{port_id}")
 async def get_strategy_id_rebal(port_id: int):
     
-    return db.get_port_id_rebal(port_id=port_id).to_dict(orient="records")    
+    return db.get_port_id_rebal(port_id=port_id).to_dict(orient="records")
+
+@router.get("/strategy/bm/{port_id}")
+async def set_benchmark(port_id: int):
+    period = db.get_port_start_end_date(port_id=port_id)
+    
+    bt = Backtest(strategy_name="BM(SPY)")
+    price = bt.data(tickers="SPY", source="db")
+    
+    w_dict = {"SPY": 1}
+    weight = pd.DataFrame(w_dict, index=period.start_date)
+    
+    weights, nav, metrics = bt.result(
+        price=price, 
+        weight=weight, 
+        end=period.end_date.values[0]
+    )
+    nav_stack = nav.stack().reset_index()
+    nav_stack.columns = ["trade_date", "bm_name", "value"]
+    
+    return  {
+        "nav": nav_stack.to_json(orient="records"),
+        "metrics": metrics.to_json(orient="records")
+    }
     
 @router.post("")
 async def run_backtest(request: schemas.BacktestRequest):

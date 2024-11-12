@@ -18,7 +18,6 @@ interface ReturnData {
 const calculateReturns = (data: NavData[], period: 'year' | 'month'): ReturnData[] => {
     if (!data || data.length === 0) return [];
 
-    // Sort data by date to ensure chronological order
     const sortedData = [...data].sort((a, b) => dayjs(a.trade_date).unix() - dayjs(b.trade_date).unix());
 
     const groupedData = sortedData.reduce((acc, { trade_date, value }) => {
@@ -47,12 +46,15 @@ const calculateReturns = (data: NavData[], period: 'year' | 'month'): ReturnData
     return returnData;
 };
 
-const MonthlyBarChart = ({ strategyNav }: { strategyNav: NavData[] }) => {
+const MonthlyBarChart = ({ strategyName, strategyNav, bmNav }: { strategyName: string; strategyNav: NavData[];  bmNav: string;}) => {
+    const bmNavData: NavData[] = JSON.parse(bmNav);
+
     if (!strategyNav || strategyNav.length === 0) {
         return <p>No data available for chart.</p>;
     }
 
     const monthlyReturns = calculateReturns(strategyNav, 'month');
+    const bMYearlyReturns = calculateReturns(bmNavData, 'month');
 
     const monthlyData = {
         labels: monthlyReturns.map((item) => item.period),
@@ -62,6 +64,13 @@ const MonthlyBarChart = ({ strategyNav }: { strategyNav: NavData[] }) => {
                 data: monthlyReturns.map((item) => item.return),
                 backgroundColor: 'rgba(54, 162, 235, 0.6)',
                 borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1,
+            },
+            {
+                label: 'Benchmark (%)',
+                data: bMYearlyReturns.map((item) => item.return),
+                backgroundColor: 'rgba(192, 75, 192, 0.2)',
+                borderColor: 'rgb(192, 75, 192)',
                 borderWidth: 1,
             },
         ],
