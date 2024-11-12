@@ -60,7 +60,7 @@ const MonthlyBarChart = ({ strategyName, strategyNav, bmNav }: { strategyName: s
         labels: monthlyReturns.map((item) => item.period),
         datasets: [
             {
-                label: 'Monthly Return (%)',
+                label: `${strategyName} (%)`,
                 data: monthlyReturns.map((item) => item.return),
                 backgroundColor: 'rgba(54, 162, 235, 0.6)',
                 borderColor: 'rgba(54, 162, 235, 1)',

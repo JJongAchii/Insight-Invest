@@ -5,7 +5,6 @@ import SetStrategy from "./SetStrategy";
 import StrategyChart from "./StrategyChart";
 import { BacktestFetcher, ClearStrategy } from "./BacktestFetcher";
 import StrategyMetrics from "./StrategyMetrics";
-import { Result } from "postcss";
 import LoadingSpinner from "@/app/(components)/LoadingSpinner";
 
 

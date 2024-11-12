@@ -98,10 +98,12 @@ const MetricSummary = ({ strategyInfo, rebalWeight, bmMetrics }: { strategyInfo:
                             </div>
                         </div>
                 </div>
+                
+                <hr className="block lg:hidden h-px my-8 bg-gray-300 border-0"></hr>
 
                 {/* Pie Chart section with auto-fit height */}
                 <div className="flex flex-col justify-center">
-                    <h4 className="text-lg font-semibold text-gray-700 mb-4">Rebalancing Weights(Recent)</h4>
+                    <h4 className="text-lg font-semibold text-gray-700 mb-4">Rebalancing Weights (Recent)</h4>
                     <div style={{ position: 'relative', height: '100%' }}>
                         <Pie data={pieData} options={{ maintainAspectRatio: false }} />
                     </div>
