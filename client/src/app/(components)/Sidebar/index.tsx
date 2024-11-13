@@ -80,7 +80,7 @@ const Sidebar = () => {
         <div className={sidebarClassNames}>
             {/* TOP LOGO */}
             <div className={`flex justify-between md:justify-normal items-center pt-5 ${
-                    isSidebarCollapsed ? "px-7" : "px-9"
+                    isSidebarCollapsed ? "px-0" : "px-3"
             }`}>
                 <Link href="/home">
                     <div className="cursor-pointer">
