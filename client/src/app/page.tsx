@@ -1,7 +1,7 @@
-import Dashboard from "@/app/home/page"
+import Home from "@/app/home/page"
 
-export default function Home() {
+export default function MainPage() {
   return (
-    <Dashboard />
+    <Home />
   );
 }

@@ -10,6 +10,8 @@ import { HiOutlineLightBulb } from "react-icons/hi";
 import { FcAlphabeticalSortingAz } from "react-icons/fc";
 import { FaRunning } from "react-icons/fa";
 import { IconType } from 'react-icons'; 
+import logo from '@/images/logo.png';
+import Image from 'next/image';
 
 
 interface SidebarLinkProps {
@@ -77,14 +79,18 @@ const Sidebar = () => {
     return (
         <div className={sidebarClassNames}>
             {/* TOP LOGO */}
-            <div className={`flex gap-3 justify-between md:justify-normal items-center pt-8 ${
-                    isSidebarCollapsed ? "px-5" : "px-8"
+            <div className={`flex justify-between md:justify-normal items-center pt-5 ${
+                    isSidebarCollapsed ? "px-7" : "px-9"
             }`}>
-                <div>
-                    <div className='w-10 h-10'>LOGO</div>
-                    <h1 className={`${isSidebarCollapsed ? "hidden" : "block"} font-extrabold text-xl`}>INSIGHT-INVEST</h1>
-                </div>
-                
+                <Link href="/home">
+                    <div className="cursor-pointer">
+                        <Image 
+                            src={logo} 
+                            alt="Logo" 
+                            className="w-full h-auto"
+                        />
+                    </div>
+                </Link>
                 <button 
                     className='md:hidden px-3 py-3 bg-gray-100 rounded-full hover:bg-blue-100'
                     onClick={toggleSidebar}
