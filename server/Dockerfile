@@ -9,12 +9,7 @@ RUN groupadd -g "${GID}" appgroup && \
 WORKDIR /server
 
 RUN apt-get update && \
-    pip install --upgrade pip && \
-    apt-get install -y cron
-
-COPY crontab /etc/cron.d/update_price_cron
-RUN chmod 0644 /etc/cron.d/update_price_cron
-RUN crontab /etc/cron.d/update_price_cron
+    pip install --upgrade pip
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -29,4 +24,4 @@ COPY . .
 
 EXPOSE 8000
 
-CMD cron && uvicorn main:app --host 0.0.0.0 --port 8000
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
