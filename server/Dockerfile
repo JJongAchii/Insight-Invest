@@ -1,7 +1,7 @@
 # Python 이미지 사용
 FROM python:3.10-slim-buster
 
-# Build Arguments로 UID와 GID 설정 (기본값: 1000)
+# 기본값을 가진 Build Arguments 설정
 ARG UID=1000
 ARG GID=1000
 
@@ -41,8 +41,5 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 # 애플리케이션 포트 설정
 EXPOSE 8000
 
-# 비루트 사용자로 실행
-USER appuser
-
-# 엔트리포인트 스크립트를 실행하여 cron과 uvicorn 시작
+# 엔트리포인트 스크립트를 실행
 ENTRYPOINT ["/entrypoint.sh"]
