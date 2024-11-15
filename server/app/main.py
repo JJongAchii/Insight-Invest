@@ -30,7 +30,24 @@ app.include_router(backtest.router)
 
 @app.on_event("startup")
 def start_scheduler():
-    scheduler.add_job(update_daily_price, 'cron', args=['US'], hour=13, minute=15)  # Runs daily at 2 AM
+    scheduler.add_job(
+        update_daily_price,
+        'cron',
+        args=['US'],
+        hour=18,
+        minute=00,
+        id='us_market_update'
+    )
+
+    # Schedule the KR market update
+    scheduler.add_job(
+        update_daily_price,
+        'cron',
+        args=['KR'],
+        hour=6,
+        minute=0,
+        id='kr_market_update'
+    )
     scheduler.start()
 
 @app.on_event("shutdown")
