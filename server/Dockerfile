@@ -1,50 +1,49 @@
 FROM python:3.10-slim-buster
 
-# Install dependencies
+# Install cron
 RUN apt-get update && \
-    apt-get install -y wget && \
+    apt-get install -y cron && \
     rm -rf /var/lib/apt/lists/*
-
-# Download supercronic
-RUN wget -O /usr/local/bin/supercronic https://github.com/aptible/supercronic/releases/download/v0.1.11/supercronic-linux-amd64 && \
-    chmod +x /usr/local/bin/supercronic
 
 # Create a non-root user and group with UID and GID 1000
 RUN groupadd -g 1000 appuser && \
     useradd -u 1000 -g appuser -s /bin/bash -m appuser
 
+# Set working directory and change ownership
+WORKDIR /server
+COPY . /server
+RUN chown -R appuser:appuser /server
+
+# Install Python dependencies
+USER appuser
+RUN pip install --no-cache-dir -r requirements.txt
+
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
+# Copy crontab file and apply cron job
+USER root
+COPY mycron.txt /etc/cron.d/mycron
+RUN chmod 0644 /etc/cron.d/mycron && \
+    chown root:root /etc/cron.d/mycron
+
+# Change the cron PID file location to a writable directory
+RUN sed -i 's|/var/run/cron.pid|/tmp/cron.pid|g' /etc/crontab /etc/init.d/cron
+
 # Set timezone
 ENV TZ=Asia/Seoul
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-
-# Set working directory
-WORKDIR /server
-
-# Copy application code
-COPY . /server
-
-# Install Python dependencies as root
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Change ownership of the application directory
-RUN chown -R appuser:appuser /server
-
-# Switch to non-root user
-USER appuser
-
-# Copy crontab file to the application directory
-COPY mycron.txt /server/mycron.txt
 
 # Expose the application port
 EXPOSE 8000
 
 # Copy and set permissions for the entrypoint script
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN chmod +x /entrypoint.sh && chown appuser:appuser /entrypoint.sh
+
+# Switch back to non-root user
+USER appuser
 
 # Use the entrypoint script to start the container
 ENTRYPOINT ["/entrypoint.sh"]
