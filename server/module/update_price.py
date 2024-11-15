@@ -50,20 +50,16 @@ def update_daily_price(market: str):
     last_price = get_last_updated_price(market=market)
     last_price.loc[last_price["iso_code"] == "KR", "ticker"] = last_price.ticker + ".KS"
     
-    # Sort last_price by meta_id
-    last_price = last_price.sort_values('meta_id').reset_index(drop=True)
+    # Determine the batch size
+    batch_size = 500
+    num_records = last_price.shape[0]
+    
+    # Loop over the DataFrame in chunks of 500
+    for start_idx in range(0, num_records, batch_size):
+        end_idx = min(start_idx + batch_size, num_records)
+        batch_last_price = last_price.iloc[start_idx:end_idx]
 
-    # Initialize an empty DataFrame to collect results if needed
-    # all_merged_results = pd.DataFrame()
-
-    # Get unique meta_ids and split into batches of 500
-    meta_ids = last_price['meta_id'].unique()
-    for i in range(0, len(meta_ids), 500):
-        batch_meta_ids = meta_ids[i:i+500]
-        batch_last_price = last_price[last_price['meta_id'].isin(batch_meta_ids)]
-        
-        # Process batch_last_price as before
-        # Handle entries where max_dt is NaN (new tickers)
+        # Process tickers with no max_dt (new entries)
         if batch_last_price["max_dt"].isna().any():
             ticker_list = batch_last_price.loc[batch_last_price["max_dt"].isna(), "ticker"].tolist()
             price = yf.download(tickers=ticker_list)[["Adj Close", "Close"]]
@@ -76,75 +72,65 @@ def update_daily_price(market: str):
                 on="ticker",
                 how="left"
             )
-            new_data["gross_return"] = new_data.groupby("ticker")["adj_close"].pct_change()
-            
-            # Insert new data into the database
+            new_data["gross_return"] = new_data.groupby("ticker")["adj_close"].pct_change(fill_method=None)
+    
             db.TbPrice.insert(new_data)
 
-        # Initialize a DataFrame to store results for this batch
+        # Initialize an empty DataFrame to collect results
         merged_results = pd.DataFrame()
-
-        unique_dt = batch_last_price['max_dt'].unique()
-
-        for date in unique_dt:
-            if pd.notna(date):
-                ticker_list = batch_last_price.loc[batch_last_price["max_dt"] == date, "ticker"].tolist()
-                
-                price = yf.download(tickers=ticker_list, start=date)
-                
-                # Adj Close 
-                adj_price = price[["Adj Close"]]
-                # Calculate returns
-                returns = adj_price.div(adj_price.iloc[0]).dropna(axis=1).iloc[1:]
-                returns.columns = returns.columns.droplevel(0)
-                
-                # Get last adj_close prices
-                last_adj_close = batch_last_price.set_index("ticker")["adj_close"]
-                # Multiply returns by last adj_close to get new adj_close
-                mg_returns = returns.mul(last_adj_close, axis=1)
-                mg_returns = mg_returns.stack(future_stack=True).reset_index().dropna()
-                mg_returns.columns = ["trade_date", "ticker", "adj_close"]
-                
-                # Close prices
-                cl_price = price[["Close"]].stack(future_stack=True).reset_index().dropna().iloc[1:]
-                cl_price.columns = ["trade_date", "ticker", "close"]
-                
-                # Gross Return
-                gross_return = price["Adj Close"].pct_change(fill_method=None).stack(future_stack=True).reset_index().dropna()
-                gross_return.columns = ["trade_date", "ticker", "gross_return"]
     
-                # Merge data
-                mg_close = pd.merge(
-                    mg_returns,
-                    cl_price,
-                    on=["trade_date", "ticker"],
-                    how="left"
-                )
-                
-                mg_gross = pd.merge(
-                    mg_close,
-                    gross_return,
-                    on=["trade_date", "ticker"],
-                    how="left"
-                )
-                
-                mg_data = pd.merge(
-                    mg_gross,
-                    batch_last_price[["meta_id", "ticker"]],
-                    on="ticker",
-                    how="left"
-                )
-                
-                # Append results
-                merged_results = pd.concat([merged_results, mg_data], ignore_index=True)
+        unique_dt = batch_last_price.max_dt.dropna().unique()
+    
+        for date in unique_dt:
+            ticker_list = batch_last_price.loc[batch_last_price["max_dt"] == date, "ticker"].tolist()
+            price = yf.download(tickers=ticker_list, start=date)
+            
+            # Adj Close 
+            adj_price = price[["Adj Close"]]
+            returns = adj_price.div(adj_price.iloc[0]).dropna(axis=1).iloc[1:]
+            returns.columns = returns.columns.droplevel(0)
+            
+            mg_returns = returns.mul(
+                batch_last_price.set_index("ticker")["adj_close"].squeeze()
+            )
+            mg_returns = mg_returns.stack(future_stack=True).reset_index().dropna()
+            mg_returns.columns = ["trade_date", "ticker", "adj_close"]
+            
+            # Close
+            cl_price = price[["Close"]].stack(future_stack=True).reset_index().dropna().iloc[1:]
+            cl_price.columns = ["trade_date", "ticker", "close"]
+            
+            # Gross Return
+            gross_return = price["Adj Close"].pct_change(fill_method=None).stack(future_stack=True).reset_index()
+            gross_return.columns = ["trade_date", "ticker", "gross_return"]
+    
+            mg_close = pd.merge(
+                mg_returns,
+                cl_price,
+                on=["trade_date", "ticker"],
+                how="left"
+            )
+            
+            mg_gross = pd.merge(
+                mg_close,
+                gross_return,
+                on=["trade_date", "ticker"],
+                how="left"
+            )
+            
+            mg_data = pd.merge(
+                mg_gross,
+                batch_last_price[["meta_id", "ticker"]],
+                on="ticker",
+                how="left"
+            )
+            
+            merged_results = pd.concat([merged_results, mg_data], ignore_index=True)
         
-        # Insert merged results for this batch into the database
-        db.TbPrice.insert(merged_results)
+        # Insert the merged results for the current batch
+        if not merged_results.empty:
+            db.TbPrice.insert(merged_results)
 
-        # Optionally, collect all results if needed
-        # all_merged_results = pd.concat([all_merged_results, merged_results], ignore_index=True)
-        
-    return
 
 
 if __name__ == "__main__":
