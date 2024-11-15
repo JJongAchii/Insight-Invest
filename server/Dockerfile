@@ -1,5 +1,7 @@
 FROM python:3.10-slim-buster
 
+USER root
+
 # Install cron
 RUN apt-get update && \
     apt-get install -y cron && \
