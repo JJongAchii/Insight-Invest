@@ -1,1 +1,1 @@
-59 16 * * * /usr/local/bin/python /server/module/update_price.py -s us_price >> /var/log/cron.log 2>&1
+17 9 * * * /usr/local/bin/python /server/module/update_price.py -s us_price >> /var/log/cron.log 2>&1
