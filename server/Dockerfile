@@ -2,7 +2,8 @@ FROM python:3.10-slim-buster
 
 # Install cron
 RUN apt-get update && \
-    apt-get install -y cron
+    apt-get install -y cron && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /server
 
@@ -28,6 +29,7 @@ RUN crontab /etc/cron.d/mycron.txt
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# Set timezone
 ENV TZ=Asia/Seoul
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
