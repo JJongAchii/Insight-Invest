@@ -15,7 +15,7 @@ celery_app.conf.timezone = 'Asia/Seoul'  # 필요한 시간대로 설정하세�
 celery_app.conf.beat_schedule = {
     'update-price-everyday-at-2am': {
         'task': 'tasks.update_daily_price_task',
-        'schedule': crontab(hour=12, minute=50),
+        'schedule': crontab(hour=12, minute=53),
         'args': ('US',),  # 필요한 시장 코드를 전달하세요.
     },
 }
