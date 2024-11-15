@@ -45,8 +45,8 @@ RUN chmod +x /entrypoint.sh && chown appuser:appuser /entrypoint.sh
 # Switch back to non-root user
 USER appuser
 
+# Add user's local bin to PATH
+ENV PATH="/home/appuser/.local/bin:${PATH}"
+
 # Use the entrypoint script to start the container
 ENTRYPOINT ["/entrypoint.sh"]
-
-# Set the default command to run uvicorn
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
