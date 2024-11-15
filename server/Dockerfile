@@ -16,6 +16,10 @@ RUN chown -R appuser:appuser /server
 
 # Install Python dependencies
 USER appuser
+
+# Add user's local bin to PATH
+ENV PATH="/home/appuser/.local/bin:${PATH}"
+
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Set environment variables
@@ -44,9 +48,6 @@ RUN chmod +x /entrypoint.sh && chown appuser:appuser /entrypoint.sh
 
 # Switch back to non-root user
 USER appuser
-
-# Add user's local bin to PATH
-ENV PATH="/home/appuser/.local/bin:${PATH}"
 
 # Use the entrypoint script to start the container
 ENTRYPOINT ["/entrypoint.sh"]
