@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# cron을 백그라운드에서 실행하며, PID 파일을 /tmp에 생성하도록 설정
-cron -L 15 -f -p /tmp/crond.pid &
+# cron을 백그라운드에서 실행
+cron &
 
-# uvicorn 서버 실행
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+# uvicorn 서버를 비루트 사용자로 실행
+runuser -u appuser -- uvicorn app.main:app --host 0.0.0.0 --port 8000
