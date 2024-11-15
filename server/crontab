@@ -1,0 +1,1 @@
+3 13 * * * python /server/module/update_price.py -s us_price
