@@ -29,7 +29,7 @@ ENV PYTHONUNBUFFERED=1
 # Copy crontab file and apply cron job
 COPY mycron.txt /etc/cron.d/mycron
 RUN chmod 0644 /etc/cron.d/mycron && \
-    chown root:root /etc/cron.d/mycron
+    chown appuser:appuser /etc/cron.d/mycron
 
 # Change the cron PID file location to a writable directory
 RUN sed -i 's|/var/run/cron.pid|/tmp/cron.pid|g' /etc/crontab /etc/init.d/cron
