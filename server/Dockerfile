@@ -27,7 +27,6 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 # Copy crontab file and apply cron job
-USER root
 COPY mycron.txt /etc/cron.d/mycron
 RUN chmod 0644 /etc/cron.d/mycron && \
     chown root:root /etc/cron.d/mycron
@@ -45,9 +44,6 @@ EXPOSE 8000
 # Copy and set permissions for the entrypoint script
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh && chown appuser:appuser /entrypoint.sh
-
-# Switch back to non-root user
-USER appuser
 
 # Use the entrypoint script to start the container
 ENTRYPOINT ["/entrypoint.sh"]
