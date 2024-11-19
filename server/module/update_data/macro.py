@@ -23,4 +23,5 @@ def update_macro():
         data_df.columns = ["base_date", "value"]
         data_df["macro_id"] = macro_id
         
-        db.TbMacroData.insert(data_df)
+        if not data_df.empty:
+            db.TbMacroData.insert(data_df)
