@@ -203,4 +203,73 @@ def get_port_start_end_date(port_id: int):
             .filter(TbNav.port_id == port_id)
         )
         
-        return read_sql_query(query=query)
+        return read_sql_query(query=query) 
+    
+def get_last_updated_price(market: str):
+    with session_local() as session:
+        subq = (
+            session.query(
+                TbPrice.meta_id,
+                sa.func.max(TbPrice.trade_date).label("max_dt")
+            )
+            .group_by(TbPrice.meta_id)
+        ).subquery()
+        
+        query = (
+            session.query(
+                TbMeta.meta_id,
+                TbMeta.ticker,
+                TbMeta.iso_code,
+                subq.c.max_dt,
+                TbPrice.adj_close,
+            )
+            .outerjoin(
+                subq,
+                subq.c.meta_id == TbMeta.meta_id
+            )
+            .outerjoin(
+                TbPrice,
+                sa.and_(
+                    TbPrice.meta_id == TbMeta.meta_id,
+                    TbPrice.trade_date == subq.c.max_dt
+                )
+            )
+            .filter(TbMeta.iso_code == market)
+        )
+        
+        data = read_sql_query(query=query)
+
+    return data
+
+def get_last_updated_macro():
+    with session_local() as session:
+        subq = (
+            session.query(
+                TbMacroData.macro_id,
+                sa.func.max(TbMacroData.base_date).label("max_dt")
+            )
+            .group_by(TbMacroData.macro_id)
+        ).subquery()
+
+        query = (
+            session.query(
+                TbMacro.macro_id,
+                TbMacro.fred,
+                subq.c.max_dt,
+            )
+            .outerjoin(
+                subq,
+                subq.c.macro_id == TbMacro.macro_id
+            )
+            .outerjoin(
+                TbMacroData,
+                sa.and_(
+                    TbMacroData.macro_id == TbMacro.macro_id,
+                    TbMacroData.base_date == subq.c.max_dt
+                )
+            )
+        )
+        
+        data = read_sql_query(query=query)
+    
+    return data

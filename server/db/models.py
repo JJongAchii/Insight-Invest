@@ -109,3 +109,21 @@ class TbMetrics(StaticBase):
     kurt = sa.Column(sa.Float, nullable=True)
     var = sa.Column(sa.Float, nullable=True)
     cvar = sa.Column(sa.Float, nullable=True)
+    
+    
+class TbMacro(StaticBase):
+    """macro economics definition"""
+
+    __tablename__ = "tb_macro"
+    macro_id = sa.Column(sa.Integer, sa.Identity(start=1), primary_key=True)
+    fred = sa.Column(sa.String(255), nullable=True)
+    description = sa.Column(sa.Text, nullable=True)
+    
+
+class TbMacroData(StaticBase):
+    """macro economics data"""
+
+    __tablename__ = "tb_macro_data"
+    macro_id = sa.Column(sa.ForeignKey("tb_macro.macro_id"), primary_key=True)
+    base_date = sa.Column(sa.Date, primary_key=True)
+    value = sa.Column(sa.Float, nullable=True)

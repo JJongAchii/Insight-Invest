@@ -4,50 +4,14 @@ import sqlalchemy as sa
 import pandas as pd
 import yfinance as yf
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../..")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../../..")))
 import db
 from config import get_args
 
 
-def get_last_updated_price(market: str):
-    with db.session_local() as session:
-        subq = (
-            session.query(
-                db.TbPrice.meta_id,
-                sa.func.max(db.TbPrice.trade_date).label("max_dt")
-            )
-            .group_by(db.TbPrice.meta_id)
-        ).subquery()
-        
-        query = (
-            session.query(
-                db.TbMeta.meta_id,
-                db.TbMeta.ticker,
-                db.TbMeta.iso_code,
-                subq.c.max_dt,
-                db.TbPrice.adj_close,
-            )
-            .outerjoin(
-                subq,
-                subq.c.meta_id == db.TbMeta.meta_id
-            )
-            .outerjoin(
-                db.TbPrice,
-                sa.and_(
-                    db.TbPrice.meta_id == db.TbMeta.meta_id,
-                    db.TbPrice.trade_date == subq.c.max_dt
-                )
-            )
-            .filter(db.TbMeta.iso_code == market)
-        )
-        
-        data = db.read_sql_query(query=query)
-
-    return data
-
 
 def update_daily_price(market: str):
-    last_price = get_last_updated_price(market=market)
+    last_price = db.get_last_updated_price(market=market)
     last_price.loc[last_price["iso_code"] == "KR", "ticker"] = last_price.ticker + ".KS"
     
     # Determine the batch size

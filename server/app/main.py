@@ -6,7 +6,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from .routers import meta, price, backtest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../..")))
-from module.update_price import update_daily_price
+from module.update_data.price import update_daily_price
+from module.update_data.macro import update_macro
 
 app = FastAPI()
 scheduler = BackgroundScheduler()
@@ -36,6 +37,7 @@ def start_scheduler():
         args=['US'],
         hour=18,
         minute=00,
+        day_of_week='tue-sat',
         id='us_market_update'
     )
 
@@ -46,8 +48,20 @@ def start_scheduler():
         args=['KR'],
         hour=6,
         minute=0,
+        day_of_week='tue-sat',
         id='kr_market_update'
     )
+    
+    # Schedule macro data update
+    scheduler.add_job(
+        update_macro,
+        'cron',
+        hour=8,
+        minute=0,
+        day_of_week='mon-sat',
+        id='macro_update'
+    )
+    
     scheduler.start()
 
 @app.on_event("shutdown")
