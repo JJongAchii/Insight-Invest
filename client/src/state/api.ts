@@ -32,6 +32,12 @@ export const api = createApi({
     fetchBmById: builder.query({
       query: (port_id) => `backtest/strategy/bm/${port_id}`
     }),
+    fetchMacroInfo: builder.query({
+      query: () => "/regime/info",
+    }),
+    fetchMacroData: builder.query({
+      query: () => "/regime/data",
+    }),
   }),
 });
 
@@ -45,4 +51,6 @@ export const {
   useFetchStNavByIdQuery,
   useFetchStRebalByIdQuery,
   useFetchBmByIdQuery,
+  useFetchMacroInfoQuery,
+  useFetchMacroDataQuery,
 } = api;

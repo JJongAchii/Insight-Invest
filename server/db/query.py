@@ -273,3 +273,16 @@ def get_last_updated_macro():
         data = read_sql_query(query=query)
     
     return data
+
+def get_macro_data():
+    with session_local() as session:
+        query = (
+            session.query(
+                TbMacroData.base_date,
+                TbMacroData.macro_id,
+                TbMacroData.value,
+            )
+            .filter(TbMacroData.base_date >= "1980-01-01")
+        )
+        
+        return read_sql_query(query=query)

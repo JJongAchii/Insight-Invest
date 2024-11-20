@@ -3,7 +3,7 @@ import sys
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
-from .routers import meta, price, backtest
+from .routers import meta, price, backtest, regime
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../..")))
 from module.update_data.price import update_daily_price
@@ -28,6 +28,7 @@ app.add_middleware(
 app.include_router(meta.router)
 app.include_router(price.router)
 app.include_router(backtest.router)
+app.include_router(regime.router)
 
 @app.on_event("startup")
 def start_scheduler():

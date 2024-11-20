@@ -16,6 +16,7 @@
     "@reduxjs/toolkit": "^2.3.0",
     "axios": "^1.7.7",
     "chart.js": "^4.4.6",
+    "chartjs-plugin-annotation": "^3.1.0",
     "dayjs": "^1.11.13",
     "dotenv": "^16.4.5",
     "lucide-react": "^0.453.0",
