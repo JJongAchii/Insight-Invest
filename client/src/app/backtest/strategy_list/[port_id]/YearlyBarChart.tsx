@@ -98,7 +98,7 @@ const YearlyBarChart = ({ strategyName, strategyNav, bmNav }: { strategyName: st
             },
             x: {
                 title: {
-                    display: true,
+                    display: false,
                     text: 'Date',
                 },
             },
@@ -106,8 +106,8 @@ const YearlyBarChart = ({ strategyName, strategyNav, bmNav }: { strategyName: st
     };
 
     return (
-        <div className="flex flex-col gap-8 bg-white shadow-lg rounded-2xl p-8">
-            <h4 className="text-lg font-semibold">Yearly Returns</h4>
+        <div className="flex flex-col bg-white shadow-lg rounded-2xl px-2 py-3 gap-5">
+            <h4 className="text-lg text-center font-semibold">Yearly Returns</h4>
             <div style={{ position: 'relative', height: '400px' }}>
                 <Bar data={yearlyData} options={options} />
             </div>

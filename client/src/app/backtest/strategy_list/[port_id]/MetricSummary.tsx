@@ -49,7 +49,7 @@ const MetricSummary = ({ strategyInfo, rebalWeight, bmMetrics }: { strategyInfo:
     };
 
     return (
-        <div className="flex flex-col bg-white shadow-lg rounded-2xl p-8 gap-8">
+        <div className="flex flex-col bg-white shadow-lg rounded-2xl px-2 py-8 gap-5">
             <h2 className="text-2xl font-semibold text-gray-800">{strategyInfo.port_name}</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
                 {/* Annual Returns and Volatility/Drawdown section */}

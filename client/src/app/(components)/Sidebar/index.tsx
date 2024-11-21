@@ -116,7 +116,7 @@ const Sidebar = () => {
                 
                 {/* Backtest 탭과 드롭다운 */}
                 <SidebarLink 
-                    href="/backtest"
+                    href="/backtest/simulation"
                     icon={IoBarChart}
                     label="Backtest"
                     isCollapsed={isSidebarCollapsed}

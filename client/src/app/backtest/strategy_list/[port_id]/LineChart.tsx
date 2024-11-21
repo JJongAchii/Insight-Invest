@@ -19,8 +19,8 @@ interface BmNavData {
 const LineChart = ({ strategyName, strategyNav, bmNav }: {strategyName: string; strategyNav: NavData[]; bmNav: string;}) => {
   const bmNavData: BmNavData[] = JSON.parse(bmNav);
   return (
-    <div className="flex flex-col bg-white shadow-lg rounded-2xl p-8 gap-8">
-      <h4 className='text-lg font-semibold'>Performance Chart</h4>
+    <div className="flex flex-col bg-white shadow-lg rounded-2xl px-2 py-3 gap-5">
+      <h4 className='text-lg text-center font-semibold'>Performance Chart</h4>
       <div style={{ position: 'relative', height: '400px' }}>
         <Line 
           data={{
@@ -60,7 +60,7 @@ const LineChart = ({ strategyName, strategyNav, bmNav }: {strategyName: string; 
                   display: false,
                 },
                 title: {
-                  display: true,
+                  display: false,
                   text: 'Date',
                   color: '#888',
                   font: { size: 12, weight: 'bold' },

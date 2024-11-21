@@ -100,7 +100,7 @@ const StrategyChart = ({ navResult }: { navResult: any }) => {
 
     return (
         <div className="flex flex-col bg-white shadow-lg rounded-2xl p-8 relative" style={{ height: 450 }}>
-            <h4 className='text-lg font-semibold'>Performance Chart</h4>
+            <h4 className='text-lg text-center font-semibold'>Performance Chart</h4>
             {navResult ? (
                 <Line data={data} options={options} />
             ) : (

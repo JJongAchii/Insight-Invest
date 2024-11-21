@@ -31,6 +31,15 @@ const Regime = () => {
   const unemploymentInfo = macroInfo?.find((macro: MacroInfo) => macro.fred === "UNRATE") || {};
   const unemploymentData = macroData?.filter((data: MacroData) => data.macro_id === unemploymentInfo.macro_id);
 
+  const employeesInfo = macroInfo?.find((macro: MacroInfo) => macro.fred === "PAYEMS") || {};
+  const employeesData = macroData?.filter((data: MacroData) => data.macro_id === employeesInfo.macro_id);
+
+  const fedFundInfo = macroInfo?.find((macro: MacroInfo) => macro.fred === "FEDFUNDS") || {};
+  const fedFundData = macroData?.filter((data: MacroData) => data.macro_id === fedFundInfo.macro_id);
+
+  const cpiInfo = macroInfo?.find((macro: MacroInfo) => macro.fred === "CPIAUCSL") || {};
+  const cpiData = macroData?.filter((data: MacroData) => data.macro_id === cpiInfo.macro_id);
+
   return (
     <div className="flex flex-col xl:overflow-auto gap-5 pb-36">
       {/* T10Y2Y Chart */}
@@ -50,6 +59,28 @@ const Regime = () => {
         recessionLabel={recessionInfo.description}
         title="Unemployment Rate"
         baseline={5}
+      />
+      <MacroChart
+        primaryData={employeesData}
+        recessionData={recessionData}
+        primaryLabel={employeesInfo.description}
+        recessionLabel={recessionInfo.description}
+        title="All Employees, Total Nonfarm"
+        baseline={150000}
+      />
+      <MacroChart
+        primaryData={fedFundData}
+        recessionData={recessionData}
+        primaryLabel={fedFundInfo.description}
+        recessionLabel={recessionInfo.description}
+        title="Federal Funds Rate"
+      />
+      <MacroChart
+        primaryData={cpiData}
+        recessionData={recessionData}
+        primaryLabel={cpiInfo.description}
+        recessionLabel={recessionInfo.description}
+        title="Consumer Price Index for All Urban Consumers"
       />
     </div>
   );

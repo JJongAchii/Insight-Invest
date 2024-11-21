@@ -41,7 +41,7 @@ const StrategyMetrics = ({ backtestResult, selectedTicker }: { backtestResult: a
 
     return (
         <div className="flex flex-col bg-white shadow-lg rounded-2xl p-8 relative" style={{ height: 450 }}>
-            <h4 className='text-lg font-semibold'>Metrics</h4>
+            <h4 className='text-lg text-center font-semibold'>Metrics</h4>
             {backtestResult?.metrics ? (
                 <DataGrid
                     rows={metricData}
