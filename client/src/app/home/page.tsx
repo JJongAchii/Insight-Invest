@@ -348,29 +348,29 @@ const Home = () => {
         widgetConfig={tickerTapeConfig}
       />
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="flex flex-col gap-8 bg-white shadow-lg rounded-2xl p-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="flex flex-col bg-white shadow-lg rounded-2xl px-2 py-3 gap-5">
           <h4 className="text-lg font-semibold">Economic Calendar</h4>
           <TradingViewWidget
             widgetScriptUrl={economicCalUrl}
             widgetConfig={economicCalConfig}
           />
         </div>
-        <div className="flex flex-col gap-8 bg-white shadow-lg rounded-2xl p-8">
+        <div className="flex flex-col bg-white shadow-lg rounded-2xl px-2 py-3 gap-5">
           <h4 className="text-lg font-semibold">Market Data</h4>
           <TradingViewWidget
             widgetScriptUrl={marketQuotesUrl}
             widgetConfig={marketQuotesConfig}
           />
         </div>
-        <div className="flex flex-col gap-8 bg-white shadow-lg rounded-2xl p-8">
+        <div className="flex flex-col bg-white shadow-lg rounded-2xl px-2 py-3 gap-5">
           <h4 className="text-lg font-semibold">Forex Cross Rate</h4>
           <TradingViewWidget 
             widgetScriptUrl={fxCrossRateUrl}
             widgetConfig={fxCrossRateConfig}
           />
         </div>
-        <div className="flex flex-col gap-8 bg-white shadow-lg rounded-2xl p-8">
+        <div className="flex flex-col bg-white shadow-lg rounded-2xl px-2 py-3 gap-5">
           <h4 className="text-lg font-semibold">Market Overview</h4>
           <TradingViewWidget
             widgetScriptUrl={marketOverviewUrl}
