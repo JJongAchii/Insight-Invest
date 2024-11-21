@@ -108,12 +108,11 @@ const Sidebar = () => {
                     isCollapsed={isSidebarCollapsed}
                 />
                 <SidebarLink 
-                    href="/stocksearch"
-                    icon={IoSearch}
-                    label="Stock Search"
+                    href="/regime"
+                    icon={IoTelescope}
+                    label="Regime"
                     isCollapsed={isSidebarCollapsed}
-                />
-                
+                />                
                 {/* Backtest 탭과 드롭다운 */}
                 <SidebarLink 
                     href="/backtest/simulation"
@@ -140,11 +139,10 @@ const Sidebar = () => {
                         />
                     </div>
                 )}
-                
                 <SidebarLink 
-                    href="/regime"
-                    icon={IoTelescope}
-                    label="Regime"
+                    href="/stocksearch"
+                    icon={IoSearch}
+                    label="Stock Search"
                     isCollapsed={isSidebarCollapsed}
                 />
                 <SidebarLink 
