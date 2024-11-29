@@ -26,7 +26,17 @@ URL: https://insight-invest-ten.vercel.app/
    - Strategy List
      - Database에 저장된 전략 리스트
      - 전략 선택시 성과 리포트 생성(Metrics, Performance Charts...)
-  
+
+4. Stock Search
+   - DB에 저장되어 있는 Stock, ETF 목록 및 정보
+   - 추가 개발 예정
+
+5. Insight
+   - 인사이트를 얻을 수 있는 정보들 크롤링
+   - 추가 개발 예정
+     
+
+
 ## 시작 가이드
 ### Requirements
 For building and running the application you need:
