@@ -35,7 +35,7 @@ const Contents = ({ strategyList, strategyNav }: {strategyList: Strategy[]; stra
                 strategyList?.map((strategy) => (
                     <div 
                         key={strategy.port_id} 
-                        className='flex bg-gradient-to-br from-sky-100 to-white p-6 rounded-xl shadow-md border border-gray-200 hover:shadow-lg transition-shadow duration-200 transform hover:scale-105'
+                        className='flex bg-gradient-to-br from-sky-100 to-white p-6 rounded-xl shadow-md border border-gray-200 cursor-pointer hover:shadow-lg transition-shadow duration-200 transform hover:scale-105'
                         onClick={() => handleGridClick(strategy.port_id)}
                     >
                         <div className='w-1/2'>

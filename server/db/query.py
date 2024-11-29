@@ -280,9 +280,15 @@ def get_macro_data():
             session.query(
                 TbMacroData.base_date,
                 TbMacroData.macro_id,
+                TbMacro.fred,
                 TbMacroData.value,
             )
+            .join(
+                TbMacro,
+                TbMacro.macro_id == TbMacroData.macro_id
+            )
             .filter(TbMacroData.base_date >= "1980-01-01")
+            .order_by(TbMacroData.base_date)
         )
         
         return read_sql_query(query=query)

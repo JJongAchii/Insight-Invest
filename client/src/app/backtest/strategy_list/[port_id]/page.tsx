@@ -1,13 +1,14 @@
 "use client"
 
 import { useFetchBmByIdQuery, useFetchStNavByIdQuery, useFetchStRebalByIdQuery, useFetchStrategyByIdQuery } from '@/state/api'
-import React from 'react'
+import React, { useState } from 'react'
 import MetricSummary from './MetricSummary'
 import LineChart from './LineChart'
 import MonthlyBarChart from './MonthlyBarChart'
 import YearlyBarChart from './YearlyBarChart'
 import Link from 'next/link'
 import { FaArrowLeft } from 'react-icons/fa' // Import an icon for better visual cue
+import LoadingSpinner from '@/app/(components)/LoadingSpinner'
 
 interface StrategyDetailProps {
   params: { port_id: number }
@@ -20,7 +21,8 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
   const { data: strategyRebal } = useFetchStRebalByIdQuery(port_id)
   const { data: bmDetails } = useFetchBmByIdQuery(port_id)
 
-  if (!strategyInfo || !bmDetails || !bmDetails.metrics || !bmDetails.nav) return <p>No data available</p>
+
+  if (!strategyInfo || !bmDetails || !bmDetails.metrics || !bmDetails.nav) return <LoadingSpinner />
 
 
   return (

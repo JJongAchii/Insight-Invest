@@ -108,56 +108,56 @@ const MacroChart: React.FC<MacroChartProps> = ({
                 },
                 },
                 zoom: {
-                zoom: {
-                    wheel: {
-                    enabled: true,
+                    zoom: {
+                        wheel: {
+                            enabled: true,
+                        },
+                        pinch: {
+                            enabled: true,
+                        },
+                        mode: "x",
                     },
-                    pinch: {
-                    enabled: true,
+                    pan: {
+                        enabled: true,
+                        mode: "x",
                     },
-                    mode: "x",
-                },
-                pan: {
-                    enabled: true,
-                    mode: "x",
-                },
                 },
                 annotation: {
-                annotations: {
-                    baselineLine: {
-                    type: "line",
-                    yMin: baseline,
-                    yMax: baseline,
-                    borderColor: "#ff0000",
-                    borderWidth: 2,
-                    label: {
-                        display: true,
-                        position: "end",
+                    annotations: {
+                        baselineLine: {
+                            type: "line",
+                            yMin: baseline,
+                            yMax: baseline,
+                            borderColor: "#ff0000",
+                            borderWidth: 2,
+                            label: {
+                                display: true,
+                                position: "end",
+                            },
+                        },
                     },
-                    },
-                },
                 },
             },
             scales: {
                 "left-axis": {
-                type: "linear",
-                position: "left",
-                grid: {
-                    drawOnChartArea: true,
-                    color: (context) =>
-                    context.tick.value === baseline ? "#ff0000" : "#e0e0e0",
-                    lineWidth: (context) => (context.tick.value === baseline ? 2 : 1),
-                },
+                    type: "linear",
+                    position: "left",
+                    grid: {
+                        drawOnChartArea: true,
+                        color: (context) =>
+                        context.tick.value === baseline ? "#ff0000" : "#e0e0e0",
+                        lineWidth: (context) => (context.tick.value === baseline ? 2 : 1),
+                    },
                 },
                 "right-axis": {
-                type: "linear",
-                position: "right",
-                grid: {
-                    drawOnChartArea: true,
-                },
-                min: 0,
-                max: 1,
-                ticks: { display: false },
+                    type: "linear",
+                    position: "right",
+                    grid: {
+                        drawOnChartArea: true,
+                    },
+                    min: 0,
+                    max: 1,
+                    ticks: { display: false },
                 },
             },
             interaction: { mode: "nearest", intersect: false },

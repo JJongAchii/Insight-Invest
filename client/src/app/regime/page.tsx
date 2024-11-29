@@ -3,6 +3,7 @@
 import { useFetchMacroDataQuery, useFetchMacroInfoQuery } from "@/state/api";
 import React from "react";
 import MacroChart from "./MacroChart";
+import LoadingSpinner from "../(components)/LoadingSpinner";
 
 
 interface MacroInfo {
@@ -39,6 +40,8 @@ const Regime = () => {
 
   const cpiInfo = macroInfo?.find((macro: MacroInfo) => macro.fred === "CPIAUCSL") || {};
   const cpiData = macroData?.filter((data: MacroData) => data.macro_id === cpiInfo.macro_id);
+
+  if (!macroInfo || !macroData) return <LoadingSpinner />
 
   return (
     <div className="flex flex-col xl:overflow-auto gap-5 pb-36">
@@ -81,6 +84,7 @@ const Regime = () => {
         primaryLabel={cpiInfo.description}
         recessionLabel={recessionInfo.description}
         title="Consumer Price Index for All Urban Consumers"
+        baseline={0.02}
       />
     </div>
   );

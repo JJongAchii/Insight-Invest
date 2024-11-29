@@ -18,5 +18,8 @@ async def get_macro_info():
 
 @router.get("/data")
 async def get_macro_data():
+    data = db.get_macro_data()
     
-    return db.get_macro_data().to_dict(orient="records")
+    data.loc[data.fred == "CPIAUCSL", "value"] = data[data.fred == "CPIAUCSL"].value.pct_change(periods=12)
+    
+    return data.dropna().to_dict(orient="records")
