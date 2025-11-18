@@ -1,0 +1,67 @@
+name: Deploy to AWS Copilot
+
+on:
+  push:
+    branches:
+      - main  # main 브랜치에 push될 때 자동 배포
+    paths:
+      - 'server/**'  # server 디렉토리 변경 시에만
+      - 'copilot/**'  # copilot 설정 변경 시에만
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:  # 수동 실행 가능
+
+env:
+  AWS_REGION: ap-northeast-2
+  COPILOT_APP: insight-invest
+  COPILOT_ENV: dev
+  COPILOT_SVC: api
+
+jobs:
+  deploy:
+    name: Deploy API to AWS
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install AWS Copilot CLI
+        run: |
+          curl -Lo copilot https://github.com/aws/copilot-cli/releases/latest/download/copilot-linux
+          chmod +x copilot
+          sudo mv copilot /usr/local/bin/copilot
+          copilot --version
+
+      - name: Deploy to Copilot
+        run: |
+          copilot svc deploy \
+            --name ${{ env.COPILOT_SVC }} \
+            --env ${{ env.COPILOT_ENV }} \
+            --app ${{ env.COPILOT_APP }}
+
+      - name: Get service status
+        if: success()
+        run: |
+          copilot svc status \
+            --name ${{ env.COPILOT_SVC }} \
+            --env ${{ env.COPILOT_ENV }}
+
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "✅ Deployment successful!"
+          echo "API URL: http://$(copilot svc show --name ${{ env.COPILOT_SVC }} --json | jq -r '.routes[0].url')"
+
+      - name: Notify deployment failure
+        if: failure()
+        run: |
+          echo "❌ Deployment failed!"
+          exit 1
+
