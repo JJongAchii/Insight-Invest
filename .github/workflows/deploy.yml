@@ -3,24 +3,24 @@ name: Deploy to AWS Copilot
 on:
   push:
     branches:
-      - main  # main 브랜치에 push될 때 자동 배포
+      - main # main 브랜치에 push될 때 자동 배포
     paths:
-      - 'server/**'  # server 디렉토리 변경 시에만
-      - 'copilot/**'  # copilot 설정 변경 시에만
-      - '.github/workflows/deploy.yml'
-  workflow_dispatch:  # 수동 실행 가능
+      - "server/**" # server 디렉토리 변경 시에만
+      - "copilot/**" # copilot 설정 변경 시에만
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch: # 수동 실행 가능
 
 env:
   AWS_REGION: ap-northeast-2
   COPILOT_APP: insight-invest
   COPILOT_ENV: dev
-  COPILOT_SVC: api
 
 jobs:
-  deploy:
-    name: Deploy API to AWS
+  # API 서버 배포
+  deploy-api:
+    name: Deploy API Server
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -39,29 +39,80 @@ jobs:
           sudo mv /tmp/copilot-cli /usr/local/bin/copilot
           copilot --version
 
-      - name: Deploy to Copilot
+      - name: Deploy API service
         run: |
           copilot svc deploy \
-            --name ${{ env.COPILOT_SVC }} \
+            --name api \
             --env ${{ env.COPILOT_ENV }} \
             --app ${{ env.COPILOT_APP }}
 
-      - name: Get service status
+      - name: Get API service status
         if: success()
         run: |
           copilot svc status \
-            --name ${{ env.COPILOT_SVC }} \
+            --name api \
             --env ${{ env.COPILOT_ENV }}
 
-      - name: Notify deployment success
+  # Scheduled Jobs 배포
+  deploy-jobs:
+    name: Deploy Scheduled Jobs
+    runs-on: ubuntu-latest
+    needs: deploy-api # API 배포 후 실행
+    strategy:
+      matrix:
+        job: [us-price-updater, kr-price-updater, macro-updater]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install AWS Copilot CLI
+        run: |
+          curl -Lo /tmp/copilot-cli https://github.com/aws/copilot-cli/releases/latest/download/copilot-linux
+          chmod +x /tmp/copilot-cli
+          sudo mv /tmp/copilot-cli /usr/local/bin/copilot
+          copilot --version
+
+      - name: Deploy ${{ matrix.job }}
+        run: |
+          copilot job deploy \
+            --name ${{ matrix.job }} \
+            --env ${{ env.COPILOT_ENV }} \
+            --app ${{ env.COPILOT_APP }}
+
+      - name: Get job status
         if: success()
         run: |
-          echo "✅ Deployment successful!"
-          echo "API URL: http://$(copilot svc show --name ${{ env.COPILOT_SVC }} --json | jq -r '.routes[0].url')"
+          copilot job status \
+            --name ${{ matrix.job }} \
+            --env ${{ env.COPILOT_ENV }}
 
-      - name: Notify deployment failure
-        if: failure()
+  # 배포 결과 알림
+  notify:
+    name: Notify Deployment Result
+    runs-on: ubuntu-latest
+    needs: [deploy-api, deploy-jobs]
+    if: always()
+
+    steps:
+      - name: Notify success
+        if: ${{ needs.deploy-api.result == 'success' && needs.deploy-jobs.result == 'success' }}
+        run: |
+          echo "✅ Deployment successful!"
+          echo "- API Server: Deployed"
+          echo "- Scheduled Jobs: Deployed"
+
+      - name: Notify failure
+        if: ${{ needs.deploy-api.result == 'failure' || needs.deploy-jobs.result == 'failure' }}
         run: |
           echo "❌ Deployment failed!"
+          echo "- API Server: ${{ needs.deploy-api.result }}"
+          echo "- Scheduled Jobs: ${{ needs.deploy-jobs.result }}"
           exit 1
-

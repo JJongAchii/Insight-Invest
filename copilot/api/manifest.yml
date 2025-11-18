@@ -1,48 +1,56 @@
-# The manifest for the "api" service.
-# Read the full specification for the "Load Balanced Web Service" type at:
-#  https://aws.github.io/copilot-cli/docs/manifest/lb-web-service/
+# Copilot manifest for API service (Cost-Optimized)
+# 
+# Type: Backend Service (No ALB - saves ~$16/month)
+# Access via: Direct ECS Task Public IP
 
-# Your service name will be used in naming your resources like log groups, ECS services, etc.
 name: api
-type: Load Balanced Web Service
+type: Backend Service  # ALB 제거 버전 (Load Balanced Web Service → Backend Service)
 
-# Distribute traffic to your service.
-http:
-  # Requests to this path will be forwarded to your service.
-  # To match all requests you can use the "/" path.
-  path: "/"
-  # You can specify a custom health check path. The default is "/".
-  # healthcheck: '/'
-
-# Configuration for your containers and service.
+# Docker image configuration
 image:
-  # Docker build arguments. For additional overrides: https://aws.github.io/copilot-cli/docs/manifest/lb-web-service/#image-build
-  build: server/Dockerfile
-  # Port exposed through your container to route traffic to it.
+  build:
+    dockerfile: server/Dockerfile
+    context: ./server
   port: 8000
 
-cpu: 256 # Number of CPU units for the task.
-memory: 512 # Amount of memory in MiB used by the task.
-count: 1 # Number of tasks that should be running in your service.
-exec: true # Enable running commands in your container.
-network:
-  connect: true # Enable Service Connect for intra-environment traffic between services.
+# Resource allocation (minimum for cost saving)
+cpu: 256       # 0.25 vCPU (최소값)
+memory: 512    # 512 MB (최소값)
+count: 1       # Single instance (no auto-scaling without ALB)
 
-# storage:
-# readonly_fs: true       # Limit to read-only access to mounted root filesystems.
+# Enable command execution for debugging
+exec: true
 
-# Optional fields for more advanced use-cases.
-#
-variables: # Pass environment variables as key value pairs.
+# Environment variables
+variables:
   ENVIRONMENT: production
   TZ: Asia/Seoul
-  CORS_ORIGINS: https://insight-invest-ten.vercel.app
+  LOG_LEVEL: INFO
+  # CORS origins - update with your actual domains
+  CORS_ORIGINS: https://insight-invest-ten.vercel.app,http://localhost:3000
 
-secrets: # Pass secrets from AWS Systems Manager (SSM) Parameter Store.
+# Secrets from AWS Systems Manager Parameter Store
+secrets:
   DATABASE_URL: /copilot/${COPILOT_APPLICATION_NAME}/${COPILOT_ENVIRONMENT_NAME}/secrets/DATABASE_URL
-# You can override any of the values defined above by environment.
-#environments:
-#  test:
-#    count: 2               # Number of tasks to run for the "test" environment.
-#    deployment:            # The deployment strategy for the "test" environment.
-#       rolling: 'recreate' # Stops existing tasks before new ones are started for faster deployments.
+
+# Network configuration
+network:
+  vpc:
+    placement: public  # Public subnet for direct access (no ALB)
+
+# Logging configuration (reduced for cost saving)
+logging:
+  retention: 7  # 7일 (기존 30일에서 축소)
+
+# Health check (internal only, no ALB)
+healthcheck:
+  command: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+  interval: 30s
+  timeout: 5s
+  retries: 3
+  start_period: 60s
+
+# Note: Without ALB, you'll access the service via:
+# - ECS Task Public IP (changes on restart)
+# - Or use Route53 to create DNS record pointing to task IP
+# - Or use AWS Service Discovery

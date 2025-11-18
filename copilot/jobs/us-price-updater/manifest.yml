@@ -1,0 +1,60 @@
+# AWS Copilot Scheduled Job Manifest for US Market Price Updates
+# 
+# This job runs daily at 18:00 KST (09:00 UTC) from Tuesday to Saturday
+# to update US stock market price data.
+#
+# For more info: https://aws.github.io/copilot-cli/docs/manifest/scheduled-job/
+
+name: us-price-updater
+type: Scheduled Job
+
+# Schedule in cron format (UTC timezone)
+# 18:00 KST = 09:00 UTC
+# Runs Tuesday-Saturday (US market trading days accounting for timezone)
+on:
+  schedule: "0 9 * * TUE-SAT"
+
+# Docker image configuration
+image:
+  build:
+    dockerfile: server/Dockerfile
+    context: ./server
+  # Override the CMD from Dockerfile
+  command: ["python", "run_scheduled_job.py", "--job", "us-price"]
+
+# Resource allocation
+cpu: 256       # 0.25 vCPU
+memory: 512    # 512 MB
+
+# Retry configuration
+retries: 2     # Retry twice if the job fails
+timeout: 30m   # Maximum execution time
+
+# Enable command execution for debugging
+exec: true
+
+# Environment variables
+variables:
+  ENVIRONMENT: production
+  TZ: Asia/Seoul
+  LOG_LEVEL: INFO
+
+# Secrets from AWS Systems Manager Parameter Store
+secrets:
+  DATABASE_URL: /copilot/${COPILOT_APPLICATION_NAME}/${COPILOT_ENVIRONMENT_NAME}/secrets/DATABASE_URL
+
+# Network configuration (same VPC as API service)
+network:
+  vpc:
+    placement: private
+
+# Cost optimization: Use Spot instances (70% cheaper)
+# Spot instances are ideal for scheduled jobs that can tolerate interruptions
+platform: linux/x86_64
+capacityProviders:
+  - FARGATE_SPOT
+
+# Logging configuration (cost-optimized)
+logging:
+  retention: 7  # 7일 (비용 절감)
+

@@ -1,20 +1,31 @@
-import os
-import sys
+"""
+Insight-Invest FastAPI Application
+
+This is a clean API server focused solely on serving HTTP endpoints.
+Scheduled data updates are handled by separate AWS EventBridge Scheduled Jobs.
+
+Architecture:
+- API Server: Handles HTTP requests (this file)
+- Scheduled Jobs: Separate ECS tasks triggered by EventBridge
+  - us-price-updater: Updates US market data
+  - kr-price-updater: Updates KR market data  
+  - macro-updater: Updates macroeconomic data
+"""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from apscheduler.schedulers.background import BackgroundScheduler
 from .routers import meta, price, backtest, regime
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../..")))
-from module.update_data.price import update_daily_price
-from module.update_data.macro import update_macro
+# Initialize FastAPI app
+app = FastAPI(
+    title="Insight-Invest API",
+    description="Investment analysis and backtesting API",
+    version="2.0.0"
+)
 
-app = FastAPI()
-scheduler = BackgroundScheduler()
-
+# CORS configuration
 origins = [
-    "http://localhost:3000",  # 로컬 개발용
-    "https://insight-invest-ten.vercel.app",  # 배포된 프론트엔드 도메인
+    "http://localhost:3000",  # Local development
+    "https://insight-invest-ten.vercel.app",  # Production frontend
 ]
 
 app.add_middleware(
@@ -25,46 +36,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include API routers
 app.include_router(meta.router)
 app.include_router(price.router)
 app.include_router(backtest.router)
 app.include_router(regime.router)
 
-@app.on_event("startup")
-def start_scheduler():
-    scheduler.add_job(
-        update_daily_price,
-        'cron',
-        args=['US'],
-        hour=18,
-        minute=00,
-        day_of_week='tue-sat',
-        id='us_market_update'
-    )
 
-    # Schedule the KR market update
-    scheduler.add_job(
-        update_daily_price,
-        'cron',
-        args=['KR'],
-        hour=6,
-        minute=0,
-        day_of_week='tue-sat',
-        id='kr_market_update'
-    )
-    
-    # Schedule macro data update
-    scheduler.add_job(
-        update_macro,
-        'cron',
-        hour=8,
-        minute=0,
-        day_of_week='mon-sat',
-        id='macro_update'
-    )
-    
-    scheduler.start()
+@app.get("/")
+async def root():
+    """Root endpoint - API health check."""
+    return {
+        "status": "healthy",
+        "service": "insight-invest-api",
+        "version": "2.0.0"
+    }
 
-@app.on_event("shutdown")
-def shutdown_scheduler():
-    scheduler.shutdown()
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for load balancer."""
+    return {"status": "healthy"}

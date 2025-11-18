@@ -1,0 +1,82 @@
+# CloudWatch Dashboard for Insight-Invest
+# This creates a unified dashboard for monitoring API and Scheduled Jobs
+#
+# Deploy with: copilot env deploy --name dev
+
+Parameters:
+  App:
+    Type: String
+    Description: Your application's name.
+  Env:
+    Type: String
+    Description: The environment name your service, job, or workflow is being deployed to.
+
+Resources:
+  InsightInvestDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub "${App}-${Env}-overview"
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "InsightInvest/Jobs", "us-price-updater-failures" ],
+                  [ ".", "kr-price-updater-failures" ],
+                  [ ".", "macro-updater-failures" ]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Job Failures (Last 24h)",
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "InsightInvest/API", "api-5xx-errors" ]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "API 5xx Errors",
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "log",
+              "properties": {
+                "query": "SOURCE '/copilot/${App}-${Env}-us-price-updater'\n| SOURCE '/copilot/${App}-${Env}-kr-price-updater'\n| SOURCE '/copilot/${App}-${Env}-macro-updater'\n| fields @timestamp, @message\n| filter @message like /ERROR/\n| sort @timestamp desc\n| limit 20",
+                "region": "${AWS::Region}",
+                "title": "Recent Job Errors",
+                "stacked": false
+              }
+            },
+            {
+              "type": "log",
+              "properties": {
+                "query": "SOURCE '/copilot/${App}-${Env}-api'\n| fields @timestamp, @message\n| filter @message like /5\\d\\d/\n| sort @timestamp desc\n| limit 20",
+                "region": "${AWS::Region}",
+                "title": "Recent API Errors",
+                "stacked": false
+              }
+            }
+          ]
+        }
+
+Outputs:
+  DashboardURL:
+    Description: CloudWatch Dashboard URL
+    Value: !Sub "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${App}-${Env}-overview"

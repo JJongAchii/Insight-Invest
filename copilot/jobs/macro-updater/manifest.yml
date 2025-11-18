@@ -1,0 +1,60 @@
+# AWS Copilot Scheduled Job Manifest for Macro Data Updates
+#
+# This job runs daily at 08:00 KST (23:00 UTC previous day) from Monday to Saturday
+# to update macroeconomic data from FRED API.
+#
+# For more info: https://aws.github.io/copilot-cli/docs/manifest/scheduled-job/
+
+name: macro-updater
+type: Scheduled Job
+
+# Schedule in cron format (UTC timezone)
+# 08:00 KST = 23:00 UTC (previous day)
+# Runs Monday-Saturday KST = Sunday-Friday UTC
+on:
+  schedule: "0 23 * * SUN-FRI"
+
+# Docker image configuration
+image:
+  build:
+    dockerfile: server/Dockerfile
+    context: ./server
+  # Override the CMD from Dockerfile
+  command: ["python", "run_scheduled_job.py", "--job", "macro"]
+
+# Resource allocation (less resources needed for macro data)
+cpu: 256 # 0.25 vCPU
+memory: 512 # 512 MB
+
+# Retry configuration
+retries: 2 # Retry twice if the job fails
+timeout: 15m # Maximum execution time (shorter than price updates)
+
+# Enable command execution for debugging
+exec: true
+
+# Environment variables
+variables:
+  ENVIRONMENT: production
+  TZ: Asia/Seoul
+  LOG_LEVEL: INFO
+
+# Secrets from AWS Systems Manager Parameter Store
+secrets:
+  DATABASE_URL: /copilot/${COPILOT_APPLICATION_NAME}/${COPILOT_ENVIRONMENT_NAME}/secrets/DATABASE_URL
+
+# Network configuration (same VPC as API service)
+network:
+  vpc:
+    placement: private
+
+# Cost optimization: Use Spot instances (70% cheaper)
+# Spot instances are ideal for scheduled jobs that can tolerate interruptions
+platform: linux/x86_64
+capacityProviders:
+  - FARGATE_SPOT
+
+# Logging configuration (cost-optimized)
+logging:
+  retention: 7 # 7일 (비용 절감)
+
