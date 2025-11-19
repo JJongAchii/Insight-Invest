@@ -10,7 +10,7 @@ type: Backend Service
 image:
   build:
     dockerfile: server/Dockerfile
-    context: .
+    context: ./server
   port: 8000
 
 # Resource allocation

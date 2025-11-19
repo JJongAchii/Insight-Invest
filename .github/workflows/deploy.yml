@@ -80,7 +80,22 @@ jobs:
           sudo mv /tmp/copilot-cli /usr/local/bin/copilot
           copilot --version
 
+      - name: Debug - Check workspace structure
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Checking copilot directory structure:"
+          ls -la copilot/
+          echo "Checking copilot/.workspace:"
+          cat copilot/.workspace
+          echo "Checking jobs directory:"
+          ls -la copilot/jobs/
+          echo "Checking manifest file:"
+          ls -la copilot/jobs/${{ matrix.job }}/
+          echo "List all copilot jobs:"
+          copilot job ls || echo "Failed to list jobs"
+
       - name: Deploy ${{ matrix.job }}
+        working-directory: ${{ github.workspace }}
         run: |
           copilot job deploy \
             --name ${{ matrix.job }} \

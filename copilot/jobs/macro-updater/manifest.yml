@@ -18,7 +18,7 @@ on:
 image:
   build:
     dockerfile: server/Dockerfile
-    context: .
+    context: ./server
   # Override the CMD from Dockerfile
   command: ["python", "run_scheduled_job.py", "--job", "macro"]
 
@@ -57,4 +57,3 @@ capacityProviders:
 # Logging configuration (cost-optimized)
 logging:
   retention: 7 # 7일 (비용 절감)
-

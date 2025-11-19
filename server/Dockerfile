@@ -18,7 +18,7 @@ USER appuser:appgroup
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-ENV TZ=Asia/Seoul  
+ENV TZ=Asia/Seoul
 
 COPY server/ .
 

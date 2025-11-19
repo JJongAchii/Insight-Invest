@@ -1,0 +1,75 @@
+# Pre-commit hooks configuration
+# See https://pre-commit.com for more information
+
+repos:
+  # Basic file checks
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v4.5.0
+  hooks:
+  - id: trailing-whitespace
+    args: [--markdown-linebreak-ext=md]
+  - id: end-of-file-fixer
+  - id: check-yaml
+    args: [--unsafe]     # Allow custom YAML tags in CloudFormation/Copilot files
+  - id: check-json
+  - id: check-added-large-files
+    args: [--maxkb=1000]
+  - id: check-merge-conflict
+  - id: check-case-conflict
+  - id: mixed-line-ending
+    args: [--fix=lf]
+  - id: detect-private-key
+
+  # Python code formatting with Black
+- repo: https://github.com/psf/black
+  rev: 24.1.1
+  hooks:
+  - id: black
+    language_version: python3
+    args: [--line-length=100]
+    files: ^server/
+
+  # Python import sorting with isort
+- repo: https://github.com/pycqa/isort
+  rev: 5.13.2
+  hooks:
+  - id: isort
+    args: [--profile=black, --line-length=100]
+    files: ^server/
+
+  # Python linting with Ruff (faster alternative to flake8)
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.1.15
+  hooks:
+  - id: ruff
+    args: [--fix, --exit-non-zero-on-fix, --ignore=E402, F403, F405]
+    files: ^server/
+
+  # YAML formatting
+- repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
+  rev: v2.12.0
+  hooks:
+  - id: pretty-format-yaml
+    args: [--autofix, --indent=2]
+    exclude: ^(copilot/|.github/)     # Exclude AWS Copilot and GitHub Actions files
+
+  # Dockerfile linting
+- repo: https://github.com/hadolint/hadolint
+  rev: v2.12.0
+  hooks:
+  - id: hadolint-docker
+    args: [--ignore, DL3008, --ignore, DL3013, --ignore, DL3009, --ignore, DL3042]     # Ignore common warnings
+
+# Configuration
+default_language_version:
+  python: python3.9
+
+# Files to exclude
+exclude: |
+  (?x)^(
+    server/venv/|
+    server/__pycache__/|
+    client/node_modules/|
+    .*\.egg-info/|
+    .*\.pyc$
+  )

@@ -1,5 +1,5 @@
 # AWS Copilot Scheduled Job Manifest for US Market Price Updates
-# 
+#
 # This job runs daily at 18:00 KST (09:00 UTC) from Tuesday to Saturday
 # to update US stock market price data.
 #
@@ -18,17 +18,17 @@ on:
 image:
   build:
     dockerfile: server/Dockerfile
-    context: .
+    context: ./server
   # Override the CMD from Dockerfile
   command: ["python", "run_scheduled_job.py", "--job", "us-price"]
 
 # Resource allocation
-cpu: 256       # 0.25 vCPU
-memory: 512    # 512 MB
+cpu: 256 # 0.25 vCPU
+memory: 512 # 512 MB
 
 # Retry configuration
-retries: 2     # Retry twice if the job fails
-timeout: 30m   # Maximum execution time
+retries: 2 # Retry twice if the job fails
+timeout: 30m # Maximum execution time
 
 # Enable command execution for debugging
 exec: true
@@ -56,5 +56,4 @@ capacityProviders:
 
 # Logging configuration (cost-optimized)
 logging:
-  retention: 7  # 7일 (비용 절감)
-
+  retention: 7 # 7일 (비용 절감)
