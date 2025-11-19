@@ -11,7 +11,7 @@ WORKDIR /server
 RUN apt-get update && \
     pip install --upgrade pip
 
-COPY server/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 USER appuser:appgroup
@@ -20,7 +20,7 @@ ENV PYTHONUNBUFFERED=1
 
 ENV TZ=Asia/Seoul
 
-COPY server/ .
+COPY . .
 
 EXPOSE 8000
 
