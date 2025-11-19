@@ -8,18 +8,20 @@ Architecture:
 - API Server: Handles HTTP requests (this file)
 - Scheduled Jobs: Separate ECS tasks triggered by EventBridge
   - us-price-updater: Updates US market data
-  - kr-price-updater: Updates KR market data  
+  - kr-price-updater: Updates KR market data
   - macro-updater: Updates macroeconomic data
 """
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import meta, price, backtest, regime
+
+from .routers import backtest, meta, price, regime
 
 # Initialize FastAPI app
 app = FastAPI(
     title="Insight-Invest API",
     description="Investment analysis and backtesting API",
-    version="2.0.0"
+    version="2.0.0",
 )
 
 # CORS configuration
@@ -46,11 +48,7 @@ app.include_router(regime.router)
 @app.get("/")
 async def root():
     """Root endpoint - API health check."""
-    return {
-        "status": "healthy",
-        "service": "insight-invest-api",
-        "version": "2.0.0"
-    }
+    return {"status": "healthy", "service": "insight-invest-api", "version": "2.0.0"}
 
 
 @app.get("/health")

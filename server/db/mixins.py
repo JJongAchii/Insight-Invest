@@ -1,14 +1,15 @@
 import logging
 from datetime import date, datetime
-from dateutil import parser
-from typing import Union, Dict, List
-from sqlalchemy.orm import Query
+from typing import Dict, List, Union
+
 import numpy as np
 import pandas as pd
 import sqlalchemy as sa
+from dateutil import parser
 from sqlalchemy.ext.declarative import declarative_base
-from .client import session_local
+from sqlalchemy.orm import Query
 
+from .client import session_local
 
 Base = declarative_base()
 
@@ -67,9 +68,7 @@ class Mixins(Base):
         return records
 
     @classmethod
-    def insert(
-        cls, records: Union[List[Dict], pd.Series, pd.DataFrame], **kwargs
-    ) -> None:
+    def insert(cls, records: Union[List[Dict], pd.Series, pd.DataFrame], **kwargs) -> None:
         """insert bulk"""
         print("start insert.")
         if isinstance(records, pd.DataFrame):
@@ -82,8 +81,7 @@ class Mixins(Base):
             records = [records]
         else:
             raise TypeError(
-                "insert only takes pd.Series or pd.DataFrame,"
-                + " but {type(records)} was given."
+                "insert only takes pd.Series or pd.DataFrame," + " but {type(records)} was given."
             )
         records = cls.parse_datetime(cls, records)
         session = kwargs.pop("session", None)
@@ -91,18 +89,14 @@ class Mixins(Base):
             with session_local() as session:
                 session.bulk_insert_mappings(cls, records)
                 session.commit()
-                print(
-                    f"insert into {cls.__tablename__}: {len(records)} records complete."
-                )
+                print(f"insert into {cls.__tablename__}: {len(records)} records complete.")
                 return
         session.bulk_insert_mappings(cls, records)
         session.flush()
         print(f"insert into {cls.__tablename__}: {len(records)} records complete.")
 
     @classmethod
-    def update(
-        cls, records: Union[Dict, List[Dict], pd.Series, pd.DataFrame], **kwargs
-    ) -> None:
+    def update(cls, records: Union[Dict, List[Dict], pd.Series, pd.DataFrame], **kwargs) -> None:
         """insert bulk"""
 
         if isinstance(records, pd.DataFrame):
@@ -111,8 +105,7 @@ class Mixins(Base):
             records = [records.replace({np.NaN: None}).to_dict()]
         else:
             raise TypeError(
-                "insert only takes pd.Series or pd.DataFrame,"
-                + " but {type(records)} was given."
+                "insert only takes pd.Series or pd.DataFrame," + " but {type(records)} was given."
             )
         records = cls.parse_datetime(cls, records)
 
@@ -121,9 +114,7 @@ class Mixins(Base):
             with session_local() as session:
                 session.bulk_update_mappings(cls, records)
                 session.commit()
-                print(
-                    f"update into {cls.__tablename__}: {len(records)} records complete."
-                )
+                print(f"update into {cls.__tablename__}: {len(records)} records complete.")
                 return
         session.bulk_update_mappings(cls, records)
         session.flush()
@@ -138,9 +129,11 @@ class Mixins(Base):
         """Convert database table row to dictionary."""
         mapper = sa.inspect(self.__class__)
         return {
-            column.key: getattr(self, column.key).isoformat()
-            if isinstance(getattr(self, column.key), (date, datetime))
-            else getattr(self, column.key)
+            column.key: (
+                getattr(self, column.key).isoformat()
+                if isinstance(getattr(self, column.key), (date, datetime))
+                else getattr(self, column.key)
+            )
             for column in mapper.columns
         }
 

@@ -1,8 +1,10 @@
 from contextlib import contextmanager
+
+from config import PROJECT_FOLDER
+from pydantic_settings import BaseSettings
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from pydantic_settings import BaseSettings
-from config import PROJECT_FOLDER
+
 
 class DBSettings(BaseSettings):
     """database settings"""

@@ -1,13 +1,12 @@
-import os
 import logging
-from logging import Handler
+import os
 from datetime import datetime
-from sqlalchemy import Column, Integer, DateTime, String, Text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, scoped_session
-from config import LOGDB_FOLDER
+from logging import Handler
 
+from config import LOGDB_FOLDER
+from sqlalchemy import Column, DateTime, Integer, String, Text, create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import scoped_session, sessionmaker
 
 if not os.path.exists(LOGDB_FOLDER):
     os.makedirs(LOGDB_FOLDER)
@@ -21,7 +20,6 @@ session = scoped_session(session_factory=sessionmaker(bind=engine))()
 
 
 class DBhandler(Handler):
-
     """db logging handler"""
 
     def emit(self, record) -> None:

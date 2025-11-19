@@ -1,7 +1,5 @@
-from typing import Optional, List, Dict, Tuple
 import numpy as np
 import pandas as pd
-
 
 
 def to_pri_return(price_df: pd.DataFrame) -> pd.DataFrame:
@@ -37,7 +35,7 @@ def numofyears(price_df: pd.DataFrame) -> pd.Series:
     Returns:
         pd.Series: _description_
     """
-    
+
     return price_df.count() / 252
 
 
@@ -66,9 +64,7 @@ def cum_returns(price_df: pd.DataFrame) -> pd.Series:
 
 
 def ann_returns(price_df: pd.DataFrame) -> pd.Series:
-    return cum_returns(price_df=price_df) ** (
-        1 / numofyears(price_df=price_df)
-    ) - 1
+    return cum_returns(price_df=price_df) ** (1 / numofyears(price_df=price_df)) - 1
 
 
 def ann_variances(price_df: pd.DataFrame) -> pd.Series:
@@ -103,9 +99,7 @@ def expected_returns(price_df: pd.DataFrame, method: str = "empirical") -> pd.Se
     raise ValueError(f"method {method} is not supported.")
 
 
-def covariance_matrix(
-    price_df: pd.DataFrame, method: str = "empirical", **kwargs
-) -> pd.DataFrame:
+def covariance_matrix(price_df: pd.DataFrame, method: str = "empirical", **kwargs) -> pd.DataFrame:
 
     if method.lower() == "empirical":
         return to_pri_return(price_df=price_df).cov() * ann_factor(price_df=price_df)
@@ -121,7 +115,11 @@ def sharpe_ratios(price_df: pd.DataFrame, risk_free: float = 0.0) -> pd.Series:
     # return (ann_returns(price_df=price_df) - risk_free) / ann_volatilities(
     #     price_df=price_df
     # )
-    return (to_pri_return(price_df=price_df).mean() / to_pri_return(price_df=price_df).std() * (252 ** 0.5))
+    return (
+        to_pri_return(price_df=price_df).mean()
+        / to_pri_return(price_df=price_df).std()
+        * (252**0.5)
+    )
 
 
 def sortino_ratios(price_df: pd.DataFrame) -> pd.Series:

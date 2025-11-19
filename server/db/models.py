@@ -1,10 +1,13 @@
 """
 database models
 """
+
 import logging
+
 import sqlalchemy as sa
-from .mixins import Base, StaticBase, TimeSeriesBase, Mixins
+
 from .client import engine
+from .mixins import Base, StaticBase
 
 logger = logging.getLogger("sqlite")
 
@@ -41,7 +44,7 @@ class TbPrice(StaticBase):
     """meta data price table"""
 
     __tablename__ = "tb_price"
-    
+
     meta_id = sa.Column(sa.ForeignKey("tb_meta.meta_id"), primary_key=True)
     trade_date = sa.Column(sa.Date, primary_key=True)
     close = sa.Column(sa.Float, nullable=True)
@@ -51,9 +54,9 @@ class TbPrice(StaticBase):
 
 class TbStrategy(StaticBase):
     """strategy table"""
-    
+
     __tablename__ = "tb_strategy"
-    
+
     strategy_id = sa.Column(sa.Integer, sa.Identity(start=1), primary_key=True)
     strategy = sa.Column(sa.String(255), nullable=False)
     strategy_name = sa.Column(sa.String(255), nullable=False)
@@ -63,19 +66,19 @@ class TbPortfolio(StaticBase):
     """custom portfolio table"""
 
     __tablename__ = "tb_portfolio"
-    
+
     port_id = sa.Column(sa.Integer, sa.Identity(start=1), primary_key=True)
     port_name = sa.Column(sa.String(255), nullable=False, unique=True)
     strategy_id = sa.Column(sa.ForeignKey("tb_strategy.strategy_id"))
-    
+
 
 class TbUniverse(StaticBase):
-    """portfolio universe table"""    
+    """portfolio universe table"""
 
     __tablename__ = "tb_universe"
     port_id = sa.Column(sa.ForeignKey("tb_portfolio.port_id"), primary_key=True)
     meta_id = sa.Column(sa.ForeignKey("tb_meta.meta_id"), primary_key=True)
-    
+
 
 class TbRebalance(StaticBase):
     """rebalancing weights of portfolio"""
@@ -86,16 +89,16 @@ class TbRebalance(StaticBase):
     meta_id = sa.Column(sa.ForeignKey("tb_meta.meta_id"), primary_key=True)
     weight = sa.Column(sa.Float, nullable=False)
 
-    
+
 class TbNav(StaticBase):
     """net asset value of portfolio"""
-    
+
     __tablename__ = "tb_nav"
     trade_date = sa.Column(sa.Date, primary_key=True)
     port_id = sa.Column(sa.ForeignKey("tb_portfolio.port_id"), primary_key=True)
     value = sa.Column(sa.Float, nullable=False)
 
-    
+
 class TbMetrics(StaticBase):
     """performance metrics of portfolio"""
 
@@ -109,8 +112,8 @@ class TbMetrics(StaticBase):
     kurt = sa.Column(sa.Float, nullable=True)
     var = sa.Column(sa.Float, nullable=True)
     cvar = sa.Column(sa.Float, nullable=True)
-    
-    
+
+
 class TbMacro(StaticBase):
     """macro economics definition"""
 
@@ -118,7 +121,7 @@ class TbMacro(StaticBase):
     macro_id = sa.Column(sa.Integer, sa.Identity(start=1), primary_key=True)
     fred = sa.Column(sa.String(255), nullable=True)
     description = sa.Column(sa.Text, nullable=True)
-    
+
 
 class TbMacroData(StaticBase):
     """macro economics data"""

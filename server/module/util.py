@@ -1,6 +1,8 @@
-import pandas as pd
-from typing import Optional, Tuple, Union
 from datetime import date
+from typing import Optional, Tuple, Union
+
+import pandas as pd
+
 from . import metrics
 
 
@@ -10,7 +12,7 @@ def resample_data(price: pd.DataFrame, freq: str = "M", type: str = "head") -> p
         res_price = price.groupby([price.index.year, price.index.month]).head(1)
     elif type == "tail":
         res_price = price.groupby([price.index.year, price.index.month]).tail(1)
-    
+
     if freq == "Y":
         max_date_value = res_price.iloc[-1]
         if type == "head":
@@ -26,7 +28,7 @@ def store_nav_results(func):
     weights_results = {}
     nav_results = {}
     metrics_results = {}
-    
+
     def wrapper(
         weight: pd.DataFrame,
         strategy_name: Optional[str] = None,
@@ -35,7 +37,7 @@ def store_nav_results(func):
         end_date: ... = None,
     ):
         weights, nav, metrics = func(weight, price, start_date, end_date)
-        
+
         if strategy_name:
             params = f"{strategy_name}"
         else:
@@ -45,9 +47,9 @@ def store_nav_results(func):
         weights_results[params] = weights
         nav_results[params] = nav
         metrics_results[params] = metrics
-        
+
         return weights_results, nav_results, metrics_results
-    
+
     def delete_strategy(strategy_name: str):
         """Delete a specific strategy by name."""
         if strategy_name in weights_results:
@@ -62,7 +64,7 @@ def store_nav_results(func):
         weights_results.clear()
         nav_results.clear()
         metrics_results.clear()
-    
+
     wrapper.delete_strategy = delete_strategy
     wrapper.clear_strategies = clear_strategies
     wrapper.count = 1
@@ -76,7 +78,7 @@ def calculate_nav(
     end_date: Optional[Union[str, pd.Timestamp]] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Calculate the net asset value (NAV) and portfolio holdings 
+    Calculate the net asset value (NAV) and portfolio holdings
     based on the provided weight DataFrame and price data.
 
     Args:
@@ -92,7 +94,10 @@ def calculate_nav(
         raise ValueError("Price data must be provided.")
 
     # Ensure the ticker symbols are strings with leading zeros if necessary
-    weight.columns = [str(column).zfill(6) if isinstance(column, int) else str(column) for column in weight.columns]
+    weight.columns = [
+        str(column).zfill(6) if isinstance(column, int) else str(column)
+        for column in weight.columns
+    ]
 
     # Convert indices to datetime
     weight.index = pd.to_datetime(weight.index)
@@ -112,7 +117,7 @@ def calculate_nav(
         raise ValueError("No price data after filtering by dates.")
 
     # Initialize NAV and book lists
-    nav_list = [{'Date': start_date, 'value': 1000}]
+    nav_list = [{"Date": start_date, "value": 1000}]
     book_list = []
 
     # Get sorted unique rebalancing dates
@@ -149,20 +154,21 @@ def calculate_nav(
 
         # Update NAV list
         nav_value = portfolio_values.iloc[-1]
-        nav_list.extend([{'Date': date, 'value': val} for date, val in portfolio_values.iloc[1:].items()])
+        nav_list.extend(
+            [{"Date": date, "value": val} for date, val in portfolio_values.iloc[1:].items()]
+        )
 
         # Calculate weights over time
         weights_over_time = weighted_returns.div(weighted_returns.sum(axis=1), axis=0).iloc[:-1]
         weights_stacked = weights_over_time.stack().reset_index()
-        weights_stacked.columns = ['Date', 'ticker', 'weights']
+        weights_stacked.columns = ["Date", "ticker", "weights"]
         book_list.append(weights_stacked)
 
     # Combine all weights and NAV data
-    book = pd.concat(book_list, ignore_index=True).set_index('Date')
-    nav = pd.DataFrame(nav_list).drop_duplicates('Date').set_index('Date')
+    book = pd.concat(book_list, ignore_index=True).set_index("Date")
+    nav = pd.DataFrame(nav_list).drop_duplicates("Date").set_index("Date")
 
     return book, nav
-
 
 
 def result_metrics(nav: pd.DataFrame) -> pd.Series:
@@ -180,8 +186,8 @@ def result_metrics(nav: pd.DataFrame) -> pd.Series:
     kurtosis = metrics.kurtosis(nav)
     value_at_risk = metrics.value_at_risk(nav)
     conditional_value_at_risk = metrics.conditional_value_at_risk(nav)
-    
-    # Prepare the data as a list 
+
+    # Prepare the data as a list
     data = {
         "ann_returns": f"{ann_returns.values[0] * 100:.2f}",
         "ann_volatilities": f"{ann_volatilities.values[0] * 100:.2f}",
@@ -190,12 +196,12 @@ def result_metrics(nav: pd.DataFrame) -> pd.Series:
         "skewness": f"{skewness.values[0]:.2f}",
         "kurtosis": f"{kurtosis.values[0]:.2f}",
         "value_at_risk": f"{value_at_risk.values[0] * 100:.2f}",
-        "conditional_value_at_risk": f"{conditional_value_at_risk.values[0] * 100:.2f}"
+        "conditional_value_at_risk": f"{conditional_value_at_risk.values[0] * 100:.2f}",
     }
 
     # Convert to Series
     metrics_series = pd.Series(data)
-    
+
     return metrics_series
 
 
@@ -206,14 +212,8 @@ def backtest_result(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
 ):
-    book, nav = calculate_nav(
-        weight=weight,
-        price=price,
-        start_date=start_date,
-        end_date=end_date
-    )
-    
+    book, nav = calculate_nav(weight=weight, price=price, start_date=start_date, end_date=end_date)
+
     metrics = result_metrics(nav=nav)
-    
-    return  weight, nav, metrics
-    
+
+    return weight, nav, metrics
