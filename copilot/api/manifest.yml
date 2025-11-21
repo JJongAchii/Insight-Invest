@@ -9,8 +9,8 @@ type: Backend Service
 # Docker image configuration
 image:
   build:
-    dockerfile: server/Dockerfile
-    context: ./server
+    dockerfile: Dockerfile
+    context: server
   port: 8000
 
 # Resource allocation

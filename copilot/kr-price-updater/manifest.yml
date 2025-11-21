@@ -1,0 +1,54 @@
+# The manifest for the "kr-price-updater" job.
+# Read the full specification for the "Scheduled Job" type at:
+#  https://aws.github.io/copilot-cli/docs/manifest/scheduled-job/
+
+# Your job name will be used in naming your resources like log groups, ECS Tasks, etc.
+name: kr-price-updater
+type: Scheduled Job
+
+# Trigger for your task.
+on:
+  # The scheduled trigger for your job. You can specify a Unix cron schedule or keyword (@weekly) or a rate (@every 1h30m)
+  # AWS Schedule Expressions are also accepted: https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html
+  schedule: "0 21 * * MON-FRI"
+retries: 2    # Optional. The number of times to retry the job before failing.
+timeout: 30m    # Optional. The timeout after which to stop the job if it's still running. You can use the units (h, m, s).
+
+# Configuration for your container and task.
+image:
+  # Docker build arguments. For additional overrides: https://aws.github.io/copilot-cli/docs/manifest/scheduled-job/#image-build
+  build:
+    context: server
+  # Override the CMD from Dockerfile
+  command: ["python", "run_scheduled_job.py", "--job", "kr-price"]
+
+cpu: 256       # Number of CPU units for the task.
+memory: 512    # Amount of memory in MiB used by the task.
+
+# Enable command execution for debugging
+exec: true
+
+# Environment variables
+variables:
+  ENVIRONMENT: production
+  TZ: Asia/Seoul
+  LOG_LEVEL: INFO
+
+# Secrets from AWS Systems Manager Parameter Store
+secrets:
+  DATABASE_URL: /copilot/${COPILOT_APPLICATION_NAME}/${COPILOT_ENVIRONMENT_NAME}/secrets/DATABASE_URL
+
+# Network configuration (same VPC as API service)
+network:
+  vpc:
+    placement: private
+
+# Cost optimization: Use Spot instances (70% cheaper)
+# Spot instances are ideal for scheduled jobs that can tolerate interruptions
+platform: linux/x86_64
+capacityProviders:
+  - FARGATE_SPOT
+
+# Logging configuration (cost-optimized)
+logging:
+  retention: 7 # 7일 (비용 절감)
