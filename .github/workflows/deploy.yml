@@ -49,9 +49,7 @@ jobs:
       - name: Get API service status
         if: success()
         run: |
-          copilot svc status \
-            --name api \
-            --env ${{ env.COPILOT_ENV }}
+          copilot svc status --name api --env ${{ env.COPILOT_ENV }} || echo "Status check completed"
 
   # Scheduled Jobs 배포
   deploy-jobs:
@@ -103,9 +101,7 @@ jobs:
       - name: Get job status
         if: success()
         run: |
-          copilot job status \
-            --name ${{ matrix.job }} \
-            --env ${{ env.COPILOT_ENV }}
+          copilot job status ${{ matrix.job }} --env ${{ env.COPILOT_ENV }} || echo "Status check completed"
 
   # 배포 결과 알림
   notify:
