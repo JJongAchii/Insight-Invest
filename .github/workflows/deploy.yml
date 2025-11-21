@@ -87,10 +87,8 @@ jobs:
           ls -la copilot/
           echo "Checking copilot/.workspace:"
           cat copilot/.workspace
-          echo "Checking jobs directory:"
-          ls -la copilot/jobs/
-          echo "Checking manifest file:"
-          ls -la copilot/jobs/${{ matrix.job }}/
+          echo "Checking job manifest file:"
+          ls -la copilot/${{ matrix.job }}/
           echo "List all copilot jobs:"
           copilot job ls || echo "Failed to list jobs"
 
