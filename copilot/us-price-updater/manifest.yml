@@ -17,10 +17,10 @@ timeout: 30m    # Optional. The timeout after which to stop the job if it's stil
 # Configuration for your container and task.
 image:
   # Docker build arguments. For additional overrides: https://aws.github.io/copilot-cli/docs/manifest/scheduled-job/#image-build
-  build:
-    context: server
-  # Override the CMD from Dockerfile
-  command: ["python", "run_scheduled_job.py", "--job", "us-price"]
+  build: server/Dockerfile
+
+# Override the CMD from Dockerfile
+command: ["python", "run_scheduled_job.py", "--job", "us-price"]
 
 cpu: 256       # Number of CPU units for the task.
 memory: 512    # Amount of memory in MiB used by the task.

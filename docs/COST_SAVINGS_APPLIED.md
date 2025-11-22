@@ -38,7 +38,7 @@ curl http://<PUBLIC_IP>:8000/health
 
 ---
 
-### 2. **CloudWatch Log Retention 축소** 
+### 2. **CloudWatch Log Retention 축소**
 **절감액: $1/월**
 
 #### 변경 내용
@@ -61,7 +61,7 @@ logging:
 
 ---
 
-### 3. **Spot Instances 적용 (Scheduled Jobs)** 
+### 3. **Spot Instances 적용 (Scheduled Jobs)**
 **절감액: $0.70/월 (-70%)**
 
 #### 변경 내용
@@ -360,4 +360,3 @@ copilot svc deploy --name api --env dev
 **추천**: 프로토타입/초기 단계에는 완벽한 선택! 🚀
 
 트래픽이 증가하면 ALB를 다시 추가하는 것을 고려하세요.
-

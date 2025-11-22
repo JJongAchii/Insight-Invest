@@ -457,4 +457,3 @@ aws sns list-subscriptions
 ---
 
 **Happy Deploying! 🚀**
-
