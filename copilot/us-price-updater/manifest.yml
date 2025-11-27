@@ -39,9 +39,11 @@ secrets:
   DATABASE_URL: /copilot/${COPILOT_APPLICATION_NAME}/${COPILOT_ENVIRONMENT_NAME}/secrets/DATABASE_URL
 
 # Network configuration (same VPC as API service)
+# Changed to public to avoid NAT Gateway costs ($32/month → $0)
+# Scheduled jobs need internet access for yfinance/FRED API
 network:
   vpc:
-    placement: private
+    placement: public
 
 # Cost optimization: Use Spot instances (70% cheaper)
 # Spot instances are ideal for scheduled jobs that can tolerate interruptions
