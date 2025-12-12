@@ -37,7 +37,7 @@ const StrategyMetrics = ({ backtestResult, selectedTicker }: { backtestResult: a
             ),
         },
     ];
-
+    
 
     return (
         <div className="flex flex-col bg-white shadow-lg rounded-2xl p-8 relative" style={{ height: 450 }}>
@@ -49,7 +49,7 @@ const StrategyMetrics = ({ backtestResult, selectedTicker }: { backtestResult: a
                     getRowId={(row) => row.strategy}
                     slotProps={{ toolbar: { showQuickFilter: true } }}
                     className="bg-white shadow rounded-lg border border-gray-200 mt-5 !text-gray-700"
-                />
+                />    
             ) : (
                 <div style={{
                     position: 'absolute',

@@ -38,9 +38,6 @@ class TbMeta(StaticBase):
     marketcap = sa.Column(sa.BigInteger, nullable=True)
     fee = sa.Column(sa.Float, nullable=True)
     remark = sa.Column(sa.Text, nullable=True)
-    min_date = sa.Column(sa.Date, nullable=True)
-    max_date = sa.Column(sa.Date, nullable=True)
-    # delisted_yn = sa.Column(sa.Boolean, nullable=False, server_default='false')
 
 
 class TbPrice(StaticBase):

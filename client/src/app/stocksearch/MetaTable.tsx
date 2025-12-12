@@ -27,14 +27,14 @@ const MetaTable = ({ onSelectionChange }: { onSelectionChange: any }) => {
         onSelectionChange(selectedData); // Pass data to parent
     };
 
-    if (!data) return <p>No data available</p>;
+    if (!data) return <p>No data available</p>; 
 
     return (
         <div className="row-span-3 xl:row-span-6 bg-white shadow-md rounded-2xl pb-16">
             <h3 className='text-lg font-semibold px-7 pt-5 pb-2'>
                 META DATA
             </h3>
-            <DataGrid
+            <DataGrid 
                 rows={data}
                 columns={columns}
                 getRowId={(row) => row.meta_id}

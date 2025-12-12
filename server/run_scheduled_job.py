@@ -9,10 +9,6 @@ Usage:
     python run_scheduled_job.py --job macro
     python run_scheduled_job.py --job all  # Run all updates
 
-    # 실패 복구 (특정 Step부터 재시작)
-    python run_scheduled_job.py --job us-price --from step2
-    python run_scheduled_job.py --job kr-price --from step3
-
 Environment Variables:
     DATABASE_URL: PostgreSQL connection string (required)
     ENVIRONMENT: production/staging/development
@@ -22,14 +18,14 @@ import argparse
 import logging
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Literal
 
 # Add parent directory to path
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
-from module.etl.daily_etl import run_daily_etl
 from module.update_data.macro import update_macro
+from module.update_data.price import update_daily_price
 
 # Configure logging
 logging.basicConfig(
@@ -40,15 +36,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 JobType = Literal["us-price", "kr-price", "macro", "all"]
-StepType = Literal["step1", "step2", "step3"]
 
 
 class JobRunner:
     """Manages scheduled job execution with proper error handling and logging."""
 
-    def __init__(self, job_type: JobType, from_step: StepType = "step1"):
+    def __init__(self, job_type: JobType):
         self.job_type = job_type
-        self.from_step = from_step
         self.start_time = datetime.now()
         self.success = False
         self.error_message = None
@@ -62,7 +56,6 @@ class JobRunner:
         """
         logger.info("=" * 80)
         logger.info(f"Starting scheduled job: {self.job_type}")
-        logger.info(f"From step: {self.from_step}")
         logger.info(f"Environment: {os.getenv('ENVIRONMENT', 'development')}")
         logger.info(f"Timezone: {os.getenv('TZ', 'UTC')}")
         logger.info(f"Start time: {self.start_time}")
@@ -90,42 +83,16 @@ class JobRunner:
             return 1
 
     def _run_us_price_update(self):
-        """Update US market price data using new ETL pipeline."""
-        logger.info("📊 Starting US market ETL pipeline...")
-
-        database_url = os.getenv("DATABASE_URL")
-        target_date = datetime.now().date() - timedelta(days=1)
-
-        logger.info(f"   Target date: {target_date}")
-        logger.info(f"   From step: {self.from_step}")
-
-        run_daily_etl(
-            iso_code="US",
-            target_date=target_date,
-            database_url=database_url,
-            from_step=self.from_step,
-        )
-
-        logger.info("✅ US market ETL pipeline completed successfully")
+        """Update US market price data."""
+        logger.info("📊 Starting US market price update...")
+        update_daily_price(market="US")
+        logger.info("✅ US market price update completed successfully")
 
     def _run_kr_price_update(self):
-        """Update KR market price data using new ETL pipeline."""
-        logger.info("📊 Starting KR market ETL pipeline...")
-
-        database_url = os.getenv("DATABASE_URL")
-        target_date = datetime.now().date() - timedelta(days=1)
-
-        logger.info(f"   Target date: {target_date}")
-        logger.info(f"   From step: {self.from_step}")
-
-        run_daily_etl(
-            iso_code="KR",
-            target_date=target_date,
-            database_url=database_url,
-            from_step=self.from_step,
-        )
-
-        logger.info("✅ KR market ETL pipeline completed successfully")
+        """Update KR market price data."""
+        logger.info("📊 Starting KR market price update...")
+        update_daily_price(market="KR")
+        logger.info("✅ KR market price update completed successfully")
 
     def _run_macro_update(self):
         """Update macro economic data."""
@@ -205,10 +172,10 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    # Update US market prices (full ETL)
+    # Update US market prices
     python run_scheduled_job.py --job us-price
 
-    # Update KR market prices (full ETL)
+    # Update KR market prices
     python run_scheduled_job.py --job kr-price
 
     # Update macro data
@@ -216,12 +183,6 @@ Examples:
 
     # Run all updates
     python run_scheduled_job.py --job all
-
-    # Recovery: restart from Step 2 (skip data collection)
-    python run_scheduled_job.py --job us-price --from step2
-
-    # Recovery: restart from Step 3 (skip collection & transform)
-    python run_scheduled_job.py --job kr-price --from step3
         """,
     )
 
@@ -231,15 +192,6 @@ Examples:
         choices=["us-price", "kr-price", "macro", "all"],
         required=True,
         help="Job type to run",
-    )
-
-    parser.add_argument(
-        "--from",
-        dest="from_step",
-        type=str,
-        choices=["step1", "step2", "step3"],
-        default="step1",
-        help="Start from specific step (for recovery). Default: step1",
     )
 
     parser.add_argument("--dry-run", action="store_true", help="Dry run mode (no database writes)")
@@ -257,7 +209,7 @@ Examples:
         os.environ["DRY_RUN"] = "true"
 
     # Run the job
-    runner = JobRunner(args.job, from_step=args.from_step)
+    runner = JobRunner(args.job)
     exit_code = runner.run()
 
     # Exit with appropriate code

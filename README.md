@@ -134,7 +134,6 @@ Insight-Invest/
 ## 🔧 기술 스택
 
 ### Backend
-
 - **Framework**: FastAPI 0.115+
 - **Database**: PostgreSQL (RDS)
 - **ORM**: SQLAlchemy 2.0
@@ -142,7 +141,6 @@ Insight-Invest/
 - **API Clients**: yfinance, fredapi
 
 ### Infrastructure
-
 - **Compute**: AWS ECS Fargate
 - **Scheduling**: AWS EventBridge
 - **Load Balancer**: Application Load Balancer
@@ -151,7 +149,6 @@ Insight-Invest/
 - **IaC**: AWS Copilot
 
 ### Frontend
-
 - **Framework**: Next.js 14
 - **Deployment**: Vercel
 
@@ -159,31 +156,28 @@ Insight-Invest/
 
 ### 주요 엔드포인트
 
-| Method | Endpoint        | 설명                 |
-| ------ | --------------- | -------------------- |
-| GET    | `/`             | 헬스 체크            |
-| GET    | `/health`       | 헬스 체크 (ALB용)    |
-| GET    | `/api/meta`     | 종목 메타데이터 조회 |
-| GET    | `/api/price`    | 주가 데이터 조회     |
-| POST   | `/api/backtest` | 백테스트 실행        |
-| GET    | `/api/regime`   | 시장 국면 분석       |
+| Method | Endpoint | 설명 |
+|--------|----------|------|
+| GET | `/` | 헬스 체크 |
+| GET | `/health` | 헬스 체크 (ALB용) |
+| GET | `/api/meta` | 종목 메타데이터 조회 |
+| GET | `/api/price` | 주가 데이터 조회 |
+| POST | `/api/backtest` | 백테스트 실행 |
+| GET | `/api/regime` | 시장 국면 분석 |
 
 자세한 API 문서: `http://your-api-url/docs`
 
 ## ⏰ Scheduled Jobs
 
 ### US Market Price Updater
-
 - **실행**: 매일 18:00 KST (화~토)
 - **작업**: 미국 주식 시장 가격 데이터 업데이트
 
 ### KR Market Price Updater
-
 - **실행**: 매일 06:00 KST (화~토)
 - **작업**: 한국 주식 시장 가격 데이터 업데이트
 
 ### Macro Data Updater
-
 - **실행**: 매일 08:00 KST (월~토)
 - **작업**: FRED API에서 매크로 경제 데이터 업데이트
 
@@ -298,26 +292,17 @@ copilot svc deploy --name api --env dev
 
 ## 💰 비용 예상
 
-| 항목                      | 월 비용 (USD) |
-| ------------------------- | ------------- |
-| ECS Fargate (API)         | ~$13          |
-| ECS Fargate (Jobs)        | ~$1           |
-| Application Load Balancer | ~$16          |
-| RDS (db.t3.micro)         | ~$15          |
-| CloudWatch Logs           | ~$2.50        |
-| 기타                      | ~$1           |
-| **총계**                  | **~$48.50**   |
+| 항목 | 월 비용 (USD) |
+|------|--------------|
+| ECS Fargate (API) | ~$13 |
+| ECS Fargate (Jobs) | ~$1 |
+| Application Load Balancer | ~$16 |
+| RDS (db.t3.micro) | ~$15 |
+| CloudWatch Logs | ~$2.50 |
+| 기타 | ~$1 |
+| **총계** | **~$48.50** |
 
 상세 비용 분석: [Architecture Document](docs/ARCHITECTURE.md#-비용-예상-월간)
-
-## 📚 문서
-
-### 배포 및 인프라
-
-- [AWS Copilot 배포 가이드](docs/AWS_COPILOT_DEPLOYMENT.md) - 전체 배포 프로세스 및 설정
-- [아키텍처 문서](docs/ARCHITECTURE.md) - 시스템 아키텍처 및 설계
-
-### 개발 도구
 
 ## 🤝 기여하기
 

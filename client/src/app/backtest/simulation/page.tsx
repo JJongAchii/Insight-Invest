@@ -9,7 +9,7 @@ import LoadingSpinner from "@/app/(components)/LoadingSpinner";
 
 
 const Simulation = () => {
-
+    
     const [loading, setLoading] = useState(false);
 
     const [selectedTicker, setSelectedTicker] = useState(() => {
@@ -17,7 +17,7 @@ const Simulation = () => {
         return savedTicker ? JSON.parse(savedTicker) : {};
     });
     const [backtestResult, setBacktestResult] = useState(() => {
-
+        
         const savedResult = localStorage.getItem("backtestResult");
         return savedResult ? JSON.parse(savedResult) : [];
     });

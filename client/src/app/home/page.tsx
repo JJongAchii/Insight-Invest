@@ -339,15 +339,15 @@ const Home = () => {
       },
     ],
   };
-
+  
 
   return (
     <div className="flex flex-col gap-5">
-      <TradingViewWidget
+      <TradingViewWidget 
         widgetScriptUrl={tickerTapeUrl}
         widgetConfig={tickerTapeConfig}
       />
-
+      
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div className="flex flex-col bg-white shadow-lg rounded-2xl px-2 py-3 gap-5">
           <h4 className="text-lg font-semibold">Economic Calendar</h4>
@@ -365,7 +365,7 @@ const Home = () => {
         </div>
         <div className="flex flex-col bg-white shadow-lg rounded-2xl px-2 py-3 gap-5">
           <h4 className="text-lg font-semibold">Forex Cross Rate</h4>
-          <TradingViewWidget
+          <TradingViewWidget 
             widgetScriptUrl={fxCrossRateUrl}
             widgetConfig={fxCrossRateConfig}
           />
