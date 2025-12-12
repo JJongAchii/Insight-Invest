@@ -9,7 +9,7 @@ import { IoHome, IoMenu, IoSearch, IoBarChart, IoTelescope } from "react-icons/i
 import { HiOutlineLightBulb } from "react-icons/hi";
 import { FcAlphabeticalSortingAz } from "react-icons/fc";
 import { FaRunning } from "react-icons/fa";
-import { IconType } from 'react-icons'; 
+import { IconType } from 'react-icons';
 import logo from '@/images/logo.png';
 import Image from 'next/image';
 
@@ -34,7 +34,7 @@ const SidebarLink = ({
     const pathname = usePathname();
     const isActive =
         pathname === href || (pathname === "/" && href === "/home") ;
-    
+
     return (
         <Link href={href}>
             <div onClick={onClick} className={`cursor-pointer flex items-center ${
@@ -84,14 +84,14 @@ const Sidebar = () => {
             }`}>
                 <Link href="/home">
                     <div className="cursor-pointer">
-                        <Image 
-                            src={logo} 
-                            alt="Logo" 
+                        <Image
+                            src={logo}
+                            alt="Logo"
                             className="w-full h-auto"
                         />
                     </div>
                 </Link>
-                <button 
+                <button
                     className='md:hidden px-3 py-3 bg-gray-100 rounded-full hover:bg-blue-100'
                     onClick={toggleSidebar}
                 >
@@ -101,20 +101,20 @@ const Sidebar = () => {
 
             {/* Links */}
             <div className='flex-grow mt-8'>
-                <SidebarLink 
+                <SidebarLink
                     href="/home"
                     icon={IoHome}
                     label="Home"
                     isCollapsed={isSidebarCollapsed}
                 />
-                <SidebarLink 
+                <SidebarLink
                     href="/regime"
                     icon={IoTelescope}
                     label="Regime"
                     isCollapsed={isSidebarCollapsed}
-                />                
+                />
                 {/* Backtest 탭과 드롭다운 */}
-                <SidebarLink 
+                <SidebarLink
                     href="/backtest/simulation"
                     icon={IoBarChart}
                     label="Backtest"
@@ -123,14 +123,14 @@ const Sidebar = () => {
                 />
                 {isBacktestDropdownOpen && !isSidebarCollapsed && (
                     <div>
-                        <SidebarLink 
+                        <SidebarLink
                             href="/backtest/simulation"
                             icon={FaRunning}
                             label="Simulation"
                             isCollapsed={isSidebarCollapsed}
                             isDropdown
                         />
-                        <SidebarLink 
+                        <SidebarLink
                             href="/backtest/strategy_list"
                             icon={FcAlphabeticalSortingAz}
                             label="Strategy List"
@@ -139,13 +139,13 @@ const Sidebar = () => {
                         />
                     </div>
                 )}
-                <SidebarLink 
+                <SidebarLink
                     href="/stocksearch"
                     icon={IoSearch}
                     label="Stock Search"
                     isCollapsed={isSidebarCollapsed}
                 />
-                <SidebarLink 
+                <SidebarLink
                     href="/insight"
                     icon={HiOutlineLightBulb}
                     label="Insight"

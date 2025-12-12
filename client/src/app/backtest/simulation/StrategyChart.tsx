@@ -4,18 +4,18 @@ import { ChartOptions } from 'chart.js';
 import 'chart.js/auto';
 
 const StrategyChart = ({ navResult }: { navResult: any }) => {
-    
+
     const navData = navResult ? JSON.parse(navResult) : { index: [], columns: [], data: [] };
 
     const chartLabels = navData.index.map((date: any) => new Date(date).toISOString().split('T')[0]);
-    
+
     const datasets = navData.columns.map((column: any, index: any) => ({
         label: column,
         data: navData.data.map((row: any) => row[index]),
-        borderColor: ['#4A90E2', '#50E3C2', '#F5A623', '#D0021B', '#BD10E0'][index % 5], 
-        backgroundColor: 'rgba(74, 144, 226, 0.1)', 
+        borderColor: ['#4A90E2', '#50E3C2', '#F5A623', '#D0021B', '#BD10E0'][index % 5],
+        backgroundColor: 'rgba(74, 144, 226, 0.1)',
         borderWidth: 2.5,
-        tension: 0.3, 
+        tension: 0.3,
         pointRadius: 0,
         pointHoverRadius: 5,
         hoverBorderWidth: 2,
@@ -83,7 +83,7 @@ const StrategyChart = ({ navResult }: { navResult: any }) => {
                             return `${tickValue}`;
                         }
                         return tickValue;
-                    }, 
+                    },
                 },
             },
         },

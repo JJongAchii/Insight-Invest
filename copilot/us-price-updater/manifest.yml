@@ -11,8 +11,8 @@ on:
   # The scheduled trigger for your job. You can specify a Unix cron schedule or keyword (@weekly) or a rate (@every 1h30m)
   # AWS Schedule Expressions are also accepted: https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html
   schedule: "0 9 * * TUE-SAT"
-retries: 2    # Optional. The number of times to retry the job before failing.
-timeout: 30m    # Optional. The timeout after which to stop the job if it's still running. You can use the units (h, m, s).
+retries: 2 # Optional. The number of times to retry the job before failing.
+timeout: 60m # Optional. ETL pipeline needs more time (Athena queries, S3 I/O)
 
 # Configuration for your container and task.
 image:
@@ -20,10 +20,11 @@ image:
   build: server/Dockerfile
 
 # Override the CMD from Dockerfile
+# New ETL pipeline: Step1 (Yahoo→S3) → Step2 (Transform) → Step3 (Iceberg)
 command: ["python", "run_scheduled_job.py", "--job", "us-price"]
 
-cpu: 256       # Number of CPU units for the task.
-memory: 512    # Amount of memory in MiB used by the task.
+cpu: 512 # Number of CPU units for the task. (increased for Athena/Arrow)
+memory: 1024 # Amount of memory in MiB used by the task. (increased for Arrow tables)
 
 # Enable command execution for debugging
 exec: true
@@ -54,3 +55,8 @@ capacityProviders:
 # Logging configuration (cost-optimized)
 logging:
   retention: 7 # 7일 (비용 절감)
+
+# Task Role for S3, Athena, Glue access (ETL pipeline)
+taskdef_overrides:
+  - path: TaskRoleArn
+    value: arn:aws:iam::061039802347:role/InsightInvestETLSourcingRole

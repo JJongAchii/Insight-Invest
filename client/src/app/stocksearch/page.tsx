@@ -4,7 +4,7 @@ import { useState } from "react";
 import MetaTable from "./MetaTable";
 
 const StockSearch = () => {
-  
+
   const [selectedData, setSelectedData] = useState([])
 
   return (

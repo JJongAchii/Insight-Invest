@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # CloudWatch 모니터링 및 알림 설정 스크립트
-# 
+#
 # 사용법:
 #   ./scripts/setup-monitoring.sh --email your-email@example.com
 #
@@ -111,9 +111,9 @@ JOBS=("us-price-updater" "kr-price-updater" "macro-updater")
 for JOB in "${JOBS[@]}"; do
     ALARM_NAME="${APP_NAME}-${ENV_NAME}-${JOB}-failed"
     LOG_GROUP="/copilot/${APP_NAME}-${ENV_NAME}-${JOB}"
-    
+
     echo "Creating alarm for: $JOB"
-    
+
     # Create metric filter for job failures
     aws logs put-metric-filter \
         --log-group-name "$LOG_GROUP" \
@@ -125,7 +125,7 @@ metricNamespace="InsightInvest/Jobs",\
 metricValue=1,\
 defaultValue=0 \
         --region "$AWS_REGION" 2>/dev/null || true
-    
+
     # Create alarm
     aws cloudwatch put-metric-alarm \
         --alarm-name "$ALARM_NAME" \
@@ -140,7 +140,7 @@ defaultValue=0 \
         --alarm-actions "$TOPIC_ARN" \
         --treat-missing-data notBreaching \
         --region "$AWS_REGION" 2>/dev/null || true
-    
+
     echo -e "${GREEN}✓ Alarm created: $ALARM_NAME${NC}"
 done
 
@@ -197,4 +197,3 @@ echo "  2. View alarms: aws cloudwatch describe-alarms --region $AWS_REGION"
 echo "  3. Test notification: aws sns publish --topic-arn $TOPIC_ARN --message 'Test' --region $AWS_REGION"
 echo ""
 echo -e "${GREEN}You will now receive email notifications when jobs fail!${NC}"
-

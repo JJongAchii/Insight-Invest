@@ -1,0 +1,77 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "S3BucketAccess",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketLocation",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::insight-invest-datalake",
+        "arn:aws:s3:::insight-invest-athena-results"
+      ]
+    },
+    {
+      "Sid": "S3ObjectAccess",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:PutObjectAcl",
+        "s3:GetObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::insight-invest-datalake/*",
+        "arn:aws:s3:::insight-invest-athena-results/*"
+      ]
+    },
+    {
+      "Sid": "AthenaAccess",
+      "Effect": "Allow",
+      "Action": [
+        "athena:StartQueryExecution",
+        "athena:GetQueryExecution",
+        "athena:GetQueryResults",
+        "athena:StopQueryExecution",
+        "athena:GetWorkGroup"
+      ],
+      "Resource": [
+        "arn:aws:athena:ap-northeast-2:061039802347:workgroup/primary"
+      ]
+    },
+    {
+      "Sid": "GlueAccess",
+      "Effect": "Allow",
+      "Action": [
+        "glue:GetDatabase",
+        "glue:GetDatabases",
+        "glue:GetTable",
+        "glue:GetTables",
+        "glue:GetPartition",
+        "glue:GetPartitions",
+        "glue:BatchGetPartition",
+        "glue:CreateTable",
+        "glue:UpdateTable"
+      ],
+      "Resource": [
+        "arn:aws:glue:ap-northeast-2:061039802347:catalog",
+        "arn:aws:glue:ap-northeast-2:061039802347:database/market",
+        "arn:aws:glue:ap-northeast-2:061039802347:database/portfolio",
+        "arn:aws:glue:ap-northeast-2:061039802347:table/market/*",
+        "arn:aws:glue:ap-northeast-2:061039802347:table/portfolio/*"
+      ]
+    },
+    {
+      "Sid": "CloudWatchLogs",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:ap-northeast-2:061039802347:log-group:/aws/ecs/*"
+    }
+  ]
+}

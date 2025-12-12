@@ -47,7 +47,7 @@ const SetStrategy = ({ onRunBacktest }: { onRunBacktest: any }) => {
     ), [data]);
 
     const tickerOptions = useMemo(() => (
-        data 
+        data
         ? data
             .filter((item: TickerData) =>
                 (!selectedIsoCode || item.iso_code === selectedIsoCode.value) &&
@@ -56,7 +56,7 @@ const SetStrategy = ({ onRunBacktest }: { onRunBacktest: any }) => {
             .map((item: TickerData) => ({
                 value: item.meta_id,
                 label: item.ticker
-            })) 
+            }))
         : []
     ), [data, selectedIsoCode, selectedSecurityType]);
 
@@ -82,7 +82,7 @@ const SetStrategy = ({ onRunBacktest }: { onRunBacktest: any }) => {
     const handleTickersChange = (newValue: MultiValue<SelectOption>, _: ActionMeta<SelectOption>) => {
         setSelectedTickers(newValue as SelectOption[]);
     };
-    
+
     const handleButtonClick = () => {
         const payload = {
             strategy_name: strategyName,
@@ -93,7 +93,7 @@ const SetStrategy = ({ onRunBacktest }: { onRunBacktest: any }) => {
         };
         onRunBacktest(payload);
     };
-        
+
 
     return (
         <div className='flex flex-col bg-white shadow-md rounded-2xl pb-12'>
@@ -102,7 +102,7 @@ const SetStrategy = ({ onRunBacktest }: { onRunBacktest: any }) => {
                     <h4 className='text-md font-semibold'>
                         Strategy Name
                     </h4>
-                    <input 
+                    <input
                         type='text'
                         placeholder='Your Strategy name...'
                         className='w-full px-3 py-3 border border-gray-300 rounded-md text-sm text-gray-500'
@@ -115,7 +115,7 @@ const SetStrategy = ({ onRunBacktest }: { onRunBacktest: any }) => {
                     <h4 className='text-md font-semibold'>
                         Country
                     </h4>
-                    <Select<SelectOption> 
+                    <Select<SelectOption>
                         options={isoCodeOptions}
                         placeholder="Select Country..."
                         onChange={handleIsoCodeChange}
@@ -172,7 +172,7 @@ const SetStrategy = ({ onRunBacktest }: { onRunBacktest: any }) => {
                     <h4 className='text-md font-semibold'>
                         End Date
                     </h4>
-                    <DatePicker 
+                    <DatePicker
                         selected={endDate}
                         onChange={(date) => setEndDate(date || new Date())}
                         placeholderText="Select end date"
@@ -181,7 +181,7 @@ const SetStrategy = ({ onRunBacktest }: { onRunBacktest: any }) => {
                 </div>
             </div>
             <div className='flex px-5'>
-                <button 
+                <button
                     className='px-5 py-3 rounded-md bg-red-300 font-semibold hover:bg-red-500'
                     onClick={handleButtonClick}
                 >

@@ -1,0 +1,42 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "glue:GetDatabase",
+        "glue:GetDatabases",
+        "glue:GetTable",
+        "glue:GetTables",
+        "glue:GetPartition",
+        "glue:GetPartitions",
+        "glue:CreateTable",
+        "glue:UpdateTable",
+        "glue:BatchCreatePartition",
+        "glue:BatchUpdatePartition"
+      ],
+      "Resource": [
+        "arn:aws:glue:ap-northeast-2:061039802347:catalog",
+        "arn:aws:glue:ap-northeast-2:061039802347:database/market",
+        "arn:aws:glue:ap-northeast-2:061039802347:database/portfolio",
+        "arn:aws:glue:ap-northeast-2:061039802347:database/analytics",
+        "arn:aws:glue:ap-northeast-2:061039802347:table/market/*",
+        "arn:aws:glue:ap-northeast-2:061039802347:table/portfolio/*",
+        "arn:aws:glue:ap-northeast-2:061039802347:table/analytics/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::insight-invest-datalake/*",
+        "arn:aws:s3:::insight-invest-datalake"
+      ]
+    }
+  ]
+}

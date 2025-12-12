@@ -33,8 +33,8 @@ const Contents = ({ strategyList, strategyNav }: {strategyList: Strategy[]; stra
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {
                 strategyList?.map((strategy) => (
-                    <div 
-                        key={strategy.port_id} 
+                    <div
+                        key={strategy.port_id}
                         className='flex bg-gradient-to-br from-sky-100 to-white p-6 rounded-xl shadow-md border border-gray-200 cursor-pointer hover:shadow-lg transition-shadow duration-200 transform hover:scale-105'
                         onClick={() => handleGridClick(strategy.port_id)}
                     >
@@ -74,10 +74,10 @@ const Contents = ({ strategyList, strategyNav }: {strategyList: Strategy[]; stra
                                     maintainAspectRatio: false,
                                     scales: {
                                         x: {
-                                            display: false, 
+                                            display: false,
                                         },
                                         y: {
-                                            display: false, 
+                                            display: false,
                                         },
                                     },
                                     plugins: {

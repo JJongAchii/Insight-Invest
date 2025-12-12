@@ -27,8 +27,8 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
 
   return (
     <div className="flex flex-col xl:overflow-auto gap-5 pb-36">
-      <Link 
-        href="/backtest/strategy_list" 
+      <Link
+        href="/backtest/strategy_list"
         className="flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-200 font-semibold">
           <FaArrowLeft className="mr-2" />
           Back to Strategy List
