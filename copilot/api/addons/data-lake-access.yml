@@ -1,0 +1,59 @@
+# CloudFormation template for API service to access Data Lake (Glue + S3)
+# This addon attaches directly to the ECS Task Role
+Parameters:
+  App:
+    Type: String
+    Description: Your application's name.
+  Env:
+    Type: String
+    Description: The environment name your service, job, or workflow is being deployed to.
+  Name:
+    Type: String
+    Description: Your workload's name.
+
+Resources:
+  DataLakeAccessPolicy:
+    Metadata:
+      "aws:copilot:description": "IAM policy for Data Lake access (Glue + S3)"
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Policy for API to read from Data Lake (Glue Catalog + S3 Iceberg)
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          # Glue Catalog permissions (read-only for API)
+          - Sid: GlueCatalogRead
+            Effect: Allow
+            Action:
+              - glue:GetDatabase
+              - glue:GetDatabases
+              - glue:GetTable
+              - glue:GetTables
+              - glue:GetTableVersion
+              - glue:GetTableVersions
+              - glue:GetPartition
+              - glue:GetPartitions
+            Resource:
+              - !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:catalog"
+              - !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:database/market"
+              - !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:database/portfolio"
+              - !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:table/market/*"
+              - !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:table/portfolio/*"
+
+          # S3 permissions (read-only for API)
+          - Sid: S3DataLakeRead
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:GetObjectVersion
+              - s3:ListBucket
+              - s3:GetBucketLocation
+            Resource:
+              - "arn:aws:s3:::insight-invest-datalake"
+              - "arn:aws:s3:::insight-invest-datalake/*"
+
+Outputs:
+  # Copilot automatically attaches policies with this output name to the Task Role
+  DataLakeAccessPolicyArn:
+    Description: ARN of the Data Lake access policy to attach to Task Role
+    Value: !Ref DataLakeAccessPolicy
