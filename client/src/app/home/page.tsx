@@ -45,7 +45,7 @@ const Home = () => {
       }
     ],
     showSymbolLogo: true,
-    isTransparent: false,
+    isTransparent: true,
     displayMode: 'compact',
     colorTheme: 'light',
     locale: 'en',
@@ -339,39 +339,74 @@ const Home = () => {
       },
     ],
   };
-  
+
 
   return (
-    <div className="flex flex-col gap-5">
-      <TradingViewWidget 
-        widgetScriptUrl={tickerTapeUrl}
-        widgetConfig={tickerTapeConfig}
-      />
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div className="flex flex-col bg-white shadow-lg rounded-2xl px-2 py-3 gap-5">
-          <h4 className="text-lg font-semibold">Economic Calendar</h4>
+    <div className="flex flex-col gap-8">
+      {/* Page Header */}
+      <div className="mb-4">
+        <h1 className="text-4xl font-bold mb-2">
+          <span className="gradient-text">Market Dashboard</span>
+        </h1>
+        <p className="text-gray-600 text-lg">Real-time market data and economic indicators</p>
+      </div>
+
+      {/* Ticker Tape */}
+      <div className="bg-white/80 backdrop-blur-sm shadow-xl rounded-2xl overflow-hidden border border-gray-100">
+        <TradingViewWidget
+          widgetScriptUrl={tickerTapeUrl}
+          widgetConfig={tickerTapeConfig}
+        />
+      </div>
+
+      {/* Main Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="card-modern group">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+              <span className="text-white text-xl font-bold">📅</span>
+            </div>
+            <h4 className="text-xl font-bold text-gray-800 group-hover:text-blue-600 transition-colors">Economic Calendar</h4>
+          </div>
           <TradingViewWidget
             widgetScriptUrl={economicCalUrl}
             widgetConfig={economicCalConfig}
           />
         </div>
-        <div className="flex flex-col bg-white shadow-lg rounded-2xl px-2 py-3 gap-5">
-          <h4 className="text-lg font-semibold">Market Data</h4>
+
+        <div className="card-modern group">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-600 rounded-xl flex items-center justify-center">
+              <span className="text-white text-xl font-bold">📊</span>
+            </div>
+            <h4 className="text-xl font-bold text-gray-800 group-hover:text-purple-600 transition-colors">Market Data</h4>
+          </div>
           <TradingViewWidget
             widgetScriptUrl={marketQuotesUrl}
             widgetConfig={marketQuotesConfig}
           />
         </div>
-        <div className="flex flex-col bg-white shadow-lg rounded-2xl px-2 py-3 gap-5">
-          <h4 className="text-lg font-semibold">Forex Cross Rate</h4>
-          <TradingViewWidget 
+
+        <div className="card-modern group">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
+              <span className="text-white text-xl font-bold">💱</span>
+            </div>
+            <h4 className="text-xl font-bold text-gray-800 group-hover:text-emerald-600 transition-colors">Forex Cross Rate</h4>
+          </div>
+          <TradingViewWidget
             widgetScriptUrl={fxCrossRateUrl}
             widgetConfig={fxCrossRateConfig}
           />
         </div>
-        <div className="flex flex-col bg-white shadow-lg rounded-2xl px-2 py-3 gap-5">
-          <h4 className="text-lg font-semibold">Market Overview</h4>
+
+        <div className="card-modern group">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-red-600 rounded-xl flex items-center justify-center">
+              <span className="text-white text-xl font-bold">📈</span>
+            </div>
+            <h4 className="text-xl font-bold text-gray-800 group-hover:text-orange-600 transition-colors">Market Overview</h4>
+          </div>
           <TradingViewWidget
             widgetScriptUrl={marketOverviewUrl}
             widgetConfig={marketOverviewConfig}

@@ -9,7 +9,7 @@ import LoadingSpinner from "@/app/(components)/LoadingSpinner";
 
 
 const Simulation = () => {
-    
+
     const [loading, setLoading] = useState(false);
 
     const [selectedTicker, setSelectedTicker] = useState(() => {
@@ -17,7 +17,7 @@ const Simulation = () => {
         return savedTicker ? JSON.parse(savedTicker) : {};
     });
     const [backtestResult, setBacktestResult] = useState(() => {
-        
+
         const savedResult = localStorage.getItem("backtestResult");
         return savedResult ? JSON.parse(savedResult) : [];
     });
@@ -51,13 +51,26 @@ const Simulation = () => {
     };
 
     return (
-        <div className="flex flex-col xl:overflow-auto gap-5 pb-36">
+        <div className="flex flex-col xl:overflow-auto gap-8 pb-36">
             {loading && <LoadingSpinner />}
-            <h2 className="text-4xl font-bold px-7 pt-7">Backtesting Tool</h2>
-            <button onClick={clearCache} className="px-4 py-2 bg-red-500 text-white rounded">
-                Clear Strategy
-            </button>
-            <SetStrategy onRunBacktest ={handleRunBacktest}/>
+
+            {/* Page Header */}
+            <div className="flex items-center justify-between mb-4">
+                <div>
+                    <h1 className="text-4xl font-bold mb-2">
+                        <span className="gradient-text">Backtesting Simulation</span>
+                    </h1>
+                    <p className="text-gray-600 text-lg">Test your investment strategies with historical data</p>
+                </div>
+                <button
+                    onClick={clearCache}
+                    className="px-6 py-3 bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-xl font-semibold shadow-md hover:shadow-lg hover:from-red-600 hover:to-pink-700 transition-all duration-300"
+                >
+                    Clear Strategy
+                </button>
+            </div>
+
+            <SetStrategy onRunBacktest={handleRunBacktest}/>
             <StrategyChart navResult={backtestResult?.nav}/>
             <StrategyMetrics backtestResult={backtestResult} selectedTicker={selectedTicker} />
         </div>

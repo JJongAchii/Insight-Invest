@@ -4,21 +4,33 @@ import { ChartOptions } from 'chart.js';
 import 'chart.js/auto';
 
 const StrategyChart = ({ navResult }: { navResult: any }) => {
-    
+
     const navData = navResult ? JSON.parse(navResult) : { index: [], columns: [], data: [] };
 
     const chartLabels = navData.index.map((date: any) => new Date(date).toISOString().split('T')[0]);
-    
+
     const datasets = navData.columns.map((column: any, index: any) => ({
         label: column,
         data: navData.data.map((row: any) => row[index]),
-        borderColor: ['#4A90E2', '#50E3C2', '#F5A623', '#D0021B', '#BD10E0'][index % 5], 
-        backgroundColor: 'rgba(74, 144, 226, 0.1)', 
-        borderWidth: 2.5,
-        tension: 0.3, 
+        borderColor: [
+            'rgb(99, 102, 241)',
+            'rgb(168, 85, 247)',
+            'rgb(236, 72, 153)',
+            'rgb(239, 68, 68)',
+            'rgb(34, 197, 94)'
+        ][index % 5],
+        backgroundColor: [
+            'rgba(99, 102, 241, 0.1)',
+            'rgba(168, 85, 247, 0.1)',
+            'rgba(236, 72, 153, 0.1)',
+            'rgba(239, 68, 68, 0.1)',
+            'rgba(34, 197, 94, 0.1)'
+        ][index % 5],
+        borderWidth: 3,
+        tension: 0.4,
         pointRadius: 0,
-        pointHoverRadius: 5,
-        hoverBorderWidth: 2,
+        pointHoverRadius: 6,
+        hoverBorderWidth: 3,
     }));
 
     const data = {
@@ -34,26 +46,46 @@ const StrategyChart = ({ navResult }: { navResult: any }) => {
                 display: true,
                 position: 'top',
                 labels: {
-                    color: '#333',
+                    color: 'rgb(55, 65, 81)',
                     font: {
-                        size: 14,
+                        size: 13,
+                        weight: '600',
                     },
-                    boxWidth: 20,
-                    padding: 20,
+                    boxWidth: 12,
+                    boxHeight: 12,
+                    padding: 16,
+                    usePointStyle: true,
+                    pointStyle: 'circle',
                 },
             },
             tooltip: {
                 mode: 'index' as const,
                 intersect: false,
-                backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                titleColor: '#1f2937',
+                bodyColor: '#4b5563',
+                borderColor: '#e5e7eb',
+                borderWidth: 1,
                 titleFont: {
-                    size: 14,
+                    size: 13,
+                    weight: 'bold',
                 },
                 bodyFont: {
                     size: 12,
                 },
                 padding: 12,
-                cornerRadius: 5,
+                cornerRadius: 8,
+                displayColors: true,
+                callbacks: {
+                    labelColor: function(context: any) {
+                        return {
+                            borderColor: context.dataset.borderColor,
+                            backgroundColor: context.dataset.borderColor,
+                            borderWidth: 2,
+                            borderRadius: 2,
+                        };
+                    },
+                }
             },
         },
         scales: {
@@ -62,28 +94,33 @@ const StrategyChart = ({ navResult }: { navResult: any }) => {
                     display: false,
                 },
                 ticks: {
-                    color: '#333',
+                    color: '#6b7280',
                     font: {
-                        size: 12,
+                        size: 11,
+                        weight: '500',
                     },
+                    maxRotation: 0,
+                    autoSkip: true,
+                    maxTicksLimit: 12,
                 },
             },
             y: {
                 grid: {
-                    color: 'rgba(200, 200, 200, 0.3)',
-                    lineWidth: 0.5,
+                    color: 'rgba(0, 0, 0, 0.05)',
+                    lineWidth: 1,
                 },
                 ticks: {
-                    color: '#333',
+                    color: '#6b7280',
                     font: {
-                        size: 12,
+                        size: 11,
+                        weight: '500',
                     },
                     callback: (tickValue: string | number) => {
                         if (typeof tickValue === 'number') {
-                            return `${tickValue}`;
+                            return tickValue.toFixed(2);
                         }
                         return tickValue;
-                    }, 
+                    },
                 },
             },
         },
@@ -93,28 +130,32 @@ const StrategyChart = ({ navResult }: { navResult: any }) => {
             intersect: false,
         },
         animation: {
-            duration: 1000,
+            duration: 800,
             easing: 'easeInOutQuart',
         },
     };
 
     return (
-        <div className="flex flex-col bg-white shadow-lg rounded-2xl p-8 relative" style={{ height: 450 }}>
-            <h4 className='text-lg text-center font-semibold'>Performance Chart</h4>
-            {navResult ? (
-                <Line data={data} options={options} />
-            ) : (
-                <div style={{
-                    position: 'absolute',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    fontSize: '1.5rem',
-                    color: '#555'
-                }}>
-                    No data available...
+        <div className="card-modern">
+            <div className='flex items-center gap-3 mb-6'>
+                <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl flex items-center justify-center">
+                    <span className="text-white text-xl font-bold">📊</span>
                 </div>
-            )}
+                <h3 className='text-xl font-bold text-gray-800'>
+                    Performance Chart
+                </h3>
+            </div>
+            <div className="bg-gradient-to-br from-gray-50 to-blue-50 rounded-xl p-4 relative" style={{ height: 450 }}>
+                {navResult ? (
+                    <Line data={data} options={options} />
+                ) : (
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center">
+                        <div className="text-6xl mb-4 opacity-20">📈</div>
+                        <p className="text-xl text-gray-400 font-medium">No data available</p>
+                        <p className="text-sm text-gray-400 mt-2">Run a backtest to see performance</p>
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

@@ -22,7 +22,7 @@ const LineChart = ({ strategyName, strategyNav, bmNav }: {strategyName: string; 
     <div className="flex flex-col bg-white shadow-lg rounded-2xl px-2 py-3 gap-5">
       <h4 className='text-lg text-center font-semibold'>Performance Chart</h4>
       <div style={{ position: 'relative', height: '400px' }}>
-        <Line 
+        <Line
           data={{
             labels: strategyNav?.map((nav) => nav.trade_date),
             datasets: [

@@ -21,14 +21,16 @@ const DashboardLayout = ({children}: {children: React.ReactNode}) => {
   })
 
   return (
-    <div className={`${isDarkMode ? "dark" : "light"} flex bg-gray-50 text-gray-900 w-full min-h-screen`}>
+    <div className={`${isDarkMode ? "dark" : "light"} flex bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 text-gray-900 w-full min-h-screen`}>
         <Sidebar />
-        <main className={`flex flex-col w-full h-full py-7 px-1 bg-gray-50 ${
-          isSidebarCollapsed ? "md:pl-24" : "md:pl-72"
+        <main className={`flex flex-col w-full h-full py-8 px-6 transition-all duration-300 ${
+          isSidebarCollapsed ? "md:pl-28" : "md:pl-80"
           }
         `}>
             <Navbar />
-            {children}
+            <div className="flex-grow">
+              {children}
+            </div>
         </main>
     </div>
   );

@@ -38,6 +38,7 @@ interface MacroChartProps {
     recessionLabel: string;
     title: string;
     baseline?: number;
+    icon?: string;
 }
 
 const MacroChart: React.FC<MacroChartProps> = ({
@@ -47,6 +48,7 @@ const MacroChart: React.FC<MacroChartProps> = ({
     recessionLabel,
     title,
     baseline = 0,
+    icon = "📊",
 }) => {
     const [pluginsLoaded, setPluginsLoaded] = useState(false);
 
@@ -62,7 +64,7 @@ const MacroChart: React.FC<MacroChartProps> = ({
         loadPlugins();
     }, []);
 
-    if (!pluginsLoaded) return null; // or a loader/spinner
+    if (!pluginsLoaded) return null;
 
     const mappedRecessionData = primaryData?.map((primary) => {
         const matchingRecession = recessionData?.find(
@@ -72,97 +74,162 @@ const MacroChart: React.FC<MacroChartProps> = ({
     });
 
     return (
-        <div className="flex flex-col bg-white shadow-lg rounded-2xl px-2 py-3 gap-5">
-        <h4 className="text-lg font-semibold text-center">{title}</h4>
-        <Line
-            data={{
-            labels: primaryData?.map((data) => data.base_date),
-            datasets: [
-                {
-                label: primaryLabel,
-                data: primaryData?.map((data) => data.value),
-                borderColor: "#2196f3",
-                borderWidth: 2,
-                pointRadius: 0,
-                tension: 0.4,
-                yAxisID: "left-axis",
-                },
-                {
-                label: recessionLabel,
-                data: mappedRecessionData,
-                backgroundColor: "rgba(76, 175, 80, 0.2)",
-                borderColor: "rgba(76, 175, 80, 0)",
-                fill: true,
-                tension: 0.4,
-                yAxisID: "right-axis",
-                },
-            ],
-            }}
-            options={{
-            responsive: true,
-            plugins: {
-                legend: {
-                position: "top",
-                labels: {
-                    font: { size: 14 },
-                },
-                },
-                zoom: {
-                    zoom: {
-                        wheel: {
-                            enabled: true,
+        <div className="card-modern group">
+            <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-md">
+                    <span className="text-white text-2xl">{icon}</span>
+                </div>
+                <h4 className="text-xl font-bold text-gray-800 group-hover:text-blue-600 transition-colors">{title}</h4>
+            </div>
+            <div className="bg-gradient-to-br from-gray-50 to-blue-50 rounded-xl p-4">
+                <Line
+                    data={{
+                    labels: primaryData?.map((data) => data.base_date),
+                    datasets: [
+                        {
+                        label: primaryLabel,
+                        data: primaryData?.map((data) => data.value),
+                        borderColor: "rgb(99, 102, 241)",
+                        backgroundColor: "rgba(99, 102, 241, 0.1)",
+                        borderWidth: 3,
+                        pointRadius: 0,
+                        tension: 0.4,
+                        yAxisID: "left-axis",
                         },
-                        pinch: {
-                            enabled: true,
+                        {
+                        label: recessionLabel,
+                        data: mappedRecessionData,
+                        backgroundColor: "rgba(239, 68, 68, 0.15)",
+                        borderColor: "rgba(239, 68, 68, 0)",
+                        fill: true,
+                        tension: 0.4,
+                        yAxisID: "right-axis",
                         },
-                        mode: "x",
-                    },
-                    pan: {
-                        enabled: true,
-                        mode: "x",
-                    },
-                },
-                annotation: {
-                    annotations: {
-                        baselineLine: {
-                            type: "line",
-                            yMin: baseline,
-                            yMax: baseline,
-                            borderColor: "#ff0000",
-                            borderWidth: 2,
-                            label: {
-                                display: true,
-                                position: "end",
+                    ],
+                    }}
+                    options={{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 3,
+                    plugins: {
+                        legend: {
+                        position: "top",
+                        labels: {
+                            font: {
+                                size: 13,
+                                weight: "600"
+                            },
+                            padding: 15,
+                            usePointStyle: true,
+                            pointStyle: "circle",
+                        },
+                        },
+                        tooltip: {
+                            backgroundColor: "rgba(255, 255, 255, 0.95)",
+                            titleColor: "#1f2937",
+                            bodyColor: "#4b5563",
+                            borderColor: "#e5e7eb",
+                            borderWidth: 1,
+                            padding: 12,
+                            boxPadding: 6,
+                            usePointStyle: true,
+                            callbacks: {
+                                labelColor: function(context: any) {
+                                    return {
+                                        borderColor: context.dataset.borderColor,
+                                        backgroundColor: context.dataset.borderColor,
+                                        borderWidth: 2,
+                                        borderRadius: 2,
+                                    };
+                                },
+                            }
+                        },
+                        zoom: {
+                            zoom: {
+                                wheel: {
+                                    enabled: true,
+                                },
+                                pinch: {
+                                    enabled: true,
+                                },
+                                mode: "x",
+                            },
+                            pan: {
+                                enabled: true,
+                                mode: "x",
+                            },
+                        },
+                        annotation: {
+                            annotations: {
+                                baselineLine: {
+                                    type: "line",
+                                    yMin: baseline,
+                                    yMax: baseline,
+                                    borderColor: "rgb(239, 68, 68)",
+                                    borderWidth: 2,
+                                    borderDash: [5, 5],
+                                    label: {
+                                        display: true,
+                                        position: "end",
+                                        backgroundColor: "rgb(239, 68, 68)",
+                                        color: "white",
+                                        font: {
+                                            weight: "bold",
+                                        },
+                                        padding: 4,
+                                    },
+                                },
                             },
                         },
                     },
-                },
-            },
-            scales: {
-                "left-axis": {
-                    type: "linear",
-                    position: "left",
-                    grid: {
-                        drawOnChartArea: true,
-                        color: (context) =>
-                        context.tick.value === baseline ? "#ff0000" : "#e0e0e0",
-                        lineWidth: (context) => (context.tick.value === baseline ? 2 : 1),
+                    scales: {
+                        "left-axis": {
+                            type: "linear",
+                            position: "left",
+                            grid: {
+                                drawOnChartArea: true,
+                                color: (context) =>
+                                context.tick.value === baseline ? "rgba(239, 68, 68, 0.3)" : "rgba(0, 0, 0, 0.05)",
+                                lineWidth: (context) => (context.tick.value === baseline ? 2 : 1),
+                            },
+                            ticks: {
+                                font: {
+                                    size: 11,
+                                    weight: "500",
+                                },
+                                color: "#6b7280",
+                            },
+                        },
+                        "right-axis": {
+                            type: "linear",
+                            position: "right",
+                            grid: {
+                                drawOnChartArea: false,
+                            },
+                            min: 0,
+                            max: 1,
+                            ticks: { display: false },
+                        },
+                        x: {
+                            grid: {
+                                display: false,
+                            },
+                            ticks: {
+                                font: {
+                                    size: 11,
+                                    weight: "500",
+                                },
+                                color: "#6b7280",
+                                maxRotation: 0,
+                                autoSkip: true,
+                                maxTicksLimit: 10,
+                            },
+                        },
                     },
-                },
-                "right-axis": {
-                    type: "linear",
-                    position: "right",
-                    grid: {
-                        drawOnChartArea: true,
-                    },
-                    min: 0,
-                    max: 1,
-                    ticks: { display: false },
-                },
-            },
-            interaction: { mode: "nearest", intersect: false },
-            }}
-        />
+                    interaction: { mode: "nearest", intersect: false },
+                    }}
+                />
+            </div>
         </div>
     );
 };

@@ -5,11 +5,11 @@ import { setIsSidebarCollapsed } from '@/state';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import React, { useState } from 'react';
-import { IoHome, IoMenu, IoSearch, IoBarChart, IoTelescope } from "react-icons/io5";
+import { IoHome, IoMenu, IoSearch, IoBarChart, IoTelescope, IoChevronDown } from "react-icons/io5";
 import { HiOutlineLightBulb } from "react-icons/hi";
 import { FcAlphabeticalSortingAz } from "react-icons/fc";
 import { FaRunning } from "react-icons/fa";
-import { IconType } from 'react-icons'; 
+import { IconType } from 'react-icons';
 import logo from '@/images/logo.png';
 import Image from 'next/image';
 
@@ -34,21 +34,36 @@ const SidebarLink = ({
     const pathname = usePathname();
     const isActive =
         pathname === href || (pathname === "/" && href === "/home") ;
-    
+
     return (
         <Link href={href}>
-            <div onClick={onClick} className={`cursor-pointer flex items-center ${
-                isCollapsed ? "justify-center py-4" : "justify-start px-8 py-4"
-            }
-            hover:text-blue-500 hover:bg-blue-100 gap-3 transition-colors ${
-                isActive ? "bg-blue-200 text-white" : ""
-            }
-            ${isDropdown ? "pl-12" : ""}  // 하위 디렉토리일 경우 들여쓰기 적용
+            <div onClick={onClick} className={`
+                cursor-pointer flex items-center
+                ${isCollapsed ? "justify-center py-4 mx-2" : "justify-start px-6 py-3.5 mx-3"}
+                ${isDropdown ? "ml-12 px-4" : ""}
+                rounded-xl
+                transition-all duration-300
+                group
+                ${isActive
+                    ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg"
+                    : "text-gray-600 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 hover:text-blue-600"
+                }
+                ${!isActive && "hover:shadow-md"}
+                gap-3
             `}>
-                    <Icon className='w-6 h-6 !text-gray-700'/>
-                    <span className={`${isCollapsed ? "hidden": "block"} font-medium text-gray-700`}>
-                        {label}
-                    </span>
+                <Icon className={`
+                    w-5 h-5
+                    transition-all duration-300
+                    ${isActive ? "text-white scale-110" : "text-gray-600 group-hover:text-blue-600 group-hover:scale-110"}
+                `}/>
+                <span className={`
+                    ${isCollapsed ? "hidden": "block"}
+                    font-semibold text-sm
+                    transition-all duration-300
+                    ${isActive ? "text-white" : "text-gray-700 group-hover:text-blue-600"}
+                `}>
+                    {label}
+                </span>
             </div>
         </Link>
     );
@@ -61,7 +76,6 @@ const Sidebar = () => {
         (state) => state.global.isSidebarCollapsed
     );
 
-    // Backtest 하위 디렉토리 표시 상태
     const [isBacktestDropdownOpen, setIsBacktestDropdownOpen] = useState(false);
 
     const toggleSidebar = () => {
@@ -73,79 +87,108 @@ const Sidebar = () => {
     };
 
     const sidebarClassNames = `fixed flex flex-col ${
-        isSidebarCollapsed ? "w-0 md:w-16" : "w-72 md:w-64"
-    } bg-white transition-all duration-300 overflow-hidden h-full shadow-md z-40`;
+        isSidebarCollapsed ? "w-0 md:w-20" : "w-72 md:w-72"
+    } bg-white/95 backdrop-blur-xl transition-all duration-300 overflow-hidden h-full shadow-2xl border-r border-gray-100 z-40`;
 
     return (
         <div className={sidebarClassNames}>
             {/* TOP LOGO */}
-            <div className={`flex justify-between md:justify-normal items-center pt-5 ${
-                    isSidebarCollapsed ? "px-0" : "px-3"
-            }`}>
+            <div className={`flex justify-between md:justify-center items-center pt-8 pb-6 ${
+                    isSidebarCollapsed ? "px-2" : "px-6"
+            } border-b border-gray-100`}>
                 <Link href="/home">
-                    <div className="cursor-pointer">
-                        <Image 
-                            src={logo} 
-                            alt="Logo" 
+                    <div className="cursor-pointer hover:scale-105 transition-transform duration-300">
+                        <Image
+                            src={logo}
+                            alt="Logo"
                             className="w-full h-auto"
                         />
                     </div>
                 </Link>
-                <button 
-                    className='md:hidden px-3 py-3 bg-gray-100 rounded-full hover:bg-blue-100'
+                <button
+                    className='md:hidden p-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:shadow-lg transition-all duration-300'
                     onClick={toggleSidebar}
                 >
-                    <IoMenu className='w-4 h-4'/>
+                    <IoMenu className='w-5 h-5'/>
                 </button>
             </div>
 
             {/* Links */}
-            <div className='flex-grow mt-8'>
-                <SidebarLink 
+            <div className='flex-grow mt-6 space-y-1'>
+                <SidebarLink
                     href="/home"
                     icon={IoHome}
                     label="Home"
                     isCollapsed={isSidebarCollapsed}
                 />
-                <SidebarLink 
+                <SidebarLink
                     href="/regime"
                     icon={IoTelescope}
                     label="Regime"
                     isCollapsed={isSidebarCollapsed}
-                />                
-                {/* Backtest 탭과 드롭다운 */}
-                <SidebarLink 
-                    href="/backtest/simulation"
-                    icon={IoBarChart}
-                    label="Backtest"
-                    isCollapsed={isSidebarCollapsed}
-                    onClick={toggleBacktestDropdown}
                 />
-                {isBacktestDropdownOpen && !isSidebarCollapsed && (
-                    <div>
-                        <SidebarLink 
-                            href="/backtest/simulation"
-                            icon={FaRunning}
-                            label="Simulation"
-                            isCollapsed={isSidebarCollapsed}
-                            isDropdown
-                        />
-                        <SidebarLink 
-                            href="/backtest/strategy_list"
-                            icon={FcAlphabeticalSortingAz}
-                            label="Strategy List"
-                            isCollapsed={isSidebarCollapsed}
-                            isDropdown
-                        />
+
+                {/* Backtest section with dropdown */}
+                <div>
+                    <div onClick={toggleBacktestDropdown} className={`
+                        cursor-pointer flex items-center
+                        ${isSidebarCollapsed ? "justify-center py-4 mx-2" : "justify-between px-6 py-3.5 mx-3"}
+                        rounded-xl
+                        transition-all duration-300
+                        text-gray-600 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 hover:text-blue-600
+                        hover:shadow-md
+                        group
+                    `}>
+                        <div className="flex items-center gap-3">
+                            <IoBarChart className={`
+                                w-5 h-5
+                                transition-all duration-300
+                                text-gray-600 group-hover:text-blue-600 group-hover:scale-110
+                            `}/>
+                            <span className={`
+                                ${isSidebarCollapsed ? "hidden": "block"}
+                                font-semibold text-sm
+                                transition-all duration-300
+                                text-gray-700 group-hover:text-blue-600
+                            `}>
+                                Backtest
+                            </span>
+                        </div>
+                        {!isSidebarCollapsed && (
+                            <IoChevronDown className={`
+                                w-4 h-4 transition-transform duration-300
+                                ${isBacktestDropdownOpen ? "rotate-180" : ""}
+                            `}/>
+                        )}
                     </div>
-                )}
-                <SidebarLink 
+
+                    {isBacktestDropdownOpen && !isSidebarCollapsed && (
+                        <div className="space-y-1 mt-1">
+                            <SidebarLink
+                                href="/backtest/simulation"
+                                icon={FaRunning}
+                                label="Simulation"
+                                isCollapsed={isSidebarCollapsed}
+                                isDropdown
+                            />
+                            <SidebarLink
+                                href="/backtest/strategy_list"
+                                icon={FcAlphabeticalSortingAz}
+                                label="Strategy List"
+                                isCollapsed={isSidebarCollapsed}
+                                isDropdown
+                            />
+                        </div>
+                    )}
+                </div>
+
+                <SidebarLink
                     href="/stocksearch"
                     icon={IoSearch}
                     label="Stock Search"
                     isCollapsed={isSidebarCollapsed}
                 />
-                <SidebarLink 
+                <SidebarLink
                     href="/insight"
                     icon={HiOutlineLightBulb}
                     label="Insight"
@@ -154,8 +197,11 @@ const Sidebar = () => {
             </div>
 
             {/* FOOTER */}
-            <div className={`${isSidebarCollapsed ? "hidden" : "block"} mb-10`}>
-                <p className='text-center text-xs text-gray-500'>&copy; 2024 Achii</p>
+            <div className={`${isSidebarCollapsed ? "hidden" : "block"} mb-8 px-6`}>
+                <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl p-4 text-white text-center">
+                    <p className='text-xs font-medium mb-1'>Insight Invest</p>
+                    <p className='text-xs opacity-80'>&copy; 2024 Achii</p>
+                </div>
             </div>
         </div>
     );

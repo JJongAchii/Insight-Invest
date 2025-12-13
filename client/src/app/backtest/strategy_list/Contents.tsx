@@ -30,23 +30,34 @@ const Contents = ({ strategyList, strategyNav }: {strategyList: Strategy[]; stra
     }
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-6">
             {
                 strategyList?.map((strategy) => (
-                    <div 
-                        key={strategy.port_id} 
-                        className='flex bg-gradient-to-br from-sky-100 to-white p-6 rounded-xl shadow-md border border-gray-200 cursor-pointer hover:shadow-lg transition-shadow duration-200 transform hover:scale-105'
+                    <div
+                        key={strategy.port_id}
+                        className='flex bg-gradient-to-br from-white to-blue-50 p-6 rounded-xl shadow-md border-2 border-transparent hover:border-blue-400 cursor-pointer hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 group'
                         onClick={() => handleGridClick(strategy.port_id)}
                     >
-                        <div className='w-1/2'>
-                            <div className='flex items-center gap-2 text-sky-500 mb-2'>
-                                <FaChartLine size={18} />
-                                <span className='font-semibold text-lg'>{strategy.port_name}</span>
+                        <div className='w-1/2 pr-4'>
+                            <div className='flex items-center gap-2 text-blue-600 mb-3'>
+                                <FaChartLine size={18} className="group-hover:scale-110 transition-transform" />
+                                <span className='font-bold text-lg'>{strategy.port_name}</span>
                             </div>
-                            <div className='text-gray-600 font-medium'>{strategy.strategy_name}</div>
-                            <div className='text-green-500 font-semibold text-sm mt-2'>Annual Return: {strategy.ann_ret} %</div>
-                            <div className='text-orange-500 font-semibold text-sm'>Annual Vol: {strategy.ann_vol} %</div>
-                            <div className='text-red-500 font-semibold text-sm'>Sharpe Ratio: {strategy.sharpe}</div>
+                            <div className='text-gray-600 font-medium mb-3 text-sm'>{strategy.strategy_name}</div>
+                            <div className='space-y-1'>
+                                <div className='flex items-center gap-2'>
+                                    <span className='text-xs text-gray-500'>Annual Return:</span>
+                                    <span className='text-green-600 font-bold text-sm'>{strategy.ann_ret}%</span>
+                                </div>
+                                <div className='flex items-center gap-2'>
+                                    <span className='text-xs text-gray-500'>Volatility:</span>
+                                    <span className='text-orange-600 font-bold text-sm'>{strategy.ann_vol}%</span>
+                                </div>
+                                <div className='flex items-center gap-2'>
+                                    <span className='text-xs text-gray-500'>Sharpe:</span>
+                                    <span className='text-indigo-600 font-bold text-sm'>{strategy.sharpe}</span>
+                                </div>
+                            </div>
                         </div>
                         <div className='w-1/2 relative'>
                             {/* Mini Chart */}
@@ -62,9 +73,10 @@ const Contents = ({ strategyList, strategyNav }: {strategyList: Strategy[]; stra
                                                 ?.filter((nav) => nav.port_id === strategy.port_id)
                                                 .map((nav) => nav.value),
                                             fill: true,
-                                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                                            borderColor: 'rgb(75, 192, 192)',
-                                            tension: 0.3,
+                                            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                                            borderColor: 'rgb(99, 102, 241)',
+                                            borderWidth: 2,
+                                            tension: 0.4,
                                             pointRadius: 0,
                                         },
                                     ],
@@ -74,10 +86,10 @@ const Contents = ({ strategyList, strategyNav }: {strategyList: Strategy[]; stra
                                     maintainAspectRatio: false,
                                     scales: {
                                         x: {
-                                            display: false, 
+                                            display: false,
                                         },
                                         y: {
-                                            display: false, 
+                                            display: false,
                                         },
                                     },
                                     plugins: {
@@ -86,9 +98,13 @@ const Contents = ({ strategyList, strategyNav }: {strategyList: Strategy[]; stra
                                         },
                                         tooltip: {
                                             enabled: true,
-                                            backgroundColor: 'rgba(0,0,0,0.7)',
-                                            titleColor: '#fff',
-                                            bodyColor: '#fff',
+                                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                                            titleColor: '#1f2937',
+                                            bodyColor: '#4b5563',
+                                            borderColor: '#e5e7eb',
+                                            borderWidth: 1,
+                                            padding: 8,
+                                            cornerRadius: 6,
                                         },
                                     },
                                 }}

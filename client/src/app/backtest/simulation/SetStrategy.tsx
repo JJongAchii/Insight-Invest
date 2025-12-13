@@ -47,7 +47,7 @@ const SetStrategy = ({ onRunBacktest }: { onRunBacktest: any }) => {
     ), [data]);
 
     const tickerOptions = useMemo(() => (
-        data 
+        data
         ? data
             .filter((item: TickerData) =>
                 (!selectedIsoCode || item.iso_code === selectedIsoCode.value) &&
@@ -56,7 +56,7 @@ const SetStrategy = ({ onRunBacktest }: { onRunBacktest: any }) => {
             .map((item: TickerData) => ({
                 value: item.meta_id,
                 label: item.ticker
-            })) 
+            }))
         : []
     ), [data, selectedIsoCode, selectedSecurityType]);
 
@@ -82,7 +82,7 @@ const SetStrategy = ({ onRunBacktest }: { onRunBacktest: any }) => {
     const handleTickersChange = (newValue: MultiValue<SelectOption>, _: ActionMeta<SelectOption>) => {
         setSelectedTickers(newValue as SelectOption[]);
     };
-    
+
     const handleButtonClick = () => {
         const payload = {
             strategy_name: strategyName,
@@ -93,100 +93,168 @@ const SetStrategy = ({ onRunBacktest }: { onRunBacktest: any }) => {
         };
         onRunBacktest(payload);
     };
-        
+
 
     return (
-        <div className='flex flex-col bg-white shadow-md rounded-2xl pb-12'>
-            <div className='flex gap-3 px-5 py-5'>
+        <div className='card-modern'>
+            <div className='flex items-center gap-3 mb-6'>
+                <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-600 rounded-xl flex items-center justify-center">
+                    <span className="text-white text-xl font-bold">⚙️</span>
+                </div>
+                <h3 className='text-xl font-bold text-gray-800'>
+                    Strategy Configuration
+                </h3>
+            </div>
+
+            <div className='bg-gradient-to-br from-gray-50 to-blue-50 rounded-xl p-6 space-y-6'>
+                {/* Strategy Name */}
                 <div>
-                    <h4 className='text-md font-semibold'>
+                    <h4 className='text-sm font-semibold text-gray-700 mb-2'>
                         Strategy Name
                     </h4>
-                    <input 
+                    <input
                         type='text'
-                        placeholder='Your Strategy name...'
-                        className='w-full px-3 py-3 border border-gray-300 rounded-md text-sm text-gray-500'
+                        placeholder='Enter your strategy name...'
+                        className='input-modern w-full'
                         onChange={(e) => setStrategyName(e.target.value)}
                     />
                 </div>
-            </div>
-            <div className='flex gap-3 px-5 py-5'>
-                <div>
-                    <h4 className='text-md font-semibold'>
-                        Country
-                    </h4>
-                    <Select<SelectOption> 
-                        options={isoCodeOptions}
-                        placeholder="Select Country..."
-                        onChange={handleIsoCodeChange}
-                    />
+
+                {/* Filters */}
+                <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+                    <div>
+                        <h4 className='text-sm font-semibold text-gray-700 mb-2'>
+                            Country
+                        </h4>
+                        <Select<SelectOption>
+                            options={isoCodeOptions}
+                            placeholder="Select Country..."
+                            onChange={handleIsoCodeChange}
+                            styles={{
+                                control: (base) => ({
+                                    ...base,
+                                    borderRadius: '0.75rem',
+                                    borderWidth: '2px',
+                                    borderColor: '#e5e7eb',
+                                    padding: '0.25rem',
+                                    boxShadow: 'none',
+                                    '&:hover': {
+                                        borderColor: '#93c5fd',
+                                    },
+                                }),
+                            }}
+                        />
+                    </div>
+                    <div>
+                        <h4 className='text-sm font-semibold text-gray-700 mb-2'>
+                            Security Type
+                        </h4>
+                        <Select<SelectOption>
+                            options={securityTypeOptions}
+                            placeholder="Select Type..."
+                            onChange={handleSecurityTypeChange}
+                            styles={{
+                                control: (base) => ({
+                                    ...base,
+                                    borderRadius: '0.75rem',
+                                    borderWidth: '2px',
+                                    borderColor: '#e5e7eb',
+                                    padding: '0.25rem',
+                                    boxShadow: 'none',
+                                    '&:hover': {
+                                        borderColor: '#93c5fd',
+                                    },
+                                }),
+                            }}
+                        />
+                    </div>
+                    <div>
+                        <h4 className='text-sm font-semibold text-gray-700 mb-2'>
+                            Tickers
+                        </h4>
+                        <Select<SelectOption, true>
+                            closeMenuOnSelect={false}
+                            isMulti
+                            options={tickerOptions}
+                            placeholder="Select tickers..."
+                            onChange={handleTickersChange}
+                            styles={{
+                                control: (base) => ({
+                                    ...base,
+                                    borderRadius: '0.75rem',
+                                    borderWidth: '2px',
+                                    borderColor: '#e5e7eb',
+                                    padding: '0.25rem',
+                                    boxShadow: 'none',
+                                    '&:hover': {
+                                        borderColor: '#93c5fd',
+                                    },
+                                }),
+                            }}
+                        />
+                    </div>
                 </div>
+
+                {/* Algorithm */}
                 <div>
-                    <h4 className='text-md font-semibold'>
-                        Security Type
-                    </h4>
-                    <Select<SelectOption>
-                        options={securityTypeOptions}
-                        placeholder="Select Type..."
-                        onChange={handleSecurityTypeChange}
-                    />
-                </div>
-                <div>
-                    <h4 className='text-md font-semibold'>
-                        Tickers
-                    </h4>
-                    <Select<SelectOption, true>
-                        closeMenuOnSelect={false}
-                        isMulti
-                        options={tickerOptions}
-                        placeholder="Select tickers..."
-                        onChange={handleTickersChange}
-                    />
-                </div>
-            </div>
-            <div className='flex gap-3 px-5 py-5'>
-                <div>
-                    <h4 className='text-md font-semibold'>
+                    <h4 className='text-sm font-semibold text-gray-700 mb-2'>
                         Choose Algorithm
                     </h4>
                     <Select<SelectOption>
                         placeholder="Select algorithm"
                         options={algorithmOptions}
                         onChange={handleAlgorithmChange}
+                        styles={{
+                            control: (base) => ({
+                                ...base,
+                                borderRadius: '0.75rem',
+                                borderWidth: '2px',
+                                borderColor: '#e5e7eb',
+                                padding: '0.25rem',
+                                boxShadow: 'none',
+                                '&:hover': {
+                                    borderColor: '#93c5fd',
+                                },
+                            }),
+                        }}
                     />
                 </div>
-            </div>
-            <div className='flex gap-3 px-5 py-5'>
-                <div>
-                    <h4 className='text-md font-semibold'>
-                        Start Date
-                    </h4>
-                    <DatePicker
-                        selected={startDate}
-                        onChange={(date) => setStartDate(date || new Date())}
-                        placeholderText="Select start date"
-                        className='w-full px-3 py-3 border border-gray-300 rounded-md text-sm text-gray-500'
-                    />
+
+                {/* Dates */}
+                <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                    <div>
+                        <h4 className='text-sm font-semibold text-gray-700 mb-2'>
+                            Start Date
+                        </h4>
+                        <DatePicker
+                            selected={startDate}
+                            onChange={(date) => setStartDate(date || new Date())}
+                            placeholderText="Select start date"
+                            className='input-modern w-full'
+                        />
+                    </div>
+                    <div>
+                        <h4 className='text-sm font-semibold text-gray-700 mb-2'>
+                            End Date
+                        </h4>
+                        <DatePicker
+                            selected={endDate}
+                            onChange={(date) => setEndDate(date || new Date())}
+                            placeholderText="Select end date"
+                            className='input-modern w-full'
+                        />
+                    </div>
                 </div>
-                <div>
-                    <h4 className='text-md font-semibold'>
-                        End Date
-                    </h4>
-                    <DatePicker 
-                        selected={endDate}
-                        onChange={(date) => setEndDate(date || new Date())}
-                        placeholderText="Select end date"
-                        className='w-full px-3 py-3 border border-gray-300 rounded-md text-sm text-gray-500'
-                    />
+
+                {/* Run Button */}
+                <div className='flex justify-end pt-4'>
+                    <button
+                        className='btn-primary'
+                        onClick={handleButtonClick}
+                    >
+                        🚀 Run Backtest
+                    </button>
                 </div>
-            </div>
-            <div className='flex px-5'>
-                <button 
-                    className='px-5 py-3 rounded-md bg-red-300 font-semibold hover:bg-red-500'
-                    onClick={handleButtonClick}
-                >
-                    Run backtest
-                </button>
             </div>
         </div>
     );

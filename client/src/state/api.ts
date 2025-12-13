@@ -41,10 +41,10 @@ export const api = createApi({
   }),
 });
 
-export const { 
-  useFetchMetaDataQuery, 
-  useFetchTickersQuery, 
-  useFetchAlgorithmsQuery, 
+export const {
+  useFetchMetaDataQuery,
+  useFetchTickersQuery,
+  useFetchAlgorithmsQuery,
   useFetchStrategiesQuery,
   useFetchStrategyMonthlyNavQuery,
   useFetchStrategyByIdQuery,

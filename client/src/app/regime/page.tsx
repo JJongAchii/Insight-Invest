@@ -44,48 +44,65 @@ const Regime = () => {
   if (!macroInfo || !macroData) return <LoadingSpinner />
 
   return (
-    <div className="flex flex-col xl:overflow-auto gap-5 pb-36">
-      {/* T10Y2Y Chart */}
-      <MacroChart
-        primaryData={t10y2yData}
-        recessionData={recessionData}
-        primaryLabel={t10y2yInfo.description}
-        recessionLabel={recessionInfo.description}
-        title="10-Year Minus 2-Year Treasury Interest Rate Spread"
-      />
+    <div className="flex flex-col xl:overflow-auto gap-8 pb-36">
+      {/* Page Header */}
+      <div className="mb-4">
+        <h1 className="text-4xl font-bold mb-2">
+          <span className="gradient-text">Market Regime Analysis</span>
+        </h1>
+        <p className="text-gray-600 text-lg">Macroeconomic indicators and recession probability</p>
+      </div>
 
-      {/* Unemployment Chart */}
-      <MacroChart
-        primaryData={unemploymentData}
-        recessionData={recessionData}
-        primaryLabel={unemploymentInfo.description}
-        recessionLabel={recessionInfo.description}
-        title="Unemployment Rate"
-        baseline={5}
-      />
-      <MacroChart
-        primaryData={employeesData}
-        recessionData={recessionData}
-        primaryLabel={employeesInfo.description}
-        recessionLabel={recessionInfo.description}
-        title="All Employees, Total Nonfarm"
-        baseline={150000}
-      />
-      <MacroChart
-        primaryData={fedFundData}
-        recessionData={recessionData}
-        primaryLabel={fedFundInfo.description}
-        recessionLabel={recessionInfo.description}
-        title="Federal Funds Rate"
-      />
-      <MacroChart
-        primaryData={cpiData}
-        recessionData={recessionData}
-        primaryLabel={cpiInfo.description}
-        recessionLabel={recessionInfo.description}
-        title="Consumer Price Index for All Urban Consumers"
-        baseline={0.02}
-      />
+      {/* Charts Grid */}
+      <div className="grid grid-cols-1 gap-6">
+        <MacroChart
+          primaryData={t10y2yData}
+          recessionData={recessionData}
+          primaryLabel={t10y2yInfo.description}
+          recessionLabel={recessionInfo.description}
+          title="10-Year Minus 2-Year Treasury Interest Rate Spread"
+          icon="📈"
+        />
+
+        <MacroChart
+          primaryData={unemploymentData}
+          recessionData={recessionData}
+          primaryLabel={unemploymentInfo.description}
+          recessionLabel={recessionInfo.description}
+          title="Unemployment Rate"
+          baseline={5}
+          icon="👥"
+        />
+
+        <MacroChart
+          primaryData={employeesData}
+          recessionData={recessionData}
+          primaryLabel={employeesInfo.description}
+          recessionLabel={recessionInfo.description}
+          title="All Employees, Total Nonfarm"
+          baseline={150000}
+          icon="💼"
+        />
+
+        <MacroChart
+          primaryData={fedFundData}
+          recessionData={recessionData}
+          primaryLabel={fedFundInfo.description}
+          recessionLabel={recessionInfo.description}
+          title="Federal Funds Rate"
+          icon="🏦"
+        />
+
+        <MacroChart
+          primaryData={cpiData}
+          recessionData={recessionData}
+          primaryLabel={cpiInfo.description}
+          recessionLabel={recessionInfo.description}
+          title="Consumer Price Index for All Urban Consumers"
+          baseline={0.02}
+          icon="💰"
+        />
+      </div>
     </div>
   );
 };

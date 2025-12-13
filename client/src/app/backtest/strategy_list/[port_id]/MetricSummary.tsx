@@ -27,7 +27,7 @@ interface BmData {
 const MetricSummary = ({ strategyInfo, rebalWeight, bmMetrics }: { strategyInfo: InfoData; rebalWeight: RebalData[]; bmMetrics: string; }) => {
     const bmData: BmData[] = JSON.parse(bmMetrics);
     const excessReturn = parseFloat((strategyInfo.ann_ret - bmData[0].ann_returns).toFixed(2));
-    
+
     const ReturnBgColor = (value: number) => (value >= 0 ? "bg-red-300" : "bg-blue-300");
 
     const lastDate = rebalWeight?.reduce(
@@ -98,7 +98,7 @@ const MetricSummary = ({ strategyInfo, rebalWeight, bmMetrics }: { strategyInfo:
                             </div>
                         </div>
                 </div>
-                
+
                 <hr className="block lg:hidden h-px my-8 bg-gray-300 border-0"></hr>
 
                 {/* Pie Chart section with auto-fit height */}

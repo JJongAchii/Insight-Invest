@@ -4,14 +4,21 @@ import { useState } from "react";
 import MetaTable from "./MetaTable";
 
 const StockSearch = () => {
-  
+
   const [selectedData, setSelectedData] = useState([])
 
   return (
-    <div className="grid grid-cols-1 xl:overflow-auto gap-10 pb-4 custom-grid-rows">
+    <div className="flex flex-col gap-8 pb-36">
+      {/* Page Header */}
+      <div className="mb-4">
+        <h1 className="text-4xl font-bold mb-2">
+          <span className="gradient-text">Stock Search</span>
+        </h1>
+        <p className="text-gray-600 text-lg">Search and explore stock metadata across US and Korean markets</p>
+      </div>
+
+      {/* Meta Table */}
       <MetaTable onSelectionChange={setSelectedData}/>
-      <div className="row-span-3 xl:row-span-6 bg-gray-500" />
-      <div className="row-span-2 xl:row-span-3 col-span-1 md:col-span-2 xl:col-span-1 bg-gray-500"/>
     </div>
   );
 }

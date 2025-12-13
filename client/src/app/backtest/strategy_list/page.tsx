@@ -10,12 +10,21 @@ const StrategyList = () => {
 
   const { data: strategyInfo } = useFetchStrategiesQuery({});
   const { data: strategyNav } = useFetchStrategyMonthlyNavQuery({});
-  
+
   return (
-    <div className="flex flex-col bg-white shadow-lg rounded-2xl p-8 gap-5">
-      <h4 className='text-lg font-semibold'>Strategy List</h4>
-      <Searchbar />
-      <Contents strategyList={strategyInfo} strategyNav={strategyNav} />
+    <div className="flex flex-col gap-8 pb-36">
+      {/* Page Header */}
+      <div className="mb-4">
+        <h1 className="text-4xl font-bold mb-2">
+          <span className="gradient-text">Strategy Library</span>
+        </h1>
+        <p className="text-gray-600 text-lg">Explore and manage your saved backtest strategies</p>
+      </div>
+
+      <div className="card-modern">
+        <Searchbar />
+        <Contents strategyList={strategyInfo} strategyNav={strategyNav} />
+      </div>
     </div>
   );
 }
