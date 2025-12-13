@@ -44,21 +44,31 @@ async def get_all_monthly_nav():
 
 @router.get("/strategy/{port_id}")
 async def get_strategy_id_info(port_id: int):
-    """포트폴리오 정보 조회 (메타데이터: MySQL, 성과지표: Iceberg → MySQL fallback)"""
+    """포트폴리오 정보 조회 (메타데이터: MySQL, 성과지표: Iceberg)"""
     # 포트폴리오 메타데이터 (MySQL)
     portfolio_info = db.get_port_id_info(port_id=port_id)
 
-    # 성과지표 (Iceberg → MySQL fallback)
+    if portfolio_info.empty:
+        return []
+
+    # 성과지표 (Iceberg)
+    metrics_cols = ["ann_ret", "ann_vol", "sharpe", "mdd", "skew", "kurt", "var", "cvar"]
     try:
         metrics_df = get_portfolio_metrics(port_id=port_id)
         if not metrics_df.empty:
-            # Iceberg에서 조회한 metrics로 교체
-            for col in ["ann_ret", "ann_vol", "sharpe", "mdd", "skew", "kurt", "var", "cvar"]:
+            for col in metrics_cols:
                 if col in metrics_df.columns:
                     portfolio_info[col] = metrics_df[col].values[0]
+                else:
+                    portfolio_info[col] = None
+        else:
+            # Iceberg에 데이터 없으면 None으로 채움
+            for col in metrics_cols:
+                portfolio_info[col] = None
     except Exception as e:
-        logger.warning(f"Iceberg Metrics 조회 실패, MySQL fallback: {e}")
-        # MySQL fallback - portfolio_info에 이미 metrics 포함되어 있음
+        logger.warning(f"Iceberg Metrics 조회 실패: {e}")
+        for col in metrics_cols:
+            portfolio_info[col] = None
 
     return portfolio_info.to_dict(orient="records")
 
