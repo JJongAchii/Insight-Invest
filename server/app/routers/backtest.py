@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 from typing import List
@@ -10,6 +11,13 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../.
 import db
 from app import schemas
 from module.backtest import Backtest
+from module.data_lake.portfolio_reader import (
+    get_portfolio_metrics,
+    get_portfolio_nav,
+    get_portfolio_rebalance,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/backtest", tags=["Backtest"])
 
@@ -36,19 +44,48 @@ async def get_all_monthly_nav():
 
 @router.get("/strategy/{port_id}")
 async def get_strategy_id_info(port_id: int):
+    """포트폴리오 정보 조회 (메타데이터: MySQL, 성과지표: Iceberg)"""
+    # 포트폴리오 메타데이터 (MySQL)
+    portfolio_info = db.get_port_id_info(port_id=port_id)
 
-    return db.get_port_id_info(port_id=port_id).to_dict(orient="records")
+    # 성과지표 (Iceberg)
+    metrics_df = get_portfolio_metrics(port_id=port_id)
+
+    # 메타데이터와 성과지표 병합
+    if not metrics_df.empty:
+        # Iceberg에서 조회한 metrics로 교체
+        for col in ["ann_ret", "ann_vol", "sharpe", "mdd", "skew", "kurt", "var", "cvar"]:
+            if col in metrics_df.columns:
+                portfolio_info[col] = metrics_df[col].values[0]
+
+    return portfolio_info.to_dict(orient="records")
 
 
 @router.get("/strategy/nav/{port_id}")
 async def get_strategy_id_nav(port_id: int):
+    """포트폴리오 NAV 조회 (Iceberg → MySQL fallback)"""
+    try:
+        nav_df = get_portfolio_nav(port_id=port_id)
+        if not nav_df.empty:
+            return nav_df.to_dict(orient="records")
+    except Exception as e:
+        logger.warning(f"Iceberg NAV 조회 실패, MySQL fallback: {e}")
 
+    # MySQL fallback
     return db.TbNav.query_df(port_id=port_id).to_dict(orient="records")
 
 
 @router.get("/strategy/rebal/{port_id}")
 async def get_strategy_id_rebal(port_id: int):
+    """포트폴리오 리밸런싱 가중치 조회 (Iceberg → MySQL fallback)"""
+    try:
+        rebal_df = get_portfolio_rebalance(port_id=port_id)
+        if not rebal_df.empty:
+            return rebal_df.to_dict(orient="records")
+    except Exception as e:
+        logger.warning(f"Iceberg Rebalance 조회 실패, MySQL fallback: {e}")
 
+    # MySQL fallback
     return db.get_port_id_rebal(port_id=port_id).to_dict(orient="records")
 
 

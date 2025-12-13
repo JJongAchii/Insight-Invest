@@ -1,9 +1,13 @@
+import logging
+
 import pandas as pd
 import sqlalchemy as sa
 from sqlalchemy.orm import Query
 
 from .client import session_local
 from .models import *
+
+logger = logging.getLogger(__name__)
 
 
 def read_sql_query(query: Query, **kwargs) -> pd.DataFrame:
@@ -69,7 +73,20 @@ def upload_rebalance(
     rebal_w["meta_id"] = rebal_w.ticker.map(get_meta_mapper())
     rebal_w["port_id"] = port_id
 
-    return TbRebalance.insert(rebal_w)
+    # MySQL에 저장
+    result = TbRebalance.insert(rebal_w)
+
+    # Iceberg에도 저장
+    try:
+        from module.data_lake.portfolio_writer import save_rebalance_to_iceberg
+
+        save_rebalance_to_iceberg(port_id=port_id, weights=weights)
+        logger.info(f"Rebalance saved to both MySQL and Iceberg: port_id={port_id}")
+    except Exception as e:
+        logger.error(f"Failed to save Rebalance to Iceberg: {e}", exc_info=True)
+        # MySQL 저장은 성공했으므로 에러를 발생시키지 않음
+
+    return result
 
 
 def upload_nav(
@@ -81,7 +98,20 @@ def upload_nav(
     value.columns = ["trade_date", "value"]
     value["port_id"] = port_id
 
-    return TbNav.insert(value)
+    # MySQL에 저장
+    result = TbNav.insert(value)
+
+    # Iceberg에도 저장
+    try:
+        from module.data_lake.portfolio_writer import save_nav_to_iceberg
+
+        save_nav_to_iceberg(port_id=port_id, nav=nav)
+        logger.info(f"NAV saved to both MySQL and Iceberg: port_id={port_id}")
+    except Exception as e:
+        logger.error(f"Failed to save NAV to Iceberg: {e}", exc_info=True)
+        # MySQL 저장은 성공했으므로 에러를 발생시키지 않음
+
+    return result
 
 
 def upload_metrics(
@@ -102,7 +132,24 @@ def upload_metrics(
     ]
     metrics["port_id"] = port_id
 
-    return TbMetrics.insert(metrics)
+    # MySQL에 저장
+    result = TbMetrics.insert(metrics)
+
+    # Iceberg에도 저장
+    try:
+        from module.data_lake.portfolio_writer import save_metrics_to_iceberg
+
+        # DataFrame을 딕셔너리로 변환 (첫 번째 row만 사용)
+        metrics_dict = metrics.iloc[0][
+            ["ann_ret", "ann_vol", "sharpe", "mdd", "skew", "kurt", "var", "cvar"]
+        ].to_dict()
+        save_metrics_to_iceberg(port_id=port_id, metrics=metrics_dict)
+        logger.info(f"Metrics saved to both MySQL and Iceberg: port_id={port_id}")
+    except Exception as e:
+        logger.error(f"Failed to save Metrics to Iceberg: {e}", exc_info=True)
+        # MySQL 저장은 성공했으므로 에러를 발생시키지 않음
+
+    return result
 
 
 def get_port_summary():

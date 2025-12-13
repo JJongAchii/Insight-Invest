@@ -14,13 +14,14 @@ RUN apt-get update && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-USER appuser:appgroup
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 ENV TZ=Asia/Seoul
 
-COPY . .
+COPY --chown=appuser:appgroup . .
+
+USER appuser:appgroup
 
 EXPOSE 8000
 

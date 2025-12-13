@@ -36,6 +36,41 @@ class IcebergClient:
         """
         return self.catalog.load_table(table_name)
 
+    def create_table(self, table_name: str, schema, partition_spec=None):
+        """
+        새 Iceberg 테이블 생성
+
+        Args:
+            table_name: "schema.table" 형식 (예: "market.portfolio_nav")
+            schema: PyArrow 스키마
+            partition_spec: 파티션 스펙 (선택)
+
+        Returns:
+            생성된 테이블
+        """
+        if partition_spec is None:
+            return self.catalog.create_table(table_name, schema=schema)
+        else:
+            return self.catalog.create_table(
+                table_name, schema=schema, partition_spec=partition_spec
+            )
+
+    def table_exists(self, table_name: str) -> bool:
+        """
+        테이블 존재 여부 확인
+
+        Args:
+            table_name: "schema.table" 형식
+
+        Returns:
+            True if exists, False otherwise
+        """
+        try:
+            self.catalog.load_table(table_name)
+            return True
+        except Exception:
+            return False
+
 
 # 싱글톤 인스턴스
 iceberg_client = IcebergClient()
