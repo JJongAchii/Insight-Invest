@@ -49,63 +49,118 @@ const MetricSummary = ({ strategyInfo, rebalWeight, bmMetrics }: { strategyInfo:
     };
 
     return (
-        <div className="flex flex-col bg-white shadow-lg rounded-2xl px-2 py-8 gap-5">
-            <h2 className="text-2xl font-semibold text-gray-800">{strategyInfo.port_name}</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
-                {/* Annual Returns and Volatility/Drawdown section */}
-                <div className="grid grid-cols-1 gap-6">
-                    {/* Section 1: Annual Returns */}
-                        <h4 className="text-lg font-semibold text-green-700">Annual Returns</h4>
-                        <div className="flex justify-between items-center">
-                            <div className="flex flex-col items-center gap-2">
-                                <p className="text-gray-600 font-semibold">Portfolio Return</p>
-                                <div className={`${ReturnBgColor(strategyInfo.ann_ret)} text-white text-2xl font-semibold px-6 py-3 rounded-md shadow-lg`}>
-                                    {strategyInfo.ann_ret}%
+        <div className="card-modern">
+            <div className='flex items-center gap-3 mb-6'>
+                <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-md">
+                    <span className="text-white text-2xl font-bold">📊</span>
+                </div>
+                <div>
+                    <h2 className="text-2xl font-bold text-gray-800">{strategyInfo.port_name}</h2>
+                    <p className="text-sm text-gray-500">Performance Summary</p>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Metrics section */}
+                <div className="space-y-6">
+                    {/* Annual Returns */}
+                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6 border-2 border-green-200">
+                        <h4 className="text-lg font-bold text-green-700 mb-4 flex items-center gap-2">
+                            <span>📈</span> Annual Returns
+                        </h4>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-white rounded-lg p-4 shadow-md">
+                                <p className="text-xs text-gray-500 mb-2">Portfolio Return</p>
+                                <div className="flex items-center gap-2">
+                                    <span className={`text-2xl font-bold ${strategyInfo.ann_ret >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {strategyInfo.ann_ret}%
+                                    </span>
                                     {strategyInfo.ann_ret > 0 ? (
-                                        <FaArrowUp className="inline text-red-700" />
+                                        <FaArrowUp className="text-green-600" />
                                     ) : (
-                                        <FaArrowDown className="inline text-blue-700" />
+                                        <FaArrowDown className="text-red-600" />
                                     )}
                                 </div>
                             </div>
-                            <div className="flex flex-col items-center gap-2">
-                                <p className="text-gray-600 font-semibold">Benchmark Relative</p>
-                                <div className={`${ReturnBgColor(excessReturn)} text-white text-2xl font-semibold px-6 py-3 rounded-md shadow-lg`}>
-                                    {excessReturn}
+                            <div className="bg-white rounded-lg p-4 shadow-md">
+                                <p className="text-xs text-gray-500 mb-2">vs Benchmark</p>
+                                <div className="flex items-center gap-2">
+                                    <span className={`text-2xl font-bold ${excessReturn >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {excessReturn}%
+                                    </span>
                                     {excessReturn > 0 ? (
-                                        <FaArrowUp className="inline text-red-700" />
+                                        <FaArrowUp className="text-green-600" />
                                     ) : (
-                                        <FaArrowDown className="inline text-blue-700" />
+                                        <FaArrowDown className="text-red-600" />
                                     )}
                                 </div>
                             </div>
                         </div>
-                        <hr className="h-px my-8 bg-gray-300 border-0"></hr>
-                        <h4 className="text-lg font-semibold text-orange-700">Volatility and Drawdown</h4>
-                        <div className="flex justify-between items-center">
-                            <div className="flex flex-col items-center gap-2">
-                                <p className="text-gray-600 font-semibold">Standard Deviation</p>
-                                <div className="bg-orange-200 text-red-700 text-2xl font-semibold px-6 py-3 rounded-md shadow-lg">
+                    </div>
+
+                    {/* Risk Metrics */}
+                    <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-6 border-2 border-orange-200">
+                        <h4 className="text-lg font-bold text-orange-700 mb-4 flex items-center gap-2">
+                            <span>⚠️</span> Risk Metrics
+                        </h4>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-white rounded-lg p-4 shadow-md">
+                                <p className="text-xs text-gray-500 mb-2">Volatility</p>
+                                <span className="text-2xl font-bold text-orange-600">
                                     {strategyInfo.ann_vol}%
-                                </div>
+                                </span>
                             </div>
-                            <div className="flex flex-col items-center gap-2">
-                                <p className="text-gray-600 font-semibold">Max DrawDown</p>
-                                <div className="bg-orange-200 text-red-700 text-2xl font-semibold px-6 py-3 rounded-md shadow-lg">
-                                    {strategyInfo.mdd}%
-                                    <FaArrowDown aria-label="Negative drawdown" className="inline text-red-700" />
+                            <div className="bg-white rounded-lg p-4 shadow-md">
+                                <p className="text-xs text-gray-500 mb-2">Max Drawdown</p>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-2xl font-bold text-red-600">
+                                        {strategyInfo.mdd}%
+                                    </span>
+                                    <FaArrowDown className="text-red-600" />
                                 </div>
                             </div>
                         </div>
+                    </div>
                 </div>
 
-                <hr className="block lg:hidden h-px my-8 bg-gray-300 border-0"></hr>
-
-                {/* Pie Chart section with auto-fit height */}
-                <div className="flex flex-col justify-center">
-                    <h4 className="text-lg font-semibold text-gray-700 mb-4">Rebalancing Weights (Recent)</h4>
-                    <div style={{ position: 'relative', height: '100%' }}>
-                        <Pie data={pieData} options={{ maintainAspectRatio: false }} />
+                {/* Pie Chart section */}
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border-2 border-blue-200">
+                    <h4 className="text-lg font-bold text-blue-700 mb-4 flex items-center gap-2">
+                        <span>🥧</span> Current Allocation
+                    </h4>
+                    <div style={{ position: 'relative', height: '350px' }}>
+                        <Pie
+                            data={pieData}
+                            options={{
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: {
+                                        position: 'bottom',
+                                        labels: {
+                                            padding: 15,
+                                            font: {
+                                                size: 11,
+                                            },
+                                            usePointStyle: true,
+                                        },
+                                    },
+                                    tooltip: {
+                                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                                        titleColor: '#1f2937',
+                                        bodyColor: '#4b5563',
+                                        borderColor: '#e5e7eb',
+                                        borderWidth: 1,
+                                        padding: 12,
+                                        cornerRadius: 8,
+                                        callbacks: {
+                                            label: function(context: any) {
+                                                return `${context.label}: ${(context.parsed * 100).toFixed(2)}%`;
+                                            }
+                                        }
+                                    }
+                                }
+                            }}
+                        />
                     </div>
                 </div>
             </div>

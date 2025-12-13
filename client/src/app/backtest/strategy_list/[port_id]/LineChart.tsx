@@ -19,89 +19,114 @@ interface BmNavData {
 const LineChart = ({ strategyName, strategyNav, bmNav }: {strategyName: string; strategyNav: NavData[]; bmNav: string;}) => {
   const bmNavData: BmNavData[] = JSON.parse(bmNav);
   return (
-    <div className="flex flex-col bg-white shadow-lg rounded-2xl px-2 py-3 gap-5">
-      <h4 className='text-lg text-center font-semibold'>Performance Chart</h4>
-      <div style={{ position: 'relative', height: '400px' }}>
-        <Line
-          data={{
-            labels: strategyNav?.map((nav) => nav.trade_date),
-            datasets: [
-              {
-                label: strategyName,
-                data: strategyNav?.map((nav) => nav.value),
-                fill: true,
-                backgroundColor: 'rgba(75, 192, 192, 0.2)', // Gradient fill
-                borderColor: 'rgb(75, 192, 192)',
-                tension: 0.3,
-                pointRadius: 0,
-                pointHoverRadius: 6,
-                borderWidth: 2,
-              },
-              {
-                label: "Benchmark",
-                data: bmNavData?.map((nav) => nav.value),
-                fill: false,
-                backgroundColor: 'rgba(192, 75, 192, 0.2)', // Optional color for hover
-                borderColor: 'rgb(192, 75, 192)',
-                tension: 0.3,
-                pointRadius: 0,
-                pointHoverRadius: 6,
-                borderWidth: 2,
-              }
-            ]
-          }}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              x: {
-                display: true,
-                grid: {
-                  display: false,
+    <div className="card-modern">
+      <div className='flex items-center gap-3 mb-6'>
+        <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-cyan-600 rounded-xl flex items-center justify-center">
+          <span className="text-white text-xl font-bold">📈</span>
+        </div>
+        <h4 className='text-xl font-bold text-gray-800'>Cumulative Performance</h4>
+      </div>
+      <div className="bg-gradient-to-br from-gray-50 to-blue-50 rounded-xl p-4">
+        <div style={{ position: 'relative', height: '400px' }}>
+          <Line
+            data={{
+              labels: strategyNav?.map((nav) => nav.trade_date),
+              datasets: [
+                {
+                  label: strategyName,
+                  data: strategyNav?.map((nav) => nav.value),
+                  fill: true,
+                  backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                  borderColor: 'rgb(99, 102, 241)',
+                  tension: 0.4,
+                  pointRadius: 0,
+                  pointHoverRadius: 6,
+                  borderWidth: 3,
                 },
-                title: {
-                  display: false,
-                  text: 'Date',
-                  color: '#888',
-                  font: { size: 12, weight: 'bold' },
+                {
+                  label: "Benchmark",
+                  data: bmNavData?.map((nav) => nav.value),
+                  fill: false,
+                  backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                  borderColor: 'rgb(168, 85, 247)',
+                  tension: 0.4,
+                  pointRadius: 0,
+                  pointHoverRadius: 6,
+                  borderWidth: 3,
+                  borderDash: [5, 5],
                 }
-              },
-              y: {
-                display: true,
-                grid: {
-                  color: 'rgba(200, 200, 200, 0.2)',
-                },
-                title: {
+              ]
+            }}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                x: {
                   display: true,
-                  text: 'Value',
-                  color: '#888',
-                  font: { size: 12, weight: 'bold' },
-                }
-              },
-            },
-            plugins: {
-              legend: {
-                display: true,
-              },
-              tooltip: {
-                enabled: true,
-                backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                titleColor: '#fff',
-                bodyColor: '#fff',
-                borderWidth: 1,
-                borderColor: 'rgba(75, 192, 192, 0.5)',
-                callbacks: {
-                  label: (context) => `Value: ${(context.raw as number).toFixed(2)}`, // Cast `context.raw` to `number`
-                  title: (context) => `Date: ${context[0].label}`,
+                  grid: {
+                    display: false,
+                  },
+                  ticks: {
+                    color: '#6b7280',
+                    font: {
+                      size: 11,
+                    },
+                    maxRotation: 0,
+                    autoSkip: true,
+                    maxTicksLimit: 12,
+                  },
+                },
+                y: {
+                  display: true,
+                  grid: {
+                    color: 'rgba(0, 0, 0, 0.05)',
+                    lineWidth: 1,
+                  },
+                  ticks: {
+                    color: '#6b7280',
+                    font: {
+                      size: 11,
+                    },
+                  },
                 },
               },
-            },
-            hover: {
-              mode: 'nearest',
-              intersect: true,
-            },
-          }}
-        />
+              plugins: {
+                legend: {
+                  display: true,
+                  position: 'top',
+                  labels: {
+                    color: 'rgb(55, 65, 81)',
+                    font: {
+                      size: 13,
+                      weight: 'bold' as const,
+                    },
+                    padding: 16,
+                    usePointStyle: true,
+                    pointStyle: 'circle',
+                  },
+                },
+                tooltip: {
+                  enabled: true,
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  titleColor: '#1f2937',
+                  bodyColor: '#4b5563',
+                  borderColor: '#e5e7eb',
+                  borderWidth: 1,
+                  padding: 12,
+                  cornerRadius: 8,
+                  callbacks: {
+                    label: (context) => `${context.dataset.label}: ${(context.raw as number).toFixed(2)}`,
+                    title: (context) => `Date: ${context[0].label}`,
+                  },
+                },
+              },
+              hover: {
+                mode: 'nearest',
+                intersect: false,
+              },
+            }}
+          />
+        </div>
       </div>
     </div>
   )
