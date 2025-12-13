@@ -14,15 +14,15 @@ Parameters:
 Resources:
   DataLakeAccessPolicy:
     Metadata:
-      "aws:copilot:description": "IAM policy for Data Lake access (Glue + S3)"
+      "aws:copilot:description": "IAM policy for Data Lake read/write access (Glue + S3)"
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      Description: Policy for API to read from Data Lake (Glue Catalog + S3 Iceberg)
+      Description: Policy for API to read/write Data Lake (Glue Catalog + S3 Iceberg)
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
-          # Glue Catalog permissions (read-only for API)
-          - Sid: GlueCatalogRead
+          # Glue Catalog permissions (read/write for portfolio tables)
+          - Sid: GlueCatalogReadWrite
             Effect: Allow
             Action:
               - glue:GetDatabase
@@ -33,6 +33,8 @@ Resources:
               - glue:GetTableVersions
               - glue:GetPartition
               - glue:GetPartitions
+              - glue:UpdateTable
+              - glue:CreateTable
             Resource:
               - !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:catalog"
               - !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:database/market"
@@ -40,14 +42,16 @@ Resources:
               - !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:table/market/*"
               - !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:table/portfolio/*"
 
-          # S3 permissions (read-only for API)
-          - Sid: S3DataLakeRead
+          # S3 permissions (read/write for Iceberg tables)
+          - Sid: S3DataLakeReadWrite
             Effect: Allow
             Action:
               - s3:GetObject
               - s3:GetObjectVersion
               - s3:ListBucket
               - s3:GetBucketLocation
+              - s3:PutObject
+              - s3:DeleteObject
             Resource:
               - "arn:aws:s3:::insight-invest-datalake"
               - "arn:aws:s3:::insight-invest-datalake/*"
