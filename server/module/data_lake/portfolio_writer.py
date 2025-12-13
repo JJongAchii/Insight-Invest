@@ -140,11 +140,17 @@ def save_metrics_to_iceberg(port_id: int, metrics: Dict[str, float]) -> None:
         df["port_id"] = port_id
         df["updated_at"] = datetime.now()
 
-        # 필수 컬럼 확인 및 기본값 설정
+        # 필수 컬럼 확인 및 기본값 설정 + 타입 변환
         required_cols = ["ann_ret", "ann_vol", "sharpe", "mdd", "skew", "kurt", "var", "cvar"]
         for col in required_cols:
             if col not in df.columns:
                 df[col] = None
+            else:
+                # 문자열을 float로 변환 (None/NaN 처리 포함)
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        # port_id를 int32로 변환
+        df["port_id"] = df["port_id"].astype("int32")
 
         # Arrow Table 변환
         arrow_table = pa.Table.from_pandas(df, schema=PORTFOLIO_METRICS_SCHEMA)
