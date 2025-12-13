@@ -62,14 +62,15 @@ def get_portfolio_rebalance(port_id: int) -> pd.DataFrame:
         port_id: 포트폴리오 ID
 
     Returns:
-        DataFrame with columns: [rebal_date, ticker, weight, meta_id]
+        DataFrame with columns: [rebal_date, port_id, ticker, name, weight]
+        (MySQL fallback과 동일한 형식)
 
     Example:
         >>> rebal = get_portfolio_rebalance(port_id=1)
         >>> print(rebal.head())
-          rebal_date ticker  weight  meta_id
-        0 2024-01-01    SPY    0.25        1
-        1 2024-01-01    QQQ    0.25        2
+          rebal_date  port_id ticker  name      weight
+        0 2024-01-01        1    SPY  SPDR...    0.25
+        1 2024-01-01        1    QQQ  Invesco..  0.25
     """
     try:
         table = iceberg_client.get_table(TABLE_PORTFOLIO_REBALANCE)
@@ -77,14 +78,32 @@ def get_portfolio_rebalance(port_id: int) -> pd.DataFrame:
         # PyIceberg scan with row_filter (서버사이드 필터링)
         df = table.scan(
             row_filter=EqualTo("port_id", port_id),
-            selected_fields=["rebal_date", "ticker", "weight", "meta_id"],
+            selected_fields=["rebal_date", "port_id", "ticker", "weight", "meta_id"],
         ).to_pandas()
+
+        if df.empty:
+            logger.info(f"Rebalance 조회 완료: port_id={port_id}, records=0")
+            return pd.DataFrame(columns=["rebal_date", "port_id", "ticker", "name", "weight"])
+
+        # TbMeta에서 name 조인 (MySQL)
+        try:
+            import db
+
+            meta_df = db.TbMeta.query_df()
+            ticker_to_name = dict(zip(meta_df["ticker"], meta_df["name"]))
+            df["name"] = df["ticker"].map(ticker_to_name).fillna("")
+        except Exception as e:
+            logger.warning(f"TbMeta 조인 실패, name 빈 문자열로 설정: {e}")
+            df["name"] = ""
 
         # Sort
         df = df.sort_values(["rebal_date", "ticker"])
 
-        logger.info(f"Rebalance 조회 완료: port_id={port_id}, records={len(df)}")
-        return df.reset_index(drop=True)
+        # MySQL fallback과 동일한 컬럼 순서로 반환
+        result_df = df[["rebal_date", "port_id", "ticker", "name", "weight"]]
+
+        logger.info(f"Rebalance 조회 완료: port_id={port_id}, records={len(result_df)}")
+        return result_df.reset_index(drop=True)
 
     except Exception as e:
         logger.error(f"Rebalance 조회 실패: port_id={port_id}, error={e}", exc_info=True)

@@ -17,7 +17,7 @@ interface BmNavData {
 }
 
 const LineChart = ({ strategyName, strategyNav, bmNav }: {strategyName: string; strategyNav: NavData[]; bmNav: string;}) => {
-  const bmNavData: BmNavData[] = JSON.parse(bmNav);
+  const bmNavData: BmNavData[] = bmNav ? JSON.parse(bmNav) : [];
   return (
     <div className="card-modern">
       <div className='flex items-center gap-3 mb-6'>

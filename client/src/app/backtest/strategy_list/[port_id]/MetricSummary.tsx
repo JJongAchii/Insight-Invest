@@ -25,16 +25,23 @@ interface BmData {
 }
 
 const MetricSummary = ({ strategyInfo, rebalWeight, bmMetrics }: { strategyInfo: InfoData; rebalWeight: RebalData[]; bmMetrics: string; }) => {
-    const bmData: BmData[] = JSON.parse(bmMetrics);
-    const excessReturn = parseFloat((strategyInfo.ann_ret - bmData[0].ann_returns).toFixed(2));
+    const bmData: BmData[] = bmMetrics ? JSON.parse(bmMetrics) : [];
+    const excessReturn = bmData.length > 0
+        ? parseFloat((strategyInfo.ann_ret - bmData[0].ann_returns).toFixed(2))
+        : 0;
 
     const ReturnBgColor = (value: number) => (value >= 0 ? "bg-red-300" : "bg-blue-300");
 
-    const lastDate = rebalWeight?.reduce(
-        (latest, item) => (item.rebal_date > latest ? item.rebal_date : latest),
-        rebalWeight[0].rebal_date
-    );
-    const recentRebalData = rebalWeight?.filter(item => item.rebal_date === lastDate);
+    // 빈 배열 처리
+    const lastDate = rebalWeight && rebalWeight.length > 0
+        ? rebalWeight.reduce(
+            (latest, item) => (item.rebal_date > latest ? item.rebal_date : latest),
+            rebalWeight[0].rebal_date
+        )
+        : null;
+    const recentRebalData = lastDate
+        ? rebalWeight?.filter(item => item.rebal_date === lastDate)
+        : [];
 
     const pieData = {
         labels: recentRebalData?.map(data => data.ticker),

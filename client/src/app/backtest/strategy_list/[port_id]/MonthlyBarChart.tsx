@@ -47,7 +47,7 @@ const calculateReturns = (data: NavData[], period: 'year' | 'month'): ReturnData
 };
 
 const MonthlyBarChart = ({ strategyName, strategyNav, bmNav }: { strategyName: string; strategyNav: NavData[];  bmNav: string;}) => {
-    const bmNavData: NavData[] = JSON.parse(bmNav);
+    const bmNavData: NavData[] = bmNav ? JSON.parse(bmNav) : [];
 
     if (!strategyNav || strategyNav.length === 0) {
         return <p>No data available for chart.</p>;
