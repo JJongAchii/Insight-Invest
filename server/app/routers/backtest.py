@@ -147,18 +147,36 @@ async def save_strategy(request: schemas.BacktestRequest):
     nav = result["nav"].get(strategy_name)
     metrics = result["metrics"]
 
-    try:
-        # 포트폴리오 생성
-        db.create_portfolio(port_name=strategy_name, algorithm=request.algorithm)
-    except IntegrityError:
-        # port_name이 이미 존재할 경우 예외 처리
+    # 먼저 포트폴리오가 이미 존재하는지 확인
+    existing = db.TbPortfolio.query(port_name=strategy_name).first()
+    if existing:
         raise HTTPException(status_code=400, detail="Portfolio name already exists.")
 
-    # 나머지 데이터베이스 등록 로직
-    db.upload_universe(port_name=strategy_name, tickers=request.meta_id)
-    db.upload_rebalance(port_name=strategy_name, weights=weights)
-    db.upload_nav(port_name=strategy_name, nav=nav)
-    db.upload_metrics(port_name=strategy_name, metrics=metrics[metrics.strategy == strategy_name])
+    try:
+        # 포트폴리오 생성 (MySQL)
+        db.create_portfolio(port_name=strategy_name, algorithm=request.algorithm)
+        db.upload_universe(port_name=strategy_name, tickers=request.meta_id)
+
+        # Iceberg에 데이터 저장
+        db.upload_rebalance(port_name=strategy_name, weights=weights)
+        db.upload_nav(port_name=strategy_name, nav=nav)
+        db.upload_metrics(
+            port_name=strategy_name, metrics=metrics[metrics.strategy == strategy_name]
+        )
+
+    except IntegrityError:
+        raise HTTPException(status_code=400, detail="Portfolio name already exists.")
+    except Exception as e:
+        # Iceberg 저장 실패 시 MySQL에서 포트폴리오 삭제 (rollback)
+        logger.error(f"Strategy save failed, rolling back: {e}")
+        try:
+            portfolio = db.TbPortfolio.query(port_name=strategy_name).first()
+            if portfolio:
+                db.TbUniverse.delete(port_id=portfolio.port_id)
+                db.TbPortfolio.delete(port_id=portfolio.port_id)
+        except Exception as rollback_error:
+            logger.error(f"Rollback failed: {rollback_error}")
+        raise HTTPException(status_code=500, detail=f"Failed to save strategy: {str(e)}")
 
     return {"message": "Strategy saved successfully"}
 

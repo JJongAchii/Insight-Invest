@@ -265,6 +265,32 @@ def get_port_id_rebal(port_id: int):
 
 
 def get_port_start_end_date(port_id: int):
+    """포트폴리오 시작/종료 날짜 조회 (Iceberg → MySQL fallback)"""
+    try:
+        from module.data_lake.iceberg_client import iceberg_client
+        from module.etl.config import TABLE_PORTFOLIO_NAV
+        from pyiceberg.expressions import EqualTo
+
+        table = iceberg_client.get_table(TABLE_PORTFOLIO_NAV)
+        nav_df = table.scan(
+            row_filter=EqualTo("port_id", port_id),
+            selected_fields=["trade_date"],
+        ).to_pandas()
+
+        if not nav_df.empty:
+            nav_df["trade_date"] = pd.to_datetime(nav_df["trade_date"])
+            result = pd.DataFrame(
+                {
+                    "start_date": [nav_df["trade_date"].min()],
+                    "end_date": [nav_df["trade_date"].max()],
+                }
+            )
+            return result
+
+    except Exception as e:
+        logger.warning(f"Iceberg NAV date 조회 실패, MySQL fallback: {e}")
+
+    # MySQL fallback
     with session_local() as session:
         query = session.query(
             sa.func.min(TbNav.trade_date).label("start_date"),
