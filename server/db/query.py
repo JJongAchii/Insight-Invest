@@ -224,6 +224,11 @@ def get_monthly_nav():
 
 
 def get_port_id_info(port_id: int):
+    """포트폴리오 정보 조회 (MySQL)
+
+    Note: TbMetrics는 LEFT JOIN으로 변경됨 (Iceberg 마이그레이션 이후
+    metrics는 Iceberg에 저장되므로 MySQL TbMetrics에 없을 수 있음)
+    """
     with session_local() as session:
         query = (
             session.query(
@@ -240,7 +245,7 @@ def get_port_id_info(port_id: int):
                 TbMetrics.cvar,
             )
             .join(TbStrategy, TbStrategy.strategy_id == TbPortfolio.strategy_id)
-            .join(TbMetrics, TbMetrics.port_id == TbPortfolio.port_id)
+            .outerjoin(TbMetrics, TbMetrics.port_id == TbPortfolio.port_id)
             .filter(TbPortfolio.port_id == port_id)
         )
 

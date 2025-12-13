@@ -22,7 +22,7 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
   const { data: bmDetails } = useFetchBmByIdQuery(port_id)
 
 
-  if (!strategyInfo || !bmDetails || !bmDetails.metrics || !bmDetails.nav) return <LoadingSpinner />
+  if (!strategyInfo || strategyInfo.length === 0 || !strategyNav || !strategyRebal || !bmDetails || !bmDetails.metrics || !bmDetails.nav) return <LoadingSpinner />
 
 
   return (
