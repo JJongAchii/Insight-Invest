@@ -49,7 +49,7 @@ const StrategyChart = ({ navResult }: { navResult: any }) => {
                     color: 'rgb(55, 65, 81)',
                     font: {
                         size: 13,
-                        weight: '600',
+                        weight: 'bold' as const,
                     },
                     boxWidth: 12,
                     boxHeight: 12,
@@ -68,7 +68,7 @@ const StrategyChart = ({ navResult }: { navResult: any }) => {
                 borderWidth: 1,
                 titleFont: {
                     size: 13,
-                    weight: 'bold',
+                    weight: 'bold' as const,
                 },
                 bodyFont: {
                     size: 12,
@@ -97,7 +97,6 @@ const StrategyChart = ({ navResult }: { navResult: any }) => {
                     color: '#6b7280',
                     font: {
                         size: 11,
-                        weight: '500',
                     },
                     maxRotation: 0,
                     autoSkip: true,
@@ -113,7 +112,6 @@ const StrategyChart = ({ navResult }: { navResult: any }) => {
                     color: '#6b7280',
                     font: {
                         size: 11,
-                        weight: '500',
                     },
                     callback: (tickValue: string | number) => {
                         if (typeof tickValue === 'number') {

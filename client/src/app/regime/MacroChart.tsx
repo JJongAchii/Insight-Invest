@@ -117,7 +117,7 @@ const MacroChart: React.FC<MacroChartProps> = ({
                         labels: {
                             font: {
                                 size: 13,
-                                weight: "600"
+                                weight: "bold" as const,
                             },
                             padding: 15,
                             usePointStyle: true,
@@ -174,7 +174,7 @@ const MacroChart: React.FC<MacroChartProps> = ({
                                         backgroundColor: "rgb(239, 68, 68)",
                                         color: "white",
                                         font: {
-                                            weight: "bold",
+                                            weight: "bold" as const,
                                         },
                                         padding: 4,
                                     },
@@ -195,7 +195,6 @@ const MacroChart: React.FC<MacroChartProps> = ({
                             ticks: {
                                 font: {
                                     size: 11,
-                                    weight: "500",
                                 },
                                 color: "#6b7280",
                             },
@@ -217,7 +216,6 @@ const MacroChart: React.FC<MacroChartProps> = ({
                             ticks: {
                                 font: {
                                     size: 11,
-                                    weight: "500",
                                 },
                                 color: "#6b7280",
                                 maxRotation: 0,
