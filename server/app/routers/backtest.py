@@ -100,7 +100,7 @@ async def set_benchmark(port_id: int):
     period = db.get_port_start_end_date(port_id=port_id)
 
     bt = Backtest(strategy_name="BM(SPY)")
-    price = bt.data(tickers="SPY", source="db")
+    price = bt.data(tickers="SPY")  # Iceberg에서 조회
 
     w_dict = {"SPY": 1}
     weight = pd.DataFrame(w_dict, index=period.start_date)
@@ -125,7 +125,7 @@ async def run_backtest(request: schemas.BacktestRequest):
     end_date = request.endDate
 
     bt = Backtest(strategy_name=strategy_name)
-    price = bt.data(meta_id=meta_id, source="db")
+    price = bt.data(meta_id=meta_id)  # Iceberg에서 조회
     weight = bt.rebalance(price=price, method=algorithm, start=start_date, end=end_date)
 
     weights, nav, metrics = bt.result(price=price, weight=weight)
