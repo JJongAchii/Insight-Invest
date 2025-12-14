@@ -21,11 +21,19 @@ interface SelectOption {
     label: string;
 }
 
-interface SetStrategyProps {
-    onRunBacktest: (payload: BacktestPayload) => void;
+interface ValidationErrors {
+    strategyName?: string;
+    tickers?: string;
+    algorithm?: string;
+    dates?: string;
 }
 
-const SetStrategy: React.FC<SetStrategyProps> = ({ onRunBacktest }) => {
+interface SetStrategyProps {
+    onRunBacktest: (payload: BacktestPayload) => void;
+    isLoading?: boolean;
+}
+
+const SetStrategy: React.FC<SetStrategyProps> = ({ onRunBacktest, isLoading = false }) => {
     const { data } = useFetchTickersQuery({});
     const { data: algorithmData } = useFetchAlgorithmsQuery({});
     const [startDate, setStartDate] = useState(new Date("2000-01-01"));
@@ -35,6 +43,7 @@ const SetStrategy: React.FC<SetStrategyProps> = ({ onRunBacktest }) => {
     const [selectedTickers, setSelectedTickers] = useState<SelectOption[]>([]);
     const [selectedAlgorithm, setSelectedAlgorithm] = useState<SelectOption | null>(null);
     const [strategyName, setStrategyName] = useState("");
+    const [errors, setErrors] = useState<ValidationErrors>({});
 
     const isoCodeOptions = useMemo(() => (
         data ? Array.from(new Set(data.map((item: TickerData) => item.iso_code))).map(code => ({
@@ -87,7 +96,32 @@ const SetStrategy: React.FC<SetStrategyProps> = ({ onRunBacktest }) => {
         setSelectedTickers(newValue as SelectOption[]);
     };
 
+    const validateForm = (): boolean => {
+        const newErrors: ValidationErrors = {};
+
+        if (!strategyName.trim()) {
+            newErrors.strategyName = "Strategy name is required";
+        }
+
+        if (selectedTickers.length === 0) {
+            newErrors.tickers = "Please select at least one ticker";
+        }
+
+        if (!selectedAlgorithm) {
+            newErrors.algorithm = "Please select an algorithm";
+        }
+
+        if (startDate >= endDate) {
+            newErrors.dates = "Start date must be before end date";
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
     const handleButtonClick = () => {
+        if (!validateForm()) return;
+
         const payload = {
             strategy_name: strategyName,
             meta_id: selectedTickers.map((meta_id) => meta_id.value),
@@ -114,14 +148,20 @@ const SetStrategy: React.FC<SetStrategyProps> = ({ onRunBacktest }) => {
                 {/* Strategy Name */}
                 <div>
                     <h4 className='text-sm font-semibold text-gray-700 mb-2'>
-                        Strategy Name
+                        Strategy Name <span className="text-red-500">*</span>
                     </h4>
                     <input
                         type='text'
                         placeholder='Enter your strategy name...'
-                        className='input-modern w-full'
-                        onChange={(e) => setStrategyName(e.target.value)}
+                        className={`input-modern w-full ${errors.strategyName ? 'border-red-500' : ''}`}
+                        onChange={(e) => {
+                            setStrategyName(e.target.value);
+                            if (errors.strategyName) setErrors(prev => ({ ...prev, strategyName: undefined }));
+                        }}
                     />
+                    {errors.strategyName && (
+                        <p className="text-red-500 text-sm mt-1">{errors.strategyName}</p>
+                    )}
                 </div>
 
                 {/* Filters */}
@@ -174,54 +214,66 @@ const SetStrategy: React.FC<SetStrategyProps> = ({ onRunBacktest }) => {
                     </div>
                     <div>
                         <h4 className='text-sm font-semibold text-gray-700 mb-2'>
-                            Tickers
+                            Tickers <span className="text-red-500">*</span>
                         </h4>
                         <Select<SelectOption, true>
                             closeMenuOnSelect={false}
                             isMulti
                             options={tickerOptions}
                             placeholder="Select tickers..."
-                            onChange={handleTickersChange}
+                            onChange={(newValue) => {
+                                handleTickersChange(newValue);
+                                if (errors.tickers) setErrors(prev => ({ ...prev, tickers: undefined }));
+                            }}
                             styles={{
                                 control: (base) => ({
                                     ...base,
                                     borderRadius: '0.75rem',
                                     borderWidth: '2px',
-                                    borderColor: '#e5e7eb',
+                                    borderColor: errors.tickers ? '#ef4444' : '#e5e7eb',
                                     padding: '0.25rem',
                                     boxShadow: 'none',
                                     '&:hover': {
-                                        borderColor: '#93c5fd',
+                                        borderColor: errors.tickers ? '#ef4444' : '#93c5fd',
                                     },
                                 }),
                             }}
                         />
+                        {errors.tickers && (
+                            <p className="text-red-500 text-sm mt-1">{errors.tickers}</p>
+                        )}
                     </div>
                 </div>
 
                 {/* Algorithm */}
                 <div>
                     <h4 className='text-sm font-semibold text-gray-700 mb-2'>
-                        Choose Algorithm
+                        Choose Algorithm <span className="text-red-500">*</span>
                     </h4>
                     <Select<SelectOption>
                         placeholder="Select algorithm"
                         options={algorithmOptions}
-                        onChange={handleAlgorithmChange}
+                        onChange={(newValue) => {
+                            handleAlgorithmChange(newValue);
+                            if (errors.algorithm) setErrors(prev => ({ ...prev, algorithm: undefined }));
+                        }}
                         styles={{
                             control: (base) => ({
                                 ...base,
                                 borderRadius: '0.75rem',
                                 borderWidth: '2px',
-                                borderColor: '#e5e7eb',
+                                borderColor: errors.algorithm ? '#ef4444' : '#e5e7eb',
                                 padding: '0.25rem',
                                 boxShadow: 'none',
                                 '&:hover': {
-                                    borderColor: '#93c5fd',
+                                    borderColor: errors.algorithm ? '#ef4444' : '#93c5fd',
                                 },
                             }),
                         }}
                     />
+                    {errors.algorithm && (
+                        <p className="text-red-500 text-sm mt-1">{errors.algorithm}</p>
+                    )}
                 </div>
 
                 {/* Dates */}
@@ -232,9 +284,12 @@ const SetStrategy: React.FC<SetStrategyProps> = ({ onRunBacktest }) => {
                         </h4>
                         <DatePicker
                             selected={startDate}
-                            onChange={(date) => setStartDate(date || new Date())}
+                            onChange={(date) => {
+                                setStartDate(date || new Date());
+                                if (errors.dates) setErrors(prev => ({ ...prev, dates: undefined }));
+                            }}
                             placeholderText="Select start date"
-                            className='input-modern w-full'
+                            className={`input-modern w-full ${errors.dates ? 'border-red-500' : ''}`}
                         />
                     </div>
                     <div>
@@ -243,20 +298,34 @@ const SetStrategy: React.FC<SetStrategyProps> = ({ onRunBacktest }) => {
                         </h4>
                         <DatePicker
                             selected={endDate}
-                            onChange={(date) => setEndDate(date || new Date())}
+                            onChange={(date) => {
+                                setEndDate(date || new Date());
+                                if (errors.dates) setErrors(prev => ({ ...prev, dates: undefined }));
+                            }}
                             placeholderText="Select end date"
-                            className='input-modern w-full'
+                            className={`input-modern w-full ${errors.dates ? 'border-red-500' : ''}`}
                         />
                     </div>
                 </div>
+                {errors.dates && (
+                    <p className="text-red-500 text-sm">{errors.dates}</p>
+                )}
 
                 {/* Run Button */}
                 <div className='flex justify-end pt-4'>
                     <button
-                        className='btn-primary'
+                        className='btn-primary disabled:opacity-50 disabled:cursor-not-allowed'
                         onClick={handleButtonClick}
+                        disabled={isLoading}
                     >
-                        🚀 Run Backtest
+                        {isLoading ? (
+                            <>
+                                <span className="animate-spin inline-block mr-2">⏳</span>
+                                Running...
+                            </>
+                        ) : (
+                            '🚀 Run Backtest'
+                        )}
                     </button>
                 </div>
             </div>
