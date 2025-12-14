@@ -44,6 +44,68 @@ export interface NewsSource {
   region: string;
 }
 
+// Types for price/stock search operations
+export interface StockMetrics {
+  ytd_return: number | null;
+  return_1y: number | null;
+  return_3m: number | null;
+  volatility: number | null;
+  sharpe: number | null;
+  mdd: number | null;
+}
+
+export interface PricePoint {
+  trade_date: string;
+  adj_close: number | null;
+  gross_return: number | null;
+}
+
+export interface StockMeta {
+  meta_id: number;
+  ticker: string;
+  name: string | null;
+  sector: string | null;
+  iso_code: string;
+  marketcap: number | null;
+}
+
+export interface PriceHistoryResponse {
+  prices: PricePoint[];
+  meta: StockMeta;
+}
+
+export interface PriceSummaryResponse {
+  meta_id: number;
+  ticker: string;
+  name: string | null;
+  metrics: StockMetrics;
+  latest_price: number | null;
+  latest_date: string | null;
+}
+
+export interface SparklineResponse {
+  sparklines: Record<string, number[]>;
+}
+
+export interface CompareStock {
+  meta_id: number;
+  ticker: string;
+  name: string | null;
+  sector: string | null;
+  iso_code: string;
+  metrics: StockMetrics;
+}
+
+export interface NormalizedPricePoint {
+  date: string;
+  [ticker: string]: string | number; // ticker -> normalized price
+}
+
+export interface CompareResponse {
+  stocks: CompareStock[];
+  normalized_prices: NormalizedPricePoint[];
+}
+
 // Types for backtest operations
 export interface BacktestPayload {
   strategy_name: string;
@@ -112,6 +174,30 @@ export const api = createApi({
       query: () => "/regime/data",
     }),
 
+    // Price endpoints for stock search
+    fetchSparklines: builder.query<SparklineResponse, string>({
+      query: (metaIds) => `/price/sparklines?meta_ids=${metaIds}`,
+    }),
+    fetchPriceHistory: builder.query<
+      PriceHistoryResponse,
+      { metaId: number; startDate?: string; endDate?: string }
+    >({
+      query: ({ metaId, startDate, endDate }) => {
+        const params = new URLSearchParams();
+        if (startDate) params.append("start_date", startDate);
+        if (endDate) params.append("end_date", endDate);
+        const queryString = params.toString();
+        return `/price/${metaId}${queryString ? `?${queryString}` : ""}`;
+      },
+    }),
+    fetchPriceSummary: builder.query<PriceSummaryResponse, number>({
+      query: (metaId) => `/price/${metaId}/summary`,
+    }),
+    fetchCompareData: builder.query<CompareResponse, { metaIds: string; period?: string }>({
+      query: ({ metaIds, period = "1y" }) =>
+        `/price/compare?meta_ids=${metaIds}&period=${period}`,
+    }),
+
     // News endpoints
     fetchNews: builder.query<NewsResponse, NewsQueryParams>({
       query: (params) => ({
@@ -167,6 +253,11 @@ export const {
   useFetchBmByIdQuery,
   useFetchMacroInfoQuery,
   useFetchMacroDataQuery,
+  // Price/Stock search hooks
+  useFetchSparklinesQuery,
+  useFetchPriceHistoryQuery,
+  useFetchPriceSummaryQuery,
+  useFetchCompareDataQuery,
   // News hooks
   useFetchNewsQuery,
   useLazyFetchNewsQuery,
