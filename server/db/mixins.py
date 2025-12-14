@@ -1,33 +1,38 @@
 import logging
 from datetime import date, datetime
-from typing import Dict, List, Union
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import pandas as pd
 import sqlalchemy as sa
 from dateutil import parser
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Query
+from sqlalchemy import Select, select
+from sqlalchemy.orm import DeclarativeBase, Session
 
-from .client import session_local
-
-Base = declarative_base()
+from .client import engine, session_local
 
 logger = logging.getLogger(__name__)
 
 
-def read_sql_query(query: Query, **kwargs) -> pd.DataFrame:
-    """Read sql query
+class Base(DeclarativeBase):
+    """SQLAlchemy 2.0 declarative base class"""
+
+    pass
+
+
+def read_sql_select(stmt: Select, session: Session, **kwargs) -> pd.DataFrame:
+    """Read SQL select statement into DataFrame (SQLAlchemy 2.0 style)
 
     Args:
-        query (Query): sqlalchemy.Query
+        stmt: SQLAlchemy Select statement
+        session: SQLAlchemy Session
 
     Returns:
-        pd.DataFrame: read the query into dataframe.
+        pd.DataFrame: Query result as DataFrame
     """
     return pd.read_sql_query(
-        sql=query.statement,
-        con=query.session.bind,
+        sql=stmt,
+        con=session.connection(),
         index_col=kwargs.get("index_col", None),
         parse_dates=kwargs.get("parse_dates", None),
     )
@@ -137,28 +142,39 @@ class Mixins(Base):
         }
 
     @classmethod
-    def query(cls, **kwargs) -> Query:
-        """make a query"""
+    def query(cls, **kwargs) -> List[Any]:
+        """Query records using SQLAlchemy 2.0 style
+
+        Args:
+            **kwargs: Filter conditions
+
+        Returns:
+            List of model instances
+        """
         session = kwargs.pop("session", None)
+        stmt = select(cls).filter_by(**kwargs)
         if session is None:
             with session_local() as session:
-                return session.query(cls).filter_by(**kwargs)
-        return session.query(cls).filter_by(**kwargs)
+                return list(session.execute(stmt).scalars().all())
+        return list(session.execute(stmt).scalars().all())
 
     @classmethod
     def query_df(cls, **kwargs) -> pd.DataFrame:
-        """query table with dataframe"""
+        """Query table and return as DataFrame (SQLAlchemy 2.0 style)"""
         read_kwargs = {
             "index_col": kwargs.pop("index_col", None),
             "parse_dates": kwargs.pop("parse_dates", None),
         }
-        return read_sql_query(cls.query(**kwargs), **read_kwargs)
+        stmt = select(cls).filter_by(**kwargs)
+        with session_local() as session:
+            return read_sql_select(stmt, session, **read_kwargs)
 
     @classmethod
     def delete(cls, **kwargs) -> None:
-        """delete recrods"""
+        """Delete records using SQLAlchemy 2.0 style"""
+        stmt = sa.delete(cls).filter_by(**kwargs)
         with session_local() as session:
-            session.query(cls).filter_by(**kwargs).delete()
+            session.execute(stmt)
             session.commit()
 
 

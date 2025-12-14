@@ -1,8 +1,10 @@
 import logging
+from typing import Any
 
 import pandas as pd
 import sqlalchemy as sa
-from sqlalchemy.orm import Query
+from sqlalchemy import Select, select
+from sqlalchemy.orm import Session
 
 from .client import session_local
 from .models import *
@@ -23,31 +25,34 @@ def _get_iceberg_client():
 logger = logging.getLogger(__name__)
 
 
-def read_sql_query(query: Query, **kwargs) -> pd.DataFrame:
-    """Read sql query
+def read_sql_select(stmt: Select[Any], session: Session, **kwargs) -> pd.DataFrame:
+    """Read SQL select statement into DataFrame (SQLAlchemy 2.0 style)
 
     Args:
-        query (Query): sqlalchemy.Query
+        stmt: SQLAlchemy Select statement
+        session: SQLAlchemy Session
 
     Returns:
-        pd.DataFrame: read the query into dataframe.
+        pd.DataFrame: Query result as DataFrame
     """
     return pd.read_sql_query(
-        sql=query.statement,
-        con=query.session.bind,
+        sql=stmt,
+        con=session.connection(),
         index_col=kwargs.get("index_col", None),
         parse_dates=kwargs.get("parse_dates", None),
     )
 
 
 def get_meta_mapper() -> dict:
+    """Get ticker to meta_id mapping (SQLAlchemy 2.0 style)"""
     mapper = {}
 
     with session_local() as session:
-        query = session.query(TbMeta.ticker, TbMeta.meta_id)
+        stmt = select(TbMeta.ticker, TbMeta.meta_id)
+        result = session.execute(stmt)
 
-        for rec in query.all():
-            mapper[rec.ticker] = rec.meta_id
+        for row in result.all():
+            mapper[row.ticker] = row.meta_id
 
     return mapper
 
@@ -56,7 +61,12 @@ def create_portfolio(
     port_name: str,
     algorithm: str,
 ):
-    strategy_id = TbStrategy.query(strategy=algorithm).first().strategy_id
+    """Create a new portfolio (SQLAlchemy 2.0 style)"""
+    with session_local() as session:
+        stmt = select(TbStrategy.strategy_id).where(TbStrategy.strategy == algorithm)
+        result = session.execute(stmt).scalar_one()
+        strategy_id = result
+
     portfolio = {
         "port_name": port_name,
         "strategy_id": strategy_id,
@@ -69,7 +79,11 @@ def upload_universe(
     port_name: str,
     tickers: list,
 ):
-    port_id = TbPortfolio.query(port_name=port_name).first().port_id
+    """Upload portfolio universe (SQLAlchemy 2.0 style)"""
+    with session_local() as session:
+        stmt = select(TbPortfolio.port_id).where(TbPortfolio.port_name == port_name)
+        port_id = session.execute(stmt).scalar_one()
+
     universe = [{"port_id": port_id, "meta_id": ticker} for ticker in tickers]
 
     return TbUniverse.insert(universe)
@@ -80,7 +94,9 @@ def upload_rebalance(
     weights: pd.DataFrame,
 ):
     """포트폴리오 리밸런싱 가중치를 Iceberg에 저장 (MySQL 제거)"""
-    port_id = TbPortfolio.query(port_name=port_name).first().port_id
+    with session_local() as session:
+        stmt = select(TbPortfolio.port_id).where(TbPortfolio.port_name == port_name)
+        port_id = session.execute(stmt).scalar_one()
 
     from module.data_lake.portfolio_writer import save_rebalance_to_iceberg
 
@@ -95,7 +111,9 @@ def upload_nav(
     nav: pd.Series,
 ):
     """포트폴리오 NAV를 Iceberg에 저장 (MySQL 제거)"""
-    port_id = TbPortfolio.query(port_name=port_name).first().port_id
+    with session_local() as session:
+        stmt = select(TbPortfolio.port_id).where(TbPortfolio.port_name == port_name)
+        port_id = session.execute(stmt).scalar_one()
 
     from module.data_lake.portfolio_writer import save_nav_to_iceberg
 
@@ -110,7 +128,9 @@ def upload_metrics(
     metrics: pd.DataFrame,
 ):
     """포트폴리오 성과지표를 Iceberg에 저장 (MySQL 제거)"""
-    port_id = TbPortfolio.query(port_name=port_name).first().port_id
+    with session_local() as session:
+        stmt = select(TbPortfolio.port_id).where(TbPortfolio.port_name == port_name)
+        port_id = session.execute(stmt).scalar_one()
     metrics.columns = [
         "strategy",
         "ann_ret",
@@ -183,16 +203,16 @@ def upload_benchmark_metrics(
 
 
 def get_port_summary():
-    """포트폴리오 요약 조회 (MySQL 메타데이터 + Iceberg 성과지표)"""
+    """포트폴리오 요약 조회 (MySQL 메타데이터 + Iceberg 성과지표) - SQLAlchemy 2.0"""
     # MySQL에서 포트폴리오 메타데이터 조회
     with session_local() as session:
-        query = session.query(
+        stmt = select(
             TbPortfolio.port_id,
             TbPortfolio.port_name,
             TbStrategy.strategy_name,
         ).join(TbStrategy, TbStrategy.strategy_id == TbPortfolio.strategy_id)
 
-        portfolio_df = read_sql_query(query=query)
+        portfolio_df = read_sql_select(stmt, session)
 
     if portfolio_df.empty:
         return portfolio_df
@@ -244,22 +264,22 @@ def get_monthly_nav():
 
 
 def get_port_id_info(port_id: int):
-    """포트폴리오 메타데이터 조회 (MySQL)
+    """포트폴리오 메타데이터 조회 (MySQL) - SQLAlchemy 2.0
 
     Note: metrics는 Iceberg에서 별도 조회 (API에서 처리)
     """
     with session_local() as session:
-        query = (
-            session.query(
+        stmt = (
+            select(
                 TbPortfolio.port_id,
                 TbPortfolio.port_name,
                 TbStrategy.strategy_name,
             )
             .join(TbStrategy, TbStrategy.strategy_id == TbPortfolio.strategy_id)
-            .filter(TbPortfolio.port_id == port_id)
+            .where(TbPortfolio.port_id == port_id)
         )
 
-        return read_sql_query(query=query)
+        return read_sql_select(stmt, session)
 
 
 # NOTE: get_port_id_rebal() 제거됨 - Iceberg portfolio_reader.get_portfolio_rebalance() 사용
@@ -326,15 +346,20 @@ def get_last_updated_price(market: str):
 
 
 def get_last_updated_macro():
+    """Get last updated macro data - SQLAlchemy 2.0 style"""
     with session_local() as session:
+        # Subquery for max date per macro_id
         subq = (
-            session.query(
-                TbMacroData.macro_id, sa.func.max(TbMacroData.base_date).label("max_dt")
-            ).group_by(TbMacroData.macro_id)
-        ).subquery()
+            select(
+                TbMacroData.macro_id,
+                sa.func.max(TbMacroData.base_date).label("max_dt"),
+            )
+            .group_by(TbMacroData.macro_id)
+            .subquery()
+        )
 
-        query = (
-            session.query(
+        stmt = (
+            select(
                 TbMacro.macro_id,
                 TbMacro.fred,
                 subq.c.max_dt,
@@ -343,28 +368,30 @@ def get_last_updated_macro():
             .outerjoin(
                 TbMacroData,
                 sa.and_(
-                    TbMacroData.macro_id == TbMacro.macro_id, TbMacroData.base_date == subq.c.max_dt
+                    TbMacroData.macro_id == TbMacro.macro_id,
+                    TbMacroData.base_date == subq.c.max_dt,
                 ),
             )
         )
 
-        data = read_sql_query(query=query)
+        data = read_sql_select(stmt, session)
 
     return data
 
 
 def get_macro_data():
+    """Get all macro data - SQLAlchemy 2.0 style"""
     with session_local() as session:
-        query = (
-            session.query(
+        stmt = (
+            select(
                 TbMacroData.base_date,
                 TbMacroData.macro_id,
                 TbMacro.fred,
                 TbMacroData.value,
             )
             .join(TbMacro, TbMacro.macro_id == TbMacroData.macro_id)
-            .filter(TbMacroData.base_date >= "1980-01-01")
+            .where(TbMacroData.base_date >= "1980-01-01")
             .order_by(TbMacroData.base_date)
         )
 
-        return read_sql_query(query=query)
+        return read_sql_select(stmt, session)
