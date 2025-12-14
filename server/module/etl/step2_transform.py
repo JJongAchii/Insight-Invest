@@ -273,10 +273,18 @@ def validate_data(arrow_table: pa.Table) -> Tuple[pa.Table, list]:
     """
     데이터 검증 및 이상치 제거
 
+    검증 항목:
+        1. 결측치 체크 (close, adj_close, volume)
+        2. 가격 이상치 (adj_close <= 0)
+        3. 수익률 이상치 (gross_return > ±50%)
+        4. 거래량 0 체크
+        5. 거래일 연속성 체크 (5일 이상 갭)
+
     Returns:
         (cleaned_table, warnings)
     """
     warnings = []
+    total_rows = len(arrow_table)
 
     # 1. 결측치 체크
     null_counts = {
@@ -286,17 +294,67 @@ def validate_data(arrow_table: pa.Table) -> Tuple[pa.Table, list]:
 
     for col, count in null_counts.items():
         if count > 0:
-            warnings.append(f"{col}: {count} null values")
+            warnings.append(f"⚠️ {col}: {count} null values ({count/total_rows*100:.1f}%)")
 
     # 2. 이상치 체크 (adj_close <= 0)
     invalid_prices = pc.sum(pc.less_equal(arrow_table["adj_close"], 0)).as_py()
 
     if invalid_prices > 0:
-        warnings.append(f"Invalid prices (<=0): {invalid_prices}")
+        warnings.append(f"❌ Invalid prices (<=0): {invalid_prices}")
 
-    # 3. 데이터 정제: adj_close > 0인 것만
+    # 3. gross_return 이상치 체크 (±50% 초과)
+    if "gross_return" in arrow_table.column_names:
+        gross_returns = arrow_table.column("gross_return")
+
+        # ±50% 초과 체크
+        extreme_positive = pc.sum(pc.greater(gross_returns, 0.5)).as_py()
+        extreme_negative = pc.sum(pc.less(gross_returns, -0.5)).as_py()
+
+        if extreme_positive > 0:
+            warnings.append(f"⚠️ Extreme positive returns (>50%): {extreme_positive}")
+
+        if extreme_negative > 0:
+            warnings.append(f"⚠️ Extreme negative returns (<-50%): {extreme_negative}")
+
+    # 4. volume 0 체크
+    zero_volume = pc.sum(pc.equal(arrow_table["volume"], 0)).as_py()
+
+    if zero_volume > 0:
+        pct = zero_volume / total_rows * 100
+        # 10% 이상이면 경고, 아니면 정보
+        if pct > 10:
+            warnings.append(f"⚠️ Zero volume: {zero_volume} ({pct:.1f}%)")
+        else:
+            warnings.append(f"ℹ️ Zero volume: {zero_volume} ({pct:.1f}%)")
+
+    # 5. 거래일 연속성 체크 (종목별 5일 이상 갭)
+    df = arrow_table.to_pandas()
+    df["trade_date"] = pd.to_datetime(df["trade_date"])
+
+    gap_warnings = []
+    for meta_id, group in df.groupby("meta_id"):
+        if len(group) < 2:
+            continue
+
+        sorted_dates = group["trade_date"].sort_values()
+        gaps = sorted_dates.diff().dropna()
+
+        # 5 영업일 이상 갭 (약 7일)
+        large_gaps = gaps[gaps > pd.Timedelta(days=7)]
+        if len(large_gaps) > 0:
+            ticker = group["ticker"].iloc[0]
+            gap_warnings.append(f"{ticker}: {len(large_gaps)} large gaps")
+
+    if gap_warnings:
+        warnings.append(f"ℹ️ Trading day gaps (>7 days): {len(gap_warnings)} tickers")
+
+    # 6. 데이터 정제: adj_close > 0인 것만
     mask = pc.greater(arrow_table["adj_close"], 0)
     cleaned_table = arrow_table.filter(mask)
+
+    removed_count = total_rows - len(cleaned_table)
+    if removed_count > 0:
+        warnings.append(f"🗑️ Removed {removed_count} invalid rows")
 
     return cleaned_table, warnings
 
@@ -312,6 +370,8 @@ def transform_daily_data(iso_code: str, date: date) -> Tuple[pa.Table, int]:
     Returns:
         (transformed_table, row_count)
     """
+    import gc
+
     print(f"\n{'='*70}")
     print(f"🔄 [{iso_code}] {date} 데이터 변환 (Iceberg 기준)")
     print(f"{'='*70}")
@@ -335,10 +395,19 @@ def transform_daily_data(iso_code: str, date: date) -> Tuple[pa.Table, int]:
 
     print(f"   📅 Staging 범위: {min_date} ~ {max_date}")
 
-    # 3. 배치별 처리 (메모리 효율화)
-    print(f"\n2️⃣ 배치별 처리 시작...")
+    # 3. 전체 meta_id에 대해 Iceberg 기준점 1회 조회 (최적화)
+    print(f"\n2️⃣ Iceberg 기준점 조회 (1회)...")
 
     all_meta_ids = list(set(arrow_table.column("meta_id").to_pylist()))
+    print(f"   📊 총 {len(all_meta_ids)} 종목")
+
+    # 전체 meta_id에 대해 한 번에 Athena 쿼리 (캐싱)
+    last_iceberg_data = get_last_iceberg_data(iso_code, all_meta_ids)
+    print(f"   ✅ Iceberg 기준점: {len(last_iceberg_data)}/{len(all_meta_ids)} 종목")
+
+    # 4. 배치별 처리 (메모리 효율화, Athena 호출 없이 캐시 사용)
+    print(f"\n3️⃣ 배치별 처리 시작 (캐시 사용)...")
+
     batch_size = 500  # 배치 크기: 500개 종목씩
     processed_tables = []
 
@@ -356,12 +425,14 @@ def transform_daily_data(iso_code: str, date: date) -> Tuple[pa.Table, int]:
 
             print(f"      데이터: {len(batch_table)} rows")
 
-            # Iceberg 기준점 조회
-            last_iceberg_data = get_last_iceberg_data(iso_code, batch_meta_ids)
-            print(f"      Iceberg: {len(last_iceberg_data)}/{len(batch_meta_ids)} 종목")
+            # 캐시된 Iceberg 기준점 사용 (Athena 호출 없음)
+            batch_iceberg_data = {
+                mid: last_iceberg_data[mid] for mid in batch_meta_ids if mid in last_iceberg_data
+            }
+            print(f"      Iceberg: {len(batch_iceberg_data)}/{len(batch_meta_ids)} 종목 (캐시)")
 
             # 재계산 + 중복 제거
-            batch_table = recalculate_adj_close_and_returns(batch_table, last_iceberg_data)
+            batch_table = recalculate_adj_close_and_returns(batch_table, batch_iceberg_data)
 
             if batch_table is not None and len(batch_table) > 0:
                 processed_tables.append(batch_table)
@@ -378,12 +449,10 @@ def transform_daily_data(iso_code: str, date: date) -> Tuple[pa.Table, int]:
             continue
 
         # 메모리 정리
-        import gc
-
         gc.collect()
 
-    # 4. 모든 배치 합치기
-    print(f"\n3️⃣ 배치 병합 중...")
+    # 5. 모든 배치 합치기
+    print(f"\n4️⃣ 배치 병합 중...")
 
     if not processed_tables:
         print(f"   ⚠️  신규 데이터 없음")
@@ -410,8 +479,8 @@ def transform_daily_data(iso_code: str, date: date) -> Tuple[pa.Table, int]:
     else:
         print(f"   ⚠️  모두 최초 데이터 (이전 가격 없음)")
 
-    # 5. 데이터 검증
-    print(f"\n4️⃣ 데이터 검증 중...")
+    # 6. 데이터 검증
+    print(f"\n5️⃣ 데이터 검증 중...")
 
     cleaned_table, warnings = validate_data(transformed_table)
 
@@ -428,8 +497,8 @@ def transform_daily_data(iso_code: str, date: date) -> Tuple[pa.Table, int]:
 
     print(f"   ✅ 최종: {len(cleaned_table)} rows")
 
-    # 6. Transformed 데이터 S3 저장 (실패 복구용)
-    print(f"\n5️⃣ Transformed 데이터 저장 중...")
+    # 7. Transformed 데이터 S3 저장 (실패 복구용)
+    print(f"\n6️⃣ Transformed 데이터 저장 중...")
 
     import pyarrow.fs as pafs
 

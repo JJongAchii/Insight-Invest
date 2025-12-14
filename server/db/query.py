@@ -7,6 +7,19 @@ from sqlalchemy.orm import Query
 from .client import session_local
 from .models import *
 
+# Iceberg 클라이언트 (지연 import로 순환 참조 방지)
+_iceberg_client = None
+
+
+def _get_iceberg_client():
+    global _iceberg_client
+    if _iceberg_client is None:
+        from module.data_lake.iceberg_client import iceberg_client
+
+        _iceberg_client = iceberg_client
+    return _iceberg_client
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -231,32 +244,38 @@ def get_port_start_end_date(port_id: int):
 
 
 def get_last_updated_price(market: str):
-    with session_local() as session:
-        subq = (
-            session.query(
-                TbPrice.meta_id, sa.func.max(TbPrice.trade_date).label("max_dt")
-            ).group_by(TbPrice.meta_id)
-        ).subquery()
+    """
+    종목별 최신 가격 조회 (Iceberg)
 
-        query = (
-            session.query(
-                TbMeta.meta_id,
-                TbMeta.ticker,
-                TbMeta.iso_code,
-                subq.c.max_dt,
-                TbPrice.adj_close,
-            )
-            .outerjoin(subq, subq.c.meta_id == TbMeta.meta_id)
-            .outerjoin(
-                TbPrice,
-                sa.and_(TbPrice.meta_id == TbMeta.meta_id, TbPrice.trade_date == subq.c.max_dt),
-            )
-            .filter(TbMeta.iso_code == market)
-        )
+    Args:
+        market: "US" 또는 "KR"
 
-        data = read_sql_query(query=query)
+    Returns:
+        DataFrame [meta_id, ticker, iso_code, max_dt, adj_close]
+    """
+    iceberg = _get_iceberg_client()
 
-    return data
+    try:
+        # Iceberg에서 최신 가격 조회
+        latest_prices = iceberg.get_latest_prices(iso_code=market)
+
+        if latest_prices.empty:
+            logger.warning(f"Iceberg에서 {market} 가격 데이터를 찾을 수 없습니다")
+            return pd.DataFrame(columns=["meta_id", "ticker", "iso_code", "max_dt", "adj_close"])
+
+        # 컬럼명 맞추기 (기존 API 호환)
+        latest_prices = latest_prices.rename(columns={"trade_date": "max_dt"})
+        latest_prices["iso_code"] = market
+
+        # 컬럼 순서 맞추기
+        result = latest_prices[["meta_id", "ticker", "iso_code", "max_dt", "adj_close"]]
+
+        logger.info(f"최신 가격 조회 (Iceberg): {len(result)} 종목 from {market}")
+        return result
+
+    except Exception as e:
+        logger.error(f"Iceberg 최신 가격 조회 실패: {e}", exc_info=True)
+        return pd.DataFrame(columns=["meta_id", "ticker", "iso_code", "max_dt", "adj_close"])
 
 
 def get_last_updated_macro():

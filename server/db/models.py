@@ -43,16 +43,10 @@ class TbMeta(StaticBase):
     # delisted_yn = sa.Column(sa.Boolean, nullable=False, server_default='false')
 
 
-class TbPrice(StaticBase):
-    """meta data price table"""
-
-    __tablename__ = "tb_price"
-
-    meta_id = sa.Column(sa.ForeignKey("tb_meta.meta_id"), primary_key=True)
-    trade_date = sa.Column(sa.Date, primary_key=True)
-    close = sa.Column(sa.Float, nullable=True)
-    adj_close = sa.Column(sa.Float, nullable=True)
-    gross_return = sa.Column(sa.Float, nullable=True)
+# NOTE: TbPrice가 Iceberg로 이관되어 삭제됨 (2025-12-14)
+# - market.us_stocks_price (US 주식 가격)
+# - market.kr_stocks_price (KR 주식 가격)
+# 가격 데이터 조회는 module.data_lake.iceberg_client.read_price_data() 사용
 
 
 class TbStrategy(StaticBase):
