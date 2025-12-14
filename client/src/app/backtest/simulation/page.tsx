@@ -72,7 +72,7 @@ const Simulation = () => {
             </div>
 
             <SetStrategy onRunBacktest={handleRunBacktest}/>
-            <StrategyChart navResult={backtestResult?.nav}/>
+            <StrategyChart navResult={backtestResult?.nav ?? null}/>
             <StrategyMetrics backtestResult={backtestResult} selectedTicker={selectedTicker} />
         </div>
     );
