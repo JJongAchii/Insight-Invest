@@ -232,9 +232,12 @@ async def save_strategy(request: schemas.BacktestRequest):
             )
             bm_nav = bm_nav_dict.get("BM(SPY)")
             if bm_nav is not None:
-                db.upload_benchmark_nav(port_id=port_id, nav=bm_nav)
-                db.upload_benchmark_metrics(port_id=port_id, metrics=bm_metrics)
-                logger.info(f"Benchmark saved for port_id={port_id}")
+                # NaN 값 제거 (Iceberg 스키마가 non-null 요구)
+                bm_nav_clean = bm_nav.dropna()
+                if not bm_nav_clean.empty:
+                    db.upload_benchmark_nav(port_id=port_id, nav=bm_nav_clean)
+                    db.upload_benchmark_metrics(port_id=port_id, metrics=bm_metrics)
+                    logger.info(f"Benchmark saved for port_id={port_id}")
 
     except IntegrityError:
         raise HTTPException(status_code=400, detail="Portfolio name already exists.")
