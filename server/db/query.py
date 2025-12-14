@@ -135,6 +135,53 @@ def upload_metrics(
     return port_id
 
 
+def upload_benchmark_nav(
+    port_id: int,
+    nav: pd.Series,
+):
+    """벤치마크 NAV를 Iceberg에 저장"""
+    from module.data_lake.portfolio_writer import save_benchmark_nav_to_iceberg
+
+    save_benchmark_nav_to_iceberg(port_id=port_id, nav=nav)
+    logger.info(f"Benchmark NAV saved to Iceberg: port_id={port_id}")
+
+    return port_id
+
+
+def upload_benchmark_metrics(
+    port_id: int,
+    metrics: pd.DataFrame,
+):
+    """벤치마크 성과지표를 Iceberg에 저장"""
+    metrics.columns = [
+        "strategy",
+        "ann_ret",
+        "ann_vol",
+        "sharpe",
+        "mdd",
+        "skew",
+        "kurt",
+        "var",
+        "cvar",
+    ]
+
+    from module.data_lake.portfolio_writer import save_benchmark_metrics_to_iceberg
+
+    # DataFrame을 딕셔너리로 변환 (BM(SPY) row만 사용)
+    bm_row = metrics[metrics["strategy"] == "BM(SPY)"]
+    if bm_row.empty:
+        logger.warning(f"BM(SPY) not found in metrics for port_id={port_id}")
+        return port_id
+
+    metrics_dict = bm_row.iloc[0][
+        ["ann_ret", "ann_vol", "sharpe", "mdd", "skew", "kurt", "var", "cvar"]
+    ].to_dict()
+    save_benchmark_metrics_to_iceberg(port_id=port_id, metrics=metrics_dict)
+    logger.info(f"Benchmark Metrics saved to Iceberg: port_id={port_id}")
+
+    return port_id
+
+
 def get_port_summary():
     """포트폴리오 요약 조회 (MySQL 메타데이터 + Iceberg 성과지표)"""
     # MySQL에서 포트폴리오 메타데이터 조회

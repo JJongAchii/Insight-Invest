@@ -10,9 +10,13 @@ import pandas as pd
 import pyarrow as pa
 from module.data_lake.iceberg_client import iceberg_client
 from module.etl.config import (
+    BENCHMARK_METRICS_SCHEMA,
+    BENCHMARK_NAV_SCHEMA,
     PORTFOLIO_METRICS_SCHEMA,
     PORTFOLIO_NAV_SCHEMA,
     PORTFOLIO_REBALANCE_SCHEMA,
+    TABLE_BENCHMARK_METRICS,
+    TABLE_BENCHMARK_NAV,
     TABLE_PORTFOLIO_METRICS,
     TABLE_PORTFOLIO_NAV,
     TABLE_PORTFOLIO_REBALANCE,
@@ -166,4 +170,127 @@ def save_metrics_to_iceberg(port_id: int, metrics: Dict[str, float]) -> None:
 
     except Exception as e:
         logger.error(f"Metrics 저장 실패: port_id={port_id}, error={e}", exc_info=True)
+        raise
+
+
+def _ensure_benchmark_tables_exist() -> None:
+    """벤치마크 테이블이 존재하지 않으면 생성"""
+    # Benchmark NAV 테이블
+    if not iceberg_client.table_exists(TABLE_BENCHMARK_NAV):
+        logger.info(f"Creating table: {TABLE_BENCHMARK_NAV}")
+        iceberg_client.create_table(TABLE_BENCHMARK_NAV, schema=BENCHMARK_NAV_SCHEMA)
+
+    # Benchmark Metrics 테이블
+    if not iceberg_client.table_exists(TABLE_BENCHMARK_METRICS):
+        logger.info(f"Creating table: {TABLE_BENCHMARK_METRICS}")
+        iceberg_client.create_table(TABLE_BENCHMARK_METRICS, schema=BENCHMARK_METRICS_SCHEMA)
+
+
+def save_benchmark_nav_to_iceberg(port_id: int, nav: pd.Series) -> None:
+    """
+    벤치마크 NAV를 Iceberg 테이블에 저장
+
+    Args:
+        port_id: 포트폴리오 ID (해당 포트폴리오에 대한 벤치마크)
+        nav: NAV 시계열 데이터 (index: trade_date, value: nav 값)
+
+    Example:
+        >>> nav = pd.Series([100, 101, 102], index=pd.to_datetime(['2024-01-01', '2024-01-02', '2024-01-03']))
+        >>> save_benchmark_nav_to_iceberg(port_id=1, nav=nav)
+    """
+    try:
+        # 테이블 존재 확인 및 생성
+        _ensure_benchmark_tables_exist()
+
+        # DataFrame 생성
+        df = nav.reset_index()
+        df.columns = ["trade_date", "value"]
+        df["port_id"] = port_id
+        df["updated_at"] = datetime.now()
+
+        # 날짜 타입 변환
+        df["trade_date"] = pd.to_datetime(df["trade_date"])
+
+        # port_id를 int32로 변환
+        df["port_id"] = df["port_id"].astype("int32")
+
+        # Arrow Table 변환
+        arrow_table = pa.Table.from_pandas(df, schema=BENCHMARK_NAV_SCHEMA)
+
+        # Iceberg 적재
+        table = iceberg_client.get_table(TABLE_BENCHMARK_NAV)
+        table.append(arrow_table)
+
+        logger.info(
+            f"Benchmark NAV 저장 완료: port_id={port_id}, records={len(df)}, "
+            f"date_range={df['trade_date'].min()} ~ {df['trade_date'].max()}"
+        )
+
+    except Exception as e:
+        logger.error(f"Benchmark NAV 저장 실패: port_id={port_id}, error={e}", exc_info=True)
+        raise
+
+
+def save_benchmark_metrics_to_iceberg(port_id: int, metrics: Dict[str, float]) -> None:
+    """
+    벤치마크 성과 지표를 Iceberg 테이블에 저장
+
+    Args:
+        port_id: 포트폴리오 ID (해당 포트폴리오에 대한 벤치마크)
+        metrics: 성과 지표 딕셔너리
+            {
+                'ann_ret': 연간 수익률,
+                'ann_vol': 연간 변동성,
+                'sharpe': Sharpe Ratio,
+                'mdd': Maximum Drawdown,
+                'skew': Skewness,
+                'kurt': Kurtosis,
+                'var': Value at Risk,
+                'cvar': Conditional VaR
+            }
+
+    Example:
+        >>> metrics = {
+        ...     'ann_ret': 0.12,
+        ...     'ann_vol': 0.18,
+        ...     'sharpe': 0.67,
+        ...     'mdd': -0.30,
+        ... }
+        >>> save_benchmark_metrics_to_iceberg(port_id=1, metrics=metrics)
+    """
+    try:
+        # 테이블 존재 확인 및 생성
+        _ensure_benchmark_tables_exist()
+
+        # DataFrame 생성
+        df = pd.DataFrame([metrics])
+        df["port_id"] = port_id
+        df["updated_at"] = datetime.now()
+
+        # 필수 컬럼 확인 및 기본값 설정 + 타입 변환
+        required_cols = ["ann_ret", "ann_vol", "sharpe", "mdd", "skew", "kurt", "var", "cvar"]
+        for col in required_cols:
+            if col not in df.columns:
+                df[col] = None
+            else:
+                # 문자열을 float로 변환 (None/NaN 처리 포함)
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        # port_id를 int32로 변환
+        df["port_id"] = df["port_id"].astype("int32")
+
+        # Arrow Table 변환
+        arrow_table = pa.Table.from_pandas(df, schema=BENCHMARK_METRICS_SCHEMA)
+
+        # Iceberg 적재
+        table = iceberg_client.get_table(TABLE_BENCHMARK_METRICS)
+        table.append(arrow_table)
+
+        logger.info(
+            f"Benchmark Metrics 저장 완료: port_id={port_id}, "
+            f"ann_ret={metrics.get('ann_ret', None)}"
+        )
+
+    except Exception as e:
+        logger.error(f"Benchmark Metrics 저장 실패: port_id={port_id}, error={e}", exc_info=True)
         raise

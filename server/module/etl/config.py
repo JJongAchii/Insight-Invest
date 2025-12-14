@@ -17,6 +17,8 @@ TABLE_MACRO_DATA = "market.macro_data"
 TABLE_PORTFOLIO_NAV = "portfolio.portfolio_nav"
 TABLE_PORTFOLIO_REBALANCE = "portfolio.portfolio_rebalance"
 TABLE_PORTFOLIO_METRICS = "portfolio.portfolio_metrics"
+TABLE_BENCHMARK_NAV = "portfolio.benchmark_nav"
+TABLE_BENCHMARK_METRICS = "portfolio.benchmark_metrics"
 
 # Arrow 스키마 (US/KR 주식)
 STOCK_SCHEMA = pa.schema(
@@ -68,6 +70,32 @@ PORTFOLIO_REBALANCE_SCHEMA = pa.schema(
 
 # Arrow 스키마 (포트폴리오 성과 지표)
 PORTFOLIO_METRICS_SCHEMA = pa.schema(
+    [
+        pa.field("port_id", pa.int32(), nullable=False),
+        pa.field("ann_ret", pa.float64(), nullable=True),
+        pa.field("ann_vol", pa.float64(), nullable=True),
+        pa.field("sharpe", pa.float64(), nullable=True),
+        pa.field("mdd", pa.float64(), nullable=True),
+        pa.field("skew", pa.float64(), nullable=True),
+        pa.field("kurt", pa.float64(), nullable=True),
+        pa.field("var", pa.float64(), nullable=True),
+        pa.field("cvar", pa.float64(), nullable=True),
+        pa.field("updated_at", pa.timestamp("us"), nullable=False),
+    ]
+)
+
+# Arrow 스키마 (벤치마크 NAV)
+BENCHMARK_NAV_SCHEMA = pa.schema(
+    [
+        pa.field("port_id", pa.int32(), nullable=False),
+        pa.field("trade_date", pa.date32(), nullable=False),
+        pa.field("value", pa.float64(), nullable=False),
+        pa.field("updated_at", pa.timestamp("us"), nullable=False),
+    ]
+)
+
+# Arrow 스키마 (벤치마크 성과 지표)
+BENCHMARK_METRICS_SCHEMA = pa.schema(
     [
         pa.field("port_id", pa.int32(), nullable=False),
         pa.field("ann_ret", pa.float64(), nullable=True),

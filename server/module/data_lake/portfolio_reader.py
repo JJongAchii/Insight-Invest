@@ -8,6 +8,8 @@ from typing import List, Optional
 import pandas as pd
 from module.data_lake.iceberg_client import iceberg_client
 from module.etl.config import (
+    TABLE_BENCHMARK_METRICS,
+    TABLE_BENCHMARK_NAV,
     TABLE_PORTFOLIO_METRICS,
     TABLE_PORTFOLIO_NAV,
     TABLE_PORTFOLIO_REBALANCE,
@@ -160,3 +162,76 @@ def get_all_portfolio_ids() -> List[int]:
     except Exception as e:
         logger.error(f"포트폴리오 ID 목록 조회 실패: {e}", exc_info=True)
         return []
+
+
+def get_benchmark_nav(port_id: int) -> pd.DataFrame:
+    """
+    벤치마크 NAV를 Iceberg 테이블에서 조회
+
+    Args:
+        port_id: 포트폴리오 ID
+
+    Returns:
+        DataFrame with columns: [trade_date, value]
+
+    Example:
+        >>> nav = get_benchmark_nav(port_id=1)
+        >>> print(nav.head())
+           trade_date  value
+        0  2024-01-01  100.0
+        1  2024-01-02  101.5
+    """
+    try:
+        table = iceberg_client.get_table(TABLE_BENCHMARK_NAV)
+
+        # PyIceberg scan with row_filter (서버사이드 필터링)
+        df = table.scan(
+            row_filter=EqualTo("port_id", port_id),
+            selected_fields=["trade_date", "value"],
+        ).to_pandas()
+
+        # Sort
+        df = df.sort_values("trade_date")
+
+        logger.info(f"Benchmark NAV 조회 완료: port_id={port_id}, records={len(df)}")
+        return df.reset_index(drop=True)
+
+    except Exception as e:
+        logger.error(f"Benchmark NAV 조회 실패: port_id={port_id}, error={e}", exc_info=True)
+        raise
+
+
+def get_benchmark_metrics(port_id: int) -> pd.DataFrame:
+    """
+    벤치마크 성과 지표를 Iceberg 테이블에서 조회
+
+    Args:
+        port_id: 포트폴리오 ID
+
+    Returns:
+        DataFrame with columns: [ann_ret, ann_vol, sharpe, mdd, skew, kurt, var, cvar]
+
+    Example:
+        >>> metrics = get_benchmark_metrics(port_id=1)
+        >>> print(metrics.iloc[0])
+        ann_ret    0.12
+        ann_vol    0.18
+        sharpe     0.67
+        mdd       -0.30
+        ...
+    """
+    try:
+        table = iceberg_client.get_table(TABLE_BENCHMARK_METRICS)
+
+        # PyIceberg scan with row_filter (서버사이드 필터링)
+        df = table.scan(
+            row_filter=EqualTo("port_id", port_id),
+            selected_fields=["ann_ret", "ann_vol", "sharpe", "mdd", "skew", "kurt", "var", "cvar"],
+        ).to_pandas()
+
+        logger.info(f"Benchmark Metrics 조회 완료: port_id={port_id}, records={len(df)}")
+        return df.reset_index(drop=True)
+
+    except Exception as e:
+        logger.error(f"Benchmark Metrics 조회 실패: port_id={port_id}, error={e}", exc_info=True)
+        raise

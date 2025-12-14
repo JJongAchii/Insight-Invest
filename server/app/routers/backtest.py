@@ -12,6 +12,8 @@ import db
 from app import schemas
 from module.backtest import Backtest
 from module.data_lake.portfolio_reader import (
+    get_benchmark_metrics,
+    get_benchmark_nav,
     get_portfolio_metrics,
     get_portfolio_nav,
     get_portfolio_rebalance,
@@ -97,6 +99,45 @@ async def get_strategy_id_rebal(port_id: int):
 
 @router.get("/strategy/bm/{port_id}")
 async def set_benchmark(port_id: int):
+    """벤치마크 데이터 조회 (Iceberg에서 미리 계산된 데이터 조회, 없으면 실시간 계산)"""
+    # 1. Iceberg에서 미리 계산된 벤치마크 데이터 조회 시도
+    try:
+        bm_nav_df = get_benchmark_nav(port_id=port_id)
+        bm_metrics_df = get_benchmark_metrics(port_id=port_id)
+
+        if not bm_nav_df.empty and not bm_metrics_df.empty:
+            # 미리 계산된 데이터 반환
+            bm_nav_df["bm_name"] = "BM(SPY)"
+            nav_stack = bm_nav_df[["trade_date", "bm_name", "value"]]
+
+            # metrics를 JSON 형식으로 변환
+            bm_metrics_df["strategy"] = "BM(SPY)"
+            metrics_cols = [
+                "strategy",
+                "ann_ret",
+                "ann_vol",
+                "sharpe",
+                "mdd",
+                "skew",
+                "kurt",
+                "var",
+                "cvar",
+            ]
+            # ann_ret을 ann_returns로 변경 (프론트엔드 호환성)
+            bm_metrics_df = bm_metrics_df.rename(columns={"ann_ret": "ann_returns"})
+            metrics_cols[1] = "ann_returns"
+
+            logger.info(f"Benchmark 조회 완료 (Iceberg): port_id={port_id}")
+            return {
+                "nav": nav_stack.to_json(orient="records"),
+                "metrics": bm_metrics_df[
+                    ["strategy", "ann_returns", "ann_vol", "sharpe", "mdd"]
+                ].to_json(orient="records"),
+            }
+    except Exception as e:
+        logger.warning(f"Iceberg 벤치마크 조회 실패, 실시간 계산 시도: {e}")
+
+    # 2. Iceberg에 데이터가 없으면 실시간 계산 (기존 로직)
     period = db.get_port_start_end_date(port_id=port_id)
 
     if period.empty:
@@ -116,6 +157,7 @@ async def set_benchmark(port_id: int):
     nav_stack = nav.stack().reset_index()
     nav_stack.columns = ["trade_date", "bm_name", "value"]
 
+    logger.info(f"Benchmark 계산 완료 (실시간): port_id={port_id}")
     return {
         "nav": nav_stack.to_json(orient="records"),
         "metrics": metrics.to_json(orient="records"),
@@ -174,6 +216,25 @@ async def save_strategy(request: schemas.BacktestRequest):
         db.upload_metrics(
             port_name=strategy_name, metrics=metrics[metrics.strategy == strategy_name]
         )
+
+        # 벤치마크 계산 및 저장 (성능 최적화: 저장 시 미리 계산)
+        port_id = db.TbPortfolio.query(port_name=strategy_name).first().port_id
+        start_date = nav.index.min().date()
+        end_date = nav.index.max().date()
+
+        bt_bm = Backtest(strategy_name="BM(SPY)")
+        bm_price = bt_bm.data(tickers="SPY", start_date=start_date, end_date=end_date)
+
+        if not bm_price.empty:
+            bm_weight = pd.DataFrame({"SPY": 1}, index=[nav.index.min()])
+            _, bm_nav_dict, bm_metrics = bt_bm.result(
+                price=bm_price, weight=bm_weight, end=end_date
+            )
+            bm_nav = bm_nav_dict.get("BM(SPY)")
+            if bm_nav is not None:
+                db.upload_benchmark_nav(port_id=port_id, nav=bm_nav)
+                db.upload_benchmark_metrics(port_id=port_id, metrics=bm_metrics)
+                logger.info(f"Benchmark saved for port_id={port_id}")
 
     except IntegrityError:
         raise HTTPException(status_code=400, detail="Portfolio name already exists.")
