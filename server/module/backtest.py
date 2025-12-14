@@ -5,6 +5,7 @@ from datetime import date
 from typing import List, Optional, Union
 
 import pandas as pd
+import polars as pl
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../..")))
 import db
@@ -16,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 
 class Backtest:
-
     def __init__(
         self,
         strategy_name: str = None,
@@ -32,23 +32,25 @@ class Backtest:
         self, meta_id: Optional[List[int]] = None, tickers: Optional[List[str]] = None
     ) -> dict:
         """
-        meta_id 또는 tickers로 iso_code 조회
+        meta_id 또는 tickers로 iso_code 조회 (SQLAlchemy 2.0 style)
 
         Returns:
             {"US": [meta_ids], "KR": [meta_ids], "tickers": {meta_id: ticker}}
         """
+        from sqlalchemy import select
+
         with db.session_local() as session:
-            query = session.query(
+            stmt = select(
                 db.TbMeta.meta_id,
                 db.TbMeta.ticker,
                 db.TbMeta.iso_code,
             )
             if meta_id:
-                query = query.filter(db.TbMeta.meta_id.in_(meta_id))
+                stmt = stmt.where(db.TbMeta.meta_id.in_(meta_id))
             if tickers:
-                query = query.filter(db.TbMeta.ticker.in_(tickers))
+                stmt = stmt.where(db.TbMeta.ticker.in_(tickers))
 
-            results = query.all()
+            results = session.execute(stmt).all()
 
         # iso_code별로 분류
         result = {"US": [], "KR": [], "tickers": {}}
@@ -120,11 +122,16 @@ class Backtest:
                 logger.warning("Iceberg에서 가격 데이터를 찾을 수 없습니다")
                 return pd.DataFrame()
 
-            # 병합
+            # 병합 - Polars 사용으로 성능 향상
             combined_df = pd.concat(all_data, ignore_index=True)
 
-            # pivot: trade_date를 인덱스로, ticker를 컬럼으로
-            data = combined_df.pivot(index="trade_date", columns="ticker", values="adj_close")
+            # pivot using Polars for better performance
+            pl_df = pl.from_pandas(combined_df[["trade_date", "ticker", "adj_close"]])
+            pivot_df = pl_df.pivot(on="ticker", index="trade_date", values="adj_close")
+
+            # Convert back to pandas with proper index
+            data = pivot_df.to_pandas()
+            data = data.set_index("trade_date")
             data.index = pd.to_datetime(data.index)
             data = data.sort_index()
 

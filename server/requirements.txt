@@ -65,6 +65,7 @@ pip-api==0.0.34
 pip-requirements-parser==32.0.1
 pip_audit==2.10.0
 platformdirs==4.5.0
+polars==1.19.0
 prompt_toolkit==3.0.52
 propcache==0.4.1
 protobuf==6.33.1

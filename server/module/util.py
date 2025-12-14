@@ -2,6 +2,7 @@ from datetime import date
 from typing import Optional, Tuple, Union
 
 import pandas as pd
+import polars as pl
 
 from . import metrics
 
@@ -9,6 +10,8 @@ from . import metrics
 def resample_data(price: pd.DataFrame, freq: str = "M", type: str = "head") -> pd.DataFrame:
     """
     Resample daily price data to monthly or yearly frequency.
+
+    Uses Polars internally for better performance on large datasets.
 
     Args:
         price: Daily price DataFrame (index: date, columns: tickers)
@@ -18,21 +21,55 @@ def resample_data(price: pd.DataFrame, freq: str = "M", type: str = "head") -> p
     Returns:
         Resampled DataFrame with first/last day of each period
     """
+    # Convert pandas to polars (reset index to get date as column)
+    df_reset = price.reset_index()
+    date_col = df_reset.columns[0]  # Get the date column name (could be 'index' or other)
+    pl_df = pl.from_pandas(df_reset)
+
+    # Rename date column for consistency
+    pl_df = pl_df.rename({date_col: "trade_date"})
+
+    # Ensure trade_date is Date type
+    if pl_df["trade_date"].dtype == pl.String:
+        pl_df = pl_df.with_columns(pl.col("trade_date").str.to_date())
+    elif pl_df["trade_date"].dtype == pl.Datetime:
+        pl_df = pl_df.with_columns(pl.col("trade_date").dt.date())
+
+    # Add year and month columns for grouping
+    pl_df = pl_df.with_columns(
+        [
+            pl.col("trade_date").dt.year().alias("_year"),
+            pl.col("trade_date").dt.month().alias("_month"),
+        ]
+    )
+
+    # Get first or last row per year-month group
     if type == "head":
-        res_price = price.groupby([price.index.year, price.index.month]).head(1)
+        res_df = pl_df.group_by(["_year", "_month"]).first().sort("trade_date")
     elif type == "tail":
-        res_price = price.groupby([price.index.year, price.index.month]).tail(1)
+        res_df = pl_df.group_by(["_year", "_month"]).last().sort("trade_date")
+    else:
+        raise ValueError(f"type must be 'head' or 'tail', got '{type}'")
 
+    # Handle yearly frequency
     if freq == "Y":
-        max_date_row = res_price.iloc[[-1]]  # Keep as DataFrame
+        max_date_row = res_df.tail(1)  # Keep last row
         if type == "head":
-            res_price = res_price[res_price.index.month == 1]
+            res_df = res_df.filter(pl.col("_month") == 1)
         elif type == "tail":
-            res_price = res_price[res_price.index.month == 12]
-        # Use pd.concat instead of deprecated .append()
-        res_price = pd.concat([res_price, max_date_row])
+            res_df = res_df.filter(pl.col("_month") == 12)
+        # Concat max_date_row if not already included
+        res_df = pl.concat([res_df, max_date_row]).unique(subset=["trade_date"]).sort("trade_date")
 
-    return res_price
+    # Remove helper columns and convert back to pandas
+    res_df = res_df.drop(["_year", "_month"])
+    res_pd = res_df.to_pandas()
+
+    # Restore original index structure
+    res_pd = res_pd.set_index("trade_date")
+    res_pd.index = pd.to_datetime(res_pd.index)
+
+    return res_pd
 
 
 def store_nav_results(func):
