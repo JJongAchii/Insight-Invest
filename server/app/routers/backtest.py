@@ -99,13 +99,20 @@ async def get_strategy_id_rebal(port_id: int):
 async def set_benchmark(port_id: int):
     period = db.get_port_start_end_date(port_id=port_id)
 
+    if period.empty:
+        raise HTTPException(status_code=404, detail="Portfolio NAV data not found")
+
+    start = pd.Timestamp(period.start_date.values[0]).date()
+    end = pd.Timestamp(period.end_date.values[0]).date()
+
     bt = Backtest(strategy_name="BM(SPY)")
-    price = bt.data(tickers="SPY")  # Iceberg에서 조회
+    # 기간 필터링으로 성능 개선
+    price = bt.data(tickers="SPY", start_date=start, end_date=end)
 
     w_dict = {"SPY": 1}
     weight = pd.DataFrame(w_dict, index=period.start_date)
 
-    weights, nav, metrics = bt.result(price=price, weight=weight, end=period.end_date.values[0])
+    weights, nav, metrics = bt.result(price=price, weight=weight, end=end)
     nav_stack = nav.stack().reset_index()
     nav_stack.columns = ["trade_date", "bm_name", "value"]
 

@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+from datetime import date
 from typing import List, Optional, Union
 
 import pandas as pd
@@ -65,6 +66,8 @@ class Backtest:
         meta_id: Union[int, List] = None,
         tickers: Union[str, List] = None,
         source: str = "iceberg",
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
     ) -> pd.DataFrame:
         """
         가격 데이터 조회
@@ -73,6 +76,8 @@ class Backtest:
             meta_id: 조회할 meta_id (단일 또는 리스트)
             tickers: 조회할 ticker (단일 또는 리스트)
             source: 데이터 소스 ("iceberg" 권장, "db"는 레거시)
+            start_date: 조회 시작 날짜 (선택)
+            end_date: 조회 종료 날짜 (선택)
 
         Returns:
             DataFrame with trade_date index and ticker columns, adj_close values
@@ -91,13 +96,23 @@ class Backtest:
 
             # US 데이터 조회
             if iso_info["US"]:
-                us_df = iceberg_client.read_price_data(iso_code="US", meta_ids=iso_info["US"])
+                us_df = iceberg_client.read_price_data(
+                    iso_code="US",
+                    meta_ids=iso_info["US"],
+                    start_date=start_date,
+                    end_date=end_date,
+                )
                 if not us_df.empty:
                     all_data.append(us_df)
 
             # KR 데이터 조회
             if iso_info["KR"]:
-                kr_df = iceberg_client.read_price_data(iso_code="KR", meta_ids=iso_info["KR"])
+                kr_df = iceberg_client.read_price_data(
+                    iso_code="KR",
+                    meta_ids=iso_info["KR"],
+                    start_date=start_date,
+                    end_date=end_date,
+                )
                 if not kr_df.empty:
                     all_data.append(kr_df)
 
