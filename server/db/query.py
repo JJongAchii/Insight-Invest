@@ -152,75 +152,35 @@ def get_port_summary():
         return result
 
     except Exception as e:
-        logger.warning(f"Iceberg Metrics 조회 실패, MySQL fallback: {e}")
-        # MySQL fallback
-        with session_local() as session:
-            query = (
-                session.query(
-                    TbPortfolio.port_id,
-                    TbPortfolio.port_name,
-                    TbStrategy.strategy_name,
-                    TbMetrics.ann_ret,
-                    TbMetrics.ann_vol,
-                    TbMetrics.sharpe,
-                )
-                .join(TbStrategy, TbStrategy.strategy_id == TbPortfolio.strategy_id)
-                .join(TbMetrics, TbMetrics.port_id == TbPortfolio.port_id)
-            )
-            return read_sql_query(query=query)
+        logger.error(f"Iceberg Metrics 조회 실패: {e}")
+        # Metrics 없이 반환 (빈 컬럼 추가)
+        portfolio_df["ann_ret"] = None
+        portfolio_df["ann_vol"] = None
+        portfolio_df["sharpe"] = None
+        return portfolio_df
 
 
 def get_monthly_nav():
-    """월별 NAV 조회 (Iceberg → MySQL fallback)"""
-    try:
-        from module.data_lake.iceberg_client import iceberg_client
-        from module.etl.config import TABLE_PORTFOLIO_NAV
+    """월별 NAV 조회 (Iceberg)"""
+    from module.data_lake.iceberg_client import iceberg_client
+    from module.etl.config import TABLE_PORTFOLIO_NAV
 
-        table = iceberg_client.get_table(TABLE_PORTFOLIO_NAV)
-        nav_df = table.scan(selected_fields=["port_id", "trade_date", "value"]).to_pandas()
+    table = iceberg_client.get_table(TABLE_PORTFOLIO_NAV)
+    nav_df = table.scan(selected_fields=["port_id", "trade_date", "value"]).to_pandas()
 
-        if nav_df.empty:
-            raise ValueError("No NAV data in Iceberg")
+    if nav_df.empty:
+        return pd.DataFrame(columns=["port_id", "trade_date", "value"])
 
-        # 월별 마지막 거래일 NAV 추출
-        nav_df["trade_date"] = pd.to_datetime(nav_df["trade_date"])
-        nav_df["year_month"] = nav_df["trade_date"].dt.to_period("M")
+    # 월별 마지막 거래일 NAV 추출
+    nav_df["trade_date"] = pd.to_datetime(nav_df["trade_date"])
+    nav_df["year_month"] = nav_df["trade_date"].dt.to_period("M")
 
-        # 각 포트폴리오별 월별 마지막 거래일 찾기
-        idx = nav_df.groupby(["port_id", "year_month"])["trade_date"].idxmax()
-        monthly_nav = nav_df.loc[idx, ["port_id", "trade_date", "value"]]
-        monthly_nav = monthly_nav.sort_values(["port_id", "trade_date"])
+    # 각 포트폴리오별 월별 마지막 거래일 찾기
+    idx = nav_df.groupby(["port_id", "year_month"])["trade_date"].idxmax()
+    monthly_nav = nav_df.loc[idx, ["port_id", "trade_date", "value"]]
+    monthly_nav = monthly_nav.sort_values(["port_id", "trade_date"])
 
-        return monthly_nav.reset_index(drop=True)
-
-    except Exception as e:
-        logger.warning(f"Iceberg NAV 조회 실패, MySQL fallback: {e}")
-        # MySQL fallback
-        with session_local() as session:
-            subq = (
-                session.query(
-                    TbNav.port_id,
-                    sa.func.extract("year", TbNav.trade_date).label("year"),
-                    sa.func.extract("month", TbNav.trade_date).label("month"),
-                    sa.func.max(TbNav.trade_date).label("last_trade_date"),
-                )
-                .group_by("year", "month", TbNav.port_id)
-                .subquery()
-            )
-
-            query = (
-                session.query(TbNav.port_id, TbNav.trade_date, TbNav.value)
-                .join(
-                    subq,
-                    sa.and_(
-                        subq.c.last_trade_date == TbNav.trade_date,
-                        subq.c.port_id == TbNav.port_id,
-                    ),
-                )
-                .order_by(subq.c.year, subq.c.month)
-            )
-
-            return read_sql_query(query=query)
+    return monthly_nav.reset_index(drop=True)
 
 
 def get_port_id_info(port_id: int):
@@ -242,57 +202,32 @@ def get_port_id_info(port_id: int):
         return read_sql_query(query=query)
 
 
-def get_port_id_rebal(port_id: int):
-    with session_local() as session:
-        query = (
-            session.query(
-                TbRebalance.rebal_date,
-                TbRebalance.port_id,
-                TbMeta.ticker,
-                TbMeta.name,
-                TbRebalance.weight,
-            )
-            .join(TbMeta, TbMeta.meta_id == TbRebalance.meta_id)
-            .filter(TbRebalance.port_id == port_id)
-        )
-
-        return read_sql_query(query=query)
+# NOTE: get_port_id_rebal() 제거됨 - Iceberg portfolio_reader.get_portfolio_rebalance() 사용
 
 
 def get_port_start_end_date(port_id: int):
-    """포트폴리오 시작/종료 날짜 조회 (Iceberg → MySQL fallback)"""
-    try:
-        from module.data_lake.iceberg_client import iceberg_client
-        from module.etl.config import TABLE_PORTFOLIO_NAV
-        from pyiceberg.expressions import EqualTo
+    """포트폴리오 시작/종료 날짜 조회 (Iceberg)"""
+    from module.data_lake.iceberg_client import iceberg_client
+    from module.etl.config import TABLE_PORTFOLIO_NAV
+    from pyiceberg.expressions import EqualTo
 
-        table = iceberg_client.get_table(TABLE_PORTFOLIO_NAV)
-        nav_df = table.scan(
-            row_filter=EqualTo("port_id", port_id),
-            selected_fields=["trade_date"],
-        ).to_pandas()
+    table = iceberg_client.get_table(TABLE_PORTFOLIO_NAV)
+    nav_df = table.scan(
+        row_filter=EqualTo("port_id", port_id),
+        selected_fields=["trade_date"],
+    ).to_pandas()
 
-        if not nav_df.empty:
-            nav_df["trade_date"] = pd.to_datetime(nav_df["trade_date"])
-            result = pd.DataFrame(
-                {
-                    "start_date": [nav_df["trade_date"].min()],
-                    "end_date": [nav_df["trade_date"].max()],
-                }
-            )
-            return result
+    if nav_df.empty:
+        return pd.DataFrame(columns=["start_date", "end_date"])
 
-    except Exception as e:
-        logger.warning(f"Iceberg NAV date 조회 실패, MySQL fallback: {e}")
-
-    # MySQL fallback
-    with session_local() as session:
-        query = session.query(
-            sa.func.min(TbNav.trade_date).label("start_date"),
-            sa.func.max(TbNav.trade_date).label("end_date"),
-        ).filter(TbNav.port_id == port_id)
-
-        return read_sql_query(query=query)
+    nav_df["trade_date"] = pd.to_datetime(nav_df["trade_date"])
+    result = pd.DataFrame(
+        {
+            "start_date": [nav_df["trade_date"].min()],
+            "end_date": [nav_df["trade_date"].max()],
+        }
+    )
+    return result
 
 
 def get_last_updated_price(market: str):

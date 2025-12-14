@@ -83,38 +83,10 @@ class TbUniverse(StaticBase):
     meta_id = sa.Column(sa.ForeignKey("tb_meta.meta_id"), primary_key=True)
 
 
-class TbRebalance(StaticBase):
-    """rebalancing weights of portfolio"""
-
-    __tablename__ = "tb_rebalance"
-    rebal_date = sa.Column(sa.Date, primary_key=True)
-    port_id = sa.Column(sa.ForeignKey("tb_portfolio.port_id"), primary_key=True)
-    meta_id = sa.Column(sa.ForeignKey("tb_meta.meta_id"), primary_key=True)
-    weight = sa.Column(sa.Float, nullable=False)
-
-
-class TbNav(StaticBase):
-    """net asset value of portfolio"""
-
-    __tablename__ = "tb_nav"
-    trade_date = sa.Column(sa.Date, primary_key=True)
-    port_id = sa.Column(sa.ForeignKey("tb_portfolio.port_id"), primary_key=True)
-    value = sa.Column(sa.Float, nullable=False)
-
-
-class TbMetrics(StaticBase):
-    """performance metrics of portfolio"""
-
-    __tablename__ = "tb_metrics"
-    port_id = sa.Column(sa.ForeignKey("tb_portfolio.port_id"), primary_key=True)
-    ann_ret = sa.Column(sa.Float, nullable=True)
-    ann_vol = sa.Column(sa.Float, nullable=True)
-    sharpe = sa.Column(sa.Float, nullable=True)
-    mdd = sa.Column(sa.Float, nullable=True)
-    skew = sa.Column(sa.Float, nullable=True)
-    kurt = sa.Column(sa.Float, nullable=True)
-    var = sa.Column(sa.Float, nullable=True)
-    cvar = sa.Column(sa.Float, nullable=True)
+# NOTE: TbRebalance, TbNav, TbMetrics가 Iceberg로 이관되어 삭제됨 (2025-12-14)
+# - portfolio.portfolio_rebalance
+# - portfolio.portfolio_nav
+# - portfolio.portfolio_metrics
 
 
 class TbMacro(StaticBase):

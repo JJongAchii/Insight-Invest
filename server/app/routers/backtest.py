@@ -75,30 +75,24 @@ async def get_strategy_id_info(port_id: int):
 
 @router.get("/strategy/nav/{port_id}")
 async def get_strategy_id_nav(port_id: int):
-    """포트폴리오 NAV 조회 (Iceberg → MySQL fallback)"""
+    """포트폴리오 NAV 조회 (Iceberg)"""
     try:
         nav_df = get_portfolio_nav(port_id=port_id)
-        if not nav_df.empty:
-            return nav_df.to_dict(orient="records")
+        return nav_df.to_dict(orient="records")
     except Exception as e:
-        logger.warning(f"Iceberg NAV 조회 실패, MySQL fallback: {e}")
-
-    # MySQL fallback
-    return db.TbNav.query_df(port_id=port_id).to_dict(orient="records")
+        logger.error(f"NAV 조회 실패: port_id={port_id}, error={e}", exc_info=True)
+        raise HTTPException(status_code=503, detail=f"NAV 데이터 조회 실패: {str(e)}")
 
 
 @router.get("/strategy/rebal/{port_id}")
 async def get_strategy_id_rebal(port_id: int):
-    """포트폴리오 리밸런싱 가중치 조회 (Iceberg → MySQL fallback)"""
+    """포트폴리오 리밸런싱 가중치 조회 (Iceberg)"""
     try:
         rebal_df = get_portfolio_rebalance(port_id=port_id)
-        if not rebal_df.empty:
-            return rebal_df.to_dict(orient="records")
+        return rebal_df.to_dict(orient="records")
     except Exception as e:
-        logger.warning(f"Iceberg Rebalance 조회 실패, MySQL fallback: {e}")
-
-    # MySQL fallback
-    return db.get_port_id_rebal(port_id=port_id).to_dict(orient="records")
+        logger.error(f"Rebalance 조회 실패: port_id={port_id}, error={e}", exc_info=True)
+        raise HTTPException(status_code=503, detail=f"리밸런싱 데이터 조회 실패: {str(e)}")
 
 
 @router.get("/strategy/bm/{port_id}")
