@@ -7,19 +7,31 @@ from . import metrics
 
 
 def resample_data(price: pd.DataFrame, freq: str = "M", type: str = "head") -> pd.DataFrame:
-    """resampling daily data"""
+    """
+    Resample daily price data to monthly or yearly frequency.
+
+    Args:
+        price: Daily price DataFrame (index: date, columns: tickers)
+        freq: Frequency - "M" for monthly, "Y" for yearly
+        type: "head" for first day of period, "tail" for last day
+
+    Returns:
+        Resampled DataFrame with first/last day of each period
+    """
     if type == "head":
         res_price = price.groupby([price.index.year, price.index.month]).head(1)
     elif type == "tail":
         res_price = price.groupby([price.index.year, price.index.month]).tail(1)
 
     if freq == "Y":
-        max_date_value = res_price.iloc[-1]
+        max_date_row = res_price.iloc[[-1]]  # Keep as DataFrame
         if type == "head":
             res_price = res_price[res_price.index.month == 1]
         elif type == "tail":
             res_price = res_price[res_price.index.month == 12]
-        res_price = res_price.append(max_date_value)
+        # Use pd.concat instead of deprecated .append()
+        res_price = pd.concat([res_price, max_date_row])
+
     return res_price
 
 

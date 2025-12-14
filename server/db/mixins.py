@@ -13,7 +13,7 @@ from .client import session_local
 
 Base = declarative_base()
 
-logger = logging.getLogger("sqlite")
+logger = logging.getLogger(__name__)
 
 
 def read_sql_query(query: Query, **kwargs) -> pd.DataFrame:
@@ -70,7 +70,7 @@ class Mixins(Base):
     @classmethod
     def insert(cls, records: Union[List[Dict], pd.Series, pd.DataFrame], **kwargs) -> None:
         """insert bulk"""
-        print("start insert.")
+        logger.debug(f"Starting insert into {cls.__tablename__}")
         if isinstance(records, pd.DataFrame):
             records = records.replace({np.nan: None}).to_dict("records")
         elif isinstance(records, pd.Series):
@@ -89,23 +89,22 @@ class Mixins(Base):
             with session_local() as session:
                 session.bulk_insert_mappings(cls, records)
                 session.commit()
-                print(f"insert into {cls.__tablename__}: {len(records)} records complete.")
+                logger.info(f"Inserted {len(records)} records into {cls.__tablename__}")
                 return
         session.bulk_insert_mappings(cls, records)
         session.flush()
-        print(f"insert into {cls.__tablename__}: {len(records)} records complete.")
+        logger.info(f"Inserted {len(records)} records into {cls.__tablename__}")
 
     @classmethod
     def update(cls, records: Union[Dict, List[Dict], pd.Series, pd.DataFrame], **kwargs) -> None:
-        """insert bulk"""
-
+        """update bulk"""
         if isinstance(records, pd.DataFrame):
-            records = records.replace({np.NaN: None}).to_dict("records")
+            records = records.replace({np.nan: None}).to_dict("records")
         elif isinstance(records, pd.Series):
-            records = [records.replace({np.NaN: None}).to_dict()]
+            records = [records.replace({np.nan: None}).to_dict()]
         else:
             raise TypeError(
-                "insert only takes pd.Series or pd.DataFrame," + " but {type(records)} was given."
+                "update only takes pd.Series or pd.DataFrame," + " but {type(records)} was given."
             )
         records = cls.parse_datetime(cls, records)
 
@@ -114,11 +113,11 @@ class Mixins(Base):
             with session_local() as session:
                 session.bulk_update_mappings(cls, records)
                 session.commit()
-                print(f"update into {cls.__tablename__}: {len(records)} records complete.")
+                logger.info(f"Updated {len(records)} records in {cls.__tablename__}")
                 return
         session.bulk_update_mappings(cls, records)
         session.flush()
-        print(f"update into {cls.__tablename__}: {len(records)} records complete.")
+        logger.info(f"Updated {len(records)} records in {cls.__tablename__}")
 
     @classmethod
     def from_dict(cls, data: Dict):

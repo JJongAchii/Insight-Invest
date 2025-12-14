@@ -35,7 +35,7 @@ def session_local():
     session = session_maker()
     try:
         yield session
-    except:
+    except Exception:
         session.rollback()
         raise
     finally:

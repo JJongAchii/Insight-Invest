@@ -50,6 +50,7 @@ nest-asyncio==1.6.0
 numpy==2.3.5
 packaging==25.0
 pandas==2.3.3
+polars==1.19.0
 parso==0.8.5
 peewee==3.18.3
 pexpect==4.9.0
