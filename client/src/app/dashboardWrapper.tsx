@@ -14,11 +14,13 @@ const DashboardLayout = ({children}: {children: React.ReactNode}) => {
 
   useEffect(() => {
     if (isDarkMode) {
-      document.documentElement.classList.add("dark")
+      document.documentElement.classList.remove("light");
+      document.documentElement.classList.add("dark");
     } else {
-      document.documentElement.classList.add("light")
+      document.documentElement.classList.remove("dark");
+      document.documentElement.classList.add("light");
     }
-  })
+  }, [isDarkMode]);
 
   return (
     <div className={`${isDarkMode ? "dark" : "light"} flex bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 text-gray-900 w-full min-h-screen`}>
