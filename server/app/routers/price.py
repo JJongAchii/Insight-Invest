@@ -43,6 +43,9 @@ def _calculate_metrics(prices: pd.Series) -> Dict[str, Optional[float]]:
             "mdd": None,
         }
 
+    # Ensure index is datetime for proper comparison
+    prices = prices.copy()
+    prices.index = pd.to_datetime(prices.index)
     prices = prices.sort_index()
     returns = prices.pct_change().dropna()
 
@@ -51,18 +54,18 @@ def _calculate_metrics(prices: pd.Series) -> Dict[str, Optional[float]]:
     today = prices.index[-1]
 
     # YTD return
-    ytd_start = date(today.year, 1, 1)
-    ytd_prices = prices[prices.index >= pd.Timestamp(ytd_start)]
+    ytd_start = pd.Timestamp(date(today.year, 1, 1))
+    ytd_prices = prices[prices.index >= ytd_start]
     ytd_return = (latest_price / ytd_prices.iloc[0] - 1) if len(ytd_prices) > 0 else None
 
     # 1Y return
-    one_year_ago = today - timedelta(days=365)
-    year_prices = prices[prices.index >= pd.Timestamp(one_year_ago)]
+    one_year_ago = today - pd.Timedelta(days=365)
+    year_prices = prices[prices.index >= one_year_ago]
     return_1y = (latest_price / year_prices.iloc[0] - 1) if len(year_prices) > 0 else None
 
     # 3M return
-    three_months_ago = today - timedelta(days=90)
-    three_month_prices = prices[prices.index >= pd.Timestamp(three_months_ago)]
+    three_months_ago = today - pd.Timedelta(days=90)
+    three_month_prices = prices[prices.index >= three_months_ago]
     return_3m = (
         (latest_price / three_month_prices.iloc[0] - 1) if len(three_month_prices) > 0 else None
     )
@@ -167,6 +170,139 @@ def get_sparklines(
             sparklines[str(meta_id)] = [round(x, 1) for x in normalized]
 
     return {"sparklines": sparklines}
+
+
+@router.get("/compare")
+def get_compare_data(
+    meta_ids: str = Query(..., description="Comma-separated meta_ids (max 5)"),
+    period: str = Query("1y", description="Period: 1m, 3m, 6m, 1y, all"),
+):
+    """
+    Get comparison data for multiple stocks.
+
+    Args:
+        meta_ids: Comma-separated list of meta_ids (max 5)
+        period: Time period for comparison
+
+    Returns:
+        Normalized price series and metrics for each stock
+    """
+    try:
+        meta_id_list = [int(x.strip()) for x in meta_ids.split(",") if x.strip()]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid meta_ids format")
+
+    if len(meta_id_list) > 5:
+        raise HTTPException(status_code=400, detail="Maximum 5 stocks allowed for comparison")
+
+    if not meta_id_list:
+        return {"stocks": [], "normalized_prices": []}
+
+    # Determine date range
+    end_date = date.today()
+    period_days = {
+        "1m": 30,
+        "3m": 90,
+        "6m": 180,
+        "1y": 365,
+        "all": 365 * 5,
+    }
+    start_date = end_date - timedelta(days=period_days.get(period, 365))
+
+    # Get meta info
+    meta_df = db.TbMeta.query_df()
+    meta_info = meta_df[meta_df["meta_id"].isin(meta_id_list)]
+
+    if meta_info.empty:
+        return {"stocks": [], "normalized_prices": []}
+
+    # Collect price data
+    all_prices = {}
+
+    for iso_code in meta_info["iso_code"].unique():
+        iso_meta_ids = meta_info[meta_info["iso_code"] == iso_code]["meta_id"].tolist()
+
+        price_df = iceberg_client.read_price_data(
+            iso_code=iso_code,
+            meta_ids=iso_meta_ids,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        if price_df.empty:
+            continue
+
+        for meta_id in iso_meta_ids:
+            stock_prices = price_df[price_df["meta_id"] == meta_id].sort_values("trade_date")
+            if not stock_prices.empty:
+                all_prices[meta_id] = stock_prices
+
+    # Build response
+    stocks = []
+    for meta_id in meta_id_list:
+        meta_row = meta_info[meta_info["meta_id"] == meta_id]
+        if meta_row.empty:
+            continue
+
+        stock_data = {
+            "meta_id": int(meta_id),
+            "ticker": meta_row.iloc[0]["ticker"],
+            "name": meta_row.iloc[0]["name"],
+            "sector": meta_row.iloc[0]["sector"],
+            "iso_code": meta_row.iloc[0]["iso_code"],
+        }
+
+        if meta_id in all_prices:
+            prices = all_prices[meta_id].set_index("trade_date")["adj_close"]
+            metrics = _calculate_metrics(prices)
+            stock_data["metrics"] = metrics
+        else:
+            stock_data["metrics"] = {
+                "ytd_return": None,
+                "return_1y": None,
+                "return_3m": None,
+                "volatility": None,
+                "sharpe": None,
+                "mdd": None,
+            }
+
+        stocks.append(stock_data)
+
+    # Build normalized price series (base = 100)
+    if all_prices:
+        # Find common dates
+        all_dates = set()
+        for prices_df in all_prices.values():
+            all_dates.update(prices_df["trade_date"].tolist())
+        all_dates = sorted(all_dates)
+
+        normalized_prices = []
+        for trade_date in all_dates:
+            point = {
+                "date": (
+                    trade_date.isoformat() if hasattr(trade_date, "isoformat") else str(trade_date)
+                )
+            }
+
+            for meta_id, prices_df in all_prices.items():
+                ticker = meta_info[meta_info["meta_id"] == meta_id].iloc[0]["ticker"]
+                date_prices = prices_df[prices_df["trade_date"] == trade_date]
+
+                if not date_prices.empty:
+                    # Normalize to base 100
+                    first_price = prices_df["adj_close"].iloc[0]
+                    current_price = date_prices["adj_close"].iloc[0]
+                    normalized = (current_price / first_price) * 100 if first_price > 0 else 100
+                    point[ticker] = round(normalized, 2)
+
+            normalized_prices.append(point)
+    else:
+        normalized_prices = []
+
+    return {
+        "stocks": stocks,
+        "normalized_prices": normalized_prices,
+    }
 
 
 @router.get("/{meta_id}")
@@ -311,137 +447,4 @@ def get_price_summary(meta_id: int):
             if hasattr(price_df["trade_date"].iloc[-1], "isoformat")
             else str(price_df["trade_date"].iloc[-1])
         ),
-    }
-
-
-@router.get("/compare")
-def get_compare_data(
-    meta_ids: str = Query(..., description="Comma-separated meta_ids (max 5)"),
-    period: str = Query("1y", description="Period: 1m, 3m, 6m, 1y, all"),
-):
-    """
-    Get comparison data for multiple stocks.
-
-    Args:
-        meta_ids: Comma-separated list of meta_ids (max 5)
-        period: Time period for comparison
-
-    Returns:
-        Normalized price series and metrics for each stock
-    """
-    try:
-        meta_id_list = [int(x.strip()) for x in meta_ids.split(",") if x.strip()]
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid meta_ids format")
-
-    if len(meta_id_list) > 5:
-        raise HTTPException(status_code=400, detail="Maximum 5 stocks allowed for comparison")
-
-    if not meta_id_list:
-        return {"stocks": [], "normalized_prices": []}
-
-    # Determine date range
-    end_date = date.today()
-    period_days = {
-        "1m": 30,
-        "3m": 90,
-        "6m": 180,
-        "1y": 365,
-        "all": 365 * 5,
-    }
-    start_date = end_date - timedelta(days=period_days.get(period, 365))
-
-    # Get meta info
-    meta_df = db.TbMeta.query_df()
-    meta_info = meta_df[meta_df["meta_id"].isin(meta_id_list)]
-
-    if meta_info.empty:
-        return {"stocks": [], "normalized_prices": []}
-
-    # Collect price data
-    all_prices = {}
-
-    for iso_code in meta_info["iso_code"].unique():
-        iso_meta_ids = meta_info[meta_info["iso_code"] == iso_code]["meta_id"].tolist()
-
-        price_df = iceberg_client.read_price_data(
-            iso_code=iso_code,
-            meta_ids=iso_meta_ids,
-            start_date=start_date,
-            end_date=end_date,
-        )
-
-        if price_df.empty:
-            continue
-
-        for meta_id in iso_meta_ids:
-            stock_prices = price_df[price_df["meta_id"] == meta_id].sort_values("trade_date")
-            if not stock_prices.empty:
-                all_prices[meta_id] = stock_prices
-
-    # Build response
-    stocks = []
-    for meta_id in meta_id_list:
-        meta_row = meta_info[meta_info["meta_id"] == meta_id]
-        if meta_row.empty:
-            continue
-
-        stock_data = {
-            "meta_id": int(meta_id),
-            "ticker": meta_row.iloc[0]["ticker"],
-            "name": meta_row.iloc[0]["name"],
-            "sector": meta_row.iloc[0]["sector"],
-            "iso_code": meta_row.iloc[0]["iso_code"],
-        }
-
-        if meta_id in all_prices:
-            prices = all_prices[meta_id].set_index("trade_date")["adj_close"]
-            metrics = _calculate_metrics(prices)
-            stock_data["metrics"] = metrics
-        else:
-            stock_data["metrics"] = {
-                "ytd_return": None,
-                "return_1y": None,
-                "return_3m": None,
-                "volatility": None,
-                "sharpe": None,
-                "mdd": None,
-            }
-
-        stocks.append(stock_data)
-
-    # Build normalized price series (base = 100)
-    if all_prices:
-        # Find common dates
-        all_dates = set()
-        for prices_df in all_prices.values():
-            all_dates.update(prices_df["trade_date"].tolist())
-        all_dates = sorted(all_dates)
-
-        normalized_prices = []
-        for trade_date in all_dates:
-            point = {
-                "date": (
-                    trade_date.isoformat() if hasattr(trade_date, "isoformat") else str(trade_date)
-                )
-            }
-
-            for meta_id, prices_df in all_prices.items():
-                ticker = meta_info[meta_info["meta_id"] == meta_id].iloc[0]["ticker"]
-                date_prices = prices_df[prices_df["trade_date"] == trade_date]
-
-                if not date_prices.empty:
-                    # Normalize to base 100
-                    first_price = prices_df["adj_close"].iloc[0]
-                    current_price = date_prices["adj_close"].iloc[0]
-                    normalized = (current_price / first_price) * 100 if first_price > 0 else 100
-                    point[ticker] = round(normalized, 2)
-
-            normalized_prices.append(point)
-    else:
-        normalized_prices = []
-
-    return {
-        "stocks": stocks,
-        "normalized_prices": normalized_prices,
     }
