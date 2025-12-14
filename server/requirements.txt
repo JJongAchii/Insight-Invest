@@ -35,6 +35,7 @@ frozenlist==1.8.0
 fsspec==2025.10.0
 greenlet==3.2.4
 h11==0.16.0
+httpx==0.28.1
 idna==3.11
 ipykernel==7.1.0
 ipython==9.7.0
