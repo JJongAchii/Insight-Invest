@@ -48,8 +48,8 @@ const columns: GridColDef[] = [
     headerName: "Market Cap",
     width: 130,
     type: "number",
-    valueFormatter: (value: number) => {
-      if (!value) return "—";
+    valueFormatter: (value: number | null | undefined) => {
+      if (value === null || value === undefined) return "—";
       if (value >= 1e12) return `$${(value / 1e12).toFixed(1)}T`;
       if (value >= 1e9) return `$${(value / 1e9).toFixed(1)}B`;
       if (value >= 1e6) return `$${(value / 1e6).toFixed(1)}M`;
@@ -61,8 +61,10 @@ const columns: GridColDef[] = [
     headerName: "Fee",
     width: 80,
     type: "number",
-    valueFormatter: (value: number | null) =>
-      value ? `${(value * 100).toFixed(2)}%` : "—",
+    valueFormatter: (value: number | null | undefined) =>
+      value !== null && value !== undefined
+        ? `${(value * 100).toFixed(2)}%`
+        : "—",
   },
 ];
 

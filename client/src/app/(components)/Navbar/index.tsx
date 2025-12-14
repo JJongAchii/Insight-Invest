@@ -3,7 +3,6 @@
 import { useAppDispatch, useAppSelector } from "@/app/redux";
 import { setIsDarkMode, setIsSidebarCollapsed } from "@/state";
 import { Bell, Menu, Moon, Settings, Sun, Search, User } from "lucide-react";
-import Link from "next/link";
 import React from "react";
 
 const Navbar = () => {
@@ -76,11 +75,9 @@ const Navbar = () => {
           </div>
         </div>
 
-        <Link href="/settings">
-          <button className="p-2 hover:bg-neutral-100 rounded-lg transition-colors">
-            <Settings className="text-neutral-600" size={20} />
-          </button>
-        </Link>
+        <button className="p-2 hover:bg-neutral-100 rounded-lg transition-colors">
+          <Settings className="text-neutral-600" size={20} />
+        </button>
       </div>
     </div>
   );
