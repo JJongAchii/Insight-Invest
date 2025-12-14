@@ -10,12 +10,35 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Semantic colors for financial data
-        success: "#00C805",
-        danger: "#FF5000",
-        warning: "#F7931A",
+        // Primary (Soft Lavender)
+        primary: {
+          50: "#F8F4FF",
+          100: "#EDE4FF",
+          200: "#D4C3FF",
+          300: "#B8A3FF",
+          400: "#9B7EFF",
+          500: "#7C5BFF",
+          600: "#6A48E0",
+          700: "#5B39CC",
+        },
+        // Secondary (Sky Blue)
+        secondary: {
+          50: "#F0F9FF",
+          100: "#E0F2FE",
+          200: "#BAE6FD",
+          300: "#7DD3FC",
+          400: "#38BDF8",
+          500: "#0EA5E9",
+        },
+        // Financial semantics (softer tones)
+        gains: "#10B981",
+        losses: "#F87171",
+        warning: "#F59E0B",
+        // Legacy aliases
+        success: "#10B981",
+        danger: "#F87171",
 
-        // Custom neutral scale (cleaner tones)
+        // Custom neutral scale
         neutral: {
           50: "#FAFAFA",
           100: "#F5F5F5",

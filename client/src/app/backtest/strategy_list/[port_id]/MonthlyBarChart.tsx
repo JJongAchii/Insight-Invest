@@ -62,18 +62,18 @@ const MonthlyBarChart = ({ strategyName, strategyNav, bmNav }: { strategyName: s
             {
                 label: `${strategyName}`,
                 data: monthlyReturns.map((item) => item.return),
-                backgroundColor: 'rgba(249, 115, 22, 0.7)',
-                borderColor: 'rgb(249, 115, 22)',
+                backgroundColor: 'rgba(124, 91, 255, 0.7)',
+                borderColor: '#7C5BFF',
                 borderWidth: 2,
-                borderRadius: 6,
+                borderRadius: 8,
             },
             {
                 label: 'Benchmark',
                 data: bMYearlyReturns.map((item) => item.return),
-                backgroundColor: 'rgba(168, 85, 247, 0.7)',
-                borderColor: 'rgb(168, 85, 247)',
+                backgroundColor: 'rgba(56, 189, 248, 0.7)',
+                borderColor: '#38BDF8',
                 borderWidth: 2,
-                borderRadius: 6,
+                borderRadius: 8,
             },
         ],
     };
@@ -86,23 +86,23 @@ const MonthlyBarChart = ({ strategyName, strategyNav, bmNav }: { strategyName: s
                 display: true,
                 position: 'top' as const,
                 labels: {
-                    color: 'rgb(55, 65, 81)',
+                    color: '#525252',
                     font: {
                         size: 12,
-                        weight: 'bold' as const,
+                        weight: 500 as const,
                     },
-                    padding: 12,
+                    padding: 16,
                     usePointStyle: true,
                 },
             },
             tooltip: {
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                titleColor: '#1f2937',
-                bodyColor: '#4b5563',
-                borderColor: '#e5e7eb',
+                titleColor: '#171717',
+                bodyColor: '#525252',
+                borderColor: 'rgba(124, 91, 255, 0.2)',
                 borderWidth: 1,
                 padding: 12,
-                cornerRadius: 8,
+                cornerRadius: 12,
                 callbacks: {
                     label: (context: TooltipItem<'bar'>) => `${context.dataset.label}: ${(context.raw as number).toFixed(2)}%`,
                 },
@@ -111,10 +111,10 @@ const MonthlyBarChart = ({ strategyName, strategyNav, bmNav }: { strategyName: s
         scales: {
             y: {
                 grid: {
-                    color: 'rgba(0, 0, 0, 0.05)',
+                    color: 'rgba(124, 91, 255, 0.08)',
                 },
                 ticks: {
-                    color: '#6b7280',
+                    color: '#a3a3a3',
                     font: {
                         size: 11,
                     },
@@ -122,10 +122,10 @@ const MonthlyBarChart = ({ strategyName, strategyNav, bmNav }: { strategyName: s
                 title: {
                     display: true,
                     text: 'Return (%)',
-                    color: '#6b7280',
+                    color: '#737373',
                     font: {
                         size: 12,
-                        weight: 'bold' as const,
+                        weight: 500 as const,
                     },
                 },
             },
@@ -134,7 +134,7 @@ const MonthlyBarChart = ({ strategyName, strategyNav, bmNav }: { strategyName: s
                     display: false,
                 },
                 ticks: {
-                    color: '#6b7280',
+                    color: '#a3a3a3',
                     font: {
                         size: 10,
                     },
@@ -146,17 +146,10 @@ const MonthlyBarChart = ({ strategyName, strategyNav, bmNav }: { strategyName: s
     };
 
     return (
-        <div className="card-modern">
-            <div className='flex items-center gap-3 mb-6'>
-                <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-amber-600 rounded-xl flex items-center justify-center">
-                    <span className="text-white text-xl font-bold">📅</span>
-                </div>
-                <h4 className='text-xl font-bold text-gray-800'>Monthly Returns</h4>
-            </div>
-            <div className="bg-gradient-to-br from-gray-50 to-blue-50 rounded-xl p-4">
-                <div style={{ position: 'relative', height: '350px' }}>
-                    <Bar data={monthlyData} options={options} />
-                </div>
+        <div className="card">
+            <h4 className='text-base font-semibold text-neutral-800 mb-4'>Monthly Returns</h4>
+            <div style={{ position: 'relative', height: '350px' }}>
+                <Bar data={monthlyData} options={options} />
             </div>
         </div>
     );

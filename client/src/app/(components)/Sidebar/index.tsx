@@ -45,12 +45,12 @@ const SidebarLink = ({
           flex items-center gap-3 cursor-pointer
           ${isCollapsed ? "justify-center py-3 mx-2" : "px-4 py-2.5 mx-3"}
           ${isDropdown ? "ml-10" : ""}
-          rounded-lg
-          transition-colors duration-150
+          rounded-xl
+          transition-all duration-200
           ${
             isActive
-              ? "bg-neutral-900 text-white"
-              : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
+              ? "bg-gradient-to-r from-primary-400 to-primary-500 text-white shadow-lg shadow-primary-500/25"
+              : "text-neutral-600 hover:bg-white/50 hover:text-neutral-900"
           }
         `}
       >
@@ -89,7 +89,7 @@ const Sidebar = () => {
       className={`
         fixed flex flex-col h-full z-40
         ${isSidebarCollapsed ? "w-0 md:w-16" : "w-60"}
-        bg-white border-r border-neutral-200
+        bg-white/40 backdrop-blur-xl border-r border-white/30
         transition-all duration-200 overflow-hidden
       `}
     >
@@ -98,21 +98,21 @@ const Sidebar = () => {
         className={`
           flex items-center justify-between
           ${isSidebarCollapsed ? "px-2 py-4" : "px-4 py-5"}
-          border-b border-neutral-200
+          border-b border-white/20
         `}
       >
         <Link href="/home" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-neutral-900 rounded-lg flex items-center justify-center">
+          <div className="w-8 h-8 bg-gradient-to-br from-primary-400 to-primary-600 rounded-xl flex items-center justify-center shadow-lg shadow-primary-500/25">
             <span className="text-white font-bold text-sm">II</span>
           </div>
           {!isSidebarCollapsed && (
-            <span className="font-semibold text-neutral-900">
+            <span className="font-semibold text-neutral-800">
               Insight Invest
             </span>
           )}
         </Link>
         <button
-          className="md:hidden p-1.5 hover:bg-neutral-100 rounded-lg transition-colors"
+          className="md:hidden p-1.5 hover:bg-white/50 rounded-lg transition-colors"
           onClick={toggleSidebar}
         >
           <IoMenu className="w-5 h-5 text-neutral-600" />
@@ -141,9 +141,9 @@ const Sidebar = () => {
             className={`
               flex items-center justify-between cursor-pointer
               ${isSidebarCollapsed ? "justify-center py-3 mx-2" : "px-4 py-2.5 mx-3"}
-              rounded-lg
-              text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900
-              transition-colors duration-150
+              rounded-xl
+              text-neutral-600 hover:bg-white/50 hover:text-neutral-900
+              transition-all duration-200
             `}
           >
             <div className="flex items-center gap-3">
@@ -198,7 +198,7 @@ const Sidebar = () => {
 
       {/* Footer */}
       {!isSidebarCollapsed && (
-        <div className="p-4 border-t border-neutral-200">
+        <div className="p-4 border-t border-white/20">
           <p className="text-xs text-neutral-400 text-center">
             Insight Invest &copy; 2024
           </p>

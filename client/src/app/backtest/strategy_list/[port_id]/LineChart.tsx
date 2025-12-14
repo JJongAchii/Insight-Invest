@@ -55,8 +55,8 @@ const LineChart = ({
                 label: strategyName,
                 data: strategyNav?.map((nav) => nav.value),
                 fill: true,
-                backgroundColor: "rgba(23, 23, 23, 0.05)",
-                borderColor: "#171717",
+                backgroundColor: "rgba(124, 91, 255, 0.1)",
+                borderColor: "#7C5BFF",
                 tension: 0.3,
                 pointRadius: 0,
                 pointHoverRadius: 4,
@@ -66,7 +66,7 @@ const LineChart = ({
                 label: "Benchmark",
                 data: bmNavData?.map((nav) => nav.value),
                 fill: false,
-                borderColor: "#a3a3a3",
+                borderColor: "#94A3B8",
                 tension: 0.3,
                 pointRadius: 0,
                 pointHoverRadius: 4,
@@ -93,7 +93,7 @@ const LineChart = ({
               y: {
                 display: true,
                 grid: {
-                  color: "rgba(0, 0, 0, 0.04)",
+                  color: "rgba(124, 91, 255, 0.08)",
                   lineWidth: 1,
                 },
                 ticks: {
@@ -108,7 +108,7 @@ const LineChart = ({
                 position: "top",
                 align: "end",
                 labels: {
-                  color: "#737373",
+                  color: "#525252",
                   font: { size: 12, weight: 500 },
                   padding: 16,
                   usePointStyle: true,
@@ -119,13 +119,13 @@ const LineChart = ({
               },
               tooltip: {
                 enabled: true,
-                backgroundColor: "rgba(255, 255, 255, 0.98)",
+                backgroundColor: "rgba(255, 255, 255, 0.95)",
                 titleColor: "#171717",
-                bodyColor: "#737373",
-                borderColor: "#e5e5e5",
+                bodyColor: "#525252",
+                borderColor: "rgba(124, 91, 255, 0.2)",
                 borderWidth: 1,
-                padding: 10,
-                cornerRadius: 6,
+                padding: 12,
+                cornerRadius: 12,
                 callbacks: {
                   label: (context) =>
                     `${context.dataset.label}: ${(context.raw as number).toFixed(2)}`,

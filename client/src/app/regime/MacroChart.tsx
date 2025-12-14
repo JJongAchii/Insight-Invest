@@ -94,8 +94,8 @@ const MacroChart: React.FC<MacroChartProps> = ({
               {
                 label: primaryLabel,
                 data: primaryData?.map((data) => data.value),
-                borderColor: "#171717",
-                backgroundColor: "rgba(23, 23, 23, 0.05)",
+                borderColor: "#7C5BFF",
+                backgroundColor: "rgba(124, 91, 255, 0.1)",
                 borderWidth: 2,
                 pointRadius: 0,
                 pointHoverRadius: 4,
@@ -105,8 +105,8 @@ const MacroChart: React.FC<MacroChartProps> = ({
               {
                 label: recessionLabel,
                 data: mappedRecessionData,
-                backgroundColor: "rgba(255, 80, 0, 0.1)",
-                borderColor: "rgba(255, 80, 0, 0)",
+                backgroundColor: "rgba(248, 113, 113, 0.15)",
+                borderColor: "rgba(248, 113, 113, 0)",
                 fill: true,
                 tension: 0.3,
                 yAxisID: "right-axis",
@@ -133,13 +133,13 @@ const MacroChart: React.FC<MacroChartProps> = ({
               },
               tooltip: {
                 enabled: true,
-                backgroundColor: "rgba(255, 255, 255, 0.98)",
+                backgroundColor: "rgba(255, 255, 255, 0.95)",
                 titleColor: "#171717",
-                bodyColor: "#737373",
-                borderColor: "#e5e5e5",
+                bodyColor: "#525252",
+                borderColor: "rgba(124, 91, 255, 0.2)",
                 borderWidth: 1,
-                padding: 10,
-                cornerRadius: 6,
+                padding: 12,
+                cornerRadius: 12,
                 boxPadding: 4,
                 usePointStyle: true,
                 callbacks: {
@@ -170,7 +170,7 @@ const MacroChart: React.FC<MacroChartProps> = ({
                     type: "line",
                     yMin: baseline,
                     yMax: baseline,
-                    borderColor: "#FF5000",
+                    borderColor: "#F87171",
                     borderWidth: 1.5,
                     borderDash: [4, 4],
                   },
@@ -185,8 +185,8 @@ const MacroChart: React.FC<MacroChartProps> = ({
                   drawOnChartArea: true,
                   color: (context) =>
                     context.tick.value === baseline
-                      ? "rgba(255, 80, 0, 0.2)"
-                      : "rgba(0, 0, 0, 0.04)",
+                      ? "rgba(248, 113, 113, 0.2)"
+                      : "rgba(124, 91, 255, 0.08)",
                   lineWidth: (context) =>
                     context.tick.value === baseline ? 1.5 : 1,
                 },

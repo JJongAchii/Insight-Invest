@@ -15,15 +15,21 @@ body,
   height: 100%;
   width: 100%;
   @apply text-sm;
-  @apply bg-neutral-50;
   @apply text-neutral-900;
 }
 
 @layer base {
   :root {
-    --success: #00c805;
-    --danger: #ff5000;
-    --warning: #f7931a;
+    /* New pastel color scheme */
+    --primary: #7C5BFF;
+    --primary-light: #9B7EFF;
+    --secondary: #38BDF8;
+    --gains: #10B981;
+    --losses: #F87171;
+    --warning: #F59E0B;
+    /* Legacy aliases */
+    --success: #10B981;
+    --danger: #F87171;
   }
 
   .dark {
@@ -33,72 +39,101 @@ body,
 }
 
 @layer components {
-  /* Card Variants */
+  /* ============================================
+     GLASSMORPHISM CARD VARIANTS
+     ============================================ */
   .card {
-    @apply bg-white rounded-xl border border-neutral-200 p-6;
+    @apply rounded-2xl border border-white/20 backdrop-blur-md;
+    @apply bg-white/60 p-6;
+    @apply shadow-lg shadow-black/5;
   }
 
   .card-interactive {
     @apply card cursor-pointer;
-    @apply hover:border-neutral-300 hover:bg-neutral-50/50;
-    @apply transition-colors duration-150;
+    @apply hover:bg-white/70 hover:border-white/30;
+    @apply hover:shadow-xl hover:shadow-primary-500/10;
+    @apply transition-all duration-200;
   }
 
   .card-elevated {
-    @apply bg-white rounded-xl shadow-lg border border-neutral-100 p-6;
+    @apply rounded-2xl border border-white/30 backdrop-blur-xl;
+    @apply bg-white/70 p-6;
+    @apply shadow-xl shadow-primary-500/10;
   }
 
-  /* Button Variants */
+  /* Glass card with subtle primary glow */
+  .card-glow {
+    @apply card;
+    @apply hover:shadow-xl hover:shadow-primary-500/15;
+    @apply transition-all duration-200;
+  }
+
+  /* ============================================
+     GLASSMORPHISM BUTTON VARIANTS
+     ============================================ */
   .btn-primary {
-    @apply px-4 py-2 bg-neutral-900 text-white rounded-lg font-medium;
-    @apply hover:bg-neutral-800 active:bg-neutral-950;
-    @apply transition-colors duration-150;
-    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply px-4 py-2 rounded-xl font-medium;
+    @apply bg-gradient-to-r from-primary-400 to-primary-500;
+    @apply text-white shadow-lg shadow-primary-500/25;
+    @apply hover:from-primary-500 hover:to-primary-600;
+    @apply hover:shadow-xl hover:shadow-primary-500/30;
+    @apply active:from-primary-600 active:to-primary-700;
+    @apply transition-all duration-200;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-lg;
   }
 
   .btn-secondary {
-    @apply px-4 py-2 bg-transparent text-neutral-700 rounded-lg font-medium;
-    @apply border border-neutral-300;
-    @apply hover:bg-neutral-50 hover:border-neutral-400;
-    @apply transition-colors duration-150;
+    @apply px-4 py-2 rounded-xl font-medium;
+    @apply bg-white/40 backdrop-blur-md border border-white/30;
+    @apply text-neutral-700;
+    @apply hover:bg-white/60 hover:border-white/50;
+    @apply transition-all duration-200;
     @apply disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .btn-ghost {
-    @apply px-4 py-2 bg-transparent text-neutral-600 rounded-lg font-medium;
-    @apply hover:bg-neutral-100;
-    @apply transition-colors duration-150;
+    @apply px-4 py-2 rounded-xl font-medium;
+    @apply bg-transparent text-neutral-600;
+    @apply hover:bg-white/40;
+    @apply transition-all duration-200;
   }
 
   .btn-success {
-    @apply px-4 py-2 bg-success text-white rounded-lg font-medium;
-    @apply hover:opacity-90;
-    @apply transition-opacity duration-150;
+    @apply px-4 py-2 rounded-xl font-medium;
+    @apply bg-gradient-to-r from-emerald-400 to-emerald-500;
+    @apply text-white shadow-lg shadow-emerald-500/25;
+    @apply hover:from-emerald-500 hover:to-emerald-600;
+    @apply transition-all duration-200;
     @apply disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .btn-danger {
-    @apply px-4 py-2 bg-danger text-white rounded-lg font-medium;
-    @apply hover:opacity-90;
-    @apply transition-opacity duration-150;
+    @apply px-4 py-2 rounded-xl font-medium;
+    @apply bg-gradient-to-r from-red-400 to-red-500;
+    @apply text-white shadow-lg shadow-red-500/25;
+    @apply hover:from-red-500 hover:to-red-600;
+    @apply transition-all duration-200;
     @apply disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
-  /* Input Variants */
+  /* ============================================
+     GLASSMORPHISM INPUT VARIANTS
+     ============================================ */
   .input {
-    @apply w-full px-3 py-2 bg-white rounded-lg;
-    @apply border border-neutral-300;
+    @apply w-full px-4 py-2.5 rounded-xl;
+    @apply bg-white/50 backdrop-blur-md border border-white/30;
     @apply text-neutral-900 placeholder:text-neutral-400;
-    @apply focus:outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900;
-    @apply transition-colors duration-150;
+    @apply focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-400/20;
+    @apply focus:bg-white/70;
+    @apply transition-all duration-200;
   }
 
   .input-error {
-    @apply input border-danger focus:border-danger focus:ring-danger;
+    @apply input border-losses focus:border-losses focus:ring-losses/20;
   }
 
   .input-label {
-    @apply text-sm font-medium text-neutral-700 mb-1.5 block;
+    @apply text-sm font-medium text-neutral-600 mb-1.5 block;
   }
 
   /* Section Header */
@@ -176,14 +211,20 @@ body,
   }
 }
 
-/* DataGrid Custom Styling */
+/* ============================================
+   GLASSMORPHISM DATAGRID STYLING
+   ============================================ */
 .MuiDataGrid-root {
   border: none !important;
+  background: rgba(255, 255, 255, 0.4) !important;
+  backdrop-filter: blur(8px) !important;
+  border-radius: 16px !important;
 }
 
 .MuiDataGrid-columnHeaders {
-  background-color: #fafafa !important;
-  border-bottom: 1px solid #e5e5e5 !important;
+  background: rgba(124, 91, 255, 0.08) !important;
+  border-bottom: 1px solid rgba(124, 91, 255, 0.1) !important;
+  border-radius: 16px 16px 0 0 !important;
 }
 
 .MuiDataGrid-columnHeaderTitle {
@@ -197,11 +238,11 @@ body,
 .MuiDataGrid-cell {
   font-size: 0.875rem !important;
   color: #171717 !important;
-  border-bottom: 1px solid #f5f5f5 !important;
+  border-bottom: 1px solid rgba(124, 91, 255, 0.05) !important;
 }
 
 .MuiDataGrid-row:hover {
-  background-color: #fafafa !important;
+  background: rgba(124, 91, 255, 0.05) !important;
 }
 
 .MuiCheckbox-root {
@@ -209,7 +250,29 @@ body,
 }
 
 .MuiCheckbox-root.Mui-checked {
-  color: #171717 !important;
+  color: #7C5BFF !important;
+}
+
+/* Financial value colors */
+.text-gains {
+  color: #10B981 !important;
+  font-weight: 500;
+}
+
+.text-losses {
+  color: #F87171 !important;
+  font-weight: 500;
+}
+
+/* Legacy support */
+.text-success {
+  color: #10B981 !important;
+  font-weight: 500;
+}
+
+.text-danger {
+  color: #F87171 !important;
+  font-weight: 500;
 }
 
 @media (min-width: 768px) {

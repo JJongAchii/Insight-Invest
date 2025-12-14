@@ -13,13 +13,14 @@ interface StrategyChartProps {
   navResult: string | null;
 }
 
-// Chart color palette - using neutral for primary, success/danger for gains/losses
+// Chart color palette - pastel colors for strategy differentiation
 const chartColors = [
-  "#171717", // neutral-900
-  "#737373", // neutral-500
-  "#00C805", // success
-  "#FF5000", // danger
-  "#525252", // neutral-600
+  "#7C5BFF", // Lavender (Strategy 1)
+  "#38BDF8", // Sky Blue (Strategy 2)
+  "#10B981", // Emerald (Strategy 3)
+  "#F59E0B", // Amber (Strategy 4)
+  "#EC4899", // Pink (Strategy 5)
+  "#14B8A6", // Teal (Strategy 6)
 ];
 
 const StrategyChart: React.FC<StrategyChartProps> = ({ navResult }) => {
@@ -72,10 +73,10 @@ const StrategyChart: React.FC<StrategyChartProps> = ({ navResult }) => {
       tooltip: {
         mode: "index" as const,
         intersect: false,
-        backgroundColor: "rgba(255, 255, 255, 0.98)",
+        backgroundColor: "rgba(255, 255, 255, 0.95)",
         titleColor: "#171717",
-        bodyColor: "#737373",
-        borderColor: "#e5e5e5",
+        bodyColor: "#525252",
+        borderColor: "rgba(124, 91, 255, 0.2)",
         borderWidth: 1,
         titleFont: {
           size: 12,
@@ -84,8 +85,8 @@ const StrategyChart: React.FC<StrategyChartProps> = ({ navResult }) => {
         bodyFont: {
           size: 11,
         },
-        padding: 10,
-        cornerRadius: 6,
+        padding: 12,
+        cornerRadius: 12,
         displayColors: true,
         callbacks: {
           labelColor: function (context: TooltipItem<"line">) {
@@ -116,7 +117,7 @@ const StrategyChart: React.FC<StrategyChartProps> = ({ navResult }) => {
       },
       y: {
         grid: {
-          color: "rgba(0, 0, 0, 0.04)",
+          color: "rgba(124, 91, 255, 0.08)",
           lineWidth: 1,
         },
         ticks: {

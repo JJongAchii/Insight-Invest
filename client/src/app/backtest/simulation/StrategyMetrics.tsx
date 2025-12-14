@@ -174,8 +174,8 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
             sx={{
               border: 0,
               "& .MuiDataGrid-columnHeaders": {
-                backgroundColor: "#fafafa",
-                borderBottom: "1px solid #e5e5e5",
+                backgroundColor: "rgba(124, 91, 255, 0.08)",
+                borderBottom: "1px solid rgba(124, 91, 255, 0.1)",
               },
               "& .MuiDataGrid-columnHeaderTitle": {
                 fontSize: "0.75rem",
@@ -185,17 +185,17 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
               "& .MuiDataGrid-cell": {
                 fontSize: "0.875rem",
                 color: "#171717",
-                borderBottom: "1px solid #f5f5f5",
+                borderBottom: "1px solid rgba(124, 91, 255, 0.05)",
               },
               "& .MuiDataGrid-row:hover": {
-                backgroundColor: "#fafafa",
+                backgroundColor: "rgba(124, 91, 255, 0.05)",
               },
               "& .text-success": {
-                color: "#00C805 !important",
+                color: "#10B981 !important",
                 fontWeight: 500,
               },
               "& .text-danger": {
-                color: "#FF5000 !important",
+                color: "#F87171 !important",
                 fontWeight: 500,
               },
             }}

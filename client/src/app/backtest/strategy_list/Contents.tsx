@@ -55,7 +55,7 @@ const Contents = ({
       {strategyList?.map((strategy) => (
         <div
           key={strategy.port_id}
-          className="flex bg-white p-5 rounded-xl border border-neutral-200 hover:border-neutral-300 cursor-pointer transition-colors duration-150"
+          className="flex p-5 rounded-2xl border border-white/20 bg-white/60 backdrop-blur-md hover:bg-white/70 hover:border-white/30 hover:shadow-xl hover:shadow-primary-500/10 cursor-pointer transition-all duration-200"
           onClick={() => handleGridClick(strategy.port_id)}
         >
           <div className="w-1/2 pr-4">
@@ -104,8 +104,8 @@ const Contents = ({
                       ?.filter((nav) => nav.port_id === strategy.port_id)
                       .map((nav) => nav.value),
                     fill: true,
-                    backgroundColor: "rgba(23, 23, 23, 0.05)",
-                    borderColor: "#171717",
+                    backgroundColor: "rgba(124, 91, 255, 0.1)",
+                    borderColor: "#7C5BFF",
                     borderWidth: 1.5,
                     tension: 0.3,
                     pointRadius: 0,
@@ -123,13 +123,13 @@ const Contents = ({
                   legend: { display: false },
                   tooltip: {
                     enabled: true,
-                    backgroundColor: "rgba(255, 255, 255, 0.98)",
+                    backgroundColor: "rgba(255, 255, 255, 0.95)",
                     titleColor: "#171717",
-                    bodyColor: "#737373",
-                    borderColor: "#e5e5e5",
+                    bodyColor: "#525252",
+                    borderColor: "rgba(124, 91, 255, 0.2)",
                     borderWidth: 1,
-                    padding: 8,
-                    cornerRadius: 6,
+                    padding: 10,
+                    cornerRadius: 12,
                   },
                 },
               }}
