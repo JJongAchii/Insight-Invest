@@ -1,6 +1,21 @@
-import React from 'react';
+export interface BacktestPayload {
+    strategy_name: string;
+    meta_id: string[];
+    algorithm: string | undefined;
+    startDate: string;
+    endDate: string;
+}
 
-export const BacktestFetcher = async (payload: any, setBacktestResult: any) => {
+export interface BacktestResult {
+    weights: string;
+    nav: string;
+    metrics: string;
+}
+
+export const BacktestFetcher = async (
+    payload: BacktestPayload,
+    setBacktestResult: (result: BacktestResult | null) => void
+) => {
     try {
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/backtest`, {
             method: 'POST',
@@ -14,7 +29,7 @@ export const BacktestFetcher = async (payload: any, setBacktestResult: any) => {
             throw new Error('Failed to run backtest');
         }
 
-        const result = await response.json();
+        const result: BacktestResult = await response.json();
         setBacktestResult(result);
     } catch (error) {
         console.error('Error running backtest:', error);
@@ -23,7 +38,7 @@ export const BacktestFetcher = async (payload: any, setBacktestResult: any) => {
 };
 
 
-export const SaveStrategy = async (strategyData: any) => {
+export const SaveStrategy = async (strategyData: BacktestPayload) => {
     try {
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/backtest/savestrategy`, {
             method: 'POST',

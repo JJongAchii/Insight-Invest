@@ -35,7 +35,7 @@ const calculateReturns = (data: NavData[], period: 'year' | 'month'): ReturnData
     const returnData: ReturnData[] = [];
     let previousEndValue: number | null = null;
 
-    for (const [key, { start, end }] of Object.entries(groupedData)) {
+    for (const [key, { end }] of Object.entries(groupedData)) {
         if (previousEndValue !== null) {
             const periodReturn = ((end - previousEndValue) / previousEndValue) * 100;
             returnData.push({ period: key, return: periodReturn });

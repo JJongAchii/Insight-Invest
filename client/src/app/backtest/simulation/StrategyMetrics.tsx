@@ -1,12 +1,16 @@
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import React from 'react';
-import { SaveStrategy } from './BacktestFetcher';
+import { SaveStrategy, BacktestResult, BacktestPayload } from './BacktestFetcher';
 
+interface StrategyMetricsProps {
+    backtestResult: BacktestResult | null;
+    selectedTicker: Record<string, BacktestPayload>;
+}
 
-const StrategyMetrics = ({ backtestResult, selectedTicker }: { backtestResult: any; selectedTicker: any }) => {
+const StrategyMetrics: React.FC<StrategyMetricsProps> = ({ backtestResult, selectedTicker }) => {
     const metricData = backtestResult?.metrics ? JSON.parse(backtestResult.metrics) : [];
 
-    const handleSave = (strategy: any) => {
+    const handleSave = (strategy: string) => {
         const strategyData = selectedTicker[strategy];
         SaveStrategy(strategyData);
     };

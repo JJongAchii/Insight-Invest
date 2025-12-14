@@ -4,8 +4,8 @@ import { useState } from "react";
 import MetaTable from "./MetaTable";
 
 const StockSearch = () => {
-
-  const [selectedData, setSelectedData] = useState([])
+  // Selected rows state - will be used for future bulk actions
+  const [, setSelectedData] = useState<unknown[]>([])
 
   return (
     <div className="flex flex-col gap-8 pb-36">

@@ -12,6 +12,7 @@ import {
     Tooltip,
     Legend,
     Filler,
+    TooltipItem,
 } from "chart.js";
 
 ChartJS.register(
@@ -134,10 +135,10 @@ const MacroChart: React.FC<MacroChartProps> = ({
                             boxPadding: 6,
                             usePointStyle: true,
                             callbacks: {
-                                labelColor: function(context: any) {
+                                labelColor: function(context: TooltipItem<'line'>) {
                                     return {
-                                        borderColor: context.dataset.borderColor,
-                                        backgroundColor: context.dataset.borderColor,
+                                        borderColor: context.dataset.borderColor as string,
+                                        backgroundColor: context.dataset.borderColor as string,
                                         borderWidth: 2,
                                         borderRadius: 2,
                                     };

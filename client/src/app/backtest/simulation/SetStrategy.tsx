@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { useFetchAlgorithmsQuery, useFetchTickersQuery } from "@/state/api";
-import Select, { SingleValue, MultiValue, ActionMeta } from "react-select";
+import Select, { SingleValue, MultiValue } from "react-select";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import { BacktestPayload } from "./BacktestFetcher";
 
 interface TickerData {
     iso_code: string;
@@ -21,8 +22,12 @@ interface SelectOption {
     label: string;
 }
 
-const SetStrategy = ({ onRunBacktest }: { onRunBacktest: any }) => {
-    const { data, isLoading, error } = useFetchTickersQuery({});
+interface SetStrategyProps {
+    onRunBacktest: (payload: BacktestPayload) => void;
+}
+
+const SetStrategy: React.FC<SetStrategyProps> = ({ onRunBacktest }) => {
+    const { data } = useFetchTickersQuery({});
     const { data: algorithmData } = useFetchAlgorithmsQuery({});
     const [startDate, setStartDate] = useState(new Date("2000-01-01"));
     const [endDate, setEndDate] = useState(new Date());
@@ -67,19 +72,19 @@ const SetStrategy = ({ onRunBacktest }: { onRunBacktest: any }) => {
         })) : []
     ), [algorithmData]);
 
-    const handleIsoCodeChange = (newValue: SingleValue<SelectOption>, _: ActionMeta<SelectOption>) => {
+    const handleIsoCodeChange = (newValue: SingleValue<SelectOption>) => {
         setSelectedIsoCode(newValue);
     };
 
-    const handleSecurityTypeChange = (newValue: SingleValue<SelectOption>, _: ActionMeta<SelectOption>) => {
+    const handleSecurityTypeChange = (newValue: SingleValue<SelectOption>) => {
         setSelectedSecurityType(newValue);
     };
 
-    const handleAlgorithmChange = (newValue: SingleValue<SelectOption>, _: ActionMeta<SelectOption>) => {
+    const handleAlgorithmChange = (newValue: SingleValue<SelectOption>) => {
         setSelectedAlgorithm(newValue);
     };
 
-    const handleTickersChange = (newValue: MultiValue<SelectOption>, _: ActionMeta<SelectOption>) => {
+    const handleTickersChange = (newValue: MultiValue<SelectOption>) => {
         setSelectedTickers(newValue as SelectOption[]);
     };
 

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import SetStrategy from "./SetStrategy";
 import StrategyChart from "./StrategyChart";
-import { BacktestFetcher, ClearStrategy } from "./BacktestFetcher";
+import { BacktestFetcher, ClearStrategy, BacktestPayload, BacktestResult } from "./BacktestFetcher";
 import StrategyMetrics from "./StrategyMetrics";
 import LoadingSpinner from "@/app/(components)/LoadingSpinner";
 
@@ -12,25 +12,26 @@ const Simulation = () => {
 
     const [loading, setLoading] = useState(false);
 
-    const [selectedTicker, setSelectedTicker] = useState(() => {
+    const [selectedTicker, setSelectedTicker] = useState<Record<string, BacktestPayload>>(() => {
+        if (typeof window === 'undefined') return {};
         const savedTicker = localStorage.getItem("selectedTicker");
         return savedTicker ? JSON.parse(savedTicker) : {};
     });
-    const [backtestResult, setBacktestResult] = useState(() => {
-
+    const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(() => {
+        if (typeof window === 'undefined') return null;
         const savedResult = localStorage.getItem("backtestResult");
-        return savedResult ? JSON.parse(savedResult) : [];
+        return savedResult ? JSON.parse(savedResult) : null;
     });
 
-    const handleRunBacktest = (payload: any) => {
+    const handleRunBacktest = (payload: BacktestPayload) => {
         setLoading(true);
-        BacktestFetcher(payload, (result: any) => {
+        BacktestFetcher(payload, (result: BacktestResult | null) => {
             setBacktestResult(result);
             setLoading(false)
         });
-        setSelectedTicker((prevSelectedTicker: any) => ({
+        setSelectedTicker((prevSelectedTicker) => ({
             ...prevSelectedTicker,
-            [payload.strategy_name]: payload // Use strategy_name as the key
+            [payload.strategy_name]: payload
         }));
     };
 
@@ -45,8 +46,8 @@ const Simulation = () => {
     const clearCache = () => {
         localStorage.removeItem("backtestResult");
         localStorage.removeItem("selectedTicker");
-        setBacktestResult([]); // Reset the state as well
-        setSelectedTicker({}); // Reset the state as well
+        setBacktestResult(null);
+        setSelectedTicker({});
         ClearStrategy()
     };
 

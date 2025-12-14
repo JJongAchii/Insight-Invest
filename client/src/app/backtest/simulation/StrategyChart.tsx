@@ -1,17 +1,28 @@
 import React from 'react';
 import { Line } from 'react-chartjs-2';
-import { ChartOptions } from 'chart.js';
+import { ChartOptions, TooltipItem } from 'chart.js';
 import 'chart.js/auto';
 
-const StrategyChart = ({ navResult }: { navResult: any }) => {
+interface NavData {
+    index: number[];
+    columns: string[];
+    data: number[][];
+}
 
-    const navData = navResult ? JSON.parse(navResult) : { index: [], columns: [], data: [] };
+interface StrategyChartProps {
+    navResult: string | null;
+}
 
-    const chartLabels = navData.index.map((date: any) => new Date(date).toISOString().split('T')[0]);
+const StrategyChart: React.FC<StrategyChartProps> = ({ navResult }) => {
+    const navData: NavData = navResult
+        ? JSON.parse(navResult)
+        : { index: [], columns: [], data: [] };
 
-    const datasets = navData.columns.map((column: any, index: any) => ({
+    const chartLabels = navData.index.map((date: number) => new Date(date).toISOString().split('T')[0]);
+
+    const datasets = navData.columns.map((column: string, index: number) => ({
         label: column,
-        data: navData.data.map((row: any) => row[index]),
+        data: navData.data.map((row: number[]) => row[index]),
         borderColor: [
             'rgb(99, 102, 241)',
             'rgb(168, 85, 247)',
@@ -77,10 +88,10 @@ const StrategyChart = ({ navResult }: { navResult: any }) => {
                 cornerRadius: 8,
                 displayColors: true,
                 callbacks: {
-                    labelColor: function(context: any) {
+                    labelColor: function(context: TooltipItem<'line'>) {
                         return {
-                            borderColor: context.dataset.borderColor,
-                            backgroundColor: context.dataset.borderColor,
+                            borderColor: context.dataset.borderColor as string,
+                            backgroundColor: context.dataset.borderColor as string,
                             borderWidth: 2,
                             borderRadius: 2,
                         };

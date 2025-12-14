@@ -1,7 +1,23 @@
 import { useFetchMetaDataQuery } from '@/state/api';
-import { DataGrid, GridColDef, GridToolbar } from '@mui/x-data-grid';
-import React, { useState } from 'react'
+import { DataGrid, GridColDef, GridToolbar, GridRowSelectionModel } from '@mui/x-data-grid';
+import React from 'react'
 
+interface MetaRow {
+    meta_id: number;
+    ticker: string;
+    name: string;
+    isin: string;
+    security_type: string;
+    asset_class: string | null;
+    sector: string | null;
+    iso_code: string;
+    marketcap: number;
+    fee: number | null;
+}
+
+interface MetaTableProps {
+    onSelectionChange: (selectedData: MetaRow[]) => void;
+}
 
 const columns: GridColDef[] = [
     { field: "meta_id", headerName: "ID", width: 90 },
@@ -9,21 +25,19 @@ const columns: GridColDef[] = [
     { field: "name", headerName: "NAME", width: 250 },
     { field: "isin", headerName: "ISIN CODE", width: 150 },
     { field: "security_type", headerName: "TYPE", width: 130 },
-    { field: "asset_class", headerName: "ASSET CLASS", width: 150, valueGetter: (value, row) => row.asset_class ? row.asset_class : "N/A" },
-    { field: "sector", headerName: "SECTOR", width: 180, valueGetter: (value, row) => row.sector ? row.sector : "N/A" },
+    { field: "asset_class", headerName: "ASSET CLASS", width: 150, valueGetter: (_value, row) => row.asset_class ? row.asset_class : "N/A" },
+    { field: "sector", headerName: "SECTOR", width: 180, valueGetter: (_value, row) => row.sector ? row.sector : "N/A" },
     { field: "iso_code", headerName: "ISO CODE", width: 100 },
     { field: "marketcap", headerName: "MARKET CAP", width: 150, type: "number" },
-    { field: "fee", headerName: "FEE", width: 90, type: "number", valueGetter: (value, row) => row.fee ? row.fee : "N/A" },
+    { field: "fee", headerName: "FEE", width: 90, type: "number", valueGetter: (_value, row) => row.fee ? row.fee : "N/A" },
 ]
 
-const MetaTable = ({ onSelectionChange }: { onSelectionChange: any }) => {
+const MetaTable: React.FC<MetaTableProps> = ({ onSelectionChange }) => {
 
     const { data } = useFetchMetaDataQuery({});
-    const [selectedRows, setSelectedRows] = useState([]);
 
-    const handleSelectionChange = (selectionModel: any) => {
-        const selectedData = selectionModel.map((id: any) => data.find((row: any) => row.meta_id === id));
-        setSelectedRows(selectedData);
+    const handleSelectionChange = (selectionModel: GridRowSelectionModel) => {
+        const selectedData = selectionModel.map((id) => (data as MetaRow[]).find((row) => row.meta_id === id)).filter((row): row is MetaRow => row !== undefined);
         onSelectionChange(selectedData);
     };
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { FaArrowUp, FaArrowDown } from 'react-icons/fa';
 import { Pie } from 'react-chartjs-2';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend, TooltipItem } from 'chart.js';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -31,8 +31,6 @@ const MetricSummary = ({ strategyInfo, rebalWeight, bmMetrics }: { strategyInfo:
     const excessReturn = benchmarkData
         ? parseFloat((strategyInfo.ann_ret - benchmarkData.ann_returns).toFixed(2))
         : 0;
-
-    const ReturnBgColor = (value: number) => (value >= 0 ? "bg-red-300" : "bg-blue-300");
 
     // 빈 배열 처리
     const lastDate = rebalWeight && rebalWeight.length > 0
@@ -162,7 +160,7 @@ const MetricSummary = ({ strategyInfo, rebalWeight, bmMetrics }: { strategyInfo:
                                         padding: 12,
                                         cornerRadius: 8,
                                         callbacks: {
-                                            label: function(context: any) {
+                                            label: function(context: TooltipItem<'pie'>) {
                                                 return `${context.label}: ${(context.parsed * 100).toFixed(2)}%`;
                                             }
                                         }
