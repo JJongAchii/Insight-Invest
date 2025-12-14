@@ -1,9 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { useFetchAlgorithmsQuery, useFetchTickersQuery } from "@/state/api";
+import { useFetchAlgorithmsQuery, useFetchTickersQuery, BacktestPayload } from "@/state/api";
 import Select, { SingleValue, MultiValue } from "react-select";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { BacktestPayload } from "./BacktestFetcher";
 
 interface TickerData {
     iso_code: string;

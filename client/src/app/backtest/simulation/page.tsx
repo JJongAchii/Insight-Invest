@@ -3,14 +3,20 @@
 import { useEffect, useState } from "react";
 import SetStrategy from "./SetStrategy";
 import StrategyChart from "./StrategyChart";
-import { BacktestFetcher, ClearStrategy, BacktestPayload, BacktestResult } from "./BacktestFetcher";
 import StrategyMetrics from "./StrategyMetrics";
 import LoadingSpinner from "@/app/(components)/LoadingSpinner";
+import {
+    useRunBacktestMutation,
+    useClearStrategyMutation,
+    BacktestPayload,
+    BacktestResult,
+} from "@/state/api";
 
 
 const Simulation = () => {
 
-    const [loading, setLoading] = useState(false);
+    const [runBacktest, { isLoading }] = useRunBacktestMutation();
+    const [clearStrategy] = useClearStrategyMutation();
 
     const [selectedTicker, setSelectedTicker] = useState<Record<string, BacktestPayload>>(() => {
         if (typeof window === 'undefined') return {};
@@ -23,16 +29,18 @@ const Simulation = () => {
         return savedResult ? JSON.parse(savedResult) : null;
     });
 
-    const handleRunBacktest = (payload: BacktestPayload) => {
-        setLoading(true);
-        BacktestFetcher(payload, (result: BacktestResult | null) => {
+    const handleRunBacktest = async (payload: BacktestPayload) => {
+        try {
+            const result = await runBacktest(payload).unwrap();
             setBacktestResult(result);
-            setLoading(false)
-        });
-        setSelectedTicker((prevSelectedTicker) => ({
-            ...prevSelectedTicker,
-            [payload.strategy_name]: payload
-        }));
+            setSelectedTicker((prevSelectedTicker) => ({
+                ...prevSelectedTicker,
+                [payload.strategy_name]: payload
+            }));
+        } catch (error) {
+            console.error('Error running backtest:', error);
+            setBacktestResult(null);
+        }
     };
 
     useEffect(() => {
@@ -43,17 +51,21 @@ const Simulation = () => {
         localStorage.setItem("selectedTicker", JSON.stringify(selectedTicker));
     }, [selectedTicker]);
 
-    const clearCache = () => {
+    const clearCache = async () => {
         localStorage.removeItem("backtestResult");
         localStorage.removeItem("selectedTicker");
         setBacktestResult(null);
         setSelectedTicker({});
-        ClearStrategy()
+        try {
+            await clearStrategy().unwrap();
+        } catch (error) {
+            console.error('Error clearing strategy:', error);
+        }
     };
 
     return (
         <div className="flex flex-col xl:overflow-auto gap-8 pb-36">
-            {loading && <LoadingSpinner />}
+            {isLoading && <LoadingSpinner />}
 
             {/* Page Header */}
             <div className="flex items-center justify-between mb-4">

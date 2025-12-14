@@ -1,6 +1,6 @@
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import React from 'react';
-import { SaveStrategy, BacktestResult, BacktestPayload } from './BacktestFetcher';
+import { useSaveStrategyMutation, BacktestResult, BacktestPayload } from '@/state/api';
 
 interface StrategyMetricsProps {
     backtestResult: BacktestResult | null;
@@ -8,11 +8,19 @@ interface StrategyMetricsProps {
 }
 
 const StrategyMetrics: React.FC<StrategyMetricsProps> = ({ backtestResult, selectedTicker }) => {
+    const [saveStrategy, { isLoading: isSaving }] = useSaveStrategyMutation();
     const metricData = backtestResult?.metrics ? JSON.parse(backtestResult.metrics) : [];
 
-    const handleSave = (strategy: string) => {
+    const handleSave = async (strategy: string) => {
         const strategyData = selectedTicker[strategy];
-        SaveStrategy(strategyData);
+        if (!strategyData) return;
+
+        try {
+            await saveStrategy(strategyData).unwrap();
+            console.log('Strategy saved successfully');
+        } catch (error) {
+            console.error('Error saving strategy:', error);
+        }
     };
 
     const columns: GridColDef[] = [
@@ -34,9 +42,10 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({ backtestResult, selec
             renderCell: (params) => (
                 <button
                     onClick={() => handleSave(params.row.strategy)}
-                    className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg font-semibold shadow-md hover:shadow-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 text-sm"
+                    disabled={isSaving}
+                    className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg font-semibold shadow-md hover:shadow-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                    Save
+                    {isSaving ? 'Saving...' : 'Save'}
                 </button>
             ),
         },
