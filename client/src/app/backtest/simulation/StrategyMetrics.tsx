@@ -47,8 +47,8 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
       headerAlign: "right",
       align: "right",
       type: "number",
-      valueFormatter: (value?: number) => {
-        if (value == null) return "";
+      valueFormatter: (value: unknown) => {
+        if (typeof value !== "number") return "—";
         return `${value.toFixed(2)}%`;
       },
       cellClassName: (params) =>
@@ -61,8 +61,8 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
       headerAlign: "right",
       align: "right",
       type: "number",
-      valueFormatter: (value?: number) => {
-        if (value == null) return "";
+      valueFormatter: (value: unknown) => {
+        if (typeof value !== "number") return "—";
         return `${value.toFixed(2)}%`;
       },
     },
@@ -73,8 +73,8 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
       headerAlign: "right",
       align: "right",
       type: "number",
-      valueFormatter: (value?: number) => {
-        if (value == null) return "";
+      valueFormatter: (value: unknown) => {
+        if (typeof value !== "number") return "—";
         return value.toFixed(2);
       },
     },
@@ -85,8 +85,8 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
       headerAlign: "right",
       align: "right",
       type: "number",
-      valueFormatter: (value?: number) => {
-        if (value == null) return "";
+      valueFormatter: (value: unknown) => {
+        if (typeof value !== "number") return "—";
         return `${value.toFixed(2)}%`;
       },
     },
@@ -97,8 +97,8 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
       headerAlign: "right",
       align: "right",
       type: "number",
-      valueFormatter: (value?: number) => {
-        if (value == null) return "";
+      valueFormatter: (value: unknown) => {
+        if (typeof value !== "number") return "—";
         return value.toFixed(2);
       },
     },
@@ -109,8 +109,8 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
       headerAlign: "right",
       align: "right",
       type: "number",
-      valueFormatter: (value?: number) => {
-        if (value == null) return "";
+      valueFormatter: (value: unknown) => {
+        if (typeof value !== "number") return "—";
         return value.toFixed(2);
       },
     },
@@ -121,8 +121,8 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
       headerAlign: "right",
       align: "right",
       type: "number",
-      valueFormatter: (value?: number) => {
-        if (value == null) return "";
+      valueFormatter: (value: unknown) => {
+        if (typeof value !== "number") return "—";
         return `${value.toFixed(2)}%`;
       },
     },
@@ -133,8 +133,8 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
       headerAlign: "right",
       align: "right",
       type: "number",
-      valueFormatter: (value?: number) => {
-        if (value == null) return "";
+      valueFormatter: (value: unknown) => {
+        if (typeof value !== "number") return "—";
         return `${value.toFixed(2)}%`;
       },
     },
