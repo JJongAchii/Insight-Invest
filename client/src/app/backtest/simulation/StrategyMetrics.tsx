@@ -1,104 +1,216 @@
-import { DataGrid, GridColDef } from '@mui/x-data-grid';
-import React from 'react';
-import { useSaveStrategyMutation, BacktestResult, BacktestPayload } from '@/state/api';
+import { DataGrid, GridColDef } from "@mui/x-data-grid";
+import React from "react";
+import {
+  useSaveStrategyMutation,
+  BacktestResult,
+  BacktestPayload,
+} from "@/state/api";
 
 interface StrategyMetricsProps {
-    backtestResult: BacktestResult | null;
-    selectedTicker: Record<string, BacktestPayload>;
+  backtestResult: BacktestResult | null;
+  selectedTicker: Record<string, BacktestPayload>;
 }
 
-const StrategyMetrics: React.FC<StrategyMetricsProps> = ({ backtestResult, selectedTicker }) => {
-    const [saveStrategy, { isLoading: isSaving }] = useSaveStrategyMutation();
-    const metricData = backtestResult?.metrics ? JSON.parse(backtestResult.metrics) : [];
+const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
+  backtestResult,
+  selectedTicker,
+}) => {
+  const [saveStrategy, { isLoading: isSaving }] = useSaveStrategyMutation();
+  const metricData = backtestResult?.metrics
+    ? JSON.parse(backtestResult.metrics)
+    : [];
 
-    const handleSave = async (strategy: string) => {
-        const strategyData = selectedTicker[strategy];
-        if (!strategyData) return;
+  const handleSave = async (strategy: string) => {
+    const strategyData = selectedTicker[strategy];
+    if (!strategyData) return;
 
-        try {
-            await saveStrategy(strategyData).unwrap();
-            console.log('Strategy saved successfully');
-        } catch (error) {
-            console.error('Error saving strategy:', error);
-        }
-    };
+    try {
+      await saveStrategy(strategyData).unwrap();
+      console.log("Strategy saved successfully");
+    } catch (error) {
+      console.error("Error saving strategy:", error);
+    }
+  };
 
-    const columns: GridColDef[] = [
-        { field: "strategy", headerName: "Strategy Name", width: 130, headerAlign: 'center', align: 'center' },
-        { field: "ann_returns", headerName: "Annual Returns (%)", width: 130, headerAlign: 'center', align: 'center', type: 'number', valueFormatter: (value?: number) => {if (value == null) {return '';}return `${value.toLocaleString()} %`;}, },
-        { field: "ann_volatilities", headerName: "Annual Volatility (%)", width: 130, headerAlign: 'center', align: 'center', type: 'number', valueFormatter: (value?: number) => {if (value == null) {return '';}return `${value.toLocaleString()} %`;},  },
-        { field: "sharpe_ratios", headerName: "Sharpe Ratio", width: 130, headerAlign: 'center', align: 'center', type: 'number' },
-        { field: "max_drawdowns", headerName: "Max Drawdown (%)", width: 130, headerAlign: 'center', align: 'center', type: 'number', valueFormatter: (value?: number) => {if (value == null) {return '';}return `${value.toLocaleString()} %`;},  },
-        { field: "skewness", headerName: "Skewness", width: 90, headerAlign: 'center', align: 'center', type: 'number' },
-        { field: "kurtosis", headerName: "Kurtosis", width: 90, headerAlign: 'center', align: 'center', type: 'number' },
-        { field: "value_at_risk", headerName: "VaR (%)", width: 100, headerAlign: 'center', align: 'center', type: 'number', valueFormatter: (value?: number) => {if (value == null) {return '';}return `${value.toLocaleString()} %`;},  },
-        { field: "conditional_value_at_risk", headerName: "C.VaR (%)", width: 100, headerAlign: 'center', align: 'center', type: 'number', valueFormatter: (value?: number) => {if (value == null) {return '';}return `${value.toLocaleString()} %`;},  },
-        {
-            field: "save",
-            headerName: "Save",
-            width: 100,
-            headerAlign: 'center',
-            align: 'center',
-            renderCell: (params) => (
-                <button
-                    onClick={() => handleSave(params.row.strategy)}
-                    disabled={isSaving}
-                    className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg font-semibold shadow-md hover:shadow-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    {isSaving ? 'Saving...' : 'Save'}
-                </button>
-            ),
-        },
-    ];
+  const columns: GridColDef[] = [
+    {
+      field: "strategy",
+      headerName: "Strategy",
+      width: 140,
+      headerAlign: "left",
+      align: "left",
+    },
+    {
+      field: "ann_returns",
+      headerName: "Return",
+      width: 100,
+      headerAlign: "right",
+      align: "right",
+      type: "number",
+      valueFormatter: (value?: number) => {
+        if (value == null) return "";
+        return `${value.toFixed(2)}%`;
+      },
+      cellClassName: (params) =>
+        params.value > 0 ? "text-success" : params.value < 0 ? "text-danger" : "",
+    },
+    {
+      field: "ann_volatilities",
+      headerName: "Volatility",
+      width: 100,
+      headerAlign: "right",
+      align: "right",
+      type: "number",
+      valueFormatter: (value?: number) => {
+        if (value == null) return "";
+        return `${value.toFixed(2)}%`;
+      },
+    },
+    {
+      field: "sharpe_ratios",
+      headerName: "Sharpe",
+      width: 90,
+      headerAlign: "right",
+      align: "right",
+      type: "number",
+      valueFormatter: (value?: number) => {
+        if (value == null) return "";
+        return value.toFixed(2);
+      },
+    },
+    {
+      field: "max_drawdowns",
+      headerName: "MDD",
+      width: 90,
+      headerAlign: "right",
+      align: "right",
+      type: "number",
+      valueFormatter: (value?: number) => {
+        if (value == null) return "";
+        return `${value.toFixed(2)}%`;
+      },
+    },
+    {
+      field: "skewness",
+      headerName: "Skew",
+      width: 80,
+      headerAlign: "right",
+      align: "right",
+      type: "number",
+      valueFormatter: (value?: number) => {
+        if (value == null) return "";
+        return value.toFixed(2);
+      },
+    },
+    {
+      field: "kurtosis",
+      headerName: "Kurt",
+      width: 80,
+      headerAlign: "right",
+      align: "right",
+      type: "number",
+      valueFormatter: (value?: number) => {
+        if (value == null) return "";
+        return value.toFixed(2);
+      },
+    },
+    {
+      field: "value_at_risk",
+      headerName: "VaR",
+      width: 80,
+      headerAlign: "right",
+      align: "right",
+      type: "number",
+      valueFormatter: (value?: number) => {
+        if (value == null) return "";
+        return `${value.toFixed(2)}%`;
+      },
+    },
+    {
+      field: "conditional_value_at_risk",
+      headerName: "CVaR",
+      width: 80,
+      headerAlign: "right",
+      align: "right",
+      type: "number",
+      valueFormatter: (value?: number) => {
+        if (value == null) return "";
+        return `${value.toFixed(2)}%`;
+      },
+    },
+    {
+      field: "save",
+      headerName: "",
+      width: 90,
+      headerAlign: "center",
+      align: "center",
+      sortable: false,
+      renderCell: (params) => (
+        <button
+          onClick={() => handleSave(params.row.strategy)}
+          disabled={isSaving}
+          className="btn-primary text-xs py-1.5 px-3"
+        >
+          {isSaving ? "..." : "Save"}
+        </button>
+      ),
+    },
+  ];
 
-
-    return (
-        <div className="card-modern">
-            <div className='flex items-center gap-3 mb-6'>
-                <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-red-600 rounded-xl flex items-center justify-center">
-                    <span className="text-white text-xl font-bold">📈</span>
-                </div>
-                <h3 className='text-xl font-bold text-gray-800'>
-                    Performance Metrics
-                </h3>
-            </div>
-            <div className="bg-gradient-to-br from-gray-50 to-blue-50 rounded-xl p-4" style={{ minHeight: 400 }}>
-                {backtestResult?.metrics ? (
-                    <DataGrid
-                        rows={metricData}
-                        columns={columns}
-                        getRowId={(row) => row.strategy}
-                        className="!border-0"
-                        sx={{
-                            backgroundColor: 'white',
-                            borderRadius: '12px',
-                            '& .MuiDataGrid-columnHeaders': {
-                                backgroundColor: 'rgb(241 245 249)',
-                                borderRadius: '8px 8px 0 0',
-                                fontSize: '0.875rem',
-                                fontWeight: '600',
-                                color: 'rgb(51 65 85)',
-                            },
-                            '& .MuiDataGrid-cell': {
-                                fontSize: '0.875rem',
-                                color: 'rgb(71 85 105)',
-                            },
-                            '& .MuiDataGrid-row:hover': {
-                                backgroundColor: 'rgb(239 246 255)',
-                            },
-                        }}
-                        autoHeight
-                    />
-                ) : (
-                    <div className="flex flex-col items-center justify-center py-16">
-                        <div className="text-6xl mb-4 opacity-20">📊</div>
-                        <p className="text-xl text-gray-400 font-medium">No metrics available</p>
-                        <p className="text-sm text-gray-400 mt-2">Run a backtest to see performance metrics</p>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-}
+  return (
+    <div className="card">
+      <h3 className="text-base font-semibold text-neutral-900 mb-4">
+        Performance Metrics
+      </h3>
+      <div style={{ minHeight: 200 }}>
+        {backtestResult?.metrics ? (
+          <DataGrid
+            rows={metricData}
+            columns={columns}
+            getRowId={(row) => row.strategy}
+            autoHeight
+            hideFooter
+            disableColumnMenu
+            sx={{
+              border: 0,
+              "& .MuiDataGrid-columnHeaders": {
+                backgroundColor: "#fafafa",
+                borderBottom: "1px solid #e5e5e5",
+              },
+              "& .MuiDataGrid-columnHeaderTitle": {
+                fontSize: "0.75rem",
+                fontWeight: 600,
+                color: "#525252",
+              },
+              "& .MuiDataGrid-cell": {
+                fontSize: "0.875rem",
+                color: "#171717",
+                borderBottom: "1px solid #f5f5f5",
+              },
+              "& .MuiDataGrid-row:hover": {
+                backgroundColor: "#fafafa",
+              },
+              "& .text-success": {
+                color: "#00C805 !important",
+                fontWeight: 500,
+              },
+              "& .text-danger": {
+                color: "#FF5000 !important",
+                fontWeight: 500,
+              },
+            }}
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center py-12">
+            <p className="text-neutral-400 text-sm">No metrics available</p>
+            <p className="text-neutral-400 text-xs mt-1">
+              Run a backtest to see performance metrics
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export default StrategyMetrics;

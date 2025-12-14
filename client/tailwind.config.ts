@@ -1,57 +1,4 @@
 import type { Config } from "tailwindcss";
-import { createThemes } from "tw-colors";
-import colors from "tailwindcss/colors";
-
-const baseColors = [
-  "gray",
-  "red",
-  "yellow",
-  "green",
-  "blue",
-  "indigo",
-  "purple",
-  "pink",
-];
-
-const shadeMapping = {
-  "50": "900",
-  "100": "800",
-  "200": "700",
-  "300": "600",
-  "400": "500",
-  "500": "400",
-  "600": "300",
-  "700": "200",
-  "800": "100",
-  "900": "50",
-};
-
-const generateThemeObject = (colors: any, mapping: any, invert = false) => {
-  const theme: any = {};
-  baseColors.forEach((color) => {
-    theme[color] = {};
-    Object.entries(mapping).forEach(([key, value]: any) => {
-      const shadeKey = invert ? value : key;
-      theme[color][key] = colors[color][shadeKey];
-    });
-  });
-  return theme;
-};
-
-const lightTheme = generateThemeObject(colors, shadeMapping);
-const darkTheme = generateThemeObject(colors, shadeMapping, true);
-
-const themes = {
-  light: {
-    ...lightTheme,
-    white: "#ffffff",
-  },
-  dark: {
-    ...darkTheme,
-    white: colors.gray["950"],
-    black: colors.gray["50"],
-  },
-};
 
 const config: Config = {
   darkMode: "class",
@@ -62,14 +9,49 @@ const config: Config = {
   ],
   theme: {
     extend: {
-      backgroundImage: {
-        "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
-        "gradient-conic":
-          "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
+      colors: {
+        // Semantic colors for financial data
+        success: "#00C805",
+        danger: "#FF5000",
+        warning: "#F7931A",
+
+        // Custom neutral scale (cleaner tones)
+        neutral: {
+          50: "#FAFAFA",
+          100: "#F5F5F5",
+          200: "#E5E5E5",
+          300: "#D4D4D4",
+          400: "#A3A3A3",
+          500: "#737373",
+          600: "#525252",
+          700: "#404040",
+          800: "#262626",
+          900: "#171717",
+          950: "#0A0A0A",
+        },
+      },
+      fontFamily: {
+        sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+        mono: ["SF Mono", "Fira Code", "monospace"],
+      },
+      borderRadius: {
+        xl: "12px",
+        "2xl": "16px",
+      },
+      boxShadow: {
+        sm: "0 1px 2px rgba(0, 0, 0, 0.04)",
+        DEFAULT: "0 1px 3px rgba(0, 0, 0, 0.08)",
+        md: "0 4px 6px rgba(0, 0, 0, 0.06)",
+        lg: "0 10px 15px rgba(0, 0, 0, 0.08)",
+        xl: "0 20px 25px rgba(0, 0, 0, 0.10)",
+      },
+      transitionDuration: {
+        "150": "150ms",
+        "200": "200ms",
       },
     },
   },
-  plugins: [createThemes(themes)],
+  plugins: [],
 };
 
 export default config;

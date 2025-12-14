@@ -1,32 +1,35 @@
-"use client"
+"use client";
 
-import React from 'react'
-import Searchbar from './Searchbar'
-import Contents from './Contents';
-import { useFetchStrategiesQuery, useFetchStrategyMonthlyNavQuery } from '@/state/api';
-
+import React from "react";
+import Searchbar from "./Searchbar";
+import Contents from "./Contents";
+import {
+  useFetchStrategiesQuery,
+  useFetchStrategyMonthlyNavQuery,
+} from "@/state/api";
 
 const StrategyList = () => {
-
   const { data: strategyInfo } = useFetchStrategiesQuery({});
   const { data: strategyNav } = useFetchStrategyMonthlyNavQuery({});
 
   return (
-    <div className="flex flex-col gap-8 pb-36">
+    <div className="flex flex-col gap-6 pb-16">
       {/* Page Header */}
-      <div className="mb-4">
-        <h1 className="text-4xl font-bold mb-2">
-          <span className="gradient-text">Strategy Library</span>
+      <div>
+        <h1 className="text-2xl font-semibold text-neutral-900">
+          Strategy Library
         </h1>
-        <p className="text-gray-600 text-lg">Explore and manage your saved backtest strategies</p>
+        <p className="text-sm text-neutral-500 mt-1">
+          Explore and manage your saved backtest strategies
+        </p>
       </div>
 
-      <div className="card-modern">
+      <div className="card">
         <Searchbar />
         <Contents strategyList={strategyInfo} strategyNav={strategyNav} />
       </div>
     </div>
   );
-}
+};
 
-export default StrategyList
+export default StrategyList;

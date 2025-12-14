@@ -15,70 +15,201 @@ body,
   height: 100%;
   width: 100%;
   @apply text-sm;
-  @apply bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50;
-  @apply text-gray-900;
+  @apply bg-neutral-50;
+  @apply text-neutral-900;
 }
 
 @layer base {
   :root {
-    --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    --gradient-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    --gradient-accent: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+    --success: #00c805;
+    --danger: #ff5000;
+    --warning: #f7931a;
   }
 
   .dark {
-    --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    --gradient-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    --gradient-accent: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    --bg-primary: #0d0d0d;
+    --bg-secondary: #171717;
   }
 }
 
 @layer components {
-  .card-modern {
-    @apply bg-white rounded-2xl shadow-lg p-6 transition-all duration-300;
-    @apply hover:shadow-xl hover:-translate-y-1;
+  /* Card Variants */
+  .card {
+    @apply bg-white rounded-xl border border-neutral-200 p-6;
   }
 
-  .card-gradient {
-    @apply bg-white rounded-2xl shadow-lg p-6 transition-all duration-300;
-    @apply border-2 border-transparent;
-    background-image: linear-gradient(white, white), var(--gradient-accent);
-    background-origin: border-box;
-    background-clip: padding-box, border-box;
+  .card-interactive {
+    @apply card cursor-pointer;
+    @apply hover:border-neutral-300 hover:bg-neutral-50/50;
+    @apply transition-colors duration-150;
   }
 
-  .card-gradient:hover {
-    @apply shadow-2xl -translate-y-1;
+  .card-elevated {
+    @apply bg-white rounded-xl shadow-lg border border-neutral-100 p-6;
   }
 
+  /* Button Variants */
   .btn-primary {
-    @apply px-6 py-3 rounded-xl font-semibold text-white transition-all duration-300;
-    @apply bg-gradient-to-r from-blue-500 to-indigo-600;
-    @apply hover:from-blue-600 hover:to-indigo-700;
-    @apply shadow-md hover:shadow-xl;
+    @apply px-4 py-2 bg-neutral-900 text-white rounded-lg font-medium;
+    @apply hover:bg-neutral-800 active:bg-neutral-950;
+    @apply transition-colors duration-150;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .btn-secondary {
-    @apply px-6 py-3 rounded-xl font-semibold transition-all duration-300;
-    @apply bg-white text-gray-700 border-2 border-gray-200;
-    @apply hover:border-blue-300 hover:text-blue-600;
-    @apply shadow-sm hover:shadow-md;
+    @apply px-4 py-2 bg-transparent text-neutral-700 rounded-lg font-medium;
+    @apply border border-neutral-300;
+    @apply hover:bg-neutral-50 hover:border-neutral-400;
+    @apply transition-colors duration-150;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
-  .input-modern {
-    @apply px-4 py-3 rounded-xl border-2 border-gray-200;
-    @apply focus:outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100;
-    @apply transition-all duration-200;
+  .btn-ghost {
+    @apply px-4 py-2 bg-transparent text-neutral-600 rounded-lg font-medium;
+    @apply hover:bg-neutral-100;
+    @apply transition-colors duration-150;
+  }
+
+  .btn-success {
+    @apply px-4 py-2 bg-success text-white rounded-lg font-medium;
+    @apply hover:opacity-90;
+    @apply transition-opacity duration-150;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-danger {
+    @apply px-4 py-2 bg-danger text-white rounded-lg font-medium;
+    @apply hover:opacity-90;
+    @apply transition-opacity duration-150;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Input Variants */
+  .input {
+    @apply w-full px-3 py-2 bg-white rounded-lg;
+    @apply border border-neutral-300;
+    @apply text-neutral-900 placeholder:text-neutral-400;
+    @apply focus:outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900;
+    @apply transition-colors duration-150;
+  }
+
+  .input-error {
+    @apply input border-danger focus:border-danger focus:ring-danger;
+  }
+
+  .input-label {
+    @apply text-sm font-medium text-neutral-700 mb-1.5 block;
+  }
+
+  /* Section Header */
+  .section-header {
+    @apply text-lg font-semibold text-neutral-900 mb-4;
+  }
+
+  /* Page Header */
+  .page-header {
+    @apply bg-white border-b border-neutral-200 px-6 py-4 -mx-6 -mt-6 mb-6;
+  }
+
+  .page-title {
+    @apply text-2xl font-semibold text-neutral-900;
+  }
+
+  .page-description {
+    @apply text-sm text-neutral-500 mt-0.5;
+  }
+
+  /* Metric Display */
+  .metric-value {
+    @apply text-2xl font-semibold text-neutral-900;
+  }
+
+  .metric-label {
+    @apply text-sm text-neutral-500;
+  }
+
+  .metric-positive {
+    @apply text-success font-medium;
+  }
+
+  .metric-negative {
+    @apply text-danger font-medium;
+  }
+
+  /* Table Styling */
+  .table-header {
+    @apply bg-neutral-50 text-neutral-600 text-xs font-semibold uppercase tracking-wider;
+  }
+
+  .table-row {
+    @apply border-b border-neutral-100 hover:bg-neutral-50 transition-colors;
+  }
+
+  .table-cell {
+    @apply py-3 px-4 text-neutral-900;
+  }
+
+  /* Badge */
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium;
+  }
+
+  .badge-success {
+    @apply badge bg-success/10 text-success;
+  }
+
+  .badge-danger {
+    @apply badge bg-danger/10 text-danger;
+  }
+
+  .badge-neutral {
+    @apply badge bg-neutral-100 text-neutral-600;
+  }
+
+  /* Legacy Support - Keep old class names working during transition */
+  .card-modern {
+    @apply card;
   }
 
   .gradient-text {
-    @apply bg-clip-text text-transparent;
-    background-image: var(--gradient-accent);
+    @apply text-neutral-900 font-bold;
   }
+}
+
+/* DataGrid Custom Styling */
+.MuiDataGrid-root {
+  border: none !important;
+}
+
+.MuiDataGrid-columnHeaders {
+  background-color: #fafafa !important;
+  border-bottom: 1px solid #e5e5e5 !important;
+}
+
+.MuiDataGrid-columnHeaderTitle {
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  color: #525252 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+}
+
+.MuiDataGrid-cell {
+  font-size: 0.875rem !important;
+  color: #171717 !important;
+  border-bottom: 1px solid #f5f5f5 !important;
+}
+
+.MuiDataGrid-row:hover {
+  background-color: #fafafa !important;
+}
+
+.MuiCheckbox-root {
+  color: #a3a3a3 !important;
+}
+
+.MuiCheckbox-root.Mui-checked {
+  color: #171717 !important;
 }
 
 @media (min-width: 768px) {
