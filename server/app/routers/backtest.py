@@ -54,7 +54,16 @@ async def get_strategy_id_info(port_id: int):
         return []
 
     # 성과지표 (Iceberg)
-    metrics_cols = ["ann_ret", "ann_vol", "sharpe", "mdd", "skew", "kurt", "var", "cvar"]
+    metrics_cols = [
+        "ann_ret",
+        "ann_vol",
+        "sharpe",
+        "mdd",
+        "skew",
+        "kurt",
+        "var",
+        "cvar",
+    ]
     try:
         metrics_df = get_portfolio_metrics(port_id=port_id)
         if not metrics_df.empty:
@@ -179,7 +188,11 @@ async def run_backtest(request: schemas.BacktestRequest):
 
     weights, nav, metrics = bt.result(price=price, weight=weight)
 
-    BACKTEST_RESULT[strategy_name] = {"weights": weights, "nav": nav, "metrics": metrics}
+    BACKTEST_RESULT[strategy_name] = {
+        "weights": weights,
+        "nav": nav,
+        "metrics": metrics,
+    }
 
     return {
         "weights": weights.get(strategy_name).to_json(orient="split"),
@@ -201,7 +214,7 @@ async def save_strategy(request: schemas.BacktestRequest):
     metrics = result["metrics"]
 
     # 먼저 포트폴리오가 이미 존재하는지 확인
-    existing = db.TbPortfolio.query(port_name=strategy_name).first()
+    existing = db.TbPortfolio.query_first(port_name=strategy_name)
     if existing:
         raise HTTPException(status_code=400, detail="Portfolio name already exists.")
 
@@ -218,7 +231,7 @@ async def save_strategy(request: schemas.BacktestRequest):
         )
 
         # 벤치마크 계산 및 저장 (성능 최적화: 저장 시 미리 계산)
-        port_id = db.TbPortfolio.query(port_name=strategy_name).first().port_id
+        port_id = db.TbPortfolio.query_first(port_name=strategy_name).port_id
         start_date = nav.index.min().date()
         end_date = nav.index.max().date()
 
@@ -245,7 +258,7 @@ async def save_strategy(request: schemas.BacktestRequest):
         # Iceberg 저장 실패 시 MySQL에서 포트폴리오 삭제 (rollback)
         logger.error(f"Strategy save failed, rolling back: {e}")
         try:
-            portfolio = db.TbPortfolio.query(port_name=strategy_name).first()
+            portfolio = db.TbPortfolio.query_first(port_name=strategy_name)
             if portfolio:
                 db.TbUniverse.delete(port_id=portfolio.port_id)
                 db.TbPortfolio.delete(port_id=portfolio.port_id)

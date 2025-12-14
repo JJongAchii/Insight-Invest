@@ -12,7 +12,7 @@ from db.models import TbPortfolio, TbUniverse
 
 def cleanup_orphan(port_name: str):
     """orphan 포트폴리오 삭제"""
-    portfolio = TbPortfolio.query(port_name=port_name).first()
+    portfolio = TbPortfolio.query_first(port_name=port_name)
 
     if portfolio:
         port_id = portfolio.port_id

@@ -159,6 +159,23 @@ class Mixins(Base):
         return list(session.execute(stmt).scalars().all())
 
     @classmethod
+    def query_first(cls, **kwargs) -> Optional[Any]:
+        """Query and return first matching record (SQLAlchemy 2.0 style)
+
+        Args:
+            **kwargs: Filter conditions
+
+        Returns:
+            First matching model instance or None if not found
+        """
+        session = kwargs.pop("session", None)
+        stmt = select(cls).filter_by(**kwargs).limit(1)
+        if session is None:
+            with session_local() as session:
+                return session.execute(stmt).scalars().first()
+        return session.execute(stmt).scalars().first()
+
+    @classmethod
     def query_df(cls, **kwargs) -> pd.DataFrame:
         """Query table and return as DataFrame (SQLAlchemy 2.0 style)"""
         read_kwargs = {
