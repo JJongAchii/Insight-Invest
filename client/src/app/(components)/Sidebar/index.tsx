@@ -12,6 +12,7 @@ import {
   IoBarChart,
   IoTelescope,
   IoChevronDown,
+  IoNewspaper,
 } from "react-icons/io5";
 import { HiOutlineLightBulb } from "react-icons/hi";
 import { FaRunning, FaList } from "react-icons/fa";
@@ -131,6 +132,12 @@ const Sidebar = () => {
           href="/regime"
           icon={IoTelescope}
           label="Market Regime"
+          isCollapsed={isSidebarCollapsed}
+        />
+        <SidebarLink
+          href="/news"
+          icon={IoNewspaper}
+          label="Economy News"
           isCollapsed={isSidebarCollapsed}
         />
 

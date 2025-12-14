@@ -1,5 +1,49 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 
+// Types for news operations
+export type NewsCategory =
+  | "topnews"  // Top news headlines (default)
+  | "economy"  // World economy, macro
+  | "policy"   // Central bank, Fed, interest rates
+  | "trade"    // International trade, tariffs
+  | "energy"   // Oil, gas, energy markets
+  | "tech";    // Tech industry news
+
+export type NewsRegion = "us" | "asia" | "europe" | "global" | "all";
+
+export interface NewsArticle {
+  id: string;
+  title: string;
+  summary: string | null;
+  url: string;
+  source: string;
+  published_at: string | null;
+  category: string;
+  region: string;
+  image_url: string | null;
+  sentiment: string | null;
+}
+
+export interface NewsResponse {
+  articles: NewsArticle[];
+  total_count: number;
+  cached: boolean;
+  fetched_at: string;
+}
+
+export interface NewsQueryParams {
+  category?: NewsCategory;
+  region?: NewsRegion;
+  limit?: number;
+  search_query?: string;
+}
+
+export interface NewsSource {
+  id: string;
+  name: string;
+  region: string;
+}
+
 // Types for backtest operations
 export interface BacktestPayload {
   strategy_name: string;
@@ -26,7 +70,7 @@ export interface ClearStrategyResponse {
 export const api = createApi({
   reducerPath: "api",
   baseQuery: fetchBaseQuery({ baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL }),
-  tagTypes: ["Strategy", "Portfolio"],
+  tagTypes: ["Strategy", "Portfolio", "News"],
   endpoints: (builder) => ({
     // Query endpoints
     fetchMetaData: builder.query({
@@ -68,6 +112,23 @@ export const api = createApi({
       query: () => "/regime/data",
     }),
 
+    // News endpoints
+    fetchNews: builder.query<NewsResponse, NewsQueryParams>({
+      query: (params) => ({
+        url: "/news",
+        params: {
+          category: params.category || "topnews",
+          region: params.region || "all",
+          limit: params.limit,  // Let backend decide default (10 for recent, 5 for others)
+          search_query: params.search_query,
+        },
+      }),
+      providesTags: ["News"],
+    }),
+    fetchNewsSources: builder.query<{ sources: NewsSource[] }, void>({
+      query: () => "/news/sources",
+    }),
+
     // Mutation endpoints
     runBacktest: builder.mutation<BacktestResult, BacktestPayload>({
       query: (payload) => ({
@@ -106,6 +167,10 @@ export const {
   useFetchBmByIdQuery,
   useFetchMacroInfoQuery,
   useFetchMacroDataQuery,
+  // News hooks
+  useFetchNewsQuery,
+  useLazyFetchNewsQuery,
+  useFetchNewsSourcesQuery,
   // Mutation hooks
   useRunBacktestMutation,
   useSaveStrategyMutation,

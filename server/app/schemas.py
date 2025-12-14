@@ -1,7 +1,68 @@
 from datetime import date, datetime
+from enum import Enum
 from typing import List, Optional
 
 from pydantic import BaseModel, validator
+
+# ============================================
+# News Schemas
+# ============================================
+
+
+class NewsCategory(str, Enum):
+    """News category filter options."""
+
+    TOPNEWS = "topnews"  # Top news headlines (default)
+    ECONOMY = "economy"  # World economy, macro
+    POLICY = "policy"  # Central bank, Fed, interest rates
+    TRADE = "trade"  # International trade, tariffs
+    ENERGY = "energy"  # Oil, gas, energy markets
+    TECH = "tech"  # Tech industry news
+
+
+class NewsRegion(str, Enum):
+    """News region filter options."""
+
+    US = "us"
+    ASIA = "asia"
+    EUROPE = "europe"
+    GLOBAL = "global"
+    ALL = "all"
+
+
+class NewsArticle(BaseModel):
+    """Individual news article."""
+
+    id: str
+    title: str
+    summary: Optional[str] = None
+    url: str
+    source: str
+    published_at: Optional[datetime] = None
+    category: str
+    region: str
+    image_url: Optional[str] = None
+    sentiment: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class NewsResponse(BaseModel):
+    """Response wrapper for news endpoint."""
+
+    articles: List[NewsArticle]
+    total_count: int
+    cached: bool
+    fetched_at: datetime
+
+
+class NewsSource(BaseModel):
+    """News source information."""
+
+    id: str
+    name: str
+    region: str
 
 
 class Meta(BaseModel):
