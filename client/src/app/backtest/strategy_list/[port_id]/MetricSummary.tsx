@@ -1,14 +1,4 @@
 import React from "react";
-import { Pie } from "react-chartjs-2";
-import {
-  Chart as ChartJS,
-  ArcElement,
-  Tooltip,
-  Legend,
-  TooltipItem,
-} from "chart.js";
-
-ChartJS.register(ArcElement, Tooltip, Legend);
 
 interface InfoData {
   port_name: string;
@@ -30,14 +20,16 @@ interface BmData {
   ann_returns: number;
 }
 
-// Neutral color palette for pie chart
-const pieColors = [
-  "#171717",
-  "#525252",
-  "#737373",
-  "#a3a3a3",
-  "#d4d4d4",
-  "#e5e5e5",
+// Pastel color palette for allocation bars
+const barColors = [
+  "#7C5BFF", // Lavender
+  "#38BDF8", // Sky Blue
+  "#10B981", // Emerald
+  "#F59E0B", // Amber
+  "#EC4899", // Pink
+  "#14B8A6", // Teal
+  "#8B5CF6", // Violet
+  "#F97316", // Orange
 ];
 
 const MetricSummary = ({
@@ -67,17 +59,10 @@ const MetricSummary = ({
     ? rebalWeight?.filter((item) => item.rebal_date === lastDate)
     : [];
 
-  const pieData = {
-    labels: recentRebalData?.map((data) => data.ticker),
-    datasets: [
-      {
-        label: "Weight",
-        data: recentRebalData?.map((data) => data.weight),
-        backgroundColor: pieColors,
-        borderWidth: 0,
-      },
-    ],
-  };
+  // Sort by weight descending for better visualization
+  const sortedRebalData = [...recentRebalData].sort(
+    (a, b) => b.weight - a.weight
+  );
 
   return (
     <div className="card">
@@ -91,7 +76,7 @@ const MetricSummary = ({
       </div>
 
       {/* Key Metrics Strip */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-4 bg-neutral-50 rounded-lg">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-4 bg-white/40 backdrop-blur-md rounded-xl border border-white/30">
         <div>
           <p className="text-xs text-neutral-500 mb-1">Annual Return</p>
           <p
@@ -124,76 +109,69 @@ const MetricSummary = ({
         </div>
       </div>
 
-      {/* Allocation Chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div>
-          <h4 className="text-sm font-semibold text-neutral-700 mb-4">
+      {/* Current Allocation - Horizontal Bars */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="text-sm font-semibold text-neutral-700">
             Current Allocation
           </h4>
-          <div style={{ height: "280px" }}>
-            <Pie
-              data={pieData}
-              options={{
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: "right",
-                    labels: {
-                      padding: 12,
-                      font: { size: 11 },
-                      color: "#737373",
-                      usePointStyle: true,
-                      pointStyle: "circle",
-                    },
-                  },
-                  tooltip: {
-                    backgroundColor: "rgba(255, 255, 255, 0.98)",
-                    titleColor: "#171717",
-                    bodyColor: "#737373",
-                    borderColor: "#e5e5e5",
-                    borderWidth: 1,
-                    padding: 10,
-                    cornerRadius: 6,
-                    callbacks: {
-                      label: function (context: TooltipItem<"pie">) {
-                        return `${context.label}: ${(context.parsed * 100).toFixed(1)}%`;
-                      },
-                    },
-                  },
-                },
-              }}
-            />
-          </div>
+          {lastDate && (
+            <span className="text-xs text-neutral-400">
+              as of {lastDate}
+            </span>
+          )}
         </div>
-        <div>
-          <h4 className="text-sm font-semibold text-neutral-700 mb-4">
-            Holdings
-          </h4>
-          <div className="space-y-2">
-            {recentRebalData?.map((item, index) => (
-              <div
-                key={item.ticker}
-                className="flex items-center justify-between py-2 border-b border-neutral-100 last:border-0"
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: pieColors[index % pieColors.length] }}
-                  />
-                  <div>
-                    <p className="text-sm font-medium text-neutral-900">
+
+        <div className="space-y-3">
+          {sortedRebalData?.map((item, index) => {
+            const percentage = item.weight * 100;
+            const color = barColors[index % barColors.length];
+
+            return (
+              <div key={item.ticker} className="group">
+                {/* Ticker info row */}
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: color }}
+                    />
+                    <span className="text-sm font-medium text-neutral-800">
                       {item.ticker}
-                    </p>
-                    <p className="text-xs text-neutral-500">{item.name}</p>
+                    </span>
+                    <span className="text-xs text-neutral-400 hidden sm:inline">
+                      {item.name}
+                    </span>
                   </div>
+                  <span className="text-sm font-semibold text-neutral-700">
+                    {percentage.toFixed(1)}%
+                  </span>
                 </div>
-                <span className="text-sm font-medium text-neutral-700">
-                  {(item.weight * 100).toFixed(1)}%
-                </span>
+
+                {/* Progress bar */}
+                <div className="h-2.5 bg-neutral-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500 ease-out"
+                    style={{
+                      width: `${percentage}%`,
+                      background: `linear-gradient(90deg, ${color}, ${color}dd)`,
+                    }}
+                  />
+                </div>
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
+
+        {/* Total check */}
+        {sortedRebalData.length > 0 && (
+          <div className="mt-4 pt-3 border-t border-neutral-100 flex items-center justify-between">
+            <span className="text-xs text-neutral-500">Total Allocation</span>
+            <span className="text-sm font-semibold text-neutral-700">
+              {(sortedRebalData.reduce((sum, item) => sum + item.weight, 0) * 100).toFixed(1)}%
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
