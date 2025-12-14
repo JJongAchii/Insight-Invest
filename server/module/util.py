@@ -236,16 +236,16 @@ def result_metrics(nav: pd.DataFrame) -> pd.Series:
     value_at_risk = metrics.value_at_risk(nav)
     conditional_value_at_risk = metrics.conditional_value_at_risk(nav)
 
-    # Prepare the data as a list
+    # Prepare the data as a dict with numeric values (formatting done on frontend)
     data = {
-        "ann_returns": f"{ann_returns.values[0] * 100:.2f}",
-        "ann_volatilities": f"{ann_volatilities.values[0] * 100:.2f}",
-        "sharpe_ratios": f"{sharpe_ratios.values[0]:.2f}",
-        "max_drawdowns": f"{max_drawdowns.values[0] * 100:.2f}",
-        "skewness": f"{skewness.values[0]:.2f}",
-        "kurtosis": f"{kurtosis.values[0]:.2f}",
-        "value_at_risk": f"{value_at_risk.values[0] * 100:.2f}",
-        "conditional_value_at_risk": f"{conditional_value_at_risk.values[0] * 100:.2f}",
+        "ann_returns": round(ann_returns.values[0] * 100, 2),
+        "ann_volatilities": round(ann_volatilities.values[0] * 100, 2),
+        "sharpe_ratios": round(sharpe_ratios.values[0], 2),
+        "max_drawdowns": round(max_drawdowns.values[0] * 100, 2),
+        "skewness": round(skewness.values[0], 2),
+        "kurtosis": round(kurtosis.values[0], 2),
+        "value_at_risk": round(value_at_risk.values[0] * 100, 2),
+        "conditional_value_at_risk": round(conditional_value_at_risk.values[0] * 100, 2),
     }
 
     # Convert to Series
