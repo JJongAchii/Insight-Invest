@@ -21,13 +21,15 @@ interface RebalData {
 }
 
 interface BmData {
+    strategy: string;
     ann_returns: number;
 }
 
 const MetricSummary = ({ strategyInfo, rebalWeight, bmMetrics }: { strategyInfo: InfoData; rebalWeight: RebalData[]; bmMetrics: string; }) => {
     const bmData: BmData[] = bmMetrics ? JSON.parse(bmMetrics) : [];
-    const excessReturn = bmData.length > 0
-        ? parseFloat((strategyInfo.ann_ret - bmData[0].ann_returns).toFixed(2))
+    const benchmarkData = bmData.find(d => d.strategy === 'BM(SPY)');
+    const excessReturn = benchmarkData
+        ? parseFloat((strategyInfo.ann_ret - benchmarkData.ann_returns).toFixed(2))
         : 0;
 
     const ReturnBgColor = (value: number) => (value >= 0 ? "bg-red-300" : "bg-blue-300");
