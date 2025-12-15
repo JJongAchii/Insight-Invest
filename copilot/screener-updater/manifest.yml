@@ -1,0 +1,52 @@
+# The manifest for the "screener-updater" job.
+# Read the full specification for the "Scheduled Job" type at:
+#  https://aws.github.io/copilot-cli/docs/manifest/scheduled-job/
+
+# Your job name will be used in naming your resources like log groups, ECS Tasks, etc.
+name: screener-updater
+type: Scheduled Job
+
+# Trigger for your task.
+on:
+  # Run daily after price updates complete (US: 09:00 KST, KR: 21:00 KST)
+  # 10:00 UTC = 19:00 KST - run after both US and KR updates
+  schedule: "0 10 * * TUE-SAT"
+retries: 2
+timeout: 30m  # Screener calculation is faster than ETL
+
+# Configuration for your container and task.
+image:
+  build: server/Dockerfile
+
+# Override the CMD from Dockerfile
+command: ["python", "run_scheduled_job.py", "--job", "screener"]
+
+cpu: 1024
+memory: 2048  # Iceberg full scan needs more memory
+
+# Enable command execution for debugging
+exec: true
+
+# Environment variables
+variables:
+  ENVIRONMENT: production
+  TZ: Asia/Seoul
+  LOG_LEVEL: INFO
+
+# Secrets from AWS Systems Manager Parameter Store
+secrets:
+  DATABASE_URL: /copilot/${COPILOT_APPLICATION_NAME}/${COPILOT_ENVIRONMENT_NAME}/secrets/DATABASE_URL
+
+# Network configuration (same VPC as API service)
+network:
+  vpc:
+    placement: public
+
+# Cost optimization: Use Spot instances (70% cheaper)
+platform: linux/x86_64
+capacityProviders:
+  - FARGATE_SPOT
+
+# Logging configuration (cost-optimized)
+logging:
+  retention: 7
