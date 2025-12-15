@@ -278,6 +278,10 @@ class ScreenerRequest(BaseModel):
     pct_from_high_min: Optional[float] = Field(None, description="Min % from 52-week high")
     pct_from_high_max: Optional[float] = Field(None, description="Max % from 52-week high")
 
+    # Market cap filters (in USD, e.g., 1000000000 = $1B)
+    marketcap_min: Optional[int] = Field(None, description="Min market cap (USD)")
+    marketcap_max: Optional[int] = Field(None, description="Max market cap (USD)")
+
     # Sorting and pagination
     sort_by: ScreenerSortField = Field(ScreenerSortField.RETURN_3M, description="Sort field")
     ascending: bool = Field(False, description="Sort ascending (False = high to low)")
@@ -292,6 +296,7 @@ class ScreenerStock(BaseModel):
     name: Optional[str] = None
     sector: Optional[str] = None
     iso_code: Optional[str] = None
+    marketcap: Optional[int] = None
     current_price: float
     return_1m: float
     return_3m: float

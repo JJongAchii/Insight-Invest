@@ -41,6 +41,10 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ onScan, isLoading }) => {
   const [pctFromHighMin, setPctFromHighMin] = useState<string>("");
   const [pctFromHighMax, setPctFromHighMax] = useState<string>("");
 
+  // Market cap filter (in billions USD)
+  const [marketcapMin, setMarketcapMin] = useState<string>("");
+  const [marketcapMax, setMarketcapMax] = useState<string>("");
+
   // Sort
   const [sortBy, setSortBy] = useState<ScreenerSortField>("return_3m");
   const [ascending, setAscending] = useState(false);
@@ -57,6 +61,9 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ onScan, isLoading }) => {
       mdd_max: mddMax ? parseFloat(mddMax) : undefined,
       pct_from_high_min: pctFromHighMin ? parseFloat(pctFromHighMin) : undefined,
       pct_from_high_max: pctFromHighMax ? parseFloat(pctFromHighMax) : undefined,
+      // Convert billions to actual number (e.g., 10B -> 10,000,000,000)
+      marketcap_min: marketcapMin ? parseFloat(marketcapMin) * 1e9 : undefined,
+      marketcap_max: marketcapMax ? parseFloat(marketcapMax) * 1e9 : undefined,
       sort_by: sortBy,
       ascending,
       limit: 100,
@@ -75,6 +82,8 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ onScan, isLoading }) => {
     setMddMax("");
     setPctFromHighMin("");
     setPctFromHighMax("");
+    setMarketcapMin("");
+    setMarketcapMax("");
     setSortBy("return_3m");
     setAscending(false);
   };
@@ -238,6 +247,35 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ onScan, isLoading }) => {
                 value={pctFromHighMax}
                 onChange={(e) => setPctFromHighMax(e.target.value)}
                 placeholder="0"
+                className="input"
+              />
+            </div>
+            <div className="hidden md:block"></div>
+            <div className="hidden md:block"></div>
+          </div>
+        </div>
+
+        {/* Row 5: Market Cap Filters */}
+        <div>
+          <p className="text-sm font-medium text-neutral-700 mb-3">Market Cap (Billions USD)</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <label className="input-label">Min Market Cap</label>
+              <input
+                type="number"
+                value={marketcapMin}
+                onChange={(e) => setMarketcapMin(e.target.value)}
+                placeholder="10"
+                className="input"
+              />
+            </div>
+            <div>
+              <label className="input-label">Max Market Cap</label>
+              <input
+                type="number"
+                value={marketcapMax}
+                onChange={(e) => setMarketcapMax(e.target.value)}
+                placeholder="1000"
                 className="input"
               />
             </div>

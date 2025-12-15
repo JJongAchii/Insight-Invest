@@ -199,6 +199,8 @@ export interface ScreenerPayload {
   current_drawdown_max?: number;
   pct_from_high_min?: number;
   pct_from_high_max?: number;
+  marketcap_min?: number;
+  marketcap_max?: number;
   sort_by?: ScreenerSortField;
   ascending?: boolean;
   limit?: number;
@@ -210,6 +212,7 @@ export interface ScreenerStock {
   name: string | null;
   sector: string | null;
   iso_code: string | null;
+  marketcap: number | null;
   current_price: number;
   return_1m: number;
   return_3m: number;

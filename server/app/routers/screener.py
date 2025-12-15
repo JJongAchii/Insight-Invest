@@ -56,6 +56,7 @@ def _query_indicators(
                 db.TbMeta.name,
                 db.TbMeta.sector,
                 db.TbMeta.iso_code,
+                db.TbMeta.marketcap,
             )
             .join(db.TbMeta, db.TbScreenerIndicators.meta_id == db.TbMeta.meta_id)
             .where(db.TbMeta.iso_code == iso_code)
@@ -116,6 +117,12 @@ def _query_indicators(
                     db.TbScreenerIndicators.pct_from_high <= criteria.pct_from_high_max / 100
                 )
 
+            # Market cap filters
+            if criteria.marketcap_min is not None:
+                filters.append(db.TbMeta.marketcap >= criteria.marketcap_min)
+            if criteria.marketcap_max is not None:
+                filters.append(db.TbMeta.marketcap <= criteria.marketcap_max)
+
             if filters:
                 stmt = stmt.where(and_(*filters))
 
@@ -152,6 +159,7 @@ def _query_indicators(
                     "name": row.name or "",
                     "sector": row.sector or "",
                     "iso_code": row.iso_code,
+                    "marketcap": row.marketcap,
                     "current_price": round(ind.current_price, 2) if ind.current_price else 0,
                     "return_1m": round(ind.return_1m * 100, 2) if ind.return_1m else 0,
                     "return_3m": round(ind.return_3m * 100, 2) if ind.return_3m else 0,
@@ -197,6 +205,7 @@ def _query_highs_lows(iso_code: str, threshold: float = 5.0) -> Tuple[List[Dict]
                 db.TbMeta.name,
                 db.TbMeta.sector,
                 db.TbMeta.iso_code,
+                db.TbMeta.marketcap,
             )
             .join(db.TbMeta, db.TbScreenerIndicators.meta_id == db.TbMeta.meta_id)
             .where(
@@ -218,6 +227,7 @@ def _query_highs_lows(iso_code: str, threshold: float = 5.0) -> Tuple[List[Dict]
                 db.TbMeta.name,
                 db.TbMeta.sector,
                 db.TbMeta.iso_code,
+                db.TbMeta.marketcap,
             )
             .join(db.TbMeta, db.TbScreenerIndicators.meta_id == db.TbMeta.meta_id)
             .where(
@@ -239,6 +249,7 @@ def _query_highs_lows(iso_code: str, threshold: float = 5.0) -> Tuple[List[Dict]
                 "name": row.name or "",
                 "sector": row.sector or "",
                 "iso_code": row.iso_code,
+                "marketcap": row.marketcap,
                 "current_price": round(ind.current_price, 2) if ind.current_price else 0,
                 "return_1m": round(ind.return_1m * 100, 2) if ind.return_1m else 0,
                 "return_3m": round(ind.return_3m * 100, 2) if ind.return_3m else 0,
@@ -339,6 +350,7 @@ async def get_stock_indicators(meta_id: int):
                     db.TbMeta.name,
                     db.TbMeta.sector,
                     db.TbMeta.iso_code,
+                    db.TbMeta.marketcap,
                 )
                 .join(db.TbMeta, db.TbScreenerIndicators.meta_id == db.TbMeta.meta_id)
                 .where(db.TbScreenerIndicators.meta_id == meta_id)
@@ -353,6 +365,7 @@ async def get_stock_indicators(meta_id: int):
                 name=row.name or "",
                 sector=row.sector or "",
                 iso_code=row.iso_code,
+                marketcap=row.marketcap,
                 current_price=round(ind.current_price, 2) if ind.current_price else 0,
                 return_1m=round(ind.return_1m * 100, 2) if ind.return_1m else 0,
                 return_3m=round(ind.return_3m * 100, 2) if ind.return_3m else 0,
@@ -380,6 +393,7 @@ async def get_stock_indicators(meta_id: int):
                 db.TbMeta.name,
                 db.TbMeta.sector,
                 db.TbMeta.iso_code,
+                db.TbMeta.marketcap,
             ).where(db.TbMeta.meta_id == meta_id)
             result = session.execute(stmt).first()
 
@@ -392,6 +406,7 @@ async def get_stock_indicators(meta_id: int):
                 "name": result.name or "",
                 "sector": result.sector or "",
                 "iso_code": result.iso_code,
+                "marketcap": result.marketcap,
             }
         }
 
