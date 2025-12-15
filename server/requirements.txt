@@ -116,4 +116,4 @@ websockets==15.0.1
 wrapt==1.17.3
 yarl==1.22.0
 yfinance==0.2.66
-scipy==1.14.1
+scipy==1.15.0
