@@ -10,6 +10,7 @@ Provides:
 import logging
 import os
 import sys
+from datetime import date, timedelta
 from typing import Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException, Query
@@ -47,6 +48,10 @@ def _query_indicators(
     Returns:
         Tuple of (total_count, results)
     """
+    # Exclude stocks with no recent price data (likely delisted or suspended)
+    # 10 calendar days ≈ 7 trading days, accounts for weekends and holidays
+    cutoff_date = date.today() - timedelta(days=10)
+
     with db.session_local() as session:
         # Build base query with join to TbMeta
         stmt = (
@@ -59,7 +64,12 @@ def _query_indicators(
                 db.TbMeta.marketcap,
             )
             .join(db.TbMeta, db.TbScreenerIndicators.meta_id == db.TbMeta.meta_id)
-            .where(db.TbMeta.iso_code == iso_code)
+            .where(
+                and_(
+                    db.TbMeta.iso_code == iso_code,
+                    db.TbMeta.max_date >= cutoff_date,  # Filter out delisted stocks
+                )
+            )
         )
 
         # Apply filters if criteria provided
@@ -126,11 +136,16 @@ def _query_indicators(
             if filters:
                 stmt = stmt.where(and_(*filters))
 
-        # Get total count (before limit)
+        # Get total count (before limit) - also filter by max_date
         count_stmt = (
             select(db.TbScreenerIndicators.meta_id)
             .join(db.TbMeta, db.TbScreenerIndicators.meta_id == db.TbMeta.meta_id)
-            .where(db.TbMeta.iso_code == iso_code)
+            .where(
+                and_(
+                    db.TbMeta.iso_code == iso_code,
+                    db.TbMeta.max_date >= cutoff_date,
+                )
+            )
         )
         total_count = len(session.execute(count_stmt).all())
 
@@ -196,6 +211,9 @@ def _query_highs_lows(iso_code: str, threshold: float = 5.0) -> Tuple[List[Dict]
     """
     threshold_decimal = threshold / 100
 
+    # Exclude stocks with no recent price data (likely delisted or suspended)
+    cutoff_date = date.today() - timedelta(days=10)
+
     with db.session_local() as session:
         # Query for highs (pct_from_high >= -threshold)
         highs_stmt = (
@@ -211,6 +229,7 @@ def _query_highs_lows(iso_code: str, threshold: float = 5.0) -> Tuple[List[Dict]
             .where(
                 and_(
                     db.TbMeta.iso_code == iso_code,
+                    db.TbMeta.max_date >= cutoff_date,  # Filter out delisted stocks
                     db.TbScreenerIndicators.pct_from_high >= -threshold_decimal,
                     db.TbScreenerIndicators.pct_from_high.isnot(None),
                 )
@@ -233,6 +252,7 @@ def _query_highs_lows(iso_code: str, threshold: float = 5.0) -> Tuple[List[Dict]
             .where(
                 and_(
                     db.TbMeta.iso_code == iso_code,
+                    db.TbMeta.max_date >= cutoff_date,  # Filter out delisted stocks
                     db.TbScreenerIndicators.pct_from_low <= threshold_decimal,
                     db.TbScreenerIndicators.pct_from_low.isnot(None),
                 )
