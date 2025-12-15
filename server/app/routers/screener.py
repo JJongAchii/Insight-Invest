@@ -112,7 +112,16 @@ async def scan_stocks(request: schemas.ScreenerRequest):
 
     Returns filtered and sorted list of stocks with their indicators.
     Also returns lists of stocks near 52-week highs and lows.
+
+    Note: iso_code is required to prevent timeout from processing too many stocks.
     """
+    # Require iso_code to prevent timeout
+    if not request.iso_code:
+        raise HTTPException(
+            status_code=400,
+            detail="iso_code is required. Please select a country (US or KR).",
+        )
+
     logger.info(
         f"Screener request: iso_code={request.iso_code}, "
         f"sort_by={request.sort_by}, limit={request.limit}"
