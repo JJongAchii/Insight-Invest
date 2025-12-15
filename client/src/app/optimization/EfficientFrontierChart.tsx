@@ -61,11 +61,11 @@ const EfficientFrontierChart: React.FC<EfficientFrontierChartProps> = ({
             },
           ],
           backgroundColor: "rgb(16, 185, 129)",
-          borderColor: "rgb(255, 255, 255)",
-          borderWidth: 3,
-          pointRadius: 16,
-          pointHoverRadius: 18,
-          pointStyle: "star" as const,
+          borderColor: "rgb(5, 150, 105)",
+          borderWidth: 4,
+          pointRadius: 12,
+          pointHoverRadius: 14,
+          pointStyle: "rectRot" as const,
           order: 0,
         },
         {
@@ -146,11 +146,11 @@ const EfficientFrontierChart: React.FC<EfficientFrontierChartProps> = ({
       </div>
       <div className="mt-4 text-xs text-neutral-500 flex gap-6">
         <span className="flex items-center gap-2">
-          <span className="w-3 h-3 bg-emerald-500 rounded-full"></span>
+          <span className="w-3 h-3 bg-emerald-500 rotate-45"></span>
           Max Sharpe: {(data.max_sharpe.sharpe_ratio).toFixed(2)}
         </span>
         <span className="flex items-center gap-2">
-          <span className="w-3 h-3 bg-amber-500 rounded-full"></span>
+          <span className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[10px] border-l-transparent border-r-transparent border-b-amber-500"></span>
           Min Vol: {(data.min_volatility.volatility * 100).toFixed(2)}%
         </span>
       </div>

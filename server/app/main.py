@@ -15,7 +15,7 @@ Architecture:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import backtest, meta, news, optimization, price, regime
+from .routers import backtest, meta, news, optimization, price, regime, screener
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -45,6 +45,7 @@ app.include_router(backtest.router)
 app.include_router(regime.router)
 app.include_router(news.router)
 app.include_router(optimization.router)
+app.include_router(screener.router)
 
 
 @app.get("/")

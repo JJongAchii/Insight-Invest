@@ -14,6 +14,7 @@ import {
   IoChevronDown,
   IoNewspaper,
   IoOptions,
+  IoFilter,
 } from "react-icons/io5";
 import { HiOutlineLightBulb } from "react-icons/hi";
 import { FaRunning, FaList } from "react-icons/fa";
@@ -194,6 +195,12 @@ const Sidebar = () => {
           href="/optimization"
           icon={IoOptions}
           label="Optimization"
+          isCollapsed={isSidebarCollapsed}
+        />
+        <SidebarLink
+          href="/screener"
+          icon={IoFilter}
+          label="Screener"
           isCollapsed={isSidebarCollapsed}
         />
         <SidebarLink
