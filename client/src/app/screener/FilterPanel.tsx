@@ -21,8 +21,8 @@ const SORT_OPTIONS: { value: ScreenerSortField; label: string }[] = [
 ];
 
 const FilterPanel: React.FC<FilterPanelProps> = ({ onScan, isLoading }) => {
-  // Country filter
-  const [isoCode, setIsoCode] = useState<string>("");
+  // Country filter (required - default to US)
+  const [isoCode, setIsoCode] = useState<string>("US");
 
   // Momentum filters
   const [return3mMin, setReturn3mMin] = useState<string>("");
@@ -47,7 +47,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ onScan, isLoading }) => {
 
   const handleScan = () => {
     const filters: ScreenerPayload = {
-      iso_code: isoCode || undefined,
+      iso_code: isoCode,
       return_3m_min: return3mMin ? parseFloat(return3mMin) : undefined,
       return_3m_max: return3mMax ? parseFloat(return3mMax) : undefined,
       return_12m_min: return12mMin ? parseFloat(return12mMin) : undefined,
@@ -65,7 +65,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ onScan, isLoading }) => {
   };
 
   const handleReset = () => {
-    setIsoCode("");
+    setIsoCode("US");
     setReturn3mMin("");
     setReturn3mMax("");
     setReturn12mMin("");
@@ -101,7 +101,6 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ onScan, isLoading }) => {
               onChange={(e) => setIsoCode(e.target.value)}
               className="input"
             >
-              <option value="">All Countries</option>
               <option value="US">United States</option>
               <option value="KR">South Korea</option>
             </select>

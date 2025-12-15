@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   useScanStocksMutation,
   ScreenerPayload,
@@ -16,9 +16,15 @@ const ScreenerPage = () => {
   const [results, setResults] = useState<ScreenerResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"screener" | "highs_lows">("screener");
+  // Track the last used iso_code for sorting
+  const lastIsoCode = useRef<string>("US");
 
   const handleScan = async (filters: ScreenerPayload) => {
     setError(null);
+    // Store the iso_code for later sorting
+    if (filters.iso_code) {
+      lastIsoCode.current = filters.iso_code;
+    }
     try {
       const result = await scanStocks(filters).unwrap();
       setResults(result);
@@ -29,12 +35,13 @@ const ScreenerPage = () => {
     }
   };
 
-  const handleSort = async (sortBy: ScreenerSortField, ascending: boolean) => {
+  const handleSort = async (sortBy: ScreenerSortField, ascending: boolean, isoCode: string) => {
     if (!results) return;
 
-    // Re-scan with new sort
+    // Re-scan with new sort (must include iso_code as it's required)
     try {
       const result = await scanStocks({
+        iso_code: isoCode,
         sort_by: sortBy,
         ascending,
         limit: 100,
@@ -109,7 +116,10 @@ const ScreenerPage = () => {
                   <span className="font-semibold">{results.total_count}</span> stocks
                 </p>
               </div>
-              <ResultsTable data={results.results} onSort={handleSort} />
+              <ResultsTable
+                data={results.results}
+                onSort={(sortBy, ascending) => handleSort(sortBy, ascending, lastIsoCode.current)}
+              />
             </div>
           )}
 
