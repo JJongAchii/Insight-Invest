@@ -13,6 +13,7 @@ import {
   IoTelescope,
   IoChevronDown,
   IoNewspaper,
+  IoOptions,
 } from "react-icons/io5";
 import { HiOutlineLightBulb } from "react-icons/hi";
 import { FaRunning, FaList } from "react-icons/fa";
@@ -189,6 +190,12 @@ const Sidebar = () => {
           )}
         </div>
 
+        <SidebarLink
+          href="/optimization"
+          icon={IoOptions}
+          label="Optimization"
+          isCollapsed={isSidebarCollapsed}
+        />
         <SidebarLink
           href="/stocksearch"
           icon={IoSearch}

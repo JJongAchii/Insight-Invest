@@ -1,8 +1,8 @@
 from datetime import date, datetime
 from enum import Enum
-from typing import List, Optional
+from typing import Dict, List, Optional
 
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, Field, validator
 
 # ============================================
 # News Schemas
@@ -161,3 +161,69 @@ class PortIdInfo(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ============================================
+# Portfolio Optimization Schemas
+# ============================================
+
+
+class OptimizationRequest(BaseModel):
+    """Request for portfolio optimization."""
+
+    meta_id: List[int] = Field(..., min_length=2, description="List of meta_ids to optimize")
+    start_date: Optional[date] = Field(None, description="Start date for historical data")
+    end_date: Optional[date] = Field(None, description="End date for historical data")
+    lookback_period: int = Field(252, ge=60, le=1260, description="Days for return/cov estimation")
+    risk_free_rate: float = Field(0.0, ge=0.0, le=0.2, description="Annual risk-free rate")
+    min_weight: float = Field(0.0, ge=0.0, le=1.0, description="Minimum weight per asset")
+    max_weight: float = Field(1.0, ge=0.0, le=1.0, description="Maximum weight per asset")
+    n_points: int = Field(50, ge=10, le=200, description="Number of frontier points")
+
+
+class OptimizedPortfolio(BaseModel):
+    """Optimized portfolio result."""
+
+    weights: Dict[str, float]
+    expected_return: float
+    volatility: float
+    sharpe_ratio: float
+    risk_contributions: Dict[str, float]
+
+
+class FrontierPoint(BaseModel):
+    """Single point on the efficient frontier."""
+
+    return_: float = Field(..., alias="return")
+    volatility: float
+    sharpe_ratio: float
+    weights: Dict[str, float]
+
+    class Config:
+        populate_by_name = True
+
+
+class AssetStats(BaseModel):
+    """Individual asset statistics."""
+
+    expected_return: float
+    volatility: float
+
+
+class EfficientFrontierResponse(BaseModel):
+    """Response for efficient frontier calculation."""
+
+    frontier_points: List[FrontierPoint]
+    max_sharpe: OptimizedPortfolio
+    min_volatility: OptimizedPortfolio
+    asset_stats: Dict[str, AssetStats]
+
+
+class RiskParityResponse(BaseModel):
+    """Response for risk parity calculation."""
+
+    weights: Dict[str, float]
+    expected_return: float
+    volatility: float
+    sharpe_ratio: float
+    risk_contributions: Dict[str, float]

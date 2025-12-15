@@ -129,6 +129,45 @@ export interface ClearStrategyResponse {
   message: string;
 }
 
+// Types for optimization operations
+export interface OptimizationPayload {
+  meta_id: number[];
+  start_date?: string;
+  end_date?: string;
+  lookback_period?: number;
+  risk_free_rate?: number;
+  min_weight?: number;
+  max_weight?: number;
+  n_points?: number;
+}
+
+export interface OptimizedPortfolio {
+  weights: Record<string, number>;
+  expected_return: number;
+  volatility: number;
+  sharpe_ratio: number;
+  risk_contributions: Record<string, number>;
+}
+
+export interface FrontierPoint {
+  return: number;
+  volatility: number;
+  sharpe_ratio: number;
+  weights: Record<string, number>;
+}
+
+export interface AssetStats {
+  expected_return: number;
+  volatility: number;
+}
+
+export interface EfficientFrontierResponse {
+  frontier_points: FrontierPoint[];
+  max_sharpe: OptimizedPortfolio;
+  min_volatility: OptimizedPortfolio;
+  asset_stats: Record<string, AssetStats>;
+}
+
 export const api = createApi({
   reducerPath: "api",
   baseQuery: fetchBaseQuery({ baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL }),
@@ -237,6 +276,36 @@ export const api = createApi({
         method: "POST",
       }),
     }),
+
+    // Optimization endpoints
+    calculateEfficientFrontier: builder.mutation<EfficientFrontierResponse, OptimizationPayload>({
+      query: (payload) => ({
+        url: "/optimization/efficient-frontier",
+        method: "POST",
+        body: payload,
+      }),
+    }),
+    calculateRiskParity: builder.mutation<OptimizedPortfolio, OptimizationPayload>({
+      query: (payload) => ({
+        url: "/optimization/risk-parity",
+        method: "POST",
+        body: payload,
+      }),
+    }),
+    calculateMaxSharpe: builder.mutation<OptimizedPortfolio, OptimizationPayload>({
+      query: (payload) => ({
+        url: "/optimization/max-sharpe",
+        method: "POST",
+        body: payload,
+      }),
+    }),
+    calculateMinVolatility: builder.mutation<OptimizedPortfolio, OptimizationPayload>({
+      query: (payload) => ({
+        url: "/optimization/min-volatility",
+        method: "POST",
+        body: payload,
+      }),
+    }),
   }),
 });
 
@@ -266,4 +335,9 @@ export const {
   useRunBacktestMutation,
   useSaveStrategyMutation,
   useClearStrategyMutation,
+  // Optimization hooks
+  useCalculateEfficientFrontierMutation,
+  useCalculateRiskParityMutation,
+  useCalculateMaxSharpeMutation,
+  useCalculateMinVolatilityMutation,
 } = api;
