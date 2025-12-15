@@ -83,6 +83,46 @@ class TbUniverse(StaticBase):
 # - portfolio.portfolio_metrics
 
 
+class TbScreenerIndicators(StaticBase):
+    """Pre-calculated screener indicators for all stocks.
+
+    Updated daily after market close via scheduled job.
+    Enables instant screener queries without real-time calculation.
+    """
+
+    __tablename__ = "tb_screener_indicators"
+
+    meta_id = sa.Column(sa.ForeignKey("tb_meta.meta_id"), primary_key=True)
+    calculated_date = sa.Column(sa.Date, nullable=False)
+
+    # Price info
+    current_price = sa.Column(sa.Float, nullable=True)
+
+    # Momentum (stored as decimal, e.g., 0.10 = 10%)
+    return_1m = sa.Column(sa.Float, nullable=True)
+    return_3m = sa.Column(sa.Float, nullable=True)
+    return_6m = sa.Column(sa.Float, nullable=True)
+    return_12m = sa.Column(sa.Float, nullable=True)
+    return_ytd = sa.Column(sa.Float, nullable=True)
+
+    # Volatility (annualized, stored as decimal)
+    volatility_1m = sa.Column(sa.Float, nullable=True)
+    volatility_3m = sa.Column(sa.Float, nullable=True)
+
+    # Drawdown (stored as decimal, negative values)
+    mdd = sa.Column(sa.Float, nullable=True)
+    mdd_1y = sa.Column(sa.Float, nullable=True)
+    current_drawdown = sa.Column(sa.Float, nullable=True)
+
+    # 52-week analysis
+    high_52w = sa.Column(sa.Float, nullable=True)
+    low_52w = sa.Column(sa.Float, nullable=True)
+    pct_from_high = sa.Column(sa.Float, nullable=True)  # negative
+    pct_from_low = sa.Column(sa.Float, nullable=True)  # positive
+
+    updated_at = sa.Column(sa.DateTime, server_default=sa.func.now(), onupdate=sa.func.now())
+
+
 class TbMacro(StaticBase):
     """macro economics definition"""
 

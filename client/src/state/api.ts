@@ -391,10 +391,10 @@ export const api = createApi({
     fetchStockIndicators: builder.query<ScreenerStock, number>({
       query: (metaId) => `/screener/indicators/${metaId}`,
     }),
-    fetchHighsLows: builder.query<HighsLowsResponse, { iso_code?: string; threshold?: number }>({
+    fetchHighsLows: builder.query<HighsLowsResponse, { iso_code: string; threshold?: number }>({
       query: ({ iso_code, threshold = 5 }) => {
         const params = new URLSearchParams();
-        if (iso_code) params.append("iso_code", iso_code);
+        params.append("iso_code", iso_code);
         params.append("threshold", threshold.toString());
         return `/screener/highs-lows?${params.toString()}`;
       },

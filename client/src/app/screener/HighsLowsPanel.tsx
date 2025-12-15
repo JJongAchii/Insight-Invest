@@ -53,11 +53,11 @@ const StockCard: React.FC<StockCardProps> = ({ stock, type }) => {
 };
 
 const HighsLowsPanel: React.FC = () => {
-  const [isoCode, setIsoCode] = useState<string>("");
+  const [isoCode, setIsoCode] = useState<string>("US");
   const [threshold, setThreshold] = useState<number>(5);
 
   const { data, isLoading, error } = useFetchHighsLowsQuery({
-    iso_code: isoCode || undefined,
+    iso_code: isoCode,
     threshold,
   });
 
@@ -74,7 +74,6 @@ const HighsLowsPanel: React.FC = () => {
               onChange={(e) => setIsoCode(e.target.value)}
               className="input"
             >
-              <option value="">All Countries</option>
               <option value="US">United States</option>
               <option value="KR">South Korea</option>
             </select>

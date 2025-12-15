@@ -7,6 +7,7 @@ Usage:
     python run_scheduled_job.py --job us-price
     python run_scheduled_job.py --job kr-price
     python run_scheduled_job.py --job macro
+    python run_scheduled_job.py --job screener  # Calculate screener indicators
     python run_scheduled_job.py --job all  # Run all updates
 
     # 실패 복구 (특정 Step부터 재시작)
@@ -29,6 +30,7 @@ from typing import Literal
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 from module.etl.daily_etl import run_daily_etl
+from module.screener.calculate_indicators import run_calculation as run_screener_calculation
 from module.update_data.macro import update_macro
 
 # Configure logging
@@ -39,7 +41,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-JobType = Literal["us-price", "kr-price", "macro", "all"]
+JobType = Literal["us-price", "kr-price", "macro", "screener", "all"]
 StepType = Literal["step1", "step2", "step3"]
 
 
@@ -75,6 +77,8 @@ class JobRunner:
                 self._run_kr_price_update()
             elif self.job_type == "macro":
                 self._run_macro_update()
+            elif self.job_type == "screener":
+                self._run_screener_update()
             elif self.job_type == "all":
                 self._run_all_updates()
             else:
@@ -133,6 +137,12 @@ class JobRunner:
         update_macro()
         logger.info("✅ Macro data update completed successfully")
 
+    def _run_screener_update(self):
+        """Update pre-calculated screener indicators for all stocks."""
+        logger.info("📊 Starting screener indicator calculation...")
+        run_screener_calculation(iso_code=None)  # Calculate for all countries
+        logger.info("✅ Screener indicator calculation completed successfully")
+
     def _run_all_updates(self):
         """Run all updates sequentially."""
         logger.info("📊 Starting all updates...")
@@ -154,6 +164,12 @@ class JobRunner:
             self._run_macro_update()
         except Exception as e:
             logger.error(f"Macro update failed: {e}")
+
+        # Screener indicators (should run after price updates)
+        try:
+            self._run_screener_update()
+        except Exception as e:
+            logger.error(f"Screener update failed: {e}")
 
         logger.info("✅ All updates completed")
 
@@ -228,7 +244,7 @@ Examples:
     parser.add_argument(
         "--job",
         type=str,
-        choices=["us-price", "kr-price", "macro", "all"],
+        choices=["us-price", "kr-price", "macro", "screener", "all"],
         required=True,
         help="Job type to run",
     )

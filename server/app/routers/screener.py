@@ -2,7 +2,7 @@
 Stock Screener API Endpoints.
 
 Provides:
-- Scan stocks based on technical criteria
+- Scan stocks based on technical criteria (using pre-calculated indicators)
 - Get detailed indicators for individual stocks
 - Find 52-week highs and lows
 """
@@ -13,7 +13,7 @@ import sys
 from typing import Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import and_, select
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../../../")))
 
@@ -21,88 +21,247 @@ import db
 from app import schemas
 from module.backtest import Backtest
 from module.screener import StockScreener
-from module.screener.screener import ScreenerCriteria, SortField
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/screener", tags=["Screener"])
 
 
-def _get_meta_info(
-    iso_code: Optional[str] = None,
-) -> Tuple[List[int], Dict[str, int], Dict[str, Dict]]:
+def _query_indicators(
+    iso_code: str,
+    criteria: Optional[schemas.ScreenerRequest] = None,
+    sort_by: str = "return_3m",
+    ascending: bool = False,
+    limit: int = 100,
+) -> Tuple[int, List[Dict]]:
     """
-    Get meta information from database.
+    Query pre-calculated indicators from database.
+
+    Args:
+        iso_code: Country code (US, KR)
+        criteria: Filter criteria
+        sort_by: Field to sort by
+        ascending: Sort order
+        limit: Maximum results to return
 
     Returns:
-        Tuple of (meta_ids, ticker_to_meta_id, ticker_info)
+        Tuple of (total_count, results)
     """
     with db.session_local() as session:
-        stmt = select(
-            db.TbMeta.meta_id,
-            db.TbMeta.ticker,
-            db.TbMeta.name,
-            db.TbMeta.sector,
-            db.TbMeta.iso_code,
-        )
-        if iso_code:
-            stmt = stmt.where(db.TbMeta.iso_code == iso_code)
-
-        results = session.execute(stmt).all()
-
-    meta_ids = [r.meta_id for r in results]
-    ticker_meta = {r.ticker: r.meta_id for r in results}
-    ticker_info = {
-        r.ticker: {
-            "name": r.name or "",
-            "sector": r.sector or "",
-            "iso_code": r.iso_code,
-        }
-        for r in results
-    }
-
-    return meta_ids, ticker_meta, ticker_info
-
-
-def _build_criteria(request: schemas.ScreenerRequest) -> Optional[ScreenerCriteria]:
-    """Build screening criteria from request."""
-    # Check if any filters are set
-    has_filters = any(
-        [
-            request.return_1m_min is not None or request.return_1m_max is not None,
-            request.return_3m_min is not None or request.return_3m_max is not None,
-            request.return_6m_min is not None or request.return_6m_max is not None,
-            request.return_12m_min is not None or request.return_12m_max is not None,
-            request.volatility_min is not None or request.volatility_max is not None,
-            request.mdd_max is not None,
-            request.current_drawdown_max is not None,
-            request.pct_from_high_min is not None or request.pct_from_high_max is not None,
-        ]
-    )
-
-    if not has_filters:
-        return None
-
-    def make_range(
-        min_val: Optional[float], max_val: Optional[float]
-    ) -> Optional[Tuple[float, float]]:
-        if min_val is None and max_val is None:
-            return None
-        return (
-            min_val if min_val is not None else -float("inf"),
-            max_val if max_val is not None else float("inf"),
+        # Build base query with join to TbMeta
+        stmt = (
+            select(
+                db.TbScreenerIndicators,
+                db.TbMeta.ticker,
+                db.TbMeta.name,
+                db.TbMeta.sector,
+                db.TbMeta.iso_code,
+            )
+            .join(db.TbMeta, db.TbScreenerIndicators.meta_id == db.TbMeta.meta_id)
+            .where(db.TbMeta.iso_code == iso_code)
         )
 
-    return ScreenerCriteria(
-        return_1m_range=make_range(request.return_1m_min, request.return_1m_max),
-        return_3m_range=make_range(request.return_3m_min, request.return_3m_max),
-        return_6m_range=make_range(request.return_6m_min, request.return_6m_max),
-        return_12m_range=make_range(request.return_12m_min, request.return_12m_max),
-        volatility_range=make_range(request.volatility_min, request.volatility_max),
-        mdd_max=request.mdd_max,
-        current_drawdown_max=request.current_drawdown_max,
-        pct_from_high_range=make_range(request.pct_from_high_min, request.pct_from_high_max),
-    )
+        # Apply filters if criteria provided
+        if criteria:
+            filters = []
+
+            # Momentum filters (values in DB are decimals, criteria are percentages)
+            if criteria.return_1m_min is not None:
+                filters.append(db.TbScreenerIndicators.return_1m >= criteria.return_1m_min / 100)
+            if criteria.return_1m_max is not None:
+                filters.append(db.TbScreenerIndicators.return_1m <= criteria.return_1m_max / 100)
+
+            if criteria.return_3m_min is not None:
+                filters.append(db.TbScreenerIndicators.return_3m >= criteria.return_3m_min / 100)
+            if criteria.return_3m_max is not None:
+                filters.append(db.TbScreenerIndicators.return_3m <= criteria.return_3m_max / 100)
+
+            if criteria.return_6m_min is not None:
+                filters.append(db.TbScreenerIndicators.return_6m >= criteria.return_6m_min / 100)
+            if criteria.return_6m_max is not None:
+                filters.append(db.TbScreenerIndicators.return_6m <= criteria.return_6m_max / 100)
+
+            if criteria.return_12m_min is not None:
+                filters.append(db.TbScreenerIndicators.return_12m >= criteria.return_12m_min / 100)
+            if criteria.return_12m_max is not None:
+                filters.append(db.TbScreenerIndicators.return_12m <= criteria.return_12m_max / 100)
+
+            # Volatility filter
+            if criteria.volatility_min is not None:
+                filters.append(
+                    db.TbScreenerIndicators.volatility_3m >= criteria.volatility_min / 100
+                )
+            if criteria.volatility_max is not None:
+                filters.append(
+                    db.TbScreenerIndicators.volatility_3m <= criteria.volatility_max / 100
+                )
+
+            # MDD filter (MDD is negative, so >= means less severe)
+            if criteria.mdd_max is not None:
+                filters.append(db.TbScreenerIndicators.mdd_1y >= criteria.mdd_max / 100)
+
+            # Current drawdown filter
+            if criteria.current_drawdown_max is not None:
+                filters.append(
+                    db.TbScreenerIndicators.current_drawdown >= criteria.current_drawdown_max / 100
+                )
+
+            # 52-week filters
+            if criteria.pct_from_high_min is not None:
+                filters.append(
+                    db.TbScreenerIndicators.pct_from_high >= criteria.pct_from_high_min / 100
+                )
+            if criteria.pct_from_high_max is not None:
+                filters.append(
+                    db.TbScreenerIndicators.pct_from_high <= criteria.pct_from_high_max / 100
+                )
+
+            if filters:
+                stmt = stmt.where(and_(*filters))
+
+        # Get total count (before limit)
+        count_stmt = (
+            select(db.TbScreenerIndicators.meta_id)
+            .join(db.TbMeta, db.TbScreenerIndicators.meta_id == db.TbMeta.meta_id)
+            .where(db.TbMeta.iso_code == iso_code)
+        )
+        total_count = len(session.execute(count_stmt).all())
+
+        # Apply sorting
+        sort_column = getattr(db.TbScreenerIndicators, sort_by, None)
+        if sort_column is not None:
+            if ascending:
+                stmt = stmt.order_by(sort_column.asc().nulls_last())
+            else:
+                stmt = stmt.order_by(sort_column.desc().nulls_last())
+
+        # Apply limit
+        stmt = stmt.limit(limit)
+
+        # Execute query
+        rows = session.execute(stmt).all()
+
+        # Format results
+        results = []
+        for row in rows:
+            ind = row[0]  # TbScreenerIndicators
+            results.append(
+                {
+                    "ticker": row.ticker,
+                    "meta_id": ind.meta_id,
+                    "name": row.name or "",
+                    "sector": row.sector or "",
+                    "iso_code": row.iso_code,
+                    "current_price": round(ind.current_price, 2) if ind.current_price else 0,
+                    "return_1m": round(ind.return_1m * 100, 2) if ind.return_1m else 0,
+                    "return_3m": round(ind.return_3m * 100, 2) if ind.return_3m else 0,
+                    "return_6m": round(ind.return_6m * 100, 2) if ind.return_6m else 0,
+                    "return_12m": round(ind.return_12m * 100, 2) if ind.return_12m else 0,
+                    "return_ytd": round(ind.return_ytd * 100, 2) if ind.return_ytd else 0,
+                    "volatility_1m": round(ind.volatility_1m * 100, 2) if ind.volatility_1m else 0,
+                    "volatility_3m": round(ind.volatility_3m * 100, 2) if ind.volatility_3m else 0,
+                    "mdd": round(ind.mdd * 100, 2) if ind.mdd else 0,
+                    "mdd_1y": round(ind.mdd_1y * 100, 2) if ind.mdd_1y else 0,
+                    "current_drawdown": (
+                        round(ind.current_drawdown * 100, 2) if ind.current_drawdown else 0
+                    ),
+                    "high_52w": round(ind.high_52w, 2) if ind.high_52w else 0,
+                    "low_52w": round(ind.low_52w, 2) if ind.low_52w else 0,
+                    "pct_from_high": round(ind.pct_from_high * 100, 2) if ind.pct_from_high else 0,
+                    "pct_from_low": round(ind.pct_from_low * 100, 2) if ind.pct_from_low else 0,
+                }
+            )
+
+        return total_count, results
+
+
+def _query_highs_lows(iso_code: str, threshold: float = 5.0) -> Tuple[List[Dict], List[Dict]]:
+    """
+    Query stocks near 52-week highs and lows.
+
+    Args:
+        iso_code: Country code
+        threshold: % threshold from high/low
+
+    Returns:
+        Tuple of (new_highs, new_lows)
+    """
+    threshold_decimal = threshold / 100
+
+    with db.session_local() as session:
+        # Query for highs (pct_from_high >= -threshold)
+        highs_stmt = (
+            select(
+                db.TbScreenerIndicators,
+                db.TbMeta.ticker,
+                db.TbMeta.name,
+                db.TbMeta.sector,
+                db.TbMeta.iso_code,
+            )
+            .join(db.TbMeta, db.TbScreenerIndicators.meta_id == db.TbMeta.meta_id)
+            .where(
+                and_(
+                    db.TbMeta.iso_code == iso_code,
+                    db.TbScreenerIndicators.pct_from_high >= -threshold_decimal,
+                    db.TbScreenerIndicators.pct_from_high.isnot(None),
+                )
+            )
+            .order_by(db.TbScreenerIndicators.pct_from_high.desc())
+            .limit(50)
+        )
+
+        # Query for lows (pct_from_low <= threshold)
+        lows_stmt = (
+            select(
+                db.TbScreenerIndicators,
+                db.TbMeta.ticker,
+                db.TbMeta.name,
+                db.TbMeta.sector,
+                db.TbMeta.iso_code,
+            )
+            .join(db.TbMeta, db.TbScreenerIndicators.meta_id == db.TbMeta.meta_id)
+            .where(
+                and_(
+                    db.TbMeta.iso_code == iso_code,
+                    db.TbScreenerIndicators.pct_from_low <= threshold_decimal,
+                    db.TbScreenerIndicators.pct_from_low.isnot(None),
+                )
+            )
+            .order_by(db.TbScreenerIndicators.pct_from_low.asc())
+            .limit(50)
+        )
+
+        def format_row(row):
+            ind = row[0]
+            return {
+                "ticker": row.ticker,
+                "meta_id": ind.meta_id,
+                "name": row.name or "",
+                "sector": row.sector or "",
+                "iso_code": row.iso_code,
+                "current_price": round(ind.current_price, 2) if ind.current_price else 0,
+                "return_1m": round(ind.return_1m * 100, 2) if ind.return_1m else 0,
+                "return_3m": round(ind.return_3m * 100, 2) if ind.return_3m else 0,
+                "return_6m": round(ind.return_6m * 100, 2) if ind.return_6m else 0,
+                "return_12m": round(ind.return_12m * 100, 2) if ind.return_12m else 0,
+                "return_ytd": round(ind.return_ytd * 100, 2) if ind.return_ytd else 0,
+                "volatility_1m": round(ind.volatility_1m * 100, 2) if ind.volatility_1m else 0,
+                "volatility_3m": round(ind.volatility_3m * 100, 2) if ind.volatility_3m else 0,
+                "mdd": round(ind.mdd * 100, 2) if ind.mdd else 0,
+                "mdd_1y": round(ind.mdd_1y * 100, 2) if ind.mdd_1y else 0,
+                "current_drawdown": (
+                    round(ind.current_drawdown * 100, 2) if ind.current_drawdown else 0
+                ),
+                "high_52w": round(ind.high_52w, 2) if ind.high_52w else 0,
+                "low_52w": round(ind.low_52w, 2) if ind.low_52w else 0,
+                "pct_from_high": round(ind.pct_from_high * 100, 2) if ind.pct_from_high else 0,
+                "pct_from_low": round(ind.pct_from_low * 100, 2) if ind.pct_from_low else 0,
+            }
+
+        highs = [format_row(row) for row in session.execute(highs_stmt).all()]
+        lows = [format_row(row) for row in session.execute(lows_stmt).all()]
+
+        return highs, lows
 
 
 @router.post("/scan", response_model=schemas.ScreenerResponse)
@@ -110,12 +269,13 @@ async def scan_stocks(request: schemas.ScreenerRequest):
     """
     Scan stocks based on technical criteria.
 
-    Returns filtered and sorted list of stocks with their indicators.
-    Also returns lists of stocks near 52-week highs and lows.
+    Uses pre-calculated indicators stored in database for instant response.
+    Indicators are updated daily after market close.
 
-    Note: iso_code is required to prevent timeout from processing too many stocks.
+    Note:
+        - iso_code is required
+        - Returns all stocks matching criteria (no market cap limit)
     """
-    # Require iso_code to prevent timeout
     if not request.iso_code:
         raise HTTPException(
             status_code=400,
@@ -128,46 +288,29 @@ async def scan_stocks(request: schemas.ScreenerRequest):
     )
 
     try:
-        # Get meta info
-        meta_ids, ticker_meta, ticker_info = _get_meta_info(request.iso_code)
-
-        if not meta_ids:
-            raise HTTPException(status_code=404, detail="No stocks found for given criteria")
-
-        # Fetch price data (1 year lookback)
-        bt = Backtest()
-        price_df = bt.data(meta_id=meta_ids)
-
-        if price_df.empty:
-            raise HTTPException(status_code=404, detail="No price data available")
-
-        # Create screener
-        screener = StockScreener(price_df, ticker_meta, ticker_info)
-
-        # Build criteria
-        criteria = _build_criteria(request)
-
-        # Map sort field
-        sort_field = SortField(request.sort_by.value)
-
-        # Run screening
-        result = screener.screen(
-            criteria=criteria,
-            sort_by=sort_field,
+        # Query from pre-calculated table
+        total_count, results = _query_indicators(
+            iso_code=request.iso_code,
+            criteria=request,
+            sort_by=request.sort_by.value,
             ascending=request.ascending,
             limit=request.limit,
         )
 
+        # Get highs and lows
+        new_highs, new_lows = _query_highs_lows(request.iso_code)
+
         logger.info(
-            f"Screener completed: {result.total_count} total, " f"{result.filtered_count} filtered"
+            f"Screener completed: {total_count} total, {len(results)} returned, "
+            f"{len(new_highs)} near highs, {len(new_lows)} near lows"
         )
 
         return schemas.ScreenerResponse(
-            total_count=result.total_count,
-            filtered_count=result.filtered_count,
-            results=[schemas.ScreenerStock(**r) for r in result.results],
-            new_highs=[schemas.ScreenerStock(**r) for r in result.new_highs],
-            new_lows=[schemas.ScreenerStock(**r) for r in result.new_lows],
+            total_count=total_count,
+            filtered_count=len(results),
+            results=[schemas.ScreenerStock(**r) for r in results],
+            new_highs=[schemas.ScreenerStock(**r) for r in new_highs[:20]],
+            new_lows=[schemas.ScreenerStock(**r) for r in new_lows[:20]],
         )
 
     except HTTPException:
@@ -181,11 +324,55 @@ async def scan_stocks(request: schemas.ScreenerRequest):
 async def get_stock_indicators(meta_id: int):
     """
     Get detailed technical indicators for a single stock.
+
+    Note: This endpoint calculates indicators in real-time for the latest data.
     """
     logger.info(f"Getting indicators for meta_id={meta_id}")
 
     try:
-        # Get ticker info
+        # First try to get from pre-calculated table
+        with db.session_local() as session:
+            stmt = (
+                select(
+                    db.TbScreenerIndicators,
+                    db.TbMeta.ticker,
+                    db.TbMeta.name,
+                    db.TbMeta.sector,
+                    db.TbMeta.iso_code,
+                )
+                .join(db.TbMeta, db.TbScreenerIndicators.meta_id == db.TbMeta.meta_id)
+                .where(db.TbScreenerIndicators.meta_id == meta_id)
+            )
+            row = session.execute(stmt).first()
+
+        if row:
+            ind = row[0]
+            return schemas.ScreenerStock(
+                ticker=row.ticker,
+                meta_id=ind.meta_id,
+                name=row.name or "",
+                sector=row.sector or "",
+                iso_code=row.iso_code,
+                current_price=round(ind.current_price, 2) if ind.current_price else 0,
+                return_1m=round(ind.return_1m * 100, 2) if ind.return_1m else 0,
+                return_3m=round(ind.return_3m * 100, 2) if ind.return_3m else 0,
+                return_6m=round(ind.return_6m * 100, 2) if ind.return_6m else 0,
+                return_12m=round(ind.return_12m * 100, 2) if ind.return_12m else 0,
+                return_ytd=round(ind.return_ytd * 100, 2) if ind.return_ytd else 0,
+                volatility_1m=round(ind.volatility_1m * 100, 2) if ind.volatility_1m else 0,
+                volatility_3m=round(ind.volatility_3m * 100, 2) if ind.volatility_3m else 0,
+                mdd=round(ind.mdd * 100, 2) if ind.mdd else 0,
+                mdd_1y=round(ind.mdd_1y * 100, 2) if ind.mdd_1y else 0,
+                current_drawdown=(
+                    round(ind.current_drawdown * 100, 2) if ind.current_drawdown else 0
+                ),
+                high_52w=round(ind.high_52w, 2) if ind.high_52w else 0,
+                low_52w=round(ind.low_52w, 2) if ind.low_52w else 0,
+                pct_from_high=round(ind.pct_from_high * 100, 2) if ind.pct_from_high else 0,
+                pct_from_low=round(ind.pct_from_low * 100, 2) if ind.pct_from_low else 0,
+            )
+
+        # Fallback to real-time calculation if not in pre-calculated table
         with db.session_local() as session:
             stmt = select(
                 db.TbMeta.meta_id,
@@ -194,7 +381,6 @@ async def get_stock_indicators(meta_id: int):
                 db.TbMeta.sector,
                 db.TbMeta.iso_code,
             ).where(db.TbMeta.meta_id == meta_id)
-
             result = session.execute(stmt).first()
 
         if not result:
@@ -209,14 +395,12 @@ async def get_stock_indicators(meta_id: int):
             }
         }
 
-        # Fetch price data
         bt = Backtest()
         price_df = bt.data(meta_id=[meta_id])
 
         if price_df.empty:
             raise HTTPException(status_code=404, detail="No price data available for this stock")
 
-        # Calculate indicators
         screener = StockScreener(price_df, ticker_meta, ticker_info)
         indicators = screener.get_ticker_indicators(result.ticker)
 
@@ -234,40 +418,24 @@ async def get_stock_indicators(meta_id: int):
 
 @router.get("/highs-lows")
 async def get_highs_and_lows(
-    iso_code: Optional[str] = Query(None, description="Filter by country (US, KR)"),
+    iso_code: str = Query(..., description="Filter by country (US, KR) - required"),
     threshold: float = Query(5.0, ge=0, le=20, description="% threshold from high/low"),
 ):
     """
     Get stocks near 52-week highs and lows.
 
+    Uses pre-calculated indicators for instant response.
+
     Args:
-        iso_code: Filter by country
+        iso_code: Filter by country (required)
         threshold: How close to high/low (default 5%)
     """
     logger.info(f"Getting highs/lows: iso_code={iso_code}, threshold={threshold}%")
 
     try:
-        # Get meta info
-        meta_ids, ticker_meta, ticker_info = _get_meta_info(iso_code)
+        new_highs, new_lows = _query_highs_lows(iso_code, threshold)
 
-        if not meta_ids:
-            raise HTTPException(status_code=404, detail="No stocks found")
-
-        # Fetch price data
-        bt = Backtest()
-        price_df = bt.data(meta_id=meta_ids)
-
-        if price_df.empty:
-            raise HTTPException(status_code=404, detail="No price data available")
-
-        # Create screener and get results
-        screener = StockScreener(price_df, ticker_meta, ticker_info)
-        result = screener.screen(criteria=None, limit=500)
-
-        # Filter by threshold
-        threshold_decimal = threshold / 100
-        new_highs = [r for r in result.new_highs if r["pct_from_high"] >= -threshold]
-        new_lows = [r for r in result.new_lows if r["pct_from_low"] <= threshold]
+        logger.info(f"Found {len(new_highs)} near highs, {len(new_lows)} near lows")
 
         return {
             "new_highs": [schemas.ScreenerStock(**r) for r in new_highs],
@@ -275,8 +443,45 @@ async def get_highs_and_lows(
             "threshold_pct": threshold,
         }
 
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Get highs/lows failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to get highs/lows: {str(e)}")
+
+
+@router.get("/stats")
+async def get_screener_stats():
+    """
+    Get screener statistics (total stocks, last update time).
+    """
+    try:
+        with db.session_local() as session:
+            # Count by country
+            stmt = select(db.TbMeta.iso_code, db.TbScreenerIndicators.calculated_date).join(
+                db.TbMeta, db.TbScreenerIndicators.meta_id == db.TbMeta.meta_id
+            )
+            rows = session.execute(stmt).all()
+
+        if not rows:
+            return {
+                "total_stocks": 0,
+                "by_country": {},
+                "last_updated": None,
+                "message": "No pre-calculated data available. Run the calculation job first.",
+            }
+
+        by_country: Dict[str, int] = {}
+        last_date = None
+        for row in rows:
+            by_country[row.iso_code] = by_country.get(row.iso_code, 0) + 1
+            if last_date is None or row.calculated_date > last_date:
+                last_date = row.calculated_date
+
+        return {
+            "total_stocks": len(rows),
+            "by_country": by_country,
+            "last_updated": last_date.isoformat() if last_date else None,
+        }
+
+    except Exception as e:
+        logger.error(f"Get stats failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
