@@ -121,7 +121,7 @@ body,
      ============================================ */
   .input {
     @apply w-full px-4 py-2.5 rounded-xl;
-    @apply bg-white/50 backdrop-blur-md border border-white/30;
+    @apply bg-white/50 backdrop-blur-md border border-neutral-300;
     @apply text-neutral-900 placeholder:text-neutral-400;
     @apply focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-400/20;
     @apply focus:bg-white/70;
