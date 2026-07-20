@@ -45,9 +45,11 @@ Resources:
                   - !Sub arn:aws:s3:::${DataBucket}
                   - !Sub arn:aws:s3:::${DataBucket}/qdata/*
                   - !Sub arn:aws:s3:::${DataBucket}/app/*
-              - Effect: Allow  # 포트폴리오 저장 (read-modify-write)
+              - Effect: Allow  # 포트폴리오 저장 + 백테스트 임시결과 (read-modify-write)
                 Action: [s3:PutObject, s3:DeleteObject]
-                Resource: !Sub arn:aws:s3:::${DataBucket}/app/portfolio/*
+                Resource:
+                  - !Sub arn:aws:s3:::${DataBucket}/app/portfolio/*
+                  - !Sub arn:aws:s3:::${DataBucket}/app/tmp_results/*
 
   ApiFunction:
     Type: AWS::Lambda::Function

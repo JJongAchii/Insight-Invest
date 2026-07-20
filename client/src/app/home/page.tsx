@@ -206,6 +206,7 @@ const Home = () => {
       {/* Ticker Tape */}
       <div className="bg-surface rounded-xl border border-edge overflow-hidden">
         <TradingViewWidget
+          key={`tape-${colorTheme}`}
           widgetScriptUrl={tickerTapeUrl}
           widgetConfig={tickerTapeConfig}
         />
@@ -217,6 +218,7 @@ const Home = () => {
         <div className="card">
           <h3 className="section-header">Economic Calendar</h3>
           <TradingViewWidget
+            key={`cal-${colorTheme}`}
             widgetScriptUrl={economicCalUrl}
             widgetConfig={economicCalConfig}
           />
@@ -226,6 +228,7 @@ const Home = () => {
         <div className="card">
           <h3 className="section-header">Market Data</h3>
           <TradingViewWidget
+            key={`quotes-${colorTheme}`}
             widgetScriptUrl={marketQuotesUrl}
             widgetConfig={marketQuotesConfig}
           />
@@ -235,6 +238,7 @@ const Home = () => {
         <div className="card">
           <h3 className="section-header">FX Cross Rates</h3>
           <TradingViewWidget
+            key={`fx-${colorTheme}`}
             widgetScriptUrl={fxCrossRateUrl}
             widgetConfig={fxCrossRateConfig}
           />
@@ -244,6 +248,7 @@ const Home = () => {
         <div className="card">
           <h3 className="section-header">Market Overview</h3>
           <TradingViewWidget
+            key={`overview-${colorTheme}`}
             widgetScriptUrl={marketOverviewUrl}
             widgetConfig={marketOverviewConfig}
           />
