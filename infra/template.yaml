@@ -1,0 +1,93 @@
+# Insight-Invest 인프라 전체 (재구조 2026-07) — 순수 CloudFormation, SAM CLI 불필요.
+# 배포:
+#   aws cloudformation deploy --stack-name insight-invest-api \
+#     --template-file infra/template.yaml --capabilities CAPABILITY_IAM \
+#     --parameter-overrides ImageUri=<ECR>@<digest> ApiToken=<token>
+#
+# 이것이 앱의 유일한 클라우드 자원이다: Lambda 1개 + Function URL.
+# (S3 버킷 insight-invest-datalake와 ECR 레포는 기존 자원 재사용 — 스택 밖)
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Insight-Invest API - Lambda container + Function URL (qdata consumer)
+
+Parameters:
+  ImageUri:
+    Type: String
+    Description: ECR image URI (digest 고정 권장)
+  ApiToken:
+    Type: String
+    NoEcho: true
+    Description: X-API-Key 헤더 토큰 (앱 레벨 인증)
+  DataBucket:
+    Type: String
+    Default: insight-invest-datalake
+
+Resources:
+  ApiRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: data-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow  # qdata 미러·메타·아카이브 읽기
+                Action: [s3:GetObject, s3:ListBucket]
+                Resource:
+                  - !Sub arn:aws:s3:::${DataBucket}
+                  - !Sub arn:aws:s3:::${DataBucket}/qdata/*
+                  - !Sub arn:aws:s3:::${DataBucket}/app/*
+              - Effect: Allow  # 포트폴리오 저장 (read-modify-write)
+                Action: [s3:PutObject, s3:DeleteObject]
+                Resource: !Sub arn:aws:s3:::${DataBucket}/app/portfolio/*
+
+  ApiFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: insight-invest-api
+      PackageType: Image
+      Code: { ImageUri: !Ref ImageUri }
+      Role: !GetAtt ApiRole.Arn
+      Architectures: [x86_64]
+      MemorySize: 2048
+      Timeout: 120
+      Environment:
+        Variables:
+          QDATA_LAKE: !Sub s3://${DataBucket}/qdata
+          APP_DATA: !Sub s3://${DataBucket}/app
+          API_TOKEN: !Ref ApiToken
+
+  ApiUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !Ref ApiFunction
+      AuthType: NONE  # 인증은 앱 레벨 X-API-Key (Vercel 브라우저 호출이라 IAM 서명 불가)
+
+  # 2025-10부터 신규 Function URL은 InvokeFunctionUrl + InvokeFunction 둘 다 필요
+  ApiUrlInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ApiFunction
+      Action: lambda:InvokeFunctionUrl
+      Principal: "*"
+      FunctionUrlAuthType: NONE
+
+  ApiInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ApiFunction
+      Action: lambda:InvokeFunction
+      Principal: "*"
+      InvokedViaFunctionUrl: true  # URL 경유 호출만 허용 (직접 invoke 차단)
+
+Outputs:
+  FunctionUrl:
+    Value: !GetAtt ApiUrl.FunctionUrl

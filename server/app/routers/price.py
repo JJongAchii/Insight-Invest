@@ -12,11 +12,10 @@ import logging
 from datetime import date, timedelta
 from typing import Dict, List, Optional
 
-import db
+import datastore
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
-from module.data_lake.iceberg_client import iceberg_client
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +116,7 @@ def get_sparklines(
         return {"sparklines": {}}
 
     # Get meta info to determine iso_code
-    meta_df = db.TbMeta.query_df()
+    meta_df = datastore.meta_df()
     meta_info = meta_df[meta_df["meta_id"].isin(meta_id_list)][["meta_id", "iso_code"]]
 
     if meta_info.empty:
@@ -132,7 +131,7 @@ def get_sparklines(
     for iso_code in meta_info["iso_code"].unique():
         iso_meta_ids = meta_info[meta_info["iso_code"] == iso_code]["meta_id"].tolist()
 
-        price_df = iceberg_client.read_price_data(
+        price_df = datastore.read_price_data(
             iso_code=iso_code,
             meta_ids=iso_meta_ids,
             start_date=start_date,
@@ -210,7 +209,7 @@ def get_compare_data(
     start_date = end_date - timedelta(days=period_days.get(period, 365))
 
     # Get meta info
-    meta_df = db.TbMeta.query_df()
+    meta_df = datastore.meta_df()
     meta_info = meta_df[meta_df["meta_id"].isin(meta_id_list)]
 
     if meta_info.empty:
@@ -222,7 +221,7 @@ def get_compare_data(
     for iso_code in meta_info["iso_code"].unique():
         iso_meta_ids = meta_info[meta_info["iso_code"] == iso_code]["meta_id"].tolist()
 
-        price_df = iceberg_client.read_price_data(
+        price_df = datastore.read_price_data(
             iso_code=iso_code,
             meta_ids=iso_meta_ids,
             start_date=start_date,
@@ -323,7 +322,7 @@ def get_price_history(
         List of price records with trade_date, adj_close, gross_return
     """
     # Get meta info
-    meta_df = db.TbMeta.query_df()
+    meta_df = datastore.meta_df()
     meta_row = meta_df[meta_df["meta_id"] == meta_id]
 
     if meta_row.empty:
@@ -337,7 +336,7 @@ def get_price_history(
     if start_date is None:
         start_date = end_date - timedelta(days=365)
 
-    price_df = iceberg_client.read_price_data(
+    price_df = datastore.read_price_data(
         iso_code=iso_code,
         meta_ids=[meta_id],
         start_date=start_date,
@@ -395,7 +394,7 @@ def get_price_summary(meta_id: int):
         Summary statistics including YTD, 1Y return, volatility, Sharpe, MDD
     """
     # Get meta info
-    meta_df = db.TbMeta.query_df()
+    meta_df = datastore.meta_df()
     meta_row = meta_df[meta_df["meta_id"] == meta_id]
 
     if meta_row.empty:
@@ -407,7 +406,7 @@ def get_price_summary(meta_id: int):
     end_date = date.today()
     start_date = end_date - timedelta(days=400)
 
-    price_df = iceberg_client.read_price_data(
+    price_df = datastore.read_price_data(
         iso_code=iso_code,
         meta_ids=[meta_id],
         start_date=start_date,

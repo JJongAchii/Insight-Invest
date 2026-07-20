@@ -168,85 +168,17 @@ export interface EfficientFrontierResponse {
   asset_stats: Record<string, AssetStats>;
 }
 
-// Types for screener operations
-export type ScreenerSortField =
-  | "return_1m"
-  | "return_3m"
-  | "return_6m"
-  | "return_12m"
-  | "return_ytd"
-  | "volatility_1m"
-  | "volatility_3m"
-  | "mdd"
-  | "mdd_1y"
-  | "current_drawdown"
-  | "pct_from_high"
-  | "pct_from_low";
-
-export interface ScreenerPayload {
-  iso_code?: string;
-  return_1m_min?: number;
-  return_1m_max?: number;
-  return_3m_min?: number;
-  return_3m_max?: number;
-  return_6m_min?: number;
-  return_6m_max?: number;
-  return_12m_min?: number;
-  return_12m_max?: number;
-  volatility_min?: number;
-  volatility_max?: number;
-  mdd_max?: number;
-  current_drawdown_max?: number;
-  pct_from_high_min?: number;
-  pct_from_high_max?: number;
-  marketcap_min?: number;
-  marketcap_max?: number;
-  sort_by?: ScreenerSortField;
-  ascending?: boolean;
-  limit?: number;
-}
-
-export interface ScreenerStock {
-  ticker: string;
-  meta_id: number;
-  name: string | null;
-  sector: string | null;
-  iso_code: string | null;
-  marketcap: number | null;
-  current_price: number;
-  return_1m: number;
-  return_3m: number;
-  return_6m: number;
-  return_12m: number;
-  return_ytd: number;
-  volatility_1m: number;
-  volatility_3m: number;
-  mdd: number;
-  mdd_1y: number;
-  current_drawdown: number;
-  high_52w: number;
-  low_52w: number;
-  pct_from_high: number;
-  pct_from_low: number;
-}
-
-export interface ScreenerResponse {
-  total_count: number;
-  filtered_count: number;
-  results: ScreenerStock[];
-  new_highs: ScreenerStock[];
-  new_lows: ScreenerStock[];
-}
-
-export interface HighsLowsResponse {
-  new_highs: ScreenerStock[];
-  new_lows: ScreenerStock[];
-  threshold_pct: number;
-}
-
 export const api = createApi({
   reducerPath: "api",
-  baseQuery: fetchBaseQuery({ baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL }),
+  baseQuery: fetchBaseQuery({
+    baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL,
+    prepareHeaders: (headers) => {
+      // Lambda Function URL 보호용 앱 토큰 (main.py 미들웨어와 쌍)
+      const apiKey = process.env.NEXT_PUBLIC_API_KEY;
+      if (apiKey) headers.set("X-API-Key", apiKey);
+      return headers;
+    },
+  }),
   tagTypes: ["Strategy", "Portfolio", "News"],
   endpoints: (builder) => ({
     // Query endpoints
@@ -383,25 +315,6 @@ export const api = createApi({
       }),
     }),
 
-    // Screener endpoints
-    scanStocks: builder.mutation<ScreenerResponse, ScreenerPayload>({
-      query: (payload) => ({
-        url: "/screener/scan",
-        method: "POST",
-        body: payload,
-      }),
-    }),
-    fetchStockIndicators: builder.query<ScreenerStock, number>({
-      query: (metaId) => `/screener/indicators/${metaId}`,
-    }),
-    fetchHighsLows: builder.query<HighsLowsResponse, { iso_code: string; threshold?: number }>({
-      query: ({ iso_code, threshold = 5 }) => {
-        const params = new URLSearchParams();
-        params.append("iso_code", iso_code);
-        params.append("threshold", threshold.toString());
-        return `/screener/highs-lows?${params.toString()}`;
-      },
-    }),
   }),
 });
 
@@ -436,8 +349,4 @@ export const {
   useCalculateRiskParityMutation,
   useCalculateMaxSharpeMutation,
   useCalculateMinVolatilityMutation,
-  // Screener hooks
-  useScanStocksMutation,
-  useFetchStockIndicatorsQuery,
-  useFetchHighsLowsQuery,
 } = api;
