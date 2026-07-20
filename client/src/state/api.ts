@@ -211,6 +211,81 @@ export interface SaveStrategyResponse {
   message: string;
 }
 
+// Types for regime operations
+export type RegimePhaseName =
+  | "Goldilocks"
+  | "Reflation"
+  | "Stagflation"
+  | "Deflation";
+
+export interface RegimePhaseCurrent {
+  phase: RegimePhaseName;
+  growth_dir: string;
+  inflation_dir: string;
+  as_of: string;
+  cli: number;
+  cli_delta: number;
+  cpi_yoy: number;
+  cpi_yoy_delta: number;
+}
+
+export interface RegimePhaseHistoryPoint {
+  month: string; // "YYYY-MM"
+  phase: RegimePhaseName;
+  cli: number;
+  cli_delta: number;
+  cpi_yoy: number;
+  cpi_yoy_delta: number;
+}
+
+export interface RegimePhaseResponse {
+  current: RegimePhaseCurrent;
+  history: RegimePhaseHistoryPoint[];
+}
+
+export interface RegimeGaugeComponent {
+  name: string;
+  value: number;
+  percentile: number;
+  score: number;
+  weight: number;
+}
+
+export interface RegimeGaugeResponse {
+  /** 0-100, higher = risk-off */
+  score: number;
+  as_of: string;
+  components: RegimeGaugeComponent[];
+}
+
+export interface KrMacroPoint {
+  date: string;
+  value: number;
+}
+
+export interface KrMacroSeries {
+  name: string;
+  data: KrMacroPoint[];
+  latest: number;
+}
+
+export interface RegimeKrResponse {
+  series: Record<string, KrMacroSeries | undefined>;
+}
+
+export interface PhasePerformanceRow {
+  ticker: string;
+  mean_monthly_ret: number;
+  ann_ret: number;
+  hit_rate: number;
+  n_months: number;
+}
+
+export interface RegimePhasePerformanceResponse {
+  phases: Record<string, PhasePerformanceRow[]>;
+  as_of: string;
+}
+
 // Types for optimization operations
 export interface OptimizationPayload {
   meta_id: number[];
@@ -301,6 +376,21 @@ export const api = createApi({
     }),
     fetchMacroData: builder.query({
       query: () => "/regime/data",
+    }),
+    fetchRegimePhase: builder.query<RegimePhaseResponse, void>({
+      query: () => "/regime/phase",
+    }),
+    fetchRegimeGauge: builder.query<RegimeGaugeResponse, void>({
+      query: () => "/regime/gauge",
+    }),
+    fetchRegimeKr: builder.query<RegimeKrResponse, void>({
+      query: () => "/regime/kr",
+    }),
+    fetchRegimePhasePerformance: builder.query<
+      RegimePhasePerformanceResponse,
+      void
+    >({
+      query: () => "/regime/phase/performance",
     }),
 
     // Price endpoints for stock search
@@ -397,6 +487,10 @@ export const {
   useFetchBmByIdQuery,
   useFetchMacroInfoQuery,
   useFetchMacroDataQuery,
+  useFetchRegimePhaseQuery,
+  useFetchRegimeGaugeQuery,
+  useFetchRegimeKrQuery,
+  useFetchRegimePhasePerformanceQuery,
   // Price/Stock search hooks
   useFetchSparklinesQuery,
   useFetchPriceHistoryQuery,
