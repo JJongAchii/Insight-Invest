@@ -1,127 +1,60 @@
-name: Deploy to AWS Copilot
+# API 배포 — 서버 코드 변경 시 Lambda 컨테이너 재빌드·재배포 (재구조 2026-07)
+#
+# 필요한 repo secrets:
+#   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY  — ECR push + CFN deploy 권한
+#   GH_PAT                                     — quant-data(private) 읽기용 PAT
+#   API_TOKEN                                  — X-API-Key 앱 토큰
+
+name: deploy-api
 
 on:
   push:
-    branches:
-      - main # main 브랜치에 push될 때 자동 배포
-    paths:
-      - "server/**" # server 디렉토리 변경 시에만
-      - "copilot/**" # copilot 설정 변경 시에만
-      - ".github/workflows/deploy.yml"
-  workflow_dispatch: # 수동 실행 가능
+    branches: [main]
+    paths: ["server/**", "infra/**", ".github/workflows/deploy.yml"]
+  workflow_dispatch:
 
 env:
   AWS_REGION: ap-northeast-2
-  COPILOT_APP: insight-invest
-  COPILOT_ENV: dev
+  ECR_REPO: insight-invest-api
 
 jobs:
-  # API 서버 배포
-  deploy-api:
-    name: Deploy API Server
+  deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Install AWS Copilot CLI
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
         run: |
-          curl -Lo /tmp/copilot-cli https://github.com/aws/copilot-cli/releases/latest/download/copilot-linux
-          chmod +x /tmp/copilot-cli
-          sudo mv /tmp/copilot-cli /usr/local/bin/copilot
-          copilot --version
+          echo "${{ secrets.GH_PAT }}" > /tmp/ghtoken
+          DOCKER_BUILDKIT=1 docker build \
+            --secret id=gh_token,src=/tmp/ghtoken \
+            -t ${{ steps.ecr.outputs.registry }}/$ECR_REPO:${{ github.sha }} server/
+          docker push ${{ steps.ecr.outputs.registry }}/$ECR_REPO:${{ github.sha }}
+          DIGEST=$(aws ecr describe-images --repository-name $ECR_REPO \
+            --image-ids imageTag=${{ github.sha }} \
+            --query 'imageDetails[0].imageDigest' --output text)
+          echo "IMAGE_URI=${{ steps.ecr.outputs.registry }}/$ECR_REPO@$DIGEST" >> $GITHUB_ENV
 
-      - name: Deploy API service
+      - name: Deploy CloudFormation stack
         run: |
-          copilot svc deploy \
-            --name api \
-            --env ${{ env.COPILOT_ENV }} \
-            --app ${{ env.COPILOT_APP }}
+          aws cloudformation deploy \
+            --stack-name insight-invest-api \
+            --template-file infra/template.yaml \
+            --capabilities CAPABILITY_IAM \
+            --parameter-overrides ImageUri=$IMAGE_URI ApiToken=${{ secrets.API_TOKEN }} \
+            --no-fail-on-empty-changeset
 
-      - name: Get API service status
-        if: success()
+      - name: Smoke test
         run: |
-          copilot svc status --name api --env ${{ env.COPILOT_ENV }} || echo "Status check completed"
-
-  # Scheduled Jobs 배포
-  deploy-jobs:
-    name: Deploy Scheduled Jobs
-    runs-on: ubuntu-latest
-    needs: deploy-api # API 배포 후 실행
-    strategy:
-      matrix:
-        job: [us-price-updater, kr-price-updater, macro-updater]
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Install AWS Copilot CLI
-        run: |
-          curl -Lo /tmp/copilot-cli https://github.com/aws/copilot-cli/releases/latest/download/copilot-linux
-          chmod +x /tmp/copilot-cli
-          sudo mv /tmp/copilot-cli /usr/local/bin/copilot
-          copilot --version
-
-      - name: Debug - Check workspace structure
-        run: |
-          echo "Current directory: $(pwd)"
-          echo "Checking copilot directory structure:"
-          ls -la copilot/
-          echo "Checking copilot/.workspace:"
-          cat copilot/.workspace
-          echo "Checking job manifest file:"
-          ls -la copilot/${{ matrix.job }}/
-          echo "List all copilot jobs:"
-          copilot job ls || echo "Failed to list jobs"
-
-      - name: Deploy ${{ matrix.job }}
-        working-directory: ${{ github.workspace }}
-        run: |
-          copilot job deploy \
-            --name ${{ matrix.job }} \
-            --env ${{ env.COPILOT_ENV }} \
-            --app ${{ env.COPILOT_APP }}
-
-      - name: Get job status
-        if: success()
-        run: |
-          copilot job status ${{ matrix.job }} --env ${{ env.COPILOT_ENV }} || echo "Status check completed"
-
-  # 배포 결과 알림
-  notify:
-    name: Notify Deployment Result
-    runs-on: ubuntu-latest
-    needs: [deploy-api, deploy-jobs]
-    if: always()
-
-    steps:
-      - name: Notify success
-        if: ${{ needs.deploy-api.result == 'success' && needs.deploy-jobs.result == 'success' }}
-        run: |
-          echo "✅ Deployment successful!"
-          echo "- API Server: Deployed"
-          echo "- Scheduled Jobs: Deployed"
-
-      - name: Notify failure
-        if: ${{ needs.deploy-api.result == 'failure' || needs.deploy-jobs.result == 'failure' }}
-        run: |
-          echo "❌ Deployment failed!"
-          echo "- API Server: ${{ needs.deploy-api.result }}"
-          echo "- Scheduled Jobs: ${{ needs.deploy-jobs.result }}"
-          exit 1
+          URL=$(aws cloudformation describe-stacks --stack-name insight-invest-api \
+            --query 'Stacks[0].Outputs[?OutputKey==`FunctionUrl`].OutputValue' --output text)
+          curl -sf "$URL/health" | grep healthy

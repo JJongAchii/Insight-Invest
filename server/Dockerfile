@@ -1,28 +1,23 @@
-FROM python:3.11-slim
+# Insight-Invest API — AWS Lambda 컨테이너 이미지 (재구조 2026-07)
+# 빌드:  docker build --secret id=gh_token,src=<토큰파일> -t insight-invest-api server/
+# 로컬 개발은 이미지 불필요: uvicorn app.main:app --reload
 
-ARG UID=1000
-ARG GID=1000
+FROM public.ecr.aws/lambda/python:3.12
 
-RUN groupadd -g "${GID}" appgroup && \
-    useradd --create-home --no-log-init -u "${UID}" -g "${GID}" appuser
+RUN dnf install -y git && dnf clean all
 
-WORKDIR /server
+COPY requirements.txt ${LAMBDA_TASK_ROOT}/
+RUN pip install --no-cache-dir -r ${LAMBDA_TASK_ROOT}/requirements.txt
 
-RUN apt-get update && \
-    pip install --upgrade pip
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+# qdata는 private repo — BuildKit secret이라 토큰이 레이어·히스토리에 남지 않는다
+RUN --mount=type=secret,id=gh_token \
+    pip install --no-cache-dir \
+    "qdata[s3] @ git+https://$(cat /run/secrets/gh_token)@github.com/JJongAchii/quant-data.git"
 
 ENV TZ=Asia/Seoul
 
-COPY --chown=appuser:appgroup . .
+COPY app/ ${LAMBDA_TASK_ROOT}/app/
+COPY datastore/ ${LAMBDA_TASK_ROOT}/datastore/
+COPY module/ ${LAMBDA_TASK_ROOT}/module/
 
-USER appuser:appgroup
-
-EXPOSE 8000
-
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["app.main.handler"]

@@ -8,8 +8,7 @@ import pandas as pd
 import polars as pl
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../..")))
-import db
-from module.data_lake.iceberg_client import iceberg_client
+import datastore
 from module.strategy import DualMomentum, EqualWeight
 from module.util import backtest_result
 
@@ -32,29 +31,15 @@ class Backtest:
         self, meta_id: Optional[List[int]] = None, tickers: Optional[List[str]] = None
     ) -> dict:
         """
-        meta_id 또는 tickers로 iso_code 조회 (SQLAlchemy 2.0 style)
+        meta_id 또는 tickers로 iso_code 조회 (datastore meta.parquet)
 
         Returns:
             {"US": [meta_ids], "KR": [meta_ids], "tickers": {meta_id: ticker}}
         """
-        from sqlalchemy import select
+        mapping = datastore.meta.resolve(meta_ids=meta_id, tickers=tickers)
 
-        with db.session_local() as session:
-            stmt = select(
-                db.TbMeta.meta_id,
-                db.TbMeta.ticker,
-                db.TbMeta.iso_code,
-            )
-            if meta_id:
-                stmt = stmt.where(db.TbMeta.meta_id.in_(meta_id))
-            if tickers:
-                stmt = stmt.where(db.TbMeta.ticker.in_(tickers))
-
-            results = session.execute(stmt).all()
-
-        # iso_code별로 분류
         result = {"US": [], "KR": [], "tickers": {}}
-        for row in results:
+        for row in mapping.itertuples():
             if row.iso_code == "US":
                 result["US"].append(row.meta_id)
             elif row.iso_code == "KR":
@@ -98,7 +83,7 @@ class Backtest:
 
             # US 데이터 조회
             if iso_info["US"]:
-                us_df = iceberg_client.read_price_data(
+                us_df = datastore.read_price_data(
                     iso_code="US",
                     meta_ids=iso_info["US"],
                     start_date=start_date,
@@ -109,7 +94,7 @@ class Backtest:
 
             # KR 데이터 조회
             if iso_info["KR"]:
-                kr_df = iceberg_client.read_price_data(
+                kr_df = datastore.read_price_data(
                     iso_code="KR",
                     meta_ids=iso_info["KR"],
                     start_date=start_date,
