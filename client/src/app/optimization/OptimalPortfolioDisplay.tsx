@@ -29,26 +29,26 @@ const PortfolioCard: React.FC<PortfolioCardProps> = ({
     <div className="card">
       <div className="flex items-center gap-2 mb-4">
         <div className={`w-3 h-3 rounded-full ${accentColor}`}></div>
-        <h4 className="text-sm font-semibold text-neutral-900">{title}</h4>
+        <h4 className="text-sm font-semibold text-ink">{title}</h4>
       </div>
 
       {/* Metrics */}
       <div className="grid grid-cols-3 gap-4 mb-5">
-        <div className="text-center p-3 bg-neutral-50 rounded-lg">
-          <p className="text-xs text-neutral-500 mb-1">Return</p>
-          <p className="text-lg font-semibold text-neutral-900">
+        <div className="text-center p-3 bg-raised rounded-lg">
+          <p className="text-xs text-ink-muted mb-1">Return</p>
+          <p className="text-lg font-semibold text-ink">
             {(portfolio.expected_return * 100).toFixed(2)}%
           </p>
         </div>
-        <div className="text-center p-3 bg-neutral-50 rounded-lg">
-          <p className="text-xs text-neutral-500 mb-1">Volatility</p>
-          <p className="text-lg font-semibold text-neutral-900">
+        <div className="text-center p-3 bg-raised rounded-lg">
+          <p className="text-xs text-ink-muted mb-1">Volatility</p>
+          <p className="text-lg font-semibold text-ink">
             {(portfolio.volatility * 100).toFixed(2)}%
           </p>
         </div>
-        <div className="text-center p-3 bg-neutral-50 rounded-lg">
-          <p className="text-xs text-neutral-500 mb-1">Sharpe</p>
-          <p className="text-lg font-semibold text-neutral-900">
+        <div className="text-center p-3 bg-raised rounded-lg">
+          <p className="text-xs text-ink-muted mb-1">Sharpe</p>
+          <p className="text-lg font-semibold text-ink">
             {portfolio.sharpe_ratio.toFixed(2)}
           </p>
         </div>
@@ -56,16 +56,16 @@ const PortfolioCard: React.FC<PortfolioCardProps> = ({
 
       {/* Weights */}
       <div>
-        <p className="text-xs font-medium text-neutral-500 mb-3">
+        <p className="text-xs font-medium text-ink-muted mb-3">
           Portfolio Weights
         </p>
         <div className="space-y-2">
           {sortedWeights.map(([ticker, weight]) => (
             <div key={ticker} className="flex items-center gap-3">
-              <span className="w-14 text-xs font-medium text-neutral-700">
+              <span className="w-14 text-xs font-medium text-ink-secondary">
                 {ticker}
               </span>
-              <div className="flex-1 h-5 bg-neutral-100 rounded-full overflow-hidden">
+              <div className="flex-1 h-5 bg-raised rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full ${
                     accentColor === "bg-emerald-500"
@@ -77,7 +77,7 @@ const PortfolioCard: React.FC<PortfolioCardProps> = ({
                   style={{ width: `${weight * 100}%` }}
                 />
               </div>
-              <span className="w-14 text-xs text-neutral-600 text-right">
+              <span className="w-14 text-xs text-ink-secondary text-right">
                 {(weight * 100).toFixed(1)}%
               </span>
             </div>

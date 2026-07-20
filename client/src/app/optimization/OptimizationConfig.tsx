@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { useFetchTickersQuery, OptimizationPayload } from "@/state/api";
 import Select, { SingleValue, MultiValue } from "react-select";
+import { tokenSelectStyles } from "@/components/ui/selectStyles";
 
 interface TickerData {
   iso_code: string;
@@ -28,42 +29,7 @@ interface OptimizationConfigProps {
   optimizationType: "mvo" | "risk_parity";
 }
 
-const selectStyles = {
-  control: (base: Record<string, unknown>, state: { isFocused: boolean }) => ({
-    ...base,
-    borderRadius: "0.5rem",
-    borderWidth: "1px",
-    borderColor: state.isFocused ? "#171717" : "#d4d4d4",
-    padding: "0.125rem",
-    boxShadow: state.isFocused ? "0 0 0 1px #171717" : "none",
-    "&:hover": { borderColor: "#a3a3a3" },
-    backgroundColor: "#fff",
-    fontSize: "0.875rem",
-  }),
-  option: (
-    base: Record<string, unknown>,
-    state: { isSelected: boolean; isFocused: boolean }
-  ) => ({
-    ...base,
-    backgroundColor: state.isSelected
-      ? "#171717"
-      : state.isFocused
-        ? "#f5f5f5"
-        : "transparent",
-    color: state.isSelected ? "#fff" : "#171717",
-    fontSize: "0.875rem",
-  }),
-  multiValue: (base: Record<string, unknown>) => ({
-    ...base,
-    backgroundColor: "#f5f5f5",
-    borderRadius: "0.375rem",
-  }),
-  multiValueLabel: (base: Record<string, unknown>) => ({
-    ...base,
-    color: "#171717",
-    fontSize: "0.75rem",
-  }),
-};
+const selectStyles = tokenSelectStyles;
 
 const OptimizationConfig: React.FC<OptimizationConfigProps> = ({
   onOptimize,
@@ -142,7 +108,7 @@ const OptimizationConfig: React.FC<OptimizationConfigProps> = ({
 
   return (
     <div className="card">
-      <h3 className="text-base font-semibold text-neutral-900 mb-6">
+      <h3 className="text-base font-semibold text-ink mb-6">
         {optimizationType === "mvo"
           ? "Mean-Variance Optimization"
           : "Risk Parity Optimization"}
@@ -246,10 +212,10 @@ const OptimizationConfig: React.FC<OptimizationConfigProps> = ({
 
         {/* Selected Assets Summary */}
         {selectedTickers.length > 0 && (
-          <div className="bg-neutral-50 rounded-lg p-3">
-            <p className="text-sm text-neutral-600">
+          <div className="bg-raised rounded-lg p-3">
+            <p className="text-sm text-ink-secondary">
               <span className="font-medium">{selectedTickers.length}</span> assets selected:{" "}
-              <span className="text-neutral-500">
+              <span className="text-ink-muted">
                 {selectedTickers.map((t) => t.label).join(", ")}
               </span>
             </p>

@@ -47,7 +47,7 @@ const SparklineChart: React.FC<SparklineChartProps> = ({
   if (!data || data.length < 2) {
     return (
       <div
-        className="flex items-center justify-center text-neutral-400 text-xs"
+        className="flex items-center justify-center text-ink-muted text-xs"
         style={{ width, height }}
       >
         —
@@ -55,7 +55,7 @@ const SparklineChart: React.FC<SparklineChartProps> = ({
     );
   }
 
-  const strokeColor = color || (isPositive ? "#22c55e" : "#ef4444");
+  const strokeColor = color || (isPositive ? "var(--gains)" : "var(--losses)");
 
   return (
     <svg width={width} height={height} className="overflow-visible">

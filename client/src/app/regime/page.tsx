@@ -3,7 +3,10 @@
 import { useFetchMacroDataQuery, useFetchMacroInfoQuery } from "@/state/api";
 import React from "react";
 import MacroChart from "./MacroChart";
-import LoadingSpinner from "../(components)/LoadingSpinner";
+import PageHeader from "@/components/ui/PageHeader";
+import StatTile from "@/components/ui/StatTile";
+import LoadingState from "@/components/ui/LoadingState";
+import ErrorState from "@/components/ui/ErrorState";
 
 interface MacroInfo {
   macro_id: string;
@@ -18,46 +21,55 @@ interface MacroData {
 }
 
 const Regime = () => {
-  const { data: macroInfo } = useFetchMacroInfoQuery({});
-  const { data: macroData } = useFetchMacroDataQuery({});
+  const {
+    data: macroInfo,
+    error: infoError,
+    refetch: refetchInfo,
+  } = useFetchMacroInfoQuery({});
+  const {
+    data: macroData,
+    error: dataError,
+    refetch: refetchData,
+  } = useFetchMacroDataQuery({});
 
-  const recessionInfo =
-    macroInfo?.find((macro: MacroInfo) => macro.fred === "USRECD") || {};
-  const recessionData = macroData?.filter(
-    (data: MacroData) => data.macro_id === recessionInfo.macro_id
-  );
+  const findIndicator = (fred: string) => {
+    const info =
+      macroInfo?.find((macro: MacroInfo) => macro.fred === fred) ||
+      ({} as Partial<MacroInfo>);
+    const data =
+      macroData?.filter((d: MacroData) => d.macro_id === info.macro_id) || [];
+    return { info, data };
+  };
 
-  const t10y2yInfo =
-    macroInfo?.find((macro: MacroInfo) => macro.fred === "T10Y2Y") || {};
-  const t10y2yData = macroData?.filter(
-    (data: MacroData) => data.macro_id === t10y2yInfo.macro_id
-  );
+  const { info: recessionInfo, data: recessionData } = findIndicator("USRECD");
+  const { info: t10y2yInfo, data: t10y2yData } = findIndicator("T10Y2Y");
+  const { info: unemploymentInfo, data: unemploymentData } =
+    findIndicator("UNRATE");
+  const { info: employeesInfo, data: employeesData } = findIndicator("PAYEMS");
+  const { info: fedFundInfo, data: fedFundData } = findIndicator("FEDFUNDS");
+  const { info: cpiInfo, data: cpiData } = findIndicator("CPIAUCSL");
 
-  const unemploymentInfo =
-    macroInfo?.find((macro: MacroInfo) => macro.fred === "UNRATE") || {};
-  const unemploymentData = macroData?.filter(
-    (data: MacroData) => data.macro_id === unemploymentInfo.macro_id
-  );
+  if (infoError || dataError) {
+    return (
+      <div className="card">
+        <ErrorState
+          message="Failed to load macro data"
+          onRetry={() => {
+            refetchInfo();
+            refetchData();
+          }}
+        />
+      </div>
+    );
+  }
 
-  const employeesInfo =
-    macroInfo?.find((macro: MacroInfo) => macro.fred === "PAYEMS") || {};
-  const employeesData = macroData?.filter(
-    (data: MacroData) => data.macro_id === employeesInfo.macro_id
-  );
-
-  const fedFundInfo =
-    macroInfo?.find((macro: MacroInfo) => macro.fred === "FEDFUNDS") || {};
-  const fedFundData = macroData?.filter(
-    (data: MacroData) => data.macro_id === fedFundInfo.macro_id
-  );
-
-  const cpiInfo =
-    macroInfo?.find((macro: MacroInfo) => macro.fred === "CPIAUCSL") || {};
-  const cpiData = macroData?.filter(
-    (data: MacroData) => data.macro_id === cpiInfo.macro_id
-  );
-
-  if (!macroInfo || !macroData) return <LoadingSpinner />;
+  if (!macroInfo || !macroData) {
+    return (
+      <div className="card">
+        <LoadingState label="Loading macro indicators..." />
+      </div>
+    );
+  }
 
   // Get latest recession indicator value
   const latestRecession = recessionData?.[recessionData.length - 1];
@@ -70,63 +82,39 @@ const Regime = () => {
 
   return (
     <div className="flex flex-col gap-6 pb-16">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-neutral-900">
-            Market Regime Analysis
-          </h1>
-          <p className="text-sm text-neutral-500 mt-1">
-            Macroeconomic indicators and recession probability
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Market Regime Analysis"
+        description="Macroeconomic indicators and recession probability"
+      />
 
       {/* Current Regime Indicator */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-neutral-900">
-            Current Regime
-          </h2>
-          <span
-            className={`px-3 py-1 rounded-full text-sm font-medium ${
-              isRecession
-                ? "bg-danger/10 text-danger"
-                : "bg-success/10 text-success"
-            }`}
-          >
+          <h2 className="section-header mb-0">Current Regime</h2>
+          <span className={isRecession ? "badge-danger" : "badge-success"}>
             {isRecession ? "Recession" : "Expansion"}
           </span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="p-4 bg-neutral-50 rounded-lg">
-            <p className="text-xs text-neutral-500 mb-1">Yield Spread (10Y-2Y)</p>
-            <p
-              className={`text-xl font-semibold ${
-                latestT10Y2Y?.value >= 0 ? "text-success" : "text-danger"
-              }`}
-            >
-              {latestT10Y2Y?.value?.toFixed(2)}%
-            </p>
-          </div>
-          <div className="p-4 bg-neutral-50 rounded-lg">
-            <p className="text-xs text-neutral-500 mb-1">Unemployment Rate</p>
-            <p className="text-xl font-semibold text-neutral-900">
-              {latestUnemployment?.value?.toFixed(1)}%
-            </p>
-          </div>
-          <div className="p-4 bg-neutral-50 rounded-lg">
-            <p className="text-xs text-neutral-500 mb-1">Fed Funds Rate</p>
-            <p className="text-xl font-semibold text-neutral-900">
-              {latestFedFund?.value?.toFixed(2)}%
-            </p>
-          </div>
-          <div className="p-4 bg-neutral-50 rounded-lg">
-            <p className="text-xs text-neutral-500 mb-1">Last Updated</p>
-            <p className="text-xl font-semibold text-neutral-900">
-              {latestRecession?.base_date?.slice(0, 7)}
-            </p>
-          </div>
+          <StatTile
+            label="Yield Spread (10Y-2Y)"
+            value={`${latestT10Y2Y?.value?.toFixed(2) ?? "—"}%`}
+            deltaType={
+              latestT10Y2Y && latestT10Y2Y.value >= 0 ? "gain" : "loss"
+            }
+          />
+          <StatTile
+            label="Unemployment Rate"
+            value={`${latestUnemployment?.value?.toFixed(1) ?? "—"}%`}
+          />
+          <StatTile
+            label="Fed Funds Rate"
+            value={`${latestFedFund?.value?.toFixed(2) ?? "—"}%`}
+          />
+          <StatTile
+            label="Last Updated"
+            value={latestRecession?.base_date?.slice(0, 7) ?? "—"}
+          />
         </div>
       </div>
 
@@ -135,16 +123,17 @@ const Regime = () => {
         <MacroChart
           primaryData={t10y2yData}
           recessionData={recessionData}
-          primaryLabel={t10y2yInfo.description}
-          recessionLabel={recessionInfo.description}
+          primaryLabel={t10y2yInfo.description ?? "T10Y2Y"}
+          recessionLabel={recessionInfo.description ?? "US Recession"}
           title="10-Year Minus 2-Year Treasury Spread"
+          baseline={0}
         />
 
         <MacroChart
           primaryData={unemploymentData}
           recessionData={recessionData}
-          primaryLabel={unemploymentInfo.description}
-          recessionLabel={recessionInfo.description}
+          primaryLabel={unemploymentInfo.description ?? "Unemployment Rate"}
+          recessionLabel={recessionInfo.description ?? "US Recession"}
           title="Unemployment Rate"
           baseline={5}
         />
@@ -152,8 +141,8 @@ const Regime = () => {
         <MacroChart
           primaryData={employeesData}
           recessionData={recessionData}
-          primaryLabel={employeesInfo.description}
-          recessionLabel={recessionInfo.description}
+          primaryLabel={employeesInfo.description ?? "Nonfarm Payrolls"}
+          recessionLabel={recessionInfo.description ?? "US Recession"}
           title="All Employees, Total Nonfarm"
           baseline={150000}
         />
@@ -161,16 +150,16 @@ const Regime = () => {
         <MacroChart
           primaryData={fedFundData}
           recessionData={recessionData}
-          primaryLabel={fedFundInfo.description}
-          recessionLabel={recessionInfo.description}
+          primaryLabel={fedFundInfo.description ?? "Federal Funds Rate"}
+          recessionLabel={recessionInfo.description ?? "US Recession"}
           title="Federal Funds Rate"
         />
 
         <MacroChart
           primaryData={cpiData}
           recessionData={recessionData}
-          primaryLabel={cpiInfo.description}
-          recessionLabel={recessionInfo.description}
+          primaryLabel={cpiInfo.description ?? "CPI"}
+          recessionLabel={recessionInfo.description ?? "US Recession"}
           title="Consumer Price Index for All Urban Consumers"
           baseline={0.02}
         />

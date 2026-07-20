@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from "react";
+import React, { Suspense, useState, useMemo, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { useFetchMetaDataQuery } from "@/state/api";
 import MetaTable from "./MetaTable";
@@ -8,10 +9,15 @@ import StockFilters from "./StockFilters";
 import StockDetailPanel from "./StockDetailPanel";
 import CompareView from "./CompareView";
 import { MetaRow, FilterState } from "./types";
+import PageHeader from "@/components/ui/PageHeader";
+import LoadingState from "@/components/ui/LoadingState";
 
 type ViewMode = "list" | "compare";
 
-const StockSearch = () => {
+const StockSearchContent = () => {
+  const searchParams = useSearchParams();
+  const initialQuickFilter = searchParams.get("q") ?? "";
+
   // View state
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedStock, setSelectedStock] = useState<MetaRow | null>(null);
@@ -79,25 +85,18 @@ const StockSearch = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-neutral-500">Loading stocks...</div>
+      <div className="card">
+        <LoadingState label="Loading stocks..." />
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-6 pb-16">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-neutral-900">
-            Stock Search
-          </h1>
-          <p className="text-sm text-neutral-500 mt-1">
-            Search and explore stock metadata across US and Korean markets
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Stock Search"
+        description="Search and explore stock metadata across US and Korean markets"
+      />
 
       {viewMode === "list" ? (
         <>
@@ -115,30 +114,32 @@ const StockSearch = () => {
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
             onRowClick={handleRowClick}
+            initialQuickFilter={initialQuickFilter}
           />
 
           {/* Action Bar - Show when stocks are selected */}
           {selectedIds.length > 0 && (
             <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
-              <div className="flex items-center gap-4 px-6 py-3 bg-neutral-900 text-white rounded-full shadow-lg">
+              <div className="flex items-center gap-4 px-6 py-3 bg-overlay border border-edge-strong text-ink rounded-full shadow-lg">
                 <span className="text-sm">
-                  {selectedIds.length} stock{selectedIds.length > 1 ? "s" : ""} selected
+                  {selectedIds.length} stock{selectedIds.length > 1 ? "s" : ""}{" "}
+                  selected
                 </span>
-                <div className="w-px h-5 bg-neutral-700" />
+                <div className="w-px h-5 bg-edge-strong" />
                 <button
                   onClick={handleCompareClick}
                   disabled={selectedIds.length < 2}
                   className={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${
                     selectedIds.length >= 2
-                      ? "bg-primary-500 hover:bg-primary-600"
-                      : "bg-neutral-700 text-neutral-400 cursor-not-allowed"
+                      ? "bg-primary-500 hover:bg-primary-600 text-white"
+                      : "bg-raised text-ink-muted cursor-not-allowed"
                   }`}
                 >
                   Compare
                 </button>
                 <button
                   onClick={() => setSelectedIds([])}
-                  className="px-4 py-1.5 text-sm font-medium rounded-full bg-neutral-800 hover:bg-neutral-700"
+                  className="px-4 py-1.5 text-sm font-medium rounded-full bg-raised hover:bg-overlay"
                 >
                   Clear
                 </button>
@@ -151,7 +152,7 @@ const StockSearch = () => {
             <>
               {/* Backdrop */}
               <div
-                className="fixed inset-0 bg-black/20 z-40"
+                className="fixed inset-0 bg-black/40 z-40"
                 onClick={handleClosePanel}
               />
               <StockDetailPanel
@@ -170,6 +171,20 @@ const StockSearch = () => {
         />
       )}
     </div>
+  );
+};
+
+const StockSearch = () => {
+  return (
+    <Suspense
+      fallback={
+        <div className="card">
+          <LoadingState label="Loading stocks..." />
+        </div>
+      }
+    >
+      <StockSearchContent />
+    </Suspense>
   );
 };
 

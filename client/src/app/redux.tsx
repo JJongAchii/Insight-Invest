@@ -47,7 +47,7 @@ const storage =
     : createWebStorage("local");
 
 const persistConfig = {
-  key: "root",
+  key: "ii-v2", // v2: 다크 퍼스트 기본값 적용을 위해 구 persist 상태 리셋
   storage,
   whitelist: ["global"],
 };

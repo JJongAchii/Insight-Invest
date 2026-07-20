@@ -16,9 +16,32 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/backtest", tags=["Backtest"])
 
-BACKTEST_RESULT = {}
-
 METRIC_COLS = ["ann_ret", "ann_vol", "sharpe", "mdd", "skew", "kurt", "var", "cvar"]
+
+# Lambda는 요청마다 다른 컨테이너일 수 있어 인메모리 결과 공유 불가 —
+# 백테스트 결과를 S3(tmp_results/{token}/)에 보관하고 저장 시 토큰으로 리로드한다.
+TMP_DIR = "tmp_results"
+
+
+def _persist_result(token: str, weights: pd.DataFrame, nav: pd.Series, metrics: pd.DataFrame):
+    from datastore import storage
+
+    storage.write_parquet(weights.reset_index(names="__idx"), TMP_DIR, token, "weights.parquet")
+    nav_df = nav.rename("value").rename_axis("__idx").reset_index()
+    storage.write_parquet(nav_df, TMP_DIR, token, "nav.parquet")
+    storage.write_parquet(metrics, TMP_DIR, token, "metrics.parquet")
+
+
+def _load_result(token: str):
+    from datastore import storage
+
+    try:
+        weights = storage.read_parquet(TMP_DIR, token, "weights.parquet").set_index("__idx")
+        nav = storage.read_parquet(TMP_DIR, token, "nav.parquet").set_index("__idx")["value"]
+        metrics = storage.read_parquet(TMP_DIR, token, "metrics.parquet")
+        return weights, nav, metrics
+    except FileNotFoundError:
+        return None
 
 
 @router.get("/algorithm", response_model=List[schemas.Strategy])
@@ -116,6 +139,8 @@ async def set_benchmark(port_id: int):
 
 @router.post("")
 async def run_backtest(request: schemas.BacktestRequest):
+    import uuid
+
     strategy_name = request.strategy_name
     bt = Backtest(strategy_name=strategy_name)
     price = bt.data(meta_id=request.meta_id)
@@ -124,9 +149,16 @@ async def run_backtest(request: schemas.BacktestRequest):
     )
     weights, nav, metrics = bt.result(price=price, weight=weight)
 
-    BACKTEST_RESULT[strategy_name] = {"weights": weights, "nav": nav, "metrics": metrics}
+    token = uuid.uuid4().hex
+    _persist_result(
+        token,
+        weights=weights.get(strategy_name),
+        nav=nav[strategy_name],
+        metrics=metrics,
+    )
 
     return {
+        "result_token": token,
         "weights": weights.get(strategy_name).to_json(orient="split"),
         "nav": nav.to_json(orient="split"),
         "metrics": metrics.to_json(orient="records"),
@@ -134,15 +166,13 @@ async def run_backtest(request: schemas.BacktestRequest):
 
 
 @router.post("/savestrategy")
-async def save_strategy(request: schemas.BacktestRequest):
+async def save_strategy(request: schemas.SaveStrategyRequest):
     strategy_name = request.strategy_name
-    result = BACKTEST_RESULT.get(strategy_name)
-    if not result:
-        raise HTTPException(status_code=404, detail="Backtest result not found.")
+    result = _load_result(request.result_token)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Backtest result not found or expired.")
 
-    weights = result["weights"].get(strategy_name)
-    nav = result["nav"].get(strategy_name)
-    metrics = result["metrics"]
+    weights, nav, metrics = result
 
     if portfolio.exists_name(strategy_name):
         raise HTTPException(status_code=400, detail="Portfolio name already exists.")

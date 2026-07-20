@@ -52,7 +52,7 @@ const SidebarLink = ({
           ${
             isActive
               ? "bg-gradient-to-r from-primary-400 to-primary-500 text-white shadow-lg shadow-primary-500/25"
-              : "text-neutral-600 hover:bg-white/50 hover:text-neutral-900"
+              : "text-ink-secondary hover:bg-raised hover:text-ink"
           }
         `}
       >
@@ -91,7 +91,7 @@ const Sidebar = () => {
       className={`
         fixed flex flex-col h-full z-40
         ${isSidebarCollapsed ? "w-0 md:w-16" : "w-60"}
-        bg-white/40 backdrop-blur-xl border-r border-white/30
+        bg-surface border-r border-edge
         transition-all duration-200 overflow-hidden
       `}
     >
@@ -100,7 +100,7 @@ const Sidebar = () => {
         className={`
           flex items-center justify-between
           ${isSidebarCollapsed ? "px-2 py-4" : "px-4 py-5"}
-          border-b border-white/20
+          border-b border-edge
         `}
       >
         <Link href="/home" className="flex items-center gap-2">
@@ -108,16 +108,16 @@ const Sidebar = () => {
             <span className="text-white font-bold text-sm">II</span>
           </div>
           {!isSidebarCollapsed && (
-            <span className="font-semibold text-neutral-800">
+            <span className="font-semibold text-ink">
               Insight Invest
             </span>
           )}
         </Link>
         <button
-          className="md:hidden p-1.5 hover:bg-white/50 rounded-lg transition-colors"
+          className="md:hidden p-1.5 hover:bg-raised rounded-lg transition-colors"
           onClick={toggleSidebar}
         >
-          <IoMenu className="w-5 h-5 text-neutral-600" />
+          <IoMenu className="w-5 h-5 text-ink-secondary" />
         </button>
       </div>
 
@@ -150,7 +150,7 @@ const Sidebar = () => {
               flex items-center justify-between cursor-pointer
               ${isSidebarCollapsed ? "justify-center py-3 mx-2" : "px-4 py-2.5 mx-3"}
               rounded-xl
-              text-neutral-600 hover:bg-white/50 hover:text-neutral-900
+              text-ink-secondary hover:bg-raised hover:text-ink
               transition-all duration-200
             `}
           >
@@ -212,8 +212,8 @@ const Sidebar = () => {
 
       {/* Footer */}
       {!isSidebarCollapsed && (
-        <div className="p-4 border-t border-white/20">
-          <p className="text-xs text-neutral-400 text-center">
+        <div className="p-4 border-t border-edge">
+          <p className="text-xs text-ink-muted text-center">
             Insight Invest &copy; 2024
           </p>
         </div>

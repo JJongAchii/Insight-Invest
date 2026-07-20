@@ -42,15 +42,15 @@ const StockFilters: React.FC<StockFiltersProps> = ({
   return (
     <div className="flex flex-wrap items-center gap-4">
       {/* Market Tabs */}
-      <div className="flex rounded-lg bg-neutral-100 p-1">
+      <div className="flex rounded-lg bg-raised p-1">
         {MARKET_OPTIONS.map((option) => (
           <button
             key={option.value}
             onClick={() => handleMarketChange(option.value)}
             className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
               filters.market === option.value
-                ? "bg-white text-neutral-900 shadow-sm"
-                : "text-neutral-600 hover:text-neutral-900"
+                ? "bg-overlay text-ink shadow-sm"
+                : "text-ink-secondary hover:text-ink"
             }`}
           >
             {option.label}
@@ -62,7 +62,7 @@ const StockFilters: React.FC<StockFiltersProps> = ({
       <select
         value={filters.sector}
         onChange={handleSectorChange}
-        className="px-3 py-2 text-sm border border-neutral-200 rounded-lg bg-white
+        className="px-3 py-2 text-sm border border-edge rounded-lg bg-surface
                    focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
       >
         <option value="">All Sectors</option>
@@ -77,7 +77,7 @@ const StockFilters: React.FC<StockFiltersProps> = ({
       <select
         value={filters.cap}
         onChange={handleCapChange}
-        className="px-3 py-2 text-sm border border-neutral-200 rounded-lg bg-white
+        className="px-3 py-2 text-sm border border-edge rounded-lg bg-surface
                    focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
       >
         {CAP_OPTIONS.map((option) => (

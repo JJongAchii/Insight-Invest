@@ -101,21 +101,21 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
   const metrics = summaryData?.metrics;
 
   return (
-    <div className="fixed inset-y-0 right-0 w-[400px] bg-white shadow-2xl z-50 flex flex-col">
+    <div className="fixed inset-y-0 right-0 w-[400px] bg-surface shadow-2xl z-50 flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-neutral-200">
+      <div className="flex items-center justify-between p-4 border-b border-edge">
         <div>
-          <h2 className="text-lg font-semibold text-neutral-900">
+          <h2 className="text-lg font-semibold text-ink">
             {stock.ticker}
           </h2>
-          <p className="text-sm text-neutral-500">{stock.name}</p>
+          <p className="text-sm text-ink-muted">{stock.name}</p>
         </div>
         <button
           onClick={onClose}
-          className="p-2 hover:bg-neutral-100 rounded-lg transition-colors"
+          className="p-2 hover:bg-raised rounded-lg transition-colors"
         >
           <svg
-            className="w-5 h-5 text-neutral-500"
+            className="w-5 h-5 text-ink-muted"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -135,7 +135,7 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
         {/* Price Chart */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-neutral-700">Price Chart</h3>
+            <h3 className="text-sm font-medium text-ink-secondary">Price Chart</h3>
             <div className="flex gap-1">
               {PERIOD_OPTIONS.map((opt) => (
                 <button
@@ -144,7 +144,7 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
                   className={`px-2 py-1 text-xs font-medium rounded ${
                     period === opt.value
                       ? "bg-primary-500 text-white"
-                      : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                      : "bg-raised text-ink-secondary hover:bg-overlay"
                   }`}
                 >
                   {opt.label}
@@ -153,9 +153,9 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
             </div>
           </div>
 
-          <div className="h-48 bg-neutral-50 rounded-lg p-2">
+          <div className="h-48 bg-raised rounded-lg p-2">
             {isLoading ? (
-              <div className="h-full flex items-center justify-center text-neutral-400">
+              <div className="h-full flex items-center justify-center text-ink-muted">
                 Loading...
               </div>
             ) : chartData.length > 0 ? (
@@ -163,7 +163,9 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
                 <LineChart data={chartData}>
                   <XAxis
                     dataKey="date"
-                    tick={{ fontSize: 10 }}
+                    tick={{ fontSize: 10, fill: "var(--text-muted)" }}
+                    axisLine={{ stroke: "var(--border)" }}
+                    tickLine={{ stroke: "var(--border)" }}
                     tickFormatter={(val) => {
                       const d = new Date(val);
                       return `${d.getMonth() + 1}/${d.getDate()}`;
@@ -172,25 +174,34 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
                   />
                   <YAxis
                     domain={["auto", "auto"]}
-                    tick={{ fontSize: 10 }}
+                    tick={{ fontSize: 10, fill: "var(--text-muted)" }}
+                    axisLine={{ stroke: "var(--border)" }}
+                    tickLine={{ stroke: "var(--border)" }}
                     width={50}
                     tickFormatter={(val) => `$${val.toFixed(0)}`}
                   />
                   <Tooltip
+                    contentStyle={{
+                      background: "var(--surface-overlay)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 12,
+                      color: "var(--text-primary)",
+                    }}
+                    labelStyle={{ color: "var(--text-secondary)" }}
                     formatter={(value: number) => [formatPrice(value), "Price"]}
                     labelFormatter={(label) => new Date(label).toLocaleDateString()}
                   />
                   <Line
                     type="monotone"
                     dataKey="price"
-                    stroke="#3b82f6"
+                    stroke="var(--chart-1)"
                     strokeWidth={1.5}
                     dot={false}
                   />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-full flex items-center justify-center text-neutral-400">
+              <div className="h-full flex items-center justify-center text-ink-muted">
                 No price data available
               </div>
             )}
@@ -199,7 +210,7 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
 
         {/* Key Metrics */}
         <div>
-          <h3 className="text-sm font-medium text-neutral-700 mb-3">
+          <h3 className="text-sm font-medium text-ink-secondary mb-3">
             Performance Metrics
           </h3>
           <div className="grid grid-cols-3 gap-3">
@@ -236,7 +247,7 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
 
         {/* Stock Info */}
         <div>
-          <h3 className="text-sm font-medium text-neutral-700 mb-3">
+          <h3 className="text-sm font-medium text-ink-secondary mb-3">
             Stock Information
           </h3>
           <div className="space-y-2 text-sm">
@@ -255,7 +266,7 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
       </div>
 
       {/* Actions */}
-      <div className="p-4 border-t border-neutral-200 space-y-2">
+      <div className="p-4 border-t border-edge space-y-2">
         <button
           onClick={() => onAddToCompare(stock.meta_id)}
           className="w-full py-2 px-4 bg-primary-500 text-white font-medium rounded-lg
@@ -276,13 +287,13 @@ interface MetricCardProps {
 }
 
 const MetricCard: React.FC<MetricCardProps> = ({ label, value, isPositive }) => {
-  let textColor = "text-neutral-900";
-  if (isPositive === true) textColor = "text-green-600";
-  if (isPositive === false) textColor = "text-red-600";
+  let textColor = "text-ink";
+  if (isPositive === true) textColor = "text-gains";
+  if (isPositive === false) textColor = "text-losses";
 
   return (
-    <div className="bg-neutral-50 rounded-lg p-3">
-      <p className="text-xs text-neutral-500 mb-1">{label}</p>
+    <div className="bg-raised rounded-lg p-3">
+      <p className="text-xs text-ink-muted mb-1">{label}</p>
       <p className={`text-sm font-semibold ${textColor}`}>{value}</p>
     </div>
   );
@@ -295,8 +306,8 @@ interface InfoRowProps {
 
 const InfoRow: React.FC<InfoRowProps> = ({ label, value }) => (
   <div className="flex justify-between">
-    <span className="text-neutral-500">{label}</span>
-    <span className="text-neutral-900 font-medium">{value}</span>
+    <span className="text-ink-muted">{label}</span>
+    <span className="text-ink font-medium">{value}</span>
   </div>
 );
 

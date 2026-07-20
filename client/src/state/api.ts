@@ -116,10 +116,14 @@ export interface BacktestPayload {
 }
 
 export interface BacktestResult {
+  result_token: string;
   weights: string;
   nav: string;
   metrics: string;
 }
+
+// 저장은 실행 응답의 result_token을 반드시 동반한다 (Lambda 컨테이너 간 상태 공유 불가)
+export type SaveStrategyPayload = BacktestPayload & { result_token: string };
 
 export interface SaveStrategyResponse {
   message: string;
@@ -270,7 +274,7 @@ export const api = createApi({
         body: payload,
       }),
     }),
-    saveStrategy: builder.mutation<SaveStrategyResponse, BacktestPayload>({
+    saveStrategy: builder.mutation<SaveStrategyResponse, SaveStrategyPayload>({
       query: (payload) => ({
         url: "/backtest/savestrategy",
         method: "POST",

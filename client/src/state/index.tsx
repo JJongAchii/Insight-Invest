@@ -7,7 +7,7 @@ export interface InitialStateTypes {
 
 const initialState: InitialStateTypes = {
   isSidebarCollapsed: false,
-  isDarkMode: false,
+  isDarkMode: true, // 다크 퍼스트 — 라이트는 토글 옵션
 };
 
 export const globalSlice = createSlice({

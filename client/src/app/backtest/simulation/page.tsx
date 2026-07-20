@@ -9,6 +9,7 @@ import {
   useRunBacktestMutation,
   useClearStrategyMutation,
   BacktestPayload,
+  SaveStrategyPayload,
   BacktestResult,
 } from "@/state/api";
 
@@ -18,7 +19,7 @@ const Simulation = () => {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const [selectedTicker, setSelectedTicker] = useState<
-    Record<string, BacktestPayload>
+    Record<string, SaveStrategyPayload>
   >(() => {
     if (typeof window === "undefined") return {};
     const savedTicker = localStorage.getItem("selectedTicker");
@@ -38,7 +39,7 @@ const Simulation = () => {
       setBacktestResult(result);
       setSelectedTicker((prevSelectedTicker) => ({
         ...prevSelectedTicker,
-        [payload.strategy_name]: payload,
+        [payload.strategy_name]: { ...payload, result_token: result.result_token },
       }));
     } catch (error) {
       console.error("Error running backtest:", error);
@@ -82,11 +83,11 @@ const Simulation = () => {
       {/* Clear Confirmation Modal */}
       {showClearConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 max-w-md mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-neutral-900 mb-2">
+          <div className="card-elevated max-w-md mx-4">
+            <h3 className="text-lg font-semibold text-ink mb-2">
               Clear All Strategies?
             </h3>
-            <p className="text-neutral-600 text-sm mb-6">
+            <p className="text-ink-secondary text-sm mb-6">
               This will remove all backtest results and selected tickers. This
               action cannot be undone.
             </p>
@@ -109,10 +110,8 @@ const Simulation = () => {
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-neutral-900">
-            Backtest Simulation
-          </h1>
-          <p className="text-sm text-neutral-500 mt-1">
+          <h1 className="page-title">Backtest Simulation</h1>
+          <p className="page-description">
             Test your investment strategies with historical data
           </p>
         </div>

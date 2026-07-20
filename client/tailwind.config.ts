@@ -31,12 +31,36 @@ const config: Config = {
           500: "#0EA5E9",
         },
         // Financial semantics (softer tones)
-        gains: "#10B981",
-        losses: "#F87171",
+        gains: "var(--gains)",
+        losses: "var(--losses)",
         warning: "#F59E0B",
         // Legacy aliases
-        success: "#10B981",
-        danger: "#F87171",
+        success: "var(--gains)",
+        danger: "var(--losses)",
+
+        // Semantic surface/text tokens — :root(다크 기본)/.light 가 정의 (globals.css)
+        canvas: "var(--canvas)",
+        surface: "var(--surface)",
+        raised: "var(--surface-raised)",
+        overlay: "var(--surface-overlay)",
+        ink: {
+          DEFAULT: "var(--text-primary)",
+          secondary: "var(--text-secondary)",
+          muted: "var(--text-muted)",
+        },
+        edge: {
+          DEFAULT: "var(--border)",
+          strong: "var(--border-strong)",
+        },
+        chart: {
+          1: "var(--chart-1)",
+          2: "var(--chart-2)",
+          3: "var(--chart-3)",
+          4: "var(--chart-4)",
+          5: "var(--chart-5)",
+          6: "var(--chart-6)",
+          grid: "var(--grid-line)",
+        },
 
         // Custom neutral scale
         neutral: {
@@ -55,7 +79,7 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
-        mono: ["SF Mono", "Fira Code", "monospace"],
+        mono: ["SF Mono", "ui-monospace", "Fira Code", "monospace"],
       },
       borderRadius: {
         xl: "12px",

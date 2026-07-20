@@ -4,6 +4,7 @@ import React, { useEffect } from "react";
 import Navbar from "./(components)/Navbar";
 import Sidebar from "./(components)/Sidebar";
 import StoreProvider, { useAppSelector } from "./redux";
+import MuiThemeBridge from "@/components/ui/MuiThemeBridge";
 
 const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   const isSidebarCollapsed = useAppSelector(
@@ -23,7 +24,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <div
-      className={`${isDarkMode ? "dark" : "light"} flex bg-gradient-to-br from-primary-50 via-white to-secondary-50 text-neutral-900 w-full min-h-screen`}
+      className={`${isDarkMode ? "dark" : "light"} flex text-ink w-full min-h-screen`}
     >
       <Sidebar />
       <main
@@ -34,7 +35,9 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
         `}
       >
         <Navbar />
-        <div className="flex-grow">{children}</div>
+        <div className="flex-grow">
+          <MuiThemeBridge>{children}</MuiThemeBridge>
+        </div>
       </main>
     </div>
   );

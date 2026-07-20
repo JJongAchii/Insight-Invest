@@ -3,12 +3,12 @@ import React from "react";
 import {
   useSaveStrategyMutation,
   BacktestResult,
-  BacktestPayload,
+  SaveStrategyPayload,
 } from "@/state/api";
 
 interface StrategyMetricsProps {
   backtestResult: BacktestResult | null;
-  selectedTicker: Record<string, BacktestPayload>;
+  selectedTicker: Record<string, SaveStrategyPayload>;
 }
 
 const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
@@ -26,7 +26,6 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
 
     try {
       await saveStrategy(strategyData).unwrap();
-      console.log("Strategy saved successfully");
     } catch (error) {
       console.error("Error saving strategy:", error);
     }
@@ -159,7 +158,7 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
 
   return (
     <div className="card">
-      <h3 className="text-base font-semibold text-neutral-900 mb-4">
+      <h3 className="text-base font-semibold text-ink mb-4">
         Performance Metrics
       </h3>
       <div style={{ minHeight: 200 }}>
@@ -173,37 +172,20 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
             disableColumnMenu
             sx={{
               border: 0,
-              "& .MuiDataGrid-columnHeaders": {
-                backgroundColor: "rgba(124, 91, 255, 0.08)",
-                borderBottom: "1px solid rgba(124, 91, 255, 0.1)",
-              },
-              "& .MuiDataGrid-columnHeaderTitle": {
-                fontSize: "0.75rem",
-                fontWeight: 600,
-                color: "#525252",
-              },
-              "& .MuiDataGrid-cell": {
-                fontSize: "0.875rem",
-                color: "#171717",
-                borderBottom: "1px solid rgba(124, 91, 255, 0.05)",
-              },
-              "& .MuiDataGrid-row:hover": {
-                backgroundColor: "rgba(124, 91, 255, 0.05)",
-              },
               "& .text-success": {
-                color: "#10B981 !important",
+                color: "var(--gains) !important",
                 fontWeight: 500,
               },
               "& .text-danger": {
-                color: "#F87171 !important",
+                color: "var(--losses) !important",
                 fontWeight: 500,
               },
             }}
           />
         ) : (
           <div className="flex flex-col items-center justify-center py-12">
-            <p className="text-neutral-400 text-sm">No metrics available</p>
-            <p className="text-neutral-400 text-xs mt-1">
+            <p className="text-ink-muted text-sm">No metrics available</p>
+            <p className="text-ink-muted text-xs mt-1">
               Run a backtest to see performance metrics
             </p>
           </div>

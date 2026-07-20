@@ -31,11 +31,11 @@ const PERIOD_OPTIONS: { value: Period; label: string }[] = [
 ];
 
 const CHART_COLORS = [
-  "#3b82f6", // blue
-  "#ef4444", // red
-  "#22c55e", // green
-  "#f59e0b", // amber
-  "#8b5cf6", // purple
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
 ];
 
 const formatPercent = (value: number | null): string => {
@@ -88,7 +88,7 @@ const CompareView: React.FC<CompareViewProps> = ({
   if (selectedIds.length === 0) {
     return (
       <div className="card text-center py-12">
-        <p className="text-neutral-500">Select stocks to compare</p>
+        <p className="text-ink-muted">Select stocks to compare</p>
         <button
           onClick={onBack}
           className="mt-4 text-primary-500 hover:underline"
@@ -106,7 +106,7 @@ const CompareView: React.FC<CompareViewProps> = ({
         <div className="flex items-center gap-4">
           <button
             onClick={onBack}
-            className="flex items-center gap-2 text-neutral-600 hover:text-neutral-900"
+            className="flex items-center gap-2 text-ink-secondary hover:text-ink"
           >
             <svg
               className="w-5 h-5"
@@ -123,7 +123,7 @@ const CompareView: React.FC<CompareViewProps> = ({
             </svg>
             Back
           </button>
-          <h2 className="text-xl font-semibold text-neutral-900">
+          <h2 className="text-xl font-semibold text-ink">
             Compare Stocks
           </h2>
         </div>
@@ -143,7 +143,7 @@ const CompareView: React.FC<CompareViewProps> = ({
             key={id}
             className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium"
             style={{
-              backgroundColor: `${CHART_COLORS[index % CHART_COLORS.length]}15`,
+              backgroundColor: `color-mix(in srgb, ${CHART_COLORS[index % CHART_COLORS.length]} 12%, transparent)`,
               color: CHART_COLORS[index % CHART_COLORS.length],
             }}
           >
@@ -167,7 +167,7 @@ const CompareView: React.FC<CompareViewProps> = ({
       {/* Normalized Price Chart */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-semibold text-neutral-900">
+          <h3 className="text-base font-semibold text-ink">
             Normalized Price (Base = 100)
           </h3>
           <div className="flex gap-1">
@@ -178,7 +178,7 @@ const CompareView: React.FC<CompareViewProps> = ({
                 className={`px-3 py-1.5 text-sm font-medium rounded ${
                   period === opt.value
                     ? "bg-primary-500 text-white"
-                    : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                    : "bg-raised text-ink-secondary hover:bg-overlay"
                 }`}
               >
                 {opt.label}
@@ -189,7 +189,7 @@ const CompareView: React.FC<CompareViewProps> = ({
 
         <div className="h-80">
           {isLoading ? (
-            <div className="h-full flex items-center justify-center text-neutral-400">
+            <div className="h-full flex items-center justify-center text-ink-muted">
               Loading...
             </div>
           ) : compareData?.normalized_prices &&
@@ -198,7 +198,9 @@ const CompareView: React.FC<CompareViewProps> = ({
               <LineChart data={compareData.normalized_prices}>
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 11 }}
+                  tick={{ fontSize: 11, fill: "var(--text-muted)" }}
+                  axisLine={{ stroke: "var(--border)" }}
+                  tickLine={{ stroke: "var(--border)" }}
                   tickFormatter={(val) => {
                     const d = new Date(val);
                     return `${d.getMonth() + 1}/${d.getDate()}`;
@@ -207,10 +209,19 @@ const CompareView: React.FC<CompareViewProps> = ({
                 />
                 <YAxis
                   domain={["auto", "auto"]}
-                  tick={{ fontSize: 11 }}
+                  tick={{ fontSize: 11, fill: "var(--text-muted)" }}
+                  axisLine={{ stroke: "var(--border)" }}
+                  tickLine={{ stroke: "var(--border)" }}
                   width={50}
                 />
                 <Tooltip
+                  contentStyle={{
+                    background: "var(--surface-overlay)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 12,
+                    color: "var(--text-primary)",
+                  }}
+                  labelStyle={{ color: "var(--text-secondary)" }}
                   labelFormatter={(label) => new Date(label).toLocaleDateString()}
                   formatter={(value: number) => [value.toFixed(1), ""]}
                 />
@@ -228,7 +239,7 @@ const CompareView: React.FC<CompareViewProps> = ({
               </LineChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-full flex items-center justify-center text-neutral-400">
+            <div className="h-full flex items-center justify-center text-ink-muted">
               No price data available
             </div>
           )}
@@ -237,18 +248,18 @@ const CompareView: React.FC<CompareViewProps> = ({
 
       {/* Metrics Comparison Table */}
       <div className="card">
-        <h3 className="text-base font-semibold text-neutral-900 mb-4">
+        <h3 className="text-base font-semibold text-ink mb-4">
           Performance Comparison
         </h3>
 
         {isLoading ? (
-          <div className="py-8 text-center text-neutral-400">Loading...</div>
+          <div className="py-8 text-center text-ink-muted">Loading...</div>
         ) : compareData?.stocks && compareData.stocks.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-neutral-200">
-                  <th className="text-left py-3 px-4 font-medium text-neutral-500">
+                <tr className="border-b border-edge">
+                  <th className="text-left py-3 px-4 font-medium text-ink-muted">
                     Metric
                   </th>
                   {compareData.stocks.map((stock, index) => (
@@ -303,7 +314,7 @@ const CompareView: React.FC<CompareViewProps> = ({
             </table>
           </div>
         ) : (
-          <div className="py-8 text-center text-neutral-400">
+          <div className="py-8 text-center text-ink-muted">
             No data available
           </div>
         )}
@@ -343,15 +354,15 @@ const MetricRow: React.FC<MetricRowProps> = ({
   }
 
   return (
-    <tr className="border-b border-neutral-100">
-      <td className="py-3 px-4 text-neutral-600">{label}</td>
+    <tr className="border-b border-edge">
+      <td className="py-3 px-4 text-ink-secondary">{label}</td>
       {values.map((value, index) => (
         <td
           key={index}
           className={`py-3 px-4 text-right font-medium ${
             index === bestIndex
-              ? "text-primary-600 bg-primary-50"
-              : "text-neutral-900"
+              ? "text-primary-400 bg-primary-500/10"
+              : "text-ink"
           }`}
         >
           {format(value)}

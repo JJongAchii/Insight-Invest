@@ -11,7 +11,7 @@ import {
 
 import { useFetchSparklinesQuery } from "@/state/api";
 import { MetaRow, FilterState, CAP_THRESHOLDS } from "./types";
-import SparklineChart from "./SparklineChart";
+import SparklineChart from "@/components/charts/SparklineChart";
 
 interface MetaTableProps {
   data: MetaRow[];
@@ -19,6 +19,8 @@ interface MetaTableProps {
   selectedIds: number[];
   onSelectionChange: (selectedIds: number[]) => void;
   onRowClick: (row: MetaRow) => void;
+  /** Applied once as the DataGrid quick filter (e.g. from ?q= URL param). */
+  initialQuickFilter?: string;
 }
 
 const MetaTable: React.FC<MetaTableProps> = ({
@@ -27,6 +29,7 @@ const MetaTable: React.FC<MetaTableProps> = ({
   selectedIds,
   onSelectionChange,
   onRowClick,
+  initialQuickFilter,
 }) => {
   // Filter data based on filters
   const filteredData = useMemo(() => {
@@ -119,10 +122,10 @@ const MetaTable: React.FC<MetaTableProps> = ({
     <div className="card">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-base font-semibold text-neutral-900">
+          <h3 className="text-base font-semibold text-ink">
             Stock Metadata
           </h3>
-          <p className="text-sm text-neutral-500 mt-0.5">
+          <p className="text-sm text-ink-muted mt-0.5">
             {filteredData.length} securities
             {filteredData.length !== data.length && ` (filtered from ${data.length})`}
           </p>
@@ -148,14 +151,19 @@ const MetaTable: React.FC<MetaTableProps> = ({
           pagination: {
             paginationModel: { pageSize: 25 },
           },
+          filter: {
+            filterModel: {
+              items: [],
+              quickFilterValues: initialQuickFilter
+                ? initialQuickFilter.split(/\s+/).filter(Boolean)
+                : [],
+            },
+          },
         }}
         pageSizeOptions={[10, 25, 50, 100]}
         sx={{
           "& .MuiDataGrid-row": {
             cursor: "pointer",
-          },
-          "& .MuiDataGrid-row:hover": {
-            backgroundColor: "rgba(59, 130, 246, 0.04)",
           },
         }}
       />

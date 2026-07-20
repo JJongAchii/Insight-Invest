@@ -7,6 +7,10 @@ import {
 import Select, { SingleValue, MultiValue } from "react-select";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import {
+  tokenSelectStyles,
+  tokenSelectErrorStyles,
+} from "@/components/ui/selectStyles";
 
 interface TickerData {
   iso_code: string;
@@ -37,79 +41,8 @@ interface SetStrategyProps {
   isLoading?: boolean;
 }
 
-// Custom styles for react-select to match our design system
-const selectStyles = {
-  control: (base: Record<string, unknown>, state: { isFocused: boolean }) => ({
-    ...base,
-    borderRadius: "0.5rem",
-    borderWidth: "1px",
-    borderColor: state.isFocused ? "#171717" : "#d4d4d4",
-    padding: "0.125rem",
-    boxShadow: state.isFocused ? "0 0 0 1px #171717" : "none",
-    "&:hover": {
-      borderColor: "#a3a3a3",
-    },
-    backgroundColor: "#fff",
-    fontSize: "0.875rem",
-  }),
-  option: (
-    base: Record<string, unknown>,
-    state: { isSelected: boolean; isFocused: boolean }
-  ) => ({
-    ...base,
-    backgroundColor: state.isSelected
-      ? "#171717"
-      : state.isFocused
-        ? "#f5f5f5"
-        : "transparent",
-    color: state.isSelected ? "#fff" : "#171717",
-    fontSize: "0.875rem",
-    "&:active": {
-      backgroundColor: "#e5e5e5",
-    },
-  }),
-  multiValue: (base: Record<string, unknown>) => ({
-    ...base,
-    backgroundColor: "#f5f5f5",
-    borderRadius: "0.375rem",
-  }),
-  multiValueLabel: (base: Record<string, unknown>) => ({
-    ...base,
-    color: "#171717",
-    fontSize: "0.75rem",
-    padding: "0.125rem 0.25rem",
-  }),
-  multiValueRemove: (base: Record<string, unknown>) => ({
-    ...base,
-    color: "#737373",
-    "&:hover": {
-      backgroundColor: "#e5e5e5",
-      color: "#171717",
-    },
-  }),
-  placeholder: (base: Record<string, unknown>) => ({
-    ...base,
-    color: "#a3a3a3",
-    fontSize: "0.875rem",
-  }),
-};
-
-const selectErrorStyles = {
-  ...selectStyles,
-  control: (base: Record<string, unknown>, state: { isFocused: boolean }) => ({
-    ...base,
-    borderRadius: "0.5rem",
-    borderWidth: "1px",
-    borderColor: "#FF5000",
-    padding: "0.125rem",
-    boxShadow: state.isFocused ? "0 0 0 1px #FF5000" : "none",
-    "&:hover": {
-      borderColor: "#FF5000",
-    },
-    backgroundColor: "#fff",
-    fontSize: "0.875rem",
-  }),
-};
+const selectStyles = tokenSelectStyles;
+const selectErrorStyles = tokenSelectErrorStyles;
 
 const SetStrategy: React.FC<SetStrategyProps> = ({
   onRunBacktest,
@@ -245,7 +178,7 @@ const SetStrategy: React.FC<SetStrategyProps> = ({
 
   return (
     <div className="card">
-      <h3 className="text-base font-semibold text-neutral-900 mb-6">
+      <h3 className="text-base font-semibold text-ink mb-6">
         Strategy Configuration
       </h3>
 

@@ -31,19 +31,19 @@ const RiskContributionChart: React.FC<RiskContributionChartProps> = ({
 
   return (
     <div className="card">
-      <h3 className="text-base font-semibold text-neutral-900 mb-4">{title}</h3>
+      <h3 className="text-base font-semibold text-ink mb-4">{title}</h3>
 
       {/* Summary */}
       <div className="flex gap-4 mb-5 text-sm">
-        <div className="px-3 py-2 bg-neutral-50 rounded-lg">
-          <span className="text-neutral-500">Total Risk: </span>
-          <span className="font-medium text-neutral-900">
+        <div className="px-3 py-2 bg-raised rounded-lg">
+          <span className="text-ink-muted">Total Risk: </span>
+          <span className="font-medium text-ink">
             {(total * 100).toFixed(2)}%
           </span>
         </div>
-        <div className="px-3 py-2 bg-neutral-50 rounded-lg">
-          <span className="text-neutral-500">Assets: </span>
-          <span className="font-medium text-neutral-900">{sortedData.length}</span>
+        <div className="px-3 py-2 bg-raised rounded-lg">
+          <span className="text-ink-muted">Assets: </span>
+          <span className="font-medium text-ink">{sortedData.length}</span>
         </div>
       </div>
 
@@ -56,19 +56,19 @@ const RiskContributionChart: React.FC<RiskContributionChartProps> = ({
 
           return (
             <div key={ticker} className="flex items-center gap-3">
-              <span className="w-14 text-sm font-medium text-neutral-700">
+              <span className="w-14 text-sm font-medium text-ink-secondary">
                 {ticker}
               </span>
-              <div className="flex-1 h-7 bg-neutral-100 rounded-lg overflow-hidden relative">
+              <div className="flex-1 h-7 bg-raised rounded-lg overflow-hidden relative">
                 <div
                   className={`h-full bg-gradient-to-r ${colorClass} rounded-lg transition-all duration-500`}
                   style={{ width: `${barWidth}%` }}
                 />
-                <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-neutral-700">
+                <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-ink-secondary">
                   {percentage.toFixed(1)}%
                 </span>
               </div>
-              <span className="w-20 text-xs text-neutral-500 text-right">
+              <span className="w-20 text-xs text-ink-muted text-right">
                 {(value * 100).toFixed(3)}%
               </span>
             </div>
@@ -77,8 +77,8 @@ const RiskContributionChart: React.FC<RiskContributionChartProps> = ({
       </div>
 
       {/* Equal distribution indicator for Risk Parity */}
-      <div className="mt-4 pt-4 border-t border-neutral-100">
-        <div className="flex items-center justify-between text-xs text-neutral-500">
+      <div className="mt-4 pt-4 border-t border-edge">
+        <div className="flex items-center justify-between text-xs text-ink-muted">
           <span>Equal contribution target:</span>
           <span className="font-medium">
             {((total / sortedData.length) * 100).toFixed(3)}% each

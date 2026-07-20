@@ -146,6 +146,19 @@ class BacktestRequest(BaseModel):
     endDate: date
 
 
+class SaveStrategyRequest(BaseModel):
+    """백테스트 결과 저장 — result_token은 POST /backtest 응답에서 받은 값.
+
+    Lambda 컨테이너 간 인메모리 공유가 불가능하므로 결과는 S3 tmp_results/에
+    보관되고 토큰으로 참조된다.
+    """
+
+    result_token: str
+    strategy_name: str
+    algorithm: Optional[str]
+    meta_id: List[int]
+
+
 class PortIdInfo(BaseModel):
     port_id: int
     port_name: str
@@ -229,96 +242,3 @@ class RiskParityResponse(BaseModel):
     risk_contributions: Dict[str, float]
 
 
-# ============================================
-# Stock Screener Schemas
-# ============================================
-
-
-class ScreenerSortField(str, Enum):
-    """Fields available for sorting screener results."""
-
-    RETURN_1M = "return_1m"
-    RETURN_3M = "return_3m"
-    RETURN_6M = "return_6m"
-    RETURN_12M = "return_12m"
-    RETURN_YTD = "return_ytd"
-    VOLATILITY_1M = "volatility_1m"
-    VOLATILITY_3M = "volatility_3m"
-    MDD = "mdd"
-    MDD_1Y = "mdd_1y"
-    CURRENT_DRAWDOWN = "current_drawdown"
-    PCT_FROM_HIGH = "pct_from_high"
-    PCT_FROM_LOW = "pct_from_low"
-
-
-class ScreenerRequest(BaseModel):
-    """Request for stock screener."""
-
-    iso_code: Optional[str] = Field(None, description="Filter by country (US, KR, or None for all)")
-
-    # Momentum filters (percentage values, e.g., 10 means 10%)
-    return_1m_min: Optional[float] = Field(None, description="Min 1-month return (%)")
-    return_1m_max: Optional[float] = Field(None, description="Max 1-month return (%)")
-    return_3m_min: Optional[float] = Field(None, description="Min 3-month return (%)")
-    return_3m_max: Optional[float] = Field(None, description="Max 3-month return (%)")
-    return_6m_min: Optional[float] = Field(None, description="Min 6-month return (%)")
-    return_6m_max: Optional[float] = Field(None, description="Max 6-month return (%)")
-    return_12m_min: Optional[float] = Field(None, description="Min 12-month return (%)")
-    return_12m_max: Optional[float] = Field(None, description="Max 12-month return (%)")
-
-    # Volatility filter
-    volatility_min: Optional[float] = Field(None, description="Min volatility (%)")
-    volatility_max: Optional[float] = Field(None, description="Max volatility (%)")
-
-    # Drawdown filters (negative values, e.g., -20 means -20%)
-    mdd_max: Optional[float] = Field(None, description="Max allowed MDD (%, negative)")
-    current_drawdown_max: Optional[float] = Field(None, description="Max current drawdown (%)")
-
-    # 52-week filters
-    pct_from_high_min: Optional[float] = Field(None, description="Min % from 52-week high")
-    pct_from_high_max: Optional[float] = Field(None, description="Max % from 52-week high")
-
-    # Market cap filters (in USD, e.g., 1000000000 = $1B)
-    marketcap_min: Optional[int] = Field(None, description="Min market cap (USD)")
-    marketcap_max: Optional[int] = Field(None, description="Max market cap (USD)")
-
-    # Sorting and pagination
-    sort_by: ScreenerSortField = Field(ScreenerSortField.RETURN_3M, description="Sort field")
-    ascending: bool = Field(False, description="Sort ascending (False = high to low)")
-    limit: int = Field(100, ge=1, le=500, description="Max results")
-
-
-class ScreenerStock(BaseModel):
-    """Stock result from screener."""
-
-    ticker: str
-    meta_id: int
-    name: Optional[str] = None
-    sector: Optional[str] = None
-    iso_code: Optional[str] = None
-    marketcap: Optional[int] = None
-    current_price: float
-    return_1m: float
-    return_3m: float
-    return_6m: float
-    return_12m: float
-    return_ytd: float
-    volatility_1m: float
-    volatility_3m: float
-    mdd: float
-    mdd_1y: float
-    current_drawdown: float
-    high_52w: float
-    low_52w: float
-    pct_from_high: float
-    pct_from_low: float
-
-
-class ScreenerResponse(BaseModel):
-    """Response for screener endpoint."""
-
-    total_count: int
-    filtered_count: int
-    results: List[ScreenerStock]
-    new_highs: List[ScreenerStock]
-    new_lows: List[ScreenerStock]

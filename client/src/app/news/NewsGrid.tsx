@@ -13,9 +13,9 @@ const NewsGrid: React.FC<NewsGridProps> = ({ articles, isLoading }) => {
   if (articles.length === 0) {
     return (
       <div className="card text-center py-16">
-        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-neutral-100 flex items-center justify-center">
+        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-raised flex items-center justify-center">
           <svg
-            className="w-8 h-8 text-neutral-400"
+            className="w-8 h-8 text-ink-muted"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -28,8 +28,8 @@ const NewsGrid: React.FC<NewsGridProps> = ({ articles, isLoading }) => {
             />
           </svg>
         </div>
-        <p className="text-neutral-600 font-medium">No news articles found</p>
-        <p className="text-sm text-neutral-400 mt-1">
+        <p className="text-ink-secondary font-medium">No news articles found</p>
+        <p className="text-sm text-ink-muted mt-1">
           Try adjusting your filters or check back later
         </p>
       </div>

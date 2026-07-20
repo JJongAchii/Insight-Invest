@@ -34,7 +34,7 @@ const NewsFilters: React.FC<NewsFiltersProps> = ({
       <div className="flex flex-col md:flex-row gap-4 md:items-end">
         {/* Category Filter */}
         <div className="flex-1">
-          <label className="text-xs font-medium text-neutral-500 mb-2.5 block uppercase tracking-wider">
+          <label className="text-xs font-medium text-ink-muted mb-2.5 block uppercase tracking-wider">
             Category
           </label>
           <div className="flex flex-wrap gap-2">
@@ -47,7 +47,7 @@ const NewsFilters: React.FC<NewsFiltersProps> = ({
                   ${
                     currentFilters.category === cat.value
                       ? "bg-gradient-to-r from-primary-400 to-primary-500 text-white shadow-md shadow-primary-500/25"
-                      : "bg-white/60 text-neutral-600 hover:bg-white hover:text-neutral-900 hover:shadow-sm"
+                      : "bg-raised text-ink-secondary hover:bg-overlay hover:text-ink hover:shadow-sm"
                   }
                 `}
               >
@@ -59,7 +59,7 @@ const NewsFilters: React.FC<NewsFiltersProps> = ({
 
         {/* Region Filter */}
         <div className="md:w-48">
-          <label className="text-xs font-medium text-neutral-500 mb-2.5 block uppercase tracking-wider">
+          <label className="text-xs font-medium text-ink-muted mb-2.5 block uppercase tracking-wider">
             Region
           </label>
           <select
@@ -67,7 +67,7 @@ const NewsFilters: React.FC<NewsFiltersProps> = ({
             onChange={(e) =>
               onFilterChange({ region: e.target.value as NewsRegion })
             }
-            className="w-full px-3.5 py-2 rounded-lg border border-neutral-200/80 bg-white/80 text-sm font-medium text-neutral-700 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 transition-all cursor-pointer"
+            className="w-full px-3.5 py-2 rounded-lg border border-edge bg-raised text-sm font-medium text-ink-secondary focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 transition-all cursor-pointer"
           >
             {REGIONS.map((region) => (
               <option key={region.value} value={region.value}>
