@@ -9,13 +9,13 @@ from . import metrics
 
 def resample_data(price: pd.DataFrame, freq: str = "M", type: str = "head") -> pd.DataFrame:
     """
-    Resample daily price data to monthly or yearly frequency.
+    Resample daily price data to monthly, quarterly or yearly frequency.
 
     Uses Polars internally for better performance on large datasets.
 
     Args:
         price: Daily price DataFrame (index: date, columns: tickers)
-        freq: Frequency - "M" for monthly, "Y" for yearly
+        freq: Frequency - "M" for monthly, "Q" for quarterly, "Y" for yearly
         type: "head" for first day of period, "tail" for last day
 
     Returns:
@@ -51,6 +51,16 @@ def resample_data(price: pd.DataFrame, freq: str = "M", type: str = "head") -> p
     else:
         raise ValueError(f"type must be 'head' or 'tail', got '{type}'")
 
+    # Handle quarterly frequency: first/last row per year+quarter
+    if freq == "Q":
+        max_date_row = res_df.tail(1)  # Keep last row (analogous to "Y")
+        if type == "head":
+            res_df = res_df.filter(pl.col("_month").is_in([1, 4, 7, 10]))
+        elif type == "tail":
+            res_df = res_df.filter(pl.col("_month").is_in([3, 6, 9, 12]))
+        # Concat max_date_row if not already included
+        res_df = pl.concat([res_df, max_date_row]).unique(subset=["trade_date"]).sort("trade_date")
+
     # Handle yearly frequency
     if freq == "Y":
         max_date_row = res_df.tail(1)  # Keep last row
@@ -61,63 +71,14 @@ def resample_data(price: pd.DataFrame, freq: str = "M", type: str = "head") -> p
         # Concat max_date_row if not already included
         res_df = pl.concat([res_df, max_date_row]).unique(subset=["trade_date"]).sort("trade_date")
 
-    # Remove helper columns and convert back to pandas
     res_df = res_df.drop(["_year", "_month"])
-    res_pd = res_df.to_pandas()
 
-    # Restore original index structure
+    # Convert back to pandas and restore original index structure
+    res_pd = res_df.to_pandas()
     res_pd = res_pd.set_index("trade_date")
     res_pd.index = pd.to_datetime(res_pd.index)
 
     return res_pd
-
-
-def store_nav_results(func):
-    """Decorator for storing nav results"""
-    weights_results = {}
-    nav_results = {}
-    metrics_results = {}
-
-    def wrapper(
-        weight: pd.DataFrame,
-        strategy_name: Optional[str] = None,
-        price: Optional[pd.DataFrame] = None,
-        start_date: ... = None,
-        end_date: ... = None,
-    ):
-        weights, nav, metrics = func(weight, price, start_date, end_date)
-
-        if strategy_name:
-            params = f"{strategy_name}"
-        else:
-            params = f"strategy_{wrapper.count}"
-            wrapper.count += 1
-
-        weights_results[params] = weights
-        nav_results[params] = nav
-        metrics_results[params] = metrics
-
-        return weights_results, nav_results, metrics_results
-
-    def delete_strategy(strategy_name: str):
-        """Delete a specific strategy by name."""
-        if strategy_name in weights_results:
-            del weights_results[strategy_name]
-        if strategy_name in nav_results:
-            del nav_results[strategy_name]
-        if strategy_name in metrics_results:
-            del metrics_results[strategy_name]
-
-    def clear_strategies():
-        """Clear all saved strategies."""
-        weights_results.clear()
-        nav_results.clear()
-        metrics_results.clear()
-
-    wrapper.delete_strategy = delete_strategy
-    wrapper.clear_strategies = clear_strategies
-    wrapper.count = 1
-    return wrapper
 
 
 def calculate_nav(
@@ -125,16 +86,32 @@ def calculate_nav(
     price: Optional[pd.DataFrame] = None,
     start_date: Optional[Union[str, pd.Timestamp]] = None,
     end_date: Optional[Union[str, pd.Timestamp]] = None,
+    cost_bps: float = 0.0,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Calculate the net asset value (NAV) and portfolio holdings
     based on the provided weight DataFrame and price data.
+
+    Transaction costs:
+        At each rebalance, turnover is measured as Σ|target_w − drifted_w| over the
+        union of old/new tickers (drifted weights come from letting the previous
+        target weights drift with prices; 0 for newly added tickers, target 0 for
+        dropped tickers). The very first rebalance starts from all-cash, so
+        turnover = Σ|target_w|. The cost fraction applied is
+        turnover × cost_bps / 10_000 — i.e. `cost_bps` is charged per traded leg,
+        and both buys and sells are counted inside Σ|Δw| (a full switch from one
+        asset to another has turnover 2). NAV is reduced at the rebalance point
+        BEFORE the new interval compounds, so the NAV series point at the
+        rebalance date reflects the post-cost value.
+
+    With cost_bps=0 the result is identical to the legacy cost-free loop.
 
     Args:
         weight (pd.DataFrame): DataFrame containing the portfolio weights with tickers as columns and dates as index.
         price (Optional[pd.DataFrame], optional): DataFrame containing the price data. Must be provided.
         start_date (Optional[Union[str, pd.Timestamp]], optional): Start date of the analysis. Defaults to the earliest date in the weight DataFrame.
         end_date (Optional[Union[str, pd.Timestamp]], optional): End date of the analysis. Defaults to the latest date in the price data.
+        cost_bps (float, optional): Transaction cost in basis points per traded leg. Defaults to 0.
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: A tuple containing the portfolio holdings (book) DataFrame and the NAV (nav) DataFrame.
@@ -173,6 +150,7 @@ def calculate_nav(
     rebal_dates = sorted(weight.index.unique())
 
     nav_value = 1000  # Initial NAV
+    drifted_weights = pd.Series(dtype=float)  # All-cash before the first rebalance
 
     for i, rebal_date in enumerate(rebal_dates):
         # Get weights for the rebalancing date
@@ -189,6 +167,22 @@ def calculate_nav(
         if price_slice.empty:
             continue
 
+        # Transaction cost: turnover over the union of old/new tickers
+        if cost_bps:
+            union = rebal_weights.index.union(drifted_weights.index)
+            turnover = (
+                rebal_weights.reindex(union, fill_value=0.0)
+                - drifted_weights.reindex(union, fill_value=0.0)
+            ).abs().sum()
+            cost_fraction = turnover * cost_bps / 10_000
+            if cost_fraction:
+                nav_value = nav_value * (1 - cost_fraction)
+                # The NAV point at the rebalance date reflects the post-cost value
+                if nav_list and nav_list[-1]["Date"] == rebal_date:
+                    nav_list[-1]["value"] = nav_value
+                else:
+                    nav_list.append({"Date": rebal_date, "value": nav_value})
+
         # Calculate price relatives
         price_returns = price_slice.div(price_slice.iloc[0])
 
@@ -201,8 +195,16 @@ def calculate_nav(
         # Calculate portfolio values
         portfolio_values = nav_value * weighted_returns.sum(axis=1) + cash
 
+        # Drifted weights at the interval end (0 for tickers not held):
+        # asset_values_i = nav_start * w_i * price_rel_end_i; drifted_w_i = asset_values_i / nav_end
+        nav_end = portfolio_values.iloc[-1]
+        if nav_end != 0:
+            drifted_weights = nav_value * weighted_returns.iloc[-1] / nav_end
+        else:
+            drifted_weights = pd.Series(dtype=float)
+
         # Update NAV list
-        nav_value = portfolio_values.iloc[-1]
+        nav_value = nav_end
         nav_list.extend(
             [{"Date": date, "value": val} for date, val in portfolio_values.iloc[1:].items()]
         )
@@ -220,13 +222,16 @@ def calculate_nav(
     return book, nav
 
 
-def result_metrics(nav: pd.DataFrame) -> pd.Series:
+def result_metrics(nav: Union[pd.DataFrame, pd.Series]) -> pd.Series:
     """
     Display the performance metrics calculated from the provided DataFrame.
 
     Args:
-        nav (pd.DataFrame): The DataFrame containing the net asset values (NAV) data.
+        nav (pd.DataFrame | pd.Series): The net asset values (NAV) data.
     """
+    if isinstance(nav, pd.Series):
+        nav = nav.to_frame(name="value")
+
     ann_returns = metrics.ann_returns(nav)
     ann_volatilities = metrics.ann_volatilities(nav)
     sharpe_ratios = metrics.sharpe_ratios(nav)
@@ -235,6 +240,9 @@ def result_metrics(nav: pd.DataFrame) -> pd.Series:
     kurtosis = metrics.kurtosis(nav)
     value_at_risk = metrics.value_at_risk(nav)
     conditional_value_at_risk = metrics.conditional_value_at_risk(nav)
+    sortino_ratios = metrics.sortino_ratios(nav)
+    calmar_ratio = metrics.calmar_ratio(nav)
+    omega_ratios = metrics.omega_ratios(nav)
 
     # Prepare the data as a dict with numeric values (formatting done on frontend)
     data = {
@@ -246,6 +254,9 @@ def result_metrics(nav: pd.DataFrame) -> pd.Series:
         "kurtosis": round(kurtosis.values[0], 2),
         "value_at_risk": round(value_at_risk.values[0] * 100, 2),
         "conditional_value_at_risk": round(conditional_value_at_risk.values[0] * 100, 2),
+        "sortino_ratios": round(sortino_ratios.values[0], 2),
+        "calmar_ratio": round(calmar_ratio.values[0], 2),
+        "omega_ratios": round(omega_ratios.values[0], 2),
     }
 
     # Convert to Series
@@ -254,15 +265,28 @@ def result_metrics(nav: pd.DataFrame) -> pd.Series:
     return metrics_series
 
 
-@store_nav_results
 def backtest_result(
     weight: pd.DataFrame,
     price: pd.DataFrame,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
-):
-    book, nav = calculate_nav(weight=weight, price=price, start_date=start_date, end_date=end_date)
+    cost_bps: float = 0.0,
+) -> Tuple[pd.DataFrame, pd.Series, pd.Series]:
+    """
+    Run the NAV engine for a single strategy.
 
-    metrics = result_metrics(nav=nav)
+    Returns:
+        book: drifted holdings over time (index Date, columns ticker/weights long form)
+        nav: pd.Series named "value" indexed by date
+        metrics: pd.Series of performance metrics
+    """
+    book, nav = calculate_nav(
+        weight=weight, price=price, start_date=start_date, end_date=end_date, cost_bps=cost_bps
+    )
 
-    return weight, nav, metrics
+    nav_series = nav["value"]
+    nav_series.name = "value"
+
+    metrics = result_metrics(nav=nav_series)
+
+    return book, nav_series, metrics

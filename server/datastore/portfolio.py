@@ -4,6 +4,7 @@
 후 파일 교체(단일 사용자 앱 전제). 읽기는 요청마다 다시 읽는다 — 수 KB~MB 규모.
 """
 
+import json
 import logging
 from datetime import datetime
 
@@ -17,7 +18,8 @@ DIR = "portfolio"
 METRIC_COLS = ["ann_ret", "ann_vol", "sharpe", "mdd", "skew", "kurt", "var", "cvar"]
 
 _EMPTY = {
-    "portfolio.parquet": ["port_id", "port_name", "strategy_id", "created_at"],
+    # config: 백테스트 실행 설정 JSON 문자열 (스키마 확장 — 구 행은 컬럼 부재 → None)
+    "portfolio.parquet": ["port_id", "port_name", "strategy_id", "created_at", "config"],
     "universe.parquet": ["port_id", "meta_id"],
     "nav.parquet": ["port_id", "trade_date", "value"],
     "rebalance.parquet": ["port_id", "rebal_date", "ticker", "weight"],
@@ -127,8 +129,13 @@ def benchmark_metrics(port_id: int) -> pd.DataFrame:
 # ---------- 생성·저장 (기존 db.create_portfolio / upload_* 계약) ----------
 
 
-def create(port_name: str, algorithm: str, meta_ids: list[int]) -> int:
-    """포트폴리오 등록 + 유니버스 기록. 반환: 새 port_id."""
+def create(port_name: str, algorithm: str, meta_ids: list[int], config: dict | None = None) -> int:
+    """포트폴리오 등록 + 유니버스 기록. 반환: 새 port_id.
+
+    config: 백테스트 실행 설정 (algorithm/rebal_freq/cost_bps/currency/params/benchmark).
+    JSON 문자열로 portfolio.parquet의 config 컬럼에 저장된다 — 실전 추적(P7) 재료.
+    구 행은 컬럼이 없거나 None으로 읽힌다.
+    """
     st = meta.strategy_df()
     row = st[st["strategy"] == algorithm]
     if row.empty:
@@ -146,6 +153,7 @@ def create(port_name: str, algorithm: str, meta_ids: list[int]) -> int:
             "port_name": port_name,
             "strategy_id": strategy_id,
             "created_at": datetime.utcnow(),
+            "config": json.dumps(config) if config is not None else None,
         }]
     )
     storage.write_parquet(pd.concat([ports, new], ignore_index=True), DIR, "portfolio.parquet")

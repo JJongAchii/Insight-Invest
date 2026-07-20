@@ -9,7 +9,7 @@ import polars as pl
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../..")))
 import datastore
-from module.strategy import DualMomentum, EqualWeight
+from module.strategy import EqualWeight, FixedWeight, Momentum
 from module.util import backtest_result
 
 logger = logging.getLogger(__name__)
@@ -136,33 +136,45 @@ class Backtest:
         method: str = "eq",
         freq: str = "M",
         custom_weight: dict = None,
+        params: dict = None,
         offensive: List = None,
         defensive: List = None,
         start: ... = None,
         end: ... = None,
     ) -> pd.DataFrame:
-        """_summary_
+        """리밸런싱 목표 비중 산출.
 
         Args:
-            method (str, optional): _description_. Defaults to "eq".
-            freq (str, optional): _description_. Defaults to "M".
-            weight (dict, optional):
-                using when method == "custom"
-                ex) weight={"SPY": 0.6, "IEF":0.4}. Defaults to None.
+            method: "eq" | "momentum" | "dual_mmt" | "custom"
+            freq: 리밸런스 주기 "M" | "Q" | "Y"
+            custom_weight: method == "custom"일 때 사용.
+                ex) custom_weight={"SPY": 0.6, "IEF": 0.4}
+            params: method == "momentum"일 때 {top_n, lookback_months}
         Returns:
-            pd.DataFrame: _description_
+            pd.DataFrame: index=rebal_date, columns=tickers
         """
 
         price = price.loc[start:end].dropna()
 
         if method == "eq":
-            """equal weights all assets"""
-            weights = EqualWeight().simulate(price=price)
+            return EqualWeight().simulate(price=price, freq=freq)
+
+        if method == "momentum":
+            p = params or {}
+            return Momentum(
+                top_n=int(p.get("top_n", 4)),
+                lookback_months=int(p.get("lookback_months", 12)),
+            ).simulate(price=price, freq=freq)
 
         if method == "dual_mmt":
-            weights = DualMomentum().simulate(price=price)
+            return Momentum(top_n=4, lookback_months=12).simulate(price=price, freq=freq)
 
-        return weights
+        if method == "custom":
+            if not custom_weight:
+                raise ValueError("custom method requires custom_weight, ex) {'SPY': 0.6}")
+            return FixedWeight(custom_weight).simulate(price=price, freq=freq)
+
+        raise ValueError(f"unknown method: {method}")
 
     def result(
         self,
@@ -170,30 +182,28 @@ class Backtest:
         weight: pd.DataFrame,
         start: ... = None,
         end: ... = None,
-    ) -> pd.DataFrame:
+        cost_bps: float = 0.0,
+    ):
+        """엔진 실행 — 이 전략 하나의 결과만 반환 (누적 딕셔너리 없음).
 
-        weight, nav, metrics = backtest_result(
+        Returns:
+            book: 보유 비중 long form (index Date)
+            nav: 전략명 컬럼 하나짜리 NAV DataFrame
+            metrics: strategy 컬럼 + 지표 컬럼의 1행 DataFrame
+        """
+        name = self.strategy_name or "strategy"
+
+        book, nav_series, metric_series = backtest_result(
             weight=weight,
             price=price,
-            strategy_name=self.strategy_name,
             start_date=start,
             end_date=end,
+            cost_bps=cost_bps,
         )
 
-        merge = pd.concat(nav.values(), axis=1)
-        merge.columns = nav.keys()
-        nav = merge.ffill()
+        nav = nav_series.to_frame(name=name)
 
-        mg_metrics = pd.concat(metrics.values(), axis=1)
-        mg_metrics.columns = metrics.keys()
-        mg_metrics = mg_metrics.T.reset_index().rename(columns={"index": "strategy"})
+        metrics = metric_series.to_frame(name=name).T.reset_index()
+        metrics = metrics.rename(columns={"index": "strategy"})
 
-        return weight, nav, mg_metrics
-
-    def delete_backtest_result(self, strategy_name: str):
-
-        backtest_result.delete_strategy(strategy_name)
-
-    def clear_backtest_result(self):
-
-        backtest_result.clear_strategies()
+        return book, nav, metrics

@@ -19,7 +19,7 @@ export interface PeriodBarSeries {
 }
 
 export interface PeriodBarChartProps {
-  data: { label: string; [series: string]: number | string }[];
+  data: { label: string; [series: string]: number | string | null }[];
   series: PeriodBarSeries[];
   height?: number;
   yFormatter?: (value: number) => string;

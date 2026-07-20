@@ -1,59 +1,85 @@
 import React, { useMemo } from "react";
 import TimeSeriesChart from "@/components/charts/TimeSeriesChart";
 import EmptyState from "@/components/ui/EmptyState";
-
-interface NavData {
-  index: number[];
-  columns: string[];
-  data: number[][];
-}
+import { NavPoint } from "@/state/api";
 
 interface StrategyChartProps {
-  navResult: string | null;
+  strategyName: string;
+  nav: NavPoint[] | null;
+  benchmark: { name: string; nav: NavPoint[] } | null;
 }
 
-const StrategyChart: React.FC<StrategyChartProps> = ({ navResult }) => {
+/** 전략 NAV + 벤치마크 NAV를 date 기준으로 병합해 라인차트로 그린다. */
+const StrategyChart: React.FC<StrategyChartProps> = ({
+  strategyName,
+  nav,
+  benchmark,
+}) => {
   const { chartData, series } = useMemo(() => {
-    if (!navResult) {
+    if (!nav || nav.length === 0) {
       return { chartData: [], series: [] };
     }
-    const navData: NavData = JSON.parse(navResult);
 
-    const chartData = navData.index.map((date: number, rowIdx: number) => {
-      const row: { date: string; [key: string]: number | string } = {
-        date: new Date(date).toISOString().split("T")[0],
-      };
-      navData.columns.forEach((column, colIdx) => {
-        row[column] = navData.data[rowIdx][colIdx];
+    const merged = new Map<
+      string,
+      { date: string; strategy: number | null; benchmark: number | null }
+    >();
+    for (const point of nav) {
+      merged.set(point.date, {
+        date: point.date,
+        strategy: point.value,
+        benchmark: null,
       });
-      return row;
-    });
+    }
+    for (const point of benchmark?.nav ?? []) {
+      const row = merged.get(point.date);
+      if (row) {
+        row.benchmark = point.value;
+      } else {
+        merged.set(point.date, {
+          date: point.date,
+          strategy: null,
+          benchmark: point.value,
+        });
+      }
+    }
 
-    const series = navData.columns.map((column) => ({
-      key: column,
-      name: column,
-    }));
+    const chartData = Array.from(merged.values()).sort((a, b) =>
+      a.date.localeCompare(b.date)
+    );
+
+    const series = [
+      { key: "strategy", name: strategyName, color: "var(--chart-1)" },
+      ...(benchmark && benchmark.nav.length > 0
+        ? [
+            {
+              key: "benchmark",
+              name: benchmark.name,
+              color: "var(--text-muted)",
+            },
+          ]
+        : []),
+    ];
 
     return { chartData, series };
-  }, [navResult]);
+  }, [nav, benchmark, strategyName]);
+
+  if (chartData.length === 0) {
+    return (
+      <EmptyState
+        title="No data available"
+        hint="Run a backtest to see performance"
+      />
+    );
+  }
 
   return (
-    <div className="card">
-      <h3 className="section-header">Performance Chart</h3>
-      {navResult && chartData.length > 0 ? (
-        <TimeSeriesChart
-          data={chartData}
-          series={series}
-          height={400}
-          yFormatter={(v) => v.toFixed(2)}
-        />
-      ) : (
-        <EmptyState
-          title="No data available"
-          hint="Run a backtest to see performance"
-        />
-      )}
-    </div>
+    <TimeSeriesChart
+      data={chartData}
+      series={series}
+      height={400}
+      yFormatter={(v) => v.toFixed(0)}
+    />
   );
 };
 

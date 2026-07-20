@@ -131,9 +131,10 @@ def omega_ratios(price_df: pd.DataFrame, required_retrun: float = 0.0) -> pd.Ser
 
     period_rr = (1 + required_retrun) ** (1 / numofyears(price_df=price_df)) - 1
     pri_return_df = to_pri_return(price_df=price_df)
+    # 분모는 하방 편차의 절대값 — abs 없이는 오메가가 음수로 나온다
     return (
         pri_return_df[pri_return_df >= period_rr].sum()
-        / pri_return_df[pri_return_df < period_rr].sum()
+        / pri_return_df[pri_return_df < period_rr].sum().abs()
     )
 
 

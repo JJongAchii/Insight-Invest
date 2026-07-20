@@ -139,11 +139,34 @@ class Price(BaseModel):
 
 
 class BacktestRequest(BaseModel):
+    """백테스트 v2 요청 — 구 필드명(strategy_name/meta_id/algorithm/startDate/endDate) 유지."""
+
     strategy_name: str
     meta_id: List[int]
-    algorithm: Optional[str]
+    algorithm: str = Field(..., description='"eq" | "momentum" | "dual_mmt" | "custom"')
     startDate: date
     endDate: date
+    rebal_freq: str = Field("M", description='"M" | "Q" | "Y"')
+    cost_bps: float = Field(10.0, ge=0.0, description="거래비용 (bps, 매매 편도당)")
+    benchmark: str = Field("SPY", description='"SPY" | "KOSPI" | "KOSDAQ" | "60_40"')
+    currency: str = Field("USD", description='"USD" | "KRW"')
+    params: Optional[dict] = Field(
+        None,
+        description="momentum: {top_n, lookback_months} / custom: {weights: {ticker: w}}",
+    )
+
+
+class FromWeightsRequest(BaseModel):
+    """티커→비중 딕셔너리로 고정비중 백테스트 실행."""
+
+    strategy_name: str
+    weights: Dict[str, float]
+    startDate: date
+    endDate: date
+    rebal_freq: str = "M"
+    cost_bps: float = 10.0
+    benchmark: str = "SPY"
+    currency: str = "USD"
 
 
 class SaveStrategyRequest(BaseModel):

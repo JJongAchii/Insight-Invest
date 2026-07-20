@@ -2,23 +2,53 @@ import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import React from "react";
 import {
   useSaveStrategyMutation,
-  BacktestResult,
+  BacktestRunResult,
+  MetricSet,
   SaveStrategyPayload,
 } from "@/state/api";
 
 interface StrategyMetricsProps {
-  backtestResult: BacktestResult | null;
+  result: BacktestRunResult | null;
   selectedTicker: Record<string, SaveStrategyPayload>;
 }
 
+interface MetricRow extends Partial<MetricSet> {
+  strategy: string;
+  isStrategy: boolean;
+}
+
+const pctFormatter = (value: unknown) => {
+  if (typeof value !== "number") return "—";
+  return `${value.toFixed(2)}%`;
+};
+
+const numFormatter = (value: unknown) => {
+  if (typeof value !== "number") return "—";
+  return value.toFixed(2);
+};
+
 const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
-  backtestResult,
+  result,
   selectedTicker,
 }) => {
   const [saveStrategy, { isLoading: isSaving }] = useSaveStrategyMutation();
-  const metricData = backtestResult?.metrics
-    ? JSON.parse(backtestResult.metrics)
-    : [];
+
+  const rows: MetricRow[] = [];
+  if (result) {
+    rows.push({
+      strategy: result.strategy_name,
+      isStrategy: true,
+      ...result.metrics.strategy,
+    });
+    const bm = result.metrics.benchmark;
+    if (bm && Object.keys(bm).length > 0) {
+      rows.push({
+        strategy: result.benchmark.name,
+        isStrategy: false,
+        ...bm,
+      });
+    }
+  }
 
   const handleSave = async (strategy: string) => {
     const strategyData = selectedTicker[strategy];
@@ -35,107 +65,96 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
     {
       field: "strategy",
       headerName: "Strategy",
-      width: 140,
+      width: 150,
       headerAlign: "left",
       align: "left",
     },
     {
-      field: "ann_returns",
+      field: "ann_ret",
       headerName: "Return",
       width: 100,
       headerAlign: "right",
       align: "right",
       type: "number",
-      valueFormatter: (value: unknown) => {
-        if (typeof value !== "number") return "—";
-        return `${value.toFixed(2)}%`;
-      },
+      valueFormatter: pctFormatter,
       cellClassName: (params) =>
-        params.value > 0 ? "text-success" : params.value < 0 ? "text-danger" : "",
+        typeof params.value === "number"
+          ? params.value > 0
+            ? "num text-success"
+            : params.value < 0
+              ? "num text-danger"
+              : "num"
+          : "num",
     },
     {
-      field: "ann_volatilities",
-      headerName: "Volatility",
-      width: 100,
+      field: "ann_vol",
+      headerName: "Vol",
+      width: 90,
       headerAlign: "right",
       align: "right",
       type: "number",
-      valueFormatter: (value: unknown) => {
-        if (typeof value !== "number") return "—";
-        return `${value.toFixed(2)}%`;
-      },
+      valueFormatter: pctFormatter,
+      cellClassName: "num",
     },
     {
-      field: "sharpe_ratios",
+      field: "sharpe",
       headerName: "Sharpe",
       width: 90,
       headerAlign: "right",
       align: "right",
       type: "number",
-      valueFormatter: (value: unknown) => {
-        if (typeof value !== "number") return "—";
-        return value.toFixed(2);
-      },
+      valueFormatter: numFormatter,
+      cellClassName: "num",
     },
     {
-      field: "max_drawdowns",
+      field: "sortino",
+      headerName: "Sortino",
+      width: 90,
+      headerAlign: "right",
+      align: "right",
+      type: "number",
+      valueFormatter: numFormatter,
+      cellClassName: "num",
+    },
+    {
+      field: "calmar",
+      headerName: "Calmar",
+      width: 90,
+      headerAlign: "right",
+      align: "right",
+      type: "number",
+      valueFormatter: numFormatter,
+      cellClassName: "num",
+    },
+    {
+      field: "mdd",
       headerName: "MDD",
       width: 90,
       headerAlign: "right",
       align: "right",
       type: "number",
-      valueFormatter: (value: unknown) => {
-        if (typeof value !== "number") return "—";
-        return `${value.toFixed(2)}%`;
-      },
+      valueFormatter: pctFormatter,
+      cellClassName: "num",
     },
     {
-      field: "skewness",
-      headerName: "Skew",
-      width: 80,
-      headerAlign: "right",
-      align: "right",
-      type: "number",
-      valueFormatter: (value: unknown) => {
-        if (typeof value !== "number") return "—";
-        return value.toFixed(2);
-      },
-    },
-    {
-      field: "kurtosis",
-      headerName: "Kurt",
-      width: 80,
-      headerAlign: "right",
-      align: "right",
-      type: "number",
-      valueFormatter: (value: unknown) => {
-        if (typeof value !== "number") return "—";
-        return value.toFixed(2);
-      },
-    },
-    {
-      field: "value_at_risk",
+      field: "var",
       headerName: "VaR",
-      width: 80,
+      width: 90,
       headerAlign: "right",
       align: "right",
       type: "number",
-      valueFormatter: (value: unknown) => {
-        if (typeof value !== "number") return "—";
-        return `${value.toFixed(2)}%`;
-      },
+      valueFormatter: pctFormatter,
+      cellClassName: "num",
     },
     {
-      field: "conditional_value_at_risk",
+      field: "cvar",
       headerName: "CVaR",
-      width: 80,
+      width: 90,
       headerAlign: "right",
       align: "right",
       type: "number",
-      valueFormatter: (value: unknown) => {
-        if (typeof value !== "number") return "—";
-        return `${value.toFixed(2)}%`;
-      },
+      valueFormatter: pctFormatter,
+      cellClassName: "num",
     },
     {
       field: "save",
@@ -144,53 +163,52 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
       headerAlign: "center",
       align: "center",
       sortable: false,
-      renderCell: (params) => (
-        <button
-          onClick={() => handleSave(params.row.strategy)}
-          disabled={isSaving}
-          className="btn-primary text-xs py-1.5 px-3"
-        >
-          {isSaving ? "..." : "Save"}
-        </button>
-      ),
+      renderCell: (params) =>
+        params.row.isStrategy ? (
+          <button
+            onClick={() => handleSave(params.row.strategy)}
+            disabled={isSaving}
+            className="btn-primary text-xs py-1.5 px-3"
+          >
+            {isSaving ? "..." : "Save"}
+          </button>
+        ) : null,
     },
   ];
 
   return (
-    <div className="card">
-      <h3 className="text-base font-semibold text-ink mb-4">
+    <div>
+      <h4 className="text-sm font-semibold text-ink mb-3 mt-6">
         Performance Metrics
-      </h3>
-      <div style={{ minHeight: 200 }}>
-        {backtestResult?.metrics ? (
-          <DataGrid
-            rows={metricData}
-            columns={columns}
-            getRowId={(row) => row.strategy}
-            autoHeight
-            hideFooter
-            disableColumnMenu
-            sx={{
-              border: 0,
-              "& .text-success": {
-                color: "var(--gains) !important",
-                fontWeight: 500,
-              },
-              "& .text-danger": {
-                color: "var(--losses) !important",
-                fontWeight: 500,
-              },
-            }}
-          />
-        ) : (
-          <div className="flex flex-col items-center justify-center py-12">
-            <p className="text-ink-muted text-sm">No metrics available</p>
-            <p className="text-ink-muted text-xs mt-1">
-              Run a backtest to see performance metrics
-            </p>
-          </div>
-        )}
-      </div>
+      </h4>
+      {rows.length > 0 ? (
+        <DataGrid
+          rows={rows}
+          columns={columns}
+          getRowId={(row) => row.strategy}
+          autoHeight
+          hideFooter
+          disableColumnMenu
+          sx={{
+            border: 0,
+            "& .text-success": {
+              color: "var(--gains) !important",
+              fontWeight: 500,
+            },
+            "& .text-danger": {
+              color: "var(--losses) !important",
+              fontWeight: 500,
+            },
+          }}
+        />
+      ) : (
+        <div className="flex flex-col items-center justify-center py-12">
+          <p className="text-ink-muted text-sm">No metrics available</p>
+          <p className="text-ink-muted text-xs mt-1">
+            Run a backtest to see performance metrics
+          </p>
+        </div>
+      )}
     </div>
   );
 };

@@ -38,11 +38,6 @@ export interface NewsQueryParams {
   search_query?: string;
 }
 
-export interface NewsSource {
-  id: string;
-  name: string;
-  region: string;
-}
 
 // Types for price/stock search operations
 export interface StockMetrics {
@@ -106,30 +101,113 @@ export interface CompareResponse {
   normalized_prices: NormalizedPricePoint[];
 }
 
-// Types for backtest operations
+// Types for backtest operations (API v2)
+export type RebalFreq = "M" | "Q" | "Y";
+export type BenchmarkName = "SPY" | "KOSPI" | "KOSDAQ" | "60_40";
+export type BacktestCurrency = "USD" | "KRW";
+
+export type BacktestParams =
+  | { top_n?: number; lookback_months?: number }
+  | { weights: Record<string, number> };
+
 export interface BacktestPayload {
   strategy_name: string;
-  meta_id: string[];
+  meta_id: number[];
   algorithm: string | undefined;
   startDate: string;
   endDate: string;
+  rebal_freq?: RebalFreq;
+  cost_bps?: number;
+  benchmark?: BenchmarkName;
+  currency?: BacktestCurrency;
+  params?: BacktestParams;
 }
 
-export interface BacktestResult {
+export interface FromWeightsPayload {
+  strategy_name: string;
+  weights: Record<string, number>;
+  startDate: string;
+  endDate: string;
+  rebal_freq?: RebalFreq;
+  cost_bps?: number;
+  benchmark?: BenchmarkName;
+  currency?: BacktestCurrency;
+}
+
+export interface NavPoint {
+  date: string;
+  value: number;
+}
+
+export interface WeightPoint {
+  date: string;
+  ticker: string;
+  weight: number;
+}
+
+export interface MetricSet {
+  ann_ret: number | null;
+  ann_vol: number | null;
+  sharpe: number | null;
+  sortino: number | null;
+  calmar: number | null;
+  omega: number | null;
+  mdd: number | null;
+  skew: number | null;
+  kurt: number | null;
+  var: number | null;
+  cvar: number | null;
+}
+
+export interface PeriodReturnPoint {
+  label: string;
+  strategy: number | null;
+  benchmark: number | null;
+}
+
+export interface ContributionPoint {
+  ticker: string;
+  value: number;
+}
+
+export interface CrisisWindow {
+  name: string;
+  start: string;
+  end: string;
+  ret: number;
+  mdd: number;
+  recovery_days: number | null;
+}
+
+export interface BacktestAnalytics {
+  /** Drawdown series in % (negative values). */
+  drawdown: NavPoint[];
+  rolling_sharpe: NavPoint[];
+  /** Period returns in %. */
+  yearly_returns: PeriodReturnPoint[];
+  monthly_returns: PeriodReturnPoint[];
+  /** Per-ticker contribution in %. */
+  contribution: ContributionPoint[];
+  crisis: CrisisWindow[];
+}
+
+export interface BacktestRunResult {
   result_token: string;
-  weights: string;
-  nav: string;
-  metrics: string;
+  strategy_name: string;
+  nav: NavPoint[];
+  benchmark: { name: string; nav: NavPoint[] };
+  weights: WeightPoint[];
+  metrics: {
+    strategy: MetricSet;
+    benchmark: Partial<MetricSet>;
+  };
+  analytics: BacktestAnalytics;
 }
 
 // 저장은 실행 응답의 result_token을 반드시 동반한다 (Lambda 컨테이너 간 상태 공유 불가)
 export type SaveStrategyPayload = BacktestPayload & { result_token: string };
 
 export interface SaveStrategyResponse {
-  message: string;
-}
-
-export interface ClearStrategyResponse {
   message: string;
 }
 
@@ -262,14 +340,18 @@ export const api = createApi({
       }),
       providesTags: ["News"],
     }),
-    fetchNewsSources: builder.query<{ sources: NewsSource[] }, void>({
-      query: () => "/news/sources",
-    }),
 
     // Mutation endpoints
-    runBacktest: builder.mutation<BacktestResult, BacktestPayload>({
+    runBacktest: builder.mutation<BacktestRunResult, BacktestPayload>({
       query: (payload) => ({
         url: "/backtest",
+        method: "POST",
+        body: payload,
+      }),
+    }),
+    runBacktestFromWeights: builder.mutation<BacktestRunResult, FromWeightsPayload>({
+      query: (payload) => ({
+        url: "/backtest/from-weights",
         method: "POST",
         body: payload,
       }),
@@ -281,12 +363,6 @@ export const api = createApi({
         body: payload,
       }),
       invalidatesTags: ["Strategy", "Portfolio"],
-    }),
-    clearStrategy: builder.mutation<ClearStrategyResponse, void>({
-      query: () => ({
-        url: "/backtest/clearstrategy",
-        method: "POST",
-      }),
     }),
 
     // Optimization endpoints
@@ -300,20 +376,6 @@ export const api = createApi({
     calculateRiskParity: builder.mutation<OptimizedPortfolio, OptimizationPayload>({
       query: (payload) => ({
         url: "/optimization/risk-parity",
-        method: "POST",
-        body: payload,
-      }),
-    }),
-    calculateMaxSharpe: builder.mutation<OptimizedPortfolio, OptimizationPayload>({
-      query: (payload) => ({
-        url: "/optimization/max-sharpe",
-        method: "POST",
-        body: payload,
-      }),
-    }),
-    calculateMinVolatility: builder.mutation<OptimizedPortfolio, OptimizationPayload>({
-      query: (payload) => ({
-        url: "/optimization/min-volatility",
         method: "POST",
         body: payload,
       }),
@@ -342,15 +404,11 @@ export const {
   useFetchCompareDataQuery,
   // News hooks
   useFetchNewsQuery,
-  useLazyFetchNewsQuery,
-  useFetchNewsSourcesQuery,
   // Mutation hooks
   useRunBacktestMutation,
+  useRunBacktestFromWeightsMutation,
   useSaveStrategyMutation,
-  useClearStrategyMutation,
   // Optimization hooks
   useCalculateEfficientFrontierMutation,
   useCalculateRiskParityMutation,
-  useCalculateMaxSharpeMutation,
-  useCalculateMinVolatilityMutation,
 } = api;

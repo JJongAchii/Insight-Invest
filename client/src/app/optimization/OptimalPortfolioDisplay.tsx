@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useRouter } from "next/navigation";
 import { OptimizedPortfolio } from "@/state/api";
 
 interface OptimalPortfolioDisplayProps {
@@ -21,9 +22,19 @@ const PortfolioCard: React.FC<PortfolioCardProps> = ({
   portfolio,
   accentColor,
 }) => {
+  const router = useRouter();
   const sortedWeights = Object.entries(portfolio.weights)
     .filter(([, weight]) => weight > 0.001)
     .sort((a, b) => b[1] - a[1]);
+
+  const handleBacktest = () => {
+    const weightsParam = sortedWeights
+      .map(([ticker, weight]) => `${ticker}:${weight.toFixed(4)}`)
+      .join(",");
+    router.push(
+      `/backtest/simulation?weights=${encodeURIComponent(weightsParam)}`
+    );
+  };
 
   return (
     <div className="card">
@@ -83,6 +94,13 @@ const PortfolioCard: React.FC<PortfolioCardProps> = ({
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Backtest handoff */}
+      <div className="flex justify-end mt-5">
+        <button onClick={handleBacktest} className="btn-secondary text-xs">
+          Backtest this portfolio
+        </button>
       </div>
     </div>
   );
