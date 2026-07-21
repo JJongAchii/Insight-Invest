@@ -151,7 +151,13 @@ const CompareView: React.FC<CompareViewProps> = ({
               className="w-2 h-2 rounded-full"
               style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
             />
-            {tickerMap[id] || `ID:${id}`}
+            <button
+              onClick={() => router.push(`/stock/${id}`)}
+              className="hover:underline"
+              title="종목 상세 보기"
+            >
+              {tickerMap[id] || `ID:${id}`}
+            </button>
             <button
               onClick={() => onRemove(id)}
               className="hover:opacity-70"
@@ -268,7 +274,13 @@ const CompareView: React.FC<CompareViewProps> = ({
                       className="text-right py-3 px-4 font-medium"
                       style={{ color: CHART_COLORS[index % CHART_COLORS.length] }}
                     >
-                      {stock.ticker}
+                      <button
+                        onClick={() => router.push(`/stock/${stock.meta_id}`)}
+                        className="hover:underline"
+                        title="종목 상세 보기"
+                      >
+                        {stock.ticker}
+                      </button>
                     </th>
                   ))}
                 </tr>

@@ -217,6 +217,19 @@ class OptimizationRequest(BaseModel):
     n_points: int = Field(50, ge=10, le=200, description="Number of frontier points")
 
 
+class CorrelationRequest(BaseModel):
+    """Request for asset correlation matrix + rolling pair correlation."""
+
+    meta_id: List[int] = Field(..., min_length=2, max_length=15, description="meta_ids (2-15)")
+    lookback_days: int = Field(252, ge=60, le=1260, description="Days for correlation estimation")
+    rolling_pair: Optional[List[int]] = Field(
+        None,
+        min_length=2,
+        max_length=2,
+        description="Two meta_ids for 60d rolling correlation (default: first two)",
+    )
+
+
 class OptimizedPortfolio(BaseModel):
     """Optimized portfolio result."""
 

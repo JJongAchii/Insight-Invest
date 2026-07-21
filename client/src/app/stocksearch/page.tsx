@@ -8,6 +8,7 @@ import MetaTable from "./MetaTable";
 import StockFilters from "./StockFilters";
 import StockDetailPanel from "./StockDetailPanel";
 import CompareView from "./CompareView";
+import WatchlistSection from "./WatchlistSection";
 import { MetaRow, FilterState } from "./types";
 import PageHeader from "@/components/ui/PageHeader";
 import LoadingState from "@/components/ui/LoadingState";
@@ -101,6 +102,9 @@ const StockSearchContent = () => {
 
       {viewMode === "list" ? (
         <>
+          {/* Watchlist */}
+          <WatchlistSection />
+
           {/* Filters */}
           <StockFilters
             filters={filters}

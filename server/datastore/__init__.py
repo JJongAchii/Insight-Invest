@@ -7,6 +7,6 @@
 
 from datastore.meta import macro_df, meta_df, strategy_df
 from datastore.prices import read_price_data
-from datastore import portfolio
+from datastore import portfolio, watchlist
 
-__all__ = ["meta_df", "strategy_df", "macro_df", "read_price_data", "portfolio"]
+__all__ = ["meta_df", "strategy_df", "macro_df", "read_price_data", "portfolio", "watchlist"]

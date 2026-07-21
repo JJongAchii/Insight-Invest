@@ -12,7 +12,6 @@ import {
   IoBarChart,
   IoTelescope,
   IoChevronDown,
-  IoNewspaper,
   IoOptions,
   IoTrendingUp,
 } from "react-icons/io5";
@@ -70,6 +69,22 @@ const SidebarLink = ({
   );
 };
 
+/** Uppercase section label; hidden entirely when the sidebar is collapsed. */
+const SectionHeader = ({
+  label,
+  isCollapsed,
+}: {
+  label: string;
+  isCollapsed: boolean;
+}) => {
+  if (isCollapsed) return null;
+  return (
+    <p className="px-7 pt-4 pb-1 text-[10px] uppercase tracking-wider text-ink-muted font-semibold">
+      {label}
+    </p>
+  );
+};
+
 const Sidebar = () => {
   const dispatch = useAppDispatch();
   const isSidebarCollapsed = useAppSelector(
@@ -123,6 +138,8 @@ const Sidebar = () => {
 
       {/* Navigation Links */}
       <nav className="flex-1 py-4 space-y-1">
+        {/* MARKETS */}
+        <SectionHeader label="Markets" isCollapsed={isSidebarCollapsed} />
         <SidebarLink
           href="/home"
           icon={IoHome}
@@ -130,17 +147,20 @@ const Sidebar = () => {
           isCollapsed={isSidebarCollapsed}
         />
         <SidebarLink
-          href="/regime"
-          icon={IoTelescope}
-          label="Market Regime"
+          href="/insight"
+          icon={IoTrendingUp}
+          label="KR Insight"
           isCollapsed={isSidebarCollapsed}
         />
         <SidebarLink
-          href="/news"
-          icon={IoNewspaper}
-          label="Economy News"
+          href="/stocksearch"
+          icon={IoSearch}
+          label="Stock Search"
           isCollapsed={isSidebarCollapsed}
         />
+
+        {/* PORTFOLIO */}
+        <SectionHeader label="Portfolio" isCollapsed={isSidebarCollapsed} />
 
         {/* Backtest Section */}
         <div>
@@ -196,16 +216,13 @@ const Sidebar = () => {
           label="Optimization"
           isCollapsed={isSidebarCollapsed}
         />
+
+        {/* MACRO */}
+        <SectionHeader label="Macro" isCollapsed={isSidebarCollapsed} />
         <SidebarLink
-          href="/stocksearch"
-          icon={IoSearch}
-          label="Stock Search"
-          isCollapsed={isSidebarCollapsed}
-        />
-        <SidebarLink
-          href="/insight"
-          icon={IoTrendingUp}
-          label="KR Insight"
+          href="/regime"
+          icon={IoTelescope}
+          label="Market Regime"
           isCollapsed={isSidebarCollapsed}
         />
       </nav>

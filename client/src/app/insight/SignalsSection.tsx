@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   InsightInvestor,
   InsightSignalRow,
   InsightSignalType,
   useFetchInsightSignalsQuery,
+  useFetchMetaDataQuery,
 } from "@/state/api";
 import Card from "@/components/ui/Card";
 import InfoTip from "@/components/ui/InfoTip";
@@ -72,8 +73,23 @@ const SignalsSection: React.FC = () => {
       : (data?.rows ?? [])
   ).slice(0, MAX_ROWS);
 
+  // Signal rows only carry tickers; resolve meta_id via the cached meta list.
+  const { data: metaData } = useFetchMetaDataQuery({});
+  const tickerToMetaId = useMemo(() => {
+    const map = new Map<string, number>();
+    const metaRows =
+      (metaData as { ticker: string; meta_id: number }[] | undefined) ?? [];
+    for (const row of metaRows) map.set(row.ticker, row.meta_id);
+    return map;
+  }, [metaData]);
+
   const goToStock = (row: InsightSignalRow) => {
-    router.push(`/stocksearch?q=${encodeURIComponent(row.name)}`);
+    const metaId = tickerToMetaId.get(row.ticker);
+    if (metaId !== undefined) {
+      router.push(`/stock/${metaId}`);
+    } else {
+      router.push(`/stocksearch?q=${encodeURIComponent(row.name)}`);
+    }
   };
 
   return (

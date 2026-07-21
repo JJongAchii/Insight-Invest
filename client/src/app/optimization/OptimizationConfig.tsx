@@ -23,11 +23,19 @@ interface ValidationErrors {
   weights?: string;
 }
 
+export type OptimizationConfigType = "mvo" | "risk_parity" | "correlation";
+
 interface OptimizationConfigProps {
   onOptimize: (payload: OptimizationPayload) => void;
   isLoading?: boolean;
-  optimizationType: "mvo" | "risk_parity";
+  optimizationType: OptimizationConfigType;
 }
+
+const TYPE_TITLES: Record<OptimizationConfigType, string> = {
+  mvo: "Mean-Variance Optimization",
+  risk_parity: "Risk Parity Optimization",
+  correlation: "Correlation Analysis",
+};
 
 const selectStyles = tokenSelectStyles;
 
@@ -109,9 +117,7 @@ const OptimizationConfig: React.FC<OptimizationConfigProps> = ({
   return (
     <div className="card">
       <h3 className="text-base font-semibold text-ink mb-6">
-        {optimizationType === "mvo"
-          ? "Mean-Variance Optimization"
-          : "Risk Parity Optimization"}
+        {TYPE_TITLES[optimizationType]}
       </h3>
 
       <div className="space-y-5">
@@ -165,18 +171,20 @@ const OptimizationConfig: React.FC<OptimizationConfigProps> = ({
               <p className="text-danger text-xs mt-1">{errors.lookback}</p>
             )}
           </div>
-          <div>
-            <label className="input-label">Risk-Free Rate (%)</label>
-            <input
-              type="number"
-              value={riskFreeRate * 100}
-              onChange={(e) => setRiskFreeRate(parseFloat(e.target.value) / 100 || 0)}
-              className="input"
-              step={0.1}
-              min={0}
-              max={20}
-            />
-          </div>
+          {optimizationType !== "correlation" && (
+            <div>
+              <label className="input-label">Risk-Free Rate (%)</label>
+              <input
+                type="number"
+                value={riskFreeRate * 100}
+                onChange={(e) => setRiskFreeRate(parseFloat(e.target.value) / 100 || 0)}
+                className="input"
+                step={0.1}
+                min={0}
+                max={20}
+              />
+            </div>
+          )}
           {optimizationType === "mvo" && (
             <>
               <div>
@@ -229,7 +237,11 @@ const OptimizationConfig: React.FC<OptimizationConfigProps> = ({
             onClick={handleOptimize}
             disabled={isLoading || selectedTickers.length < 2}
           >
-            {isLoading ? "Optimizing..." : "Run Optimization"}
+            {isLoading
+              ? "Calculating..."
+              : optimizationType === "correlation"
+                ? "Run Analysis"
+                : "Run Optimization"}
           </button>
         </div>
       </div>

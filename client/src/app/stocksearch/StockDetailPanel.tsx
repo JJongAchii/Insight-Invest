@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -13,6 +15,7 @@ import {
 import { useFetchPriceHistoryQuery, useFetchPriceSummaryQuery } from "@/state/api";
 import { MetaRow } from "./types";
 import InfoTip from "@/components/ui/InfoTip";
+import WatchlistStar from "@/components/ui/WatchlistStar";
 import { fmtEok, fmtJo } from "../insight/format";
 
 interface StockDetailPanelProps {
@@ -109,30 +112,44 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
     <div className="fixed inset-y-0 right-0 w-[400px] bg-surface shadow-2xl z-50 flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-edge">
-        <div>
-          <h2 className="text-lg font-semibold text-ink">
-            {stock.ticker}
-          </h2>
-          <p className="text-sm text-ink-muted">{stock.name}</p>
+        <div className="flex items-center gap-1">
+          <div>
+            <h2 className="text-lg font-semibold text-ink">
+              {stock.ticker}
+            </h2>
+            <p className="text-sm text-ink-muted">{stock.name}</p>
+          </div>
+          <WatchlistStar metaId={stock.meta_id} size={18} />
         </div>
-        <button
-          onClick={onClose}
-          className="p-2 hover:bg-raised rounded-lg transition-colors"
-        >
-          <svg
-            className="w-5 h-5 text-ink-muted"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
+        <div className="flex items-center gap-1">
+          <Link
+            href={`/stock/${stock.meta_id}`}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium
+                       rounded-lg bg-raised text-ink-secondary hover:bg-overlay
+                       hover:text-ink transition-colors"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
+            전체 보기
+            <ArrowRight size={12} aria-hidden />
+          </Link>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-raised rounded-lg transition-colors"
+          >
+            <svg
+              className="w-5 h-5 text-ink-muted"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Content */}

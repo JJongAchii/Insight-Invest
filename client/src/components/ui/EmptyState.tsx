@@ -3,7 +3,7 @@ import React from "react";
 interface EmptyStateProps {
   icon?: React.ReactNode;
   title: string;
-  hint?: string;
+  hint?: React.ReactNode;
 }
 
 /** Card-friendly empty placeholder with optional icon and hint line. */

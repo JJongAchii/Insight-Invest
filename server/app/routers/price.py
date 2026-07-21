@@ -456,25 +456,9 @@ def get_price_history(
     }
 
 
-@router.get("/{meta_id}/summary")
-def get_price_summary(meta_id: int):
-    """
-    Get summary statistics for a single stock.
-
-    Args:
-        meta_id: Stock meta_id
-
-    Returns:
-        Summary statistics including YTD, 1Y return, volatility, Sharpe, MDD
-    """
-    # Get meta info
-    meta_df = datastore.meta_df()
-    meta_row = meta_df[meta_df["meta_id"] == meta_id]
-
-    if meta_row.empty:
-        raise HTTPException(status_code=404, detail=f"Stock with meta_id {meta_id} not found")
-
-    iso_code = meta_row.iloc[0]["iso_code"]
+def _build_summary(meta_id: int, meta_row: pd.Series) -> Dict:
+    """Summary statistics payload for a single stock (shared by /price/{id}/summary and /stock/{id})."""
+    iso_code = meta_row["iso_code"]
 
     # Get 1+ year of data for calculations
     end_date = date.today()
@@ -487,15 +471,13 @@ def get_price_summary(meta_id: int):
         end_date=end_date,
     )
 
-    extras = (
-        _kr_summary_extras(meta_row.iloc[0]["ticker"]) if iso_code == "KR" else dict(_EMPTY_EXTRAS)
-    )
+    extras = _kr_summary_extras(meta_row["ticker"]) if iso_code == "KR" else dict(_EMPTY_EXTRAS)
 
     if price_df.empty:
         return {
             "meta_id": meta_id,
-            "ticker": meta_row.iloc[0]["ticker"],
-            "name": meta_row.iloc[0]["name"],
+            "ticker": meta_row["ticker"],
+            "name": meta_row["name"],
             "metrics": {
                 "ytd_return": None,
                 "return_1y": None,
@@ -516,8 +498,8 @@ def get_price_summary(meta_id: int):
 
     return {
         "meta_id": meta_id,
-        "ticker": meta_row.iloc[0]["ticker"],
-        "name": meta_row.iloc[0]["name"],
+        "ticker": meta_row["ticker"],
+        "name": meta_row["name"],
         "metrics": metrics,
         "latest_price": float(price_df["adj_close"].iloc[-1]),
         "latest_date": (
@@ -526,4 +508,74 @@ def get_price_summary(meta_id: int):
             else str(price_df["trade_date"].iloc[-1])
         ),
         **extras,
+    }
+
+
+@router.get("/{meta_id}/summary")
+def get_price_summary(meta_id: int):
+    """
+    Get summary statistics for a single stock.
+
+    Args:
+        meta_id: Stock meta_id
+
+    Returns:
+        Summary statistics including YTD, 1Y return, volatility, Sharpe, MDD
+    """
+    meta_df = datastore.meta_df()
+    meta_row = meta_df[meta_df["meta_id"] == meta_id]
+
+    if meta_row.empty:
+        raise HTTPException(status_code=404, detail=f"Stock with meta_id {meta_id} not found")
+
+    return _build_summary(meta_id, meta_row.iloc[0])
+
+
+# ---------- /stock — 종목 상세 페이지 복합 엔드포인트 ----------
+
+stock_router = APIRouter(prefix="/stock", tags=["Stock"])
+
+
+@stock_router.get("/{meta_id}")
+def get_stock_detail(meta_id: int):
+    """
+    Composite payload for the stock detail page: meta + summary + watchlist flag.
+
+    Price history and flows stay on their existing endpoints.
+    """
+    meta_df = datastore.meta_df()
+    meta_rows = meta_df[meta_df["meta_id"] == meta_id]
+
+    if meta_rows.empty:
+        raise HTTPException(status_code=404, detail=f"Stock with meta_id {meta_id} not found")
+
+    row = meta_rows.iloc[0]
+
+    in_watchlist = False
+    try:
+        from datastore import watchlist as watchlist_store
+
+        wl = watchlist_store.list_items()
+        in_watchlist = bool((wl["meta_id"] == meta_id).any()) if not wl.empty else False
+    except Exception:
+        logger.debug(f"watchlist 조회 실패: {meta_id}")
+
+    def _na(v):
+        try:
+            return None if pd.isna(v) else v
+        except (TypeError, ValueError):
+            return v
+
+    return {
+        "meta": {
+            "meta_id": int(row["meta_id"]),
+            "ticker": row["ticker"],
+            "name": row["name"],
+            "sector": _na(row["sector"]),
+            "iso_code": row["iso_code"],
+            "security_type": _na(row["security_type"]),
+            "marketcap": int(row["marketcap"]) if pd.notna(row["marketcap"]) else None,
+        },
+        "summary": _build_summary(meta_id, row),
+        "in_watchlist": in_watchlist,
     }

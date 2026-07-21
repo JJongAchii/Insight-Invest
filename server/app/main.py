@@ -15,7 +15,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .routers import backtest, insight, meta, news, optimization, price, regime
+from .routers import backtest, insight, meta, news, optimization, price, regime, watchlist
 
 app = FastAPI(
     title="Insight-Invest API",
@@ -54,6 +54,8 @@ app.include_router(regime.router)
 app.include_router(insight.router)
 app.include_router(news.router)
 app.include_router(optimization.router)
+app.include_router(watchlist.router)
+app.include_router(price.stock_router)
 
 
 @app.get("/")

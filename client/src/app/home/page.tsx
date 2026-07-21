@@ -4,6 +4,11 @@ import { useMemo } from "react";
 import TradingViewWidget from "@/app/(components)/TradingViewWidget";
 import { useAppSelector } from "@/app/redux";
 import PageHeader from "@/components/ui/PageHeader";
+import MarketTiles from "./MarketTiles";
+import WatchlistCard from "./WatchlistCard";
+import StrategiesCard from "./StrategiesCard";
+import FlowsTopCard from "./FlowsTopCard";
+import NewsCompactList from "./NewsCompactList";
 
 const Home = () => {
   const isDarkMode = useAppSelector((state) => state.global.isDarkMode);
@@ -34,176 +39,14 @@ const Home = () => {
     [colorTheme]
   );
 
-  const marketQuotesUrl =
-    "https://s3.tradingview.com/external-embedding/embed-widget-market-quotes.js";
-  const marketQuotesConfig = useMemo(
-    () => ({
-      width: "100%",
-      height: "500",
-      symbolsGroups: [
-        {
-          name: "Indices",
-          originalName: "Indices",
-          symbols: [
-            { name: "FOREXCOM:SPXUSD", displayName: "S&P 500 Index" },
-            { name: "FOREXCOM:NSXUSD", displayName: "US 100 Cash CFD" },
-            { name: "FOREXCOM:DJI", displayName: "Dow Jones" },
-            { name: "INDEX:NKY", displayName: "Japan 225" },
-            { name: "INDEX:DEU40", displayName: "DAX Index" },
-            { name: "FOREXCOM:UKXGBP", displayName: "FTSE 100 Index" },
-          ],
-        },
-        {
-          name: "Futures",
-          originalName: "Futures",
-          symbols: [
-            { name: "CME:6E1!", displayName: "Euro" },
-            { name: "COMEX:GC1!", displayName: "Gold" },
-            { name: "NYMEX:CL1!", displayName: "WTI Crude Oil" },
-            { name: "NYMEX:NG1!", displayName: "Gas" },
-            { name: "CBOT:ZC1!", displayName: "Corn" },
-          ],
-        },
-        {
-          name: "Bonds",
-          originalName: "Bonds",
-          symbols: [
-            { name: "CBOT:ZB1!", displayName: "T-Bond" },
-            { name: "CBOT:UB1!", displayName: "Ultra T-Bond" },
-            { name: "EUREX:FGBL1!", displayName: "Euro Bund" },
-            { name: "EUREX:FBTP1!", displayName: "Euro BTP" },
-            { name: "EUREX:FGBM1!", displayName: "Euro BOBL" },
-          ],
-        },
-        {
-          name: "Forex",
-          originalName: "Forex",
-          symbols: [
-            { name: "FX:EURUSD", displayName: "EUR to USD" },
-            { name: "FX:GBPUSD", displayName: "GBP to USD" },
-            { name: "FX:USDJPY", displayName: "USD to JPY" },
-            { name: "FX:USDCHF", displayName: "USD to CHF" },
-            { name: "FX:AUDUSD", displayName: "AUD to USD" },
-            { name: "FX:USDCAD", displayName: "USD to CAD" },
-          ],
-        },
-      ],
-      showSymbolLogo: true,
-      isTransparent: true,
-      colorTheme,
-      locale: "en",
-      backgroundColor: "rgba(0,0,0,0)",
-    }),
-    [colorTheme]
-  );
-
-  const economicCalUrl =
-    "https://s3.tradingview.com/external-embedding/embed-widget-events.js";
-  const economicCalConfig = useMemo(
-    () => ({
-      isTransparent: true,
-      colorTheme,
-      locale: "en",
-      importanceFilter: "0,1",
-      countryFilter: "us,eu,ch,kr,jp,cn",
-      width: "100%",
-      height: 500,
-    }),
-    [colorTheme]
-  );
-
-  const fxCrossRateUrl =
-    "https://s3.tradingview.com/external-embedding/embed-widget-forex-cross-rates.js";
-  const fxCrossRateConfig = useMemo(
-    () => ({
-      isTransparent: true,
-      colorTheme,
-      locale: "en",
-      currencies: ["USD", "JPY", "CNY", "KRW", "EUR", "GBP", "CHF", "AUD"],
-      width: "100%",
-      height: 500,
-      backgroundColor: "rgba(0,0,0,0)",
-    }),
-    [colorTheme]
-  );
-
-  const marketOverviewUrl =
-    "https://s3.tradingview.com/external-embedding/embed-widget-market-overview.js";
-  const marketOverviewConfig = useMemo(
-    () => ({
-      colorTheme,
-      dateRange: "12M",
-      showChart: true,
-      locale: "en",
-      largeChartUrl: "",
-      isTransparent: true,
-      showSymbolLogo: true,
-      showFloatingTooltip: false,
-      width: "100%",
-      height: "500",
-      backgroundColor: "rgba(0,0,0,0)",
-      gridLineColor: "rgba(240, 243, 250, 0)",
-      tabs: [
-        {
-          title: "Indices",
-          symbols: [
-            { s: "FOREXCOM:SPXUSD", d: "S&P 500 Index" },
-            { s: "FOREXCOM:NSXUSD", d: "US 100 Cash CFD" },
-            { s: "FOREXCOM:DJI", d: "Dow Jones" },
-            { s: "INDEX:NKY", d: "Japan 225" },
-            { s: "INDEX:DEU40", d: "DAX Index" },
-            { s: "FOREXCOM:UKXGBP", d: "FTSE 100 Index" },
-          ],
-          originalTitle: "Indices",
-        },
-        {
-          title: "Futures",
-          symbols: [
-            { s: "CME_MINI:ES1!", d: "S&P 500" },
-            { s: "CME:6E1!", d: "Euro" },
-            { s: "COMEX:GC1!", d: "Gold" },
-            { s: "NYMEX:CL1!", d: "WTI Crude Oil" },
-            { s: "NYMEX:NG1!", d: "Gas" },
-            { s: "CBOT:ZC1!", d: "Corn" },
-          ],
-          originalTitle: "Futures",
-        },
-        {
-          title: "Bonds",
-          symbols: [
-            { s: "CBOT:ZB1!", d: "T-Bond" },
-            { s: "CBOT:UB1!", d: "Ultra T-Bond" },
-            { s: "EUREX:FGBL1!", d: "Euro Bund" },
-            { s: "EUREX:FBTP1!", d: "Euro BTP" },
-            { s: "EUREX:FGBM1!", d: "Euro BOBL" },
-          ],
-          originalTitle: "Bonds",
-        },
-        {
-          title: "Forex",
-          symbols: [
-            { s: "FX:EURUSD", d: "EUR to USD" },
-            { s: "FX:GBPUSD", d: "GBP to USD" },
-            { s: "FX:USDJPY", d: "USD to JPY" },
-            { s: "FX:USDCHF", d: "USD to CHF" },
-            { s: "FX:AUDUSD", d: "AUD to USD" },
-            { s: "FX:USDCAD", d: "USD to CAD" },
-          ],
-          originalTitle: "Forex",
-        },
-      ],
-    }),
-    [colorTheme]
-  );
-
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 pb-16">
       <PageHeader
-        title="Dashboard"
-        description="Real-time market data and economic indicators"
+        title="나의 대시보드"
+        description="시장 현황과 내 포트폴리오를 한눈에"
       />
 
-      {/* Ticker Tape */}
+      {/* Row 0: Ticker Tape */}
       <div className="bg-surface rounded-xl border border-edge overflow-hidden">
         <TradingViewWidget
           key={`tape-${colorTheme}`}
@@ -212,47 +55,19 @@ const Home = () => {
         />
       </div>
 
-      {/* Main Grid */}
+      {/* Row 1: Index snapshots + regime/gauge chips */}
+      <MarketTiles />
+
+      {/* Row 2: Watchlist + strategies */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Economic Calendar */}
-        <div className="card">
-          <h3 className="section-header">Economic Calendar</h3>
-          <TradingViewWidget
-            key={`cal-${colorTheme}`}
-            widgetScriptUrl={economicCalUrl}
-            widgetConfig={economicCalConfig}
-          />
-        </div>
+        <WatchlistCard />
+        <StrategiesCard />
+      </div>
 
-        {/* Market Data */}
-        <div className="card">
-          <h3 className="section-header">Market Data</h3>
-          <TradingViewWidget
-            key={`quotes-${colorTheme}`}
-            widgetScriptUrl={marketQuotesUrl}
-            widgetConfig={marketQuotesConfig}
-          />
-        </div>
-
-        {/* FX Cross Rates */}
-        <div className="card">
-          <h3 className="section-header">FX Cross Rates</h3>
-          <TradingViewWidget
-            key={`fx-${colorTheme}`}
-            widgetScriptUrl={fxCrossRateUrl}
-            widgetConfig={fxCrossRateConfig}
-          />
-        </div>
-
-        {/* Market Overview */}
-        <div className="card">
-          <h3 className="section-header">Market Overview</h3>
-          <TradingViewWidget
-            key={`overview-${colorTheme}`}
-            widgetScriptUrl={marketOverviewUrl}
-            widgetConfig={marketOverviewConfig}
-          />
-        </div>
+      {/* Row 3: Foreign net-buy top 5 + latest news */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <FlowsTopCard />
+        <NewsCompactList />
       </div>
     </div>
   );

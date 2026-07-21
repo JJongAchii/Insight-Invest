@@ -8,6 +8,7 @@ import {
   InsightWindow,
   useFetchInsightFlowsMarketQuery,
   useFetchInsightFlowsTopQuery,
+  useFetchMetaDataQuery,
 } from "@/state/api";
 import Card from "@/components/ui/Card";
 import InfoTip from "@/components/ui/InfoTip";
@@ -144,8 +145,23 @@ const FlowsSection: React.FC = () => {
       });
   }, [marketData, investor]);
 
+  // Insight rows only carry tickers; resolve meta_id via the cached meta list.
+  const { data: metaData } = useFetchMetaDataQuery({});
+  const tickerToMetaId = useMemo(() => {
+    const map = new Map<string, number>();
+    const rows =
+      (metaData as { ticker: string; meta_id: number }[] | undefined) ?? [];
+    for (const row of rows) map.set(row.ticker, row.meta_id);
+    return map;
+  }, [metaData]);
+
   const goToStock = (row: InsightFlowTopRow) => {
-    router.push(`/stocksearch?q=${encodeURIComponent(row.name)}`);
+    const metaId = tickerToMetaId.get(row.ticker);
+    if (metaId !== undefined) {
+      router.push(`/stock/${metaId}`);
+    } else {
+      router.push(`/stocksearch?q=${encodeURIComponent(row.name)}`);
+    }
   };
 
   return (

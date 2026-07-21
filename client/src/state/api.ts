@@ -98,6 +98,45 @@ export interface SparklineResponse {
   sparklines: Record<string, number[]>;
 }
 
+// Types for stock detail / watchlist operations
+export interface StockDetailMeta {
+  meta_id: number;
+  ticker: string;
+  name: string | null;
+  sector: string | null;
+  iso_code: string;
+  security_type: string | null;
+  marketcap: number | null;
+}
+
+export interface StockDetailResponse {
+  meta: StockDetailMeta;
+  summary: PriceSummaryResponse;
+  in_watchlist: boolean;
+}
+
+export interface WatchlistItem {
+  meta_id: number;
+  ticker: string;
+  name: string | null;
+  iso_code: string;
+  security_type: string | null;
+  added_at: string | null;
+  note: string | null;
+  latest_price: number | null;
+  chg_pct: number | null;
+  frgn_net_20d: number | null;
+  inst_net_20d: number | null;
+}
+
+export interface WatchlistResponse {
+  items: WatchlistItem[];
+}
+
+export interface WatchlistMutationResponse {
+  count: number;
+}
+
 export interface CompareStock {
   meta_id: number;
   ticker: string;
@@ -339,6 +378,31 @@ export interface EfficientFrontierResponse {
   asset_stats: Record<string, AssetStats>;
 }
 
+// Types for correlation analysis
+export interface CorrelationPayload {
+  meta_id: number[];
+  lookback_days?: number;
+  /** [meta_id_a, meta_id_b] for the rolling correlation series. */
+  rolling_pair?: number[];
+}
+
+export interface CorrelationRollingPoint {
+  date: string;
+  value: number;
+}
+
+export interface CorrelationRolling {
+  pair: [string, string];
+  series: CorrelationRollingPoint[];
+}
+
+export interface CorrelationResponse {
+  tickers: string[];
+  matrix: (number | null)[][];
+  rolling: CorrelationRolling | null;
+  as_of: string;
+}
+
 // Types for KR insight operations (수급·시장폭·신호)
 export type InsightWindow = "1d" | "1w" | "1m";
 export type InsightInvestor = "frgn" | "inst";
@@ -507,7 +571,7 @@ export const api = createApi({
       return headers;
     },
   }),
-  tagTypes: ["Strategy", "Portfolio", "News"],
+  tagTypes: ["Strategy", "Portfolio", "News", "Watchlist"],
   endpoints: (builder) => ({
     // Query endpoints
     fetchMetaData: builder.query({
@@ -586,6 +650,35 @@ export const api = createApi({
     fetchCompareData: builder.query<CompareResponse, { metaIds: string; period?: string }>({
       query: ({ metaIds, period = "1y" }) =>
         `/price/compare?meta_ids=${metaIds}&period=${period}`,
+    }),
+
+    // Stock detail / watchlist endpoints
+    fetchStockDetail: builder.query<StockDetailResponse, number>({
+      query: (metaId) => `/stock/${metaId}`,
+      // in_watchlist must refresh when the watchlist mutates
+      providesTags: ["Watchlist"],
+    }),
+    fetchWatchlist: builder.query<WatchlistResponse, void>({
+      query: () => "/watchlist",
+      providesTags: ["Watchlist"],
+    }),
+    addToWatchlist: builder.mutation<
+      WatchlistMutationResponse,
+      { meta_id: number; note?: string }
+    >({
+      query: (body) => ({
+        url: "/watchlist",
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: ["Watchlist"],
+    }),
+    removeFromWatchlist: builder.mutation<WatchlistMutationResponse, number>({
+      query: (metaId) => ({
+        url: `/watchlist/${metaId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: ["Watchlist"],
     }),
 
     // News endpoints
@@ -697,6 +790,13 @@ export const api = createApi({
         body: payload,
       }),
     }),
+    calculateCorrelation: builder.mutation<CorrelationResponse, CorrelationPayload>({
+      query: (payload) => ({
+        url: "/optimization/correlation",
+        method: "POST",
+        body: payload,
+      }),
+    }),
 
   }),
 });
@@ -723,6 +823,11 @@ export const {
   useFetchPriceHistoryQuery,
   useFetchPriceSummaryQuery,
   useFetchCompareDataQuery,
+  // Stock detail / watchlist hooks
+  useFetchStockDetailQuery,
+  useFetchWatchlistQuery,
+  useAddToWatchlistMutation,
+  useRemoveFromWatchlistMutation,
   // News hooks
   useFetchNewsQuery,
   // KR insight hooks
@@ -742,4 +847,5 @@ export const {
   // Optimization hooks
   useCalculateEfficientFrontierMutation,
   useCalculateRiskParityMutation,
+  useCalculateCorrelationMutation,
 } = api;

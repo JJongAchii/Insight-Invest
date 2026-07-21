@@ -9,14 +9,18 @@ Provides:
 """
 
 import logging
+import math
 import os
 import sys
+from datetime import date, timedelta
 from typing import Dict
 
+import pandas as pd
 from fastapi import APIRouter, HTTPException
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../../../")))
 
+import datastore
 from app import schemas
 from module.backtest import Backtest
 from module.metrics import covariance_matrix, expected_returns
@@ -230,5 +234,71 @@ async def calculate_risk_parity(request: schemas.OptimizationRequest):
     except Exception as e:
         logger.error(f"Risk parity calculation failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Optimization failed: {str(e)}")
+
+
+def _rolling_pair_correlation(pair: list, window: int = 60, years: int = 3) -> Dict:
+    """두 meta_id의 일간 수익률 60일 롤링 상관 (~3년 구간). 실패 시 빈 payload."""
+    empty: Dict = {"pair": [], "series": []}
+    try:
+        tick_of = datastore.meta_df().set_index("meta_id")["ticker"].to_dict()
+        pair_tickers = [tick_of.get(int(m)) for m in pair]
+        if any(t is None for t in pair_tickers):
+            return empty
+
+        start = date.today() - timedelta(days=years * 365 + 60)
+        price = Backtest().data(meta_id=[int(m) for m in pair], start_date=start)
+        if price.empty or not all(t in price.columns for t in pair_tickers):
+            return empty
+
+        rets = price[pair_tickers].ffill().pct_change()
+        roll = rets[pair_tickers[0]].rolling(window).corr(rets[pair_tickers[1]]).dropna()
+        series = [
+            {"date": d.date().isoformat(), "value": round(max(-1.0, min(1.0, float(v))), 4)}
+            for d, v in roll.items()
+            if math.isfinite(v)
+        ]
+        return {"pair": pair_tickers, "series": series}
+    except Exception:
+        logger.warning(f"Rolling correlation failed for pair {pair}", exc_info=True)
+        return empty
+
+
+@router.post("/correlation")
+async def calculate_correlation(request: schemas.CorrelationRequest):
+    """
+    Correlation matrix for given assets + 60d rolling correlation for one pair.
+
+    Returns:
+        - tickers: column order of the matrix
+        - matrix: pairwise correlation of daily returns (rounded 2dp, NaN -> null)
+        - rolling: {pair: [tickerA, tickerB], series: [{date, value}]} over ~3y
+        - as_of: last price date used for the matrix
+    """
+    logger.info(
+        f"Correlation request: meta_id={request.meta_id}, lookback={request.lookback_days}"
+    )
+
+    try:
+        price = _get_price_data(meta_id=request.meta_id, lookback_period=request.lookback_days)
+
+        corr = price.pct_change().corr()
+        tickers = corr.columns.tolist()
+        matrix = [
+            [round(float(v), 2) if pd.notna(v) else None for v in row] for row in corr.values
+        ]
+
+        pair = request.rolling_pair if request.rolling_pair else request.meta_id[:2]
+        rolling = _rolling_pair_correlation(pair)
+
+        as_of = price.index[-1]
+        as_of = as_of.date().isoformat() if hasattr(as_of, "date") else str(as_of)
+
+        return {"tickers": tickers, "matrix": matrix, "rolling": rolling, "as_of": as_of}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Correlation calculation failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Correlation failed: {str(e)}")
 
 
