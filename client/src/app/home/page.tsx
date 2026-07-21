@@ -30,7 +30,8 @@ const Home = () => {
         { description: "USD/CNY", proName: "FX_IDC:USDCNY" },
       ],
       showSymbolLogo: true,
-      isTransparent: true,
+      // 투명 배경은 우리 표면과 글자색이 어긋날 수 있어 TradingView 자체 테마 배경 사용
+      isTransparent: false,
       displayMode: "compact",
       colorTheme,
       locale: "en",
@@ -47,7 +48,7 @@ const Home = () => {
       />
 
       {/* Row 0: Ticker Tape */}
-      <div className="bg-surface rounded-xl border border-edge overflow-hidden">
+      <div className="rounded-xl border border-edge overflow-hidden">
         <TradingViewWidget
           key={`tape-${colorTheme}`}
           widgetScriptUrl={tickerTapeUrl}
