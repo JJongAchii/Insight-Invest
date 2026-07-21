@@ -36,7 +36,7 @@ const mergeSeries = (
 const KoreaMacro: React.FC = () => {
   const { data, isLoading, error, refetch } = useFetchRegimeKrQuery();
 
-  const series = data?.series;
+  const series = data;
   const baseRate = series?.base_rate;
   const ktb3y = series?.ktb_3y;
   const ktb10y = series?.ktb_10y;

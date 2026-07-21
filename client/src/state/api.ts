@@ -269,9 +269,7 @@ export interface KrMacroSeries {
   latest: number;
 }
 
-export interface RegimeKrResponse {
-  series: Record<string, KrMacroSeries | undefined>;
-}
+export type RegimeKrResponse = Record<string, KrMacroSeries | undefined>
 
 export interface PhasePerformanceRow {
   ticker: string;
