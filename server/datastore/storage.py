@@ -29,11 +29,12 @@ def read_parquet(*parts: str, columns=None, filters=None) -> pd.DataFrame:
     return pd.read_parquet(path(*parts), columns=columns, filters=filters)
 
 
-def write_parquet(df: pd.DataFrame, *parts: str) -> str:
+def write_parquet(df: pd.DataFrame, *parts: str, **to_parquet_kwargs) -> str:
+    """kwargs는 pyarrow write_table로 전달 (예: row_group_size — 필터 푸시다운용 로우그룹 분할)."""
     target = path(*parts)
     if not target.startswith("s3://"):
         Path(target).parent.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(target, index=False)
+    df.to_parquet(target, index=False, **to_parquet_kwargs)
     return target
 
 

@@ -1,65 +1,38 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
+import React, { useState } from "react";
+import { InsightMarket } from "@/state/api";
+import PageHeader from "@/components/ui/PageHeader";
+import IndexBreadthStrip from "./IndexBreadthStrip";
+import FlowsSection from "./FlowsSection";
+import SignalsSection from "./SignalsSection";
+import BreadthHistory from "./BreadthHistory";
 
-const Page = () => {
-  const [inputValue, setInputValue] = useState<string>(''); // inputValue는 문자열
-  const [long1Result, setLong1Result] = useState<number | null>(null); // long1 result
-  const [long2Result, setLong2Result] = useState<number | null>(null); // long2 result
-  const [short1Result, setShort1Result] = useState<number | null>(null); // short1 result
-  const [short2Result, setShort2Result] = useState<number | null>(null); // short2 result
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setInputValue(value);
-
-    // 숫자 형식 확인 및 계산
-    const numericValue = parseFloat(value);
-    if (!isNaN(numericValue)) {
-      setLong1Result(numericValue + 0.02);
-      setLong2Result(numericValue + 0.02 * 2);
-      setShort1Result(numericValue - 0.02);
-      setShort2Result(numericValue - 0.02 * 2);
-    } else {
-      setLong1Result(null);
-      setLong2Result(null);
-      setShort1Result(null);
-      setShort2Result(null);
-    }
-  };
+/** KR market insight dashboard: index/breadth strip, investor flows, signals, breadth history. */
+const InsightPage = () => {
+  // Market toggle shared by the breadth strip and the breadth history section.
+  const [market, setMarket] = useState<InsightMarket>("KOSPI");
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-      {/* long 결과 (위) */}
-      <div style={{ display: 'flex', gap: '20px' }}>
-        <div style={{ padding: '10px', border: '1px solid var(--border)', borderRadius: '5px' }}>
-          <p>Long1: {long1Result !== null ? long1Result.toFixed(2) : 'Enter a valid number'}</p>
-        </div>
-        <div style={{ padding: '10px', border: '1px solid var(--border)', borderRadius: '5px' }}>
-          <p>Long2: {long2Result !== null ? long2Result.toFixed(2) : 'Enter a valid number'}</p>
-        </div>
-      </div>
-
-      {/* 입력 필드 */}
-      <input
-        type="text"
-        placeholder="Standard Value"
-        value={inputValue}
-        onChange={handleInputChange}
-        style={{ padding: '10px', border: '1px solid var(--border)', borderRadius: '5px' }}
+    <div className="flex flex-col gap-6 pb-16">
+      <PageHeader
+        title="KR Market Insight"
+        description="수급·시장폭·신호 — KRX 전 종목 데이터 기반"
       />
 
-      {/* short 결과 (아래) */}
-      <div style={{ display: 'flex', gap: '20px' }}>
-        <div style={{ padding: '10px', border: '1px solid var(--border)', borderRadius: '5px' }}>
-          <p>Short1: {short1Result !== null ? short1Result.toFixed(2) : 'Enter a valid number'}</p>
-        </div>
-        <div style={{ padding: '10px', border: '1px solid var(--border)', borderRadius: '5px' }}>
-          <p>Short2: {short2Result !== null ? short2Result.toFixed(2) : 'Enter a valid number'}</p>
-        </div>
-      </div>
+      {/* 1. Index & breadth strip */}
+      <IndexBreadthStrip market={market} onMarketChange={setMarket} />
+
+      {/* 2. Foreign/Institution flows */}
+      <FlowsSection />
+
+      {/* 3. Flow signals */}
+      <SignalsSection />
+
+      {/* 4. Breadth history */}
+      <BreadthHistory market={market} onMarketChange={setMarket} />
     </div>
   );
 };
 
-export default Page;
+export default InsightPage;

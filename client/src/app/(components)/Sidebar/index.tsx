@@ -14,8 +14,8 @@ import {
   IoChevronDown,
   IoNewspaper,
   IoOptions,
+  IoTrendingUp,
 } from "react-icons/io5";
-import { HiOutlineLightBulb } from "react-icons/hi";
 import { FaRunning, FaList } from "react-icons/fa";
 import { IconType } from "react-icons";
 
@@ -204,8 +204,8 @@ const Sidebar = () => {
         />
         <SidebarLink
           href="/insight"
-          icon={HiOutlineLightBulb}
-          label="Insights"
+          icon={IoTrendingUp}
+          label="KR Insight"
           isCollapsed={isSidebarCollapsed}
         />
       </nav>

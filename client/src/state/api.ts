@@ -323,6 +323,109 @@ export interface EfficientFrontierResponse {
   asset_stats: Record<string, AssetStats>;
 }
 
+// Types for KR insight operations (수급·시장폭·신호)
+export type InsightWindow = "1d" | "1w" | "1m";
+export type InsightInvestor = "frgn" | "inst";
+export type InsightMarket = "KOSPI" | "KOSDAQ";
+export type InsightSignalType = "streak" | "intensity" | "divergence";
+
+export interface InsightFlowTopRow {
+  rank: number;
+  ticker: string;
+  name: string;
+  market: string;
+  /** Net traded value in KRW (display as 억 = /1e8). */
+  net_value: number;
+  net_volume: number;
+  close: number;
+  chg_pct: number;
+  mktcap: number;
+}
+
+export interface InsightFlowsTopResponse {
+  window: InsightWindow;
+  investor: InsightInvestor;
+  as_of: string;
+  buys: InsightFlowTopRow[];
+  sells: InsightFlowTopRow[];
+}
+
+export interface InsightMarketFlowRow {
+  date: string;
+  market: InsightMarket | "ALL";
+  investor: InsightInvestor | "indiv";
+  net_value: number;
+}
+
+export interface InsightFlowsMarketResponse {
+  as_of: string;
+  rows: InsightMarketFlowRow[];
+}
+
+export interface InsightTickerFlowRow {
+  date: string;
+  frgn_net: number;
+  inst_net: number;
+  indiv_net: number;
+}
+
+export interface InsightFlowsTickerResponse {
+  ticker: string;
+  as_of: string;
+  rows: InsightTickerFlowRow[];
+}
+
+export interface InsightBreadthRow {
+  date: string;
+  advances: number;
+  declines: number;
+  unchanged: number;
+  new_high_52w: number;
+  new_low_52w: number;
+  limit_up: number;
+  limit_down: number;
+  pct_above_ma20: number;
+  total_value: number;
+}
+
+export interface InsightBreadthResponse {
+  as_of: string;
+  rows: InsightBreadthRow[];
+}
+
+export interface InsightSignalRow {
+  ticker: string;
+  name: string;
+  market: string;
+  close: number;
+  chg_pct: number;
+  mktcap: number;
+  investor: InsightInvestor;
+  /** Consecutive net-buy (+) / net-sell (−) days. */
+  streak: number;
+  net_1d: number;
+  net_20d: number;
+  /** 20d net value / mktcap, in %. */
+  intensity_20d: number;
+  ret_20d: number;
+  divergence: "bull" | "bear" | null;
+}
+
+export interface InsightSignalsResponse {
+  as_of: string;
+  rows: InsightSignalRow[];
+}
+
+export interface InsightIndexRow {
+  date: string;
+  index: InsightMarket;
+  close: number;
+}
+
+export interface InsightIndexResponse {
+  rows: InsightIndexRow[];
+}
+
 export const api = createApi({
   reducerPath: "api",
   baseQuery: fetchBaseQuery({
@@ -429,6 +532,45 @@ export const api = createApi({
       providesTags: ["News"],
     }),
 
+    // KR insight endpoints (수급·시장폭·신호)
+    fetchInsightFlowsTop: builder.query<
+      InsightFlowsTopResponse,
+      { window: InsightWindow; investor: InsightInvestor }
+    >({
+      query: ({ window, investor }) =>
+        `/insight/flows/top?window=${window}&investor=${investor}`,
+    }),
+    fetchInsightFlowsMarket: builder.query<
+      InsightFlowsMarketResponse,
+      { days?: number }
+    >({
+      query: ({ days = 365 }) => `/insight/flows/market?days=${days}`,
+    }),
+    fetchInsightFlowsTicker: builder.query<
+      InsightFlowsTickerResponse,
+      { ticker: string; months?: number }
+    >({
+      query: ({ ticker, months = 6 }) =>
+        `/insight/flows/ticker/${ticker}?months=${months}`,
+    }),
+    fetchInsightBreadth: builder.query<
+      InsightBreadthResponse,
+      { days?: number; market: InsightMarket }
+    >({
+      query: ({ days = 365, market }) =>
+        `/insight/breadth?days=${days}&market=${market}`,
+    }),
+    fetchInsightSignals: builder.query<
+      InsightSignalsResponse,
+      { type: InsightSignalType; investor: InsightInvestor }
+    >({
+      query: ({ type, investor }) =>
+        `/insight/flows/signals?type=${type}&investor=${investor}`,
+    }),
+    fetchInsightIndex: builder.query<InsightIndexResponse, { days?: number }>({
+      query: ({ days = 365 }) => `/insight/index?days=${days}`,
+    }),
+
     // Mutation endpoints
     runBacktest: builder.mutation<BacktestRunResult, BacktestPayload>({
       query: (payload) => ({
@@ -496,6 +638,13 @@ export const {
   useFetchCompareDataQuery,
   // News hooks
   useFetchNewsQuery,
+  // KR insight hooks
+  useFetchInsightFlowsTopQuery,
+  useFetchInsightFlowsMarketQuery,
+  useFetchInsightFlowsTickerQuery,
+  useFetchInsightBreadthQuery,
+  useFetchInsightSignalsQuery,
+  useFetchInsightIndexQuery,
   // Mutation hooks
   useRunBacktestMutation,
   useRunBacktestFromWeightsMutation,
