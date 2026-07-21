@@ -1,5 +1,6 @@
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import React from "react";
+import InfoTip from "@/components/ui/InfoTip";
 import {
   useSaveStrategyMutation,
   BacktestRunResult,
@@ -26,6 +27,17 @@ const numFormatter = (value: unknown) => {
   if (typeof value !== "number") return "—";
   return value.toFixed(2);
 };
+
+/** Column header with an InfoTip; the tip stops propagation so sorting clicks still work. */
+const headerWithTip = (label: string, helpKey: string) =>
+  function HeaderWithTip() {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <span className="MuiDataGrid-columnHeaderTitle">{label}</span>
+        <InfoTip helpKey={helpKey} />
+      </span>
+    );
+  };
 
 const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
   result,
@@ -99,6 +111,7 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
     {
       field: "sharpe",
       headerName: "Sharpe",
+      renderHeader: headerWithTip("Sharpe", "bt.sharpe"),
       width: 90,
       headerAlign: "right",
       align: "right",
@@ -109,6 +122,7 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
     {
       field: "sortino",
       headerName: "Sortino",
+      renderHeader: headerWithTip("Sortino", "bt.sortino"),
       width: 90,
       headerAlign: "right",
       align: "right",
@@ -119,6 +133,7 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
     {
       field: "calmar",
       headerName: "Calmar",
+      renderHeader: headerWithTip("Calmar", "bt.calmar"),
       width: 90,
       headerAlign: "right",
       align: "right",
@@ -129,6 +144,7 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
     {
       field: "mdd",
       headerName: "MDD",
+      renderHeader: headerWithTip("MDD", "bt.mdd"),
       width: 90,
       headerAlign: "right",
       align: "right",
@@ -139,6 +155,7 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
     {
       field: "var",
       headerName: "VaR",
+      renderHeader: headerWithTip("VaR", "bt.var"),
       width: 90,
       headerAlign: "right",
       align: "right",
@@ -149,6 +166,7 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
     {
       field: "cvar",
       headerName: "CVaR",
+      renderHeader: headerWithTip("CVaR", "bt.cvar"),
       width: 90,
       headerAlign: "right",
       align: "right",
@@ -191,6 +209,11 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
           disableColumnMenu
           sx={{
             border: 0,
+            // Let InfoTip popovers escape the header cells instead of being clipped.
+            "& .MuiDataGrid-columnHeaders, & .MuiDataGrid-columnHeader, & .MuiDataGrid-columnHeaderDraggableContainer, & .MuiDataGrid-columnHeaderTitleContainer, & .MuiDataGrid-columnHeaderTitleContainerContent":
+              {
+                overflow: "visible",
+              },
             "& .text-success": {
               color: "var(--gains) !important",
               fontWeight: 500,

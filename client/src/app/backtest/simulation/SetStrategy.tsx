@@ -18,6 +18,7 @@ import {
   tokenSelectStyles,
   tokenSelectErrorStyles,
 } from "@/components/ui/selectStyles";
+import InfoTip from "@/components/ui/InfoTip";
 
 interface TickerData {
   iso_code: string;
@@ -469,7 +470,10 @@ const SetStrategyInner: React.FC<SetStrategyProps> = ({
             </div>
           </div>
           <div>
-            <label className="input-label">Cost (bps)</label>
+            <label className="input-label flex items-center gap-1">
+              <span>Cost (bps)</span>
+              <InfoTip helpKey="bt.cost" />
+            </label>
             <input
               type="number"
               min={0}

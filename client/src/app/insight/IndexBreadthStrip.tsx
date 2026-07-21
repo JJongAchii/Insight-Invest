@@ -128,6 +128,7 @@ const IndexBreadthStrip: React.FC<IndexBreadthStripProps> = ({
           <div className="grid grid-cols-2 gap-4">
             <StatTile
               label="Advance / Decline"
+              helpKey="breadth.ad"
               value={
                 <>
                   <span className="text-gains">
@@ -143,6 +144,7 @@ const IndexBreadthStrip: React.FC<IndexBreadthStripProps> = ({
             />
             <StatTile
               label="New 52w High / Low"
+              helpKey="breadth.high_low"
               value={
                 <>
                   <span className="text-gains">{latest.new_high_52w}</span>
@@ -153,11 +155,13 @@ const IndexBreadthStrip: React.FC<IndexBreadthStripProps> = ({
             />
             <StatTile
               label="Limit-up"
+              helpKey="breadth.limit"
               value={latest.limit_up}
               sub={`Limit-down ${latest.limit_down}`}
             />
             <StatTile
               label="% Above MA20"
+              helpKey="breadth.ma20"
               value={`${latest.pct_above_ma20.toFixed(1)}%`}
               deltaType={latest.pct_above_ma20 >= 50 ? "gain" : "loss"}
             />

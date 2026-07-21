@@ -3,8 +3,19 @@
 import React from "react";
 import { useFetchRegimeGaugeQuery } from "@/state/api";
 import Card from "@/components/ui/Card";
+import InfoTip from "@/components/ui/InfoTip";
 import LoadingState from "@/components/ui/LoadingState";
 import ErrorState from "@/components/ui/ErrorState";
+
+/** Server component name → INDICATOR_HELP key. */
+const componentHelpKey = (name: string): string | undefined => {
+  const n = name.toLowerCase();
+  if (n.includes("yield")) return "gauge.yield_curve";
+  if (n.includes("hy")) return "gauge.hy";
+  if (n.includes("vix")) return "gauge.vix";
+  if (n.includes("unemploy")) return "gauge.unemployment";
+  return undefined;
+};
 
 const scoreColor = (score: number) =>
   score < 35 ? "var(--gains)" : score <= 65 ? "var(--chart-4)" : "var(--losses)";
@@ -85,7 +96,15 @@ const RiskGauge: React.FC<{ className?: string }> = ({ className = "" }) => {
   const { data, isLoading, error, refetch } = useFetchRegimeGaugeQuery();
 
   return (
-    <Card title="Risk-Off Gauge" className={className}>
+    <Card
+      title={
+        <span className="inline-flex items-center gap-1.5">
+          Risk-Off Gauge
+          <InfoTip helpKey="regime.gauge" />
+        </span>
+      }
+      className={className}
+    >
       {error ? (
         <ErrorState message="Failed to load risk gauge" onRetry={refetch} />
       ) : isLoading || !data ? (
@@ -121,10 +140,14 @@ const RiskGauge: React.FC<{ className?: string }> = ({ className = "" }) => {
             {data.components.map((c) => {
               const color = scoreColor(c.score);
               const width = Math.max(0, Math.min(100, c.score));
+              const helpKey = componentHelpKey(c.name);
               return (
                 <div key={c.name} className="flex items-center gap-3">
-                  <span className="text-xs text-ink-secondary w-28 shrink-0 truncate">
-                    {c.name}
+                  <span className="flex items-center gap-1 w-28 shrink-0">
+                    <span className="text-xs text-ink-secondary truncate">
+                      {c.name}
+                    </span>
+                    {helpKey && <InfoTip helpKey={helpKey} />}
                   </span>
                   <span className="num text-xs text-ink w-14 shrink-0 text-right">
                     {c.value.toFixed(2)}

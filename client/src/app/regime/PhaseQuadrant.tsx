@@ -3,6 +3,7 @@
 import React from "react";
 import { RegimePhaseName, useFetchRegimePhaseQuery } from "@/state/api";
 import Card from "@/components/ui/Card";
+import InfoTip from "@/components/ui/InfoTip";
 import LoadingState from "@/components/ui/LoadingState";
 import ErrorState from "@/components/ui/ErrorState";
 import { PHASE_AXES, PHASE_COLORS, phaseTint } from "./phases";
@@ -34,7 +35,12 @@ const PhaseQuadrant: React.FC<PhaseQuadrantProps> = ({ className = "" }) => {
 
   return (
     <Card
-      title="Growth / Inflation Phase"
+      title={
+        <span className="inline-flex items-center gap-1.5">
+          Growth / Inflation Phase
+          <InfoTip helpKey="regime.phase" />
+        </span>
+      }
       className={className}
       action={
         current && (

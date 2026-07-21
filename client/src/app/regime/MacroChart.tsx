@@ -4,6 +4,7 @@ import React, { useMemo } from "react";
 import TimeSeriesChart, {
   TimeSeriesReferenceArea,
 } from "@/components/charts/TimeSeriesChart";
+import InfoTip from "@/components/ui/InfoTip";
 
 interface MacroData {
   macro_id: string;
@@ -19,6 +20,8 @@ interface MacroChartProps {
   title: string;
   subtitle?: string;
   baseline?: number;
+  /** INDICATOR_HELP key; renders an InfoTip next to the chart title. */
+  helpKey?: string;
 }
 
 const MacroChart: React.FC<MacroChartProps> = ({
@@ -29,6 +32,7 @@ const MacroChart: React.FC<MacroChartProps> = ({
   title,
   subtitle,
   baseline,
+  helpKey,
 }) => {
   const { chartData, recessionAreas } = useMemo(() => {
     const data = (primaryData ?? []).map((d) => ({
@@ -69,7 +73,12 @@ const MacroChart: React.FC<MacroChartProps> = ({
     <div className="card">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h4 className="text-base font-semibold text-ink">{title}</h4>
+          <h4 className="text-base font-semibold text-ink">
+            <span className="inline-flex items-center gap-1.5">
+              {title}
+              {helpKey && <InfoTip helpKey={helpKey} />}
+            </span>
+          </h4>
           <p className="text-xs text-ink-muted mt-0.5">
             {subtitle ?? `${primaryLabel} · shaded: ${recessionLabel}`}
           </p>

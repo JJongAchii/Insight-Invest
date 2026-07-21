@@ -3,6 +3,7 @@
 import React, { useMemo } from "react";
 import { InsightMarket, useFetchInsightBreadthQuery } from "@/state/api";
 import Card from "@/components/ui/Card";
+import InfoTip from "@/components/ui/InfoTip";
 import LoadingState from "@/components/ui/LoadingState";
 import ErrorState from "@/components/ui/ErrorState";
 import EmptyState from "@/components/ui/EmptyState";
@@ -71,8 +72,9 @@ const BreadthHistory: React.FC<BreadthHistoryProps> = ({
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
-            <p className="text-sm font-medium text-ink-secondary mb-2">
-              % Above MA20
+            <p className="text-sm font-medium text-ink-secondary mb-2 flex items-center gap-1.5">
+              <span>% Above MA20</span>
+              <InfoTip helpKey="breadth.ma20" />
             </p>
             <TimeSeriesChart
               data={maData}
@@ -89,8 +91,9 @@ const BreadthHistory: React.FC<BreadthHistoryProps> = ({
             />
           </div>
           <div>
-            <p className="text-sm font-medium text-ink-secondary mb-2">
-              52w New Highs / New Lows
+            <p className="text-sm font-medium text-ink-secondary mb-2 flex items-center gap-1.5">
+              <span>52w New Highs / New Lows</span>
+              <InfoTip helpKey="breadth.high_low" />
             </p>
             <TimeSeriesChart
               data={hlData}

@@ -3,6 +3,7 @@
 import React, { useMemo } from "react";
 import { KrMacroSeries, useFetchRegimeKrQuery } from "@/state/api";
 import Card from "@/components/ui/Card";
+import InfoTip from "@/components/ui/InfoTip";
 import StatTile from "@/components/ui/StatTile";
 import LoadingState from "@/components/ui/LoadingState";
 import ErrorState from "@/components/ui/ErrorState";
@@ -104,7 +105,14 @@ const KoreaMacro: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card title="금리 — 기준금리 · 국고채 3Y/10Y">
+        <Card
+          title={
+            <span className="inline-flex items-center gap-1.5">
+              금리 — 기준금리 · 국고채 3Y/10Y
+              <InfoTip helpKey="kr.rates" />
+            </span>
+          }
+        >
           <TimeSeriesChart
             data={ratesData}
             series={[
@@ -129,7 +137,14 @@ const KoreaMacro: React.FC = () => {
           />
         </Card>
 
-        <Card title={usdkrw?.name ?? "USD/KRW"}>
+        <Card
+          title={
+            <span className="inline-flex items-center gap-1.5">
+              {usdkrw?.name ?? "USD/KRW"}
+              <InfoTip helpKey="kr.usdkrw" />
+            </span>
+          }
+        >
           <TimeSeriesChart
             data={toChartData(usdkrw)}
             series={[

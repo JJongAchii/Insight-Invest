@@ -10,6 +10,7 @@ import {
   useFetchInsightFlowsTopQuery,
 } from "@/state/api";
 import Card from "@/components/ui/Card";
+import InfoTip from "@/components/ui/InfoTip";
 import LoadingState from "@/components/ui/LoadingState";
 import ErrorState from "@/components/ui/ErrorState";
 import EmptyState from "@/components/ui/EmptyState";
@@ -159,7 +160,12 @@ const FlowsSection: React.FC = () => {
       </div>
 
       <Card
-        title={`Cumulative Net Buying — ${investorLabel}`}
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            {`Cumulative Net Buying — ${investorLabel}`}
+            <InfoTip helpKey="flows.cumulative" />
+          </span>
+        }
         action={
           <span className="text-xs text-ink-muted">12M · KOSPI vs KOSDAQ</span>
         }
@@ -188,7 +194,12 @@ const FlowsSection: React.FC = () => {
       </Card>
 
       <Card
-        title={`Top Net Buys / Sells — ${investorLabel}`}
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            {`Top Net Buys / Sells — ${investorLabel}`}
+            <InfoTip helpKey="flows.top" />
+          </span>
+        }
         action={
           <div className="flex items-center gap-3">
             {topData?.as_of && (

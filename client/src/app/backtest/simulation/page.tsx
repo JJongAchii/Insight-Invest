@@ -8,6 +8,7 @@ import LoadingSpinner from "@/app/(components)/LoadingSpinner";
 import TimeSeriesChart from "@/components/charts/TimeSeriesChart";
 import PeriodBarChart from "@/components/charts/PeriodBarChart";
 import EmptyState from "@/components/ui/EmptyState";
+import InfoTip from "@/components/ui/InfoTip";
 import {
   useRunBacktestMutation,
   BacktestPayload,
@@ -216,7 +217,10 @@ const Simulation = () => {
       {/* Drawdown */}
       {activeTab === "drawdown" && (
         <div className="card">
-          <h3 className="section-header">Drawdown</h3>
+          <div className="flex items-start justify-between">
+            <h3 className="section-header">Drawdown</h3>
+            <InfoTip helpKey="bt.drawdown" />
+          </div>
           {analytics && analytics.drawdown.length > 0 ? (
             <TimeSeriesChart
               data={toSeriesData(analytics.drawdown)}
@@ -239,7 +243,10 @@ const Simulation = () => {
       {/* Rolling Sharpe */}
       {activeTab === "rolling" && (
         <div className="card">
-          <h3 className="section-header">Rolling Sharpe</h3>
+          <div className="flex items-start justify-between">
+            <h3 className="section-header">Rolling Sharpe</h3>
+            <InfoTip helpKey="bt.rolling" />
+          </div>
           {analytics && analytics.rolling_sharpe.length > 0 ? (
             <TimeSeriesChart
               data={toSeriesData(analytics.rolling_sharpe)}
@@ -326,7 +333,10 @@ const Simulation = () => {
       {/* Contribution */}
       {activeTab === "contribution" && (
         <div className="card">
-          <h3 className="section-header">Return Contribution by Asset</h3>
+          <div className="flex items-start justify-between">
+            <h3 className="section-header">Return Contribution by Asset</h3>
+            <InfoTip helpKey="bt.contribution" />
+          </div>
           {analytics && analytics.contribution.length > 0 ? (
             <div className="space-y-3">
               {[...analytics.contribution]
@@ -384,7 +394,10 @@ const Simulation = () => {
       {/* Stress */}
       {activeTab === "stress" && (
         <div className="card">
-          <h3 className="section-header">Crisis Stress Windows</h3>
+          <div className="flex items-start justify-between">
+            <h3 className="section-header">Crisis Stress Windows</h3>
+            <InfoTip helpKey="bt.stress" />
+          </div>
           {analytics && analytics.crisis.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

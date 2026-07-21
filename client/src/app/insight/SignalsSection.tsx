@@ -9,6 +9,7 @@ import {
   useFetchInsightSignalsQuery,
 } from "@/state/api";
 import Card from "@/components/ui/Card";
+import InfoTip from "@/components/ui/InfoTip";
 import LoadingState from "@/components/ui/LoadingState";
 import ErrorState from "@/components/ui/ErrorState";
 import EmptyState from "@/components/ui/EmptyState";
@@ -33,6 +34,12 @@ const INVESTOR_OPTIONS: { id: InsightInvestor; label: string }[] = [
   { id: "frgn", label: "Foreign" },
   { id: "inst", label: "Institution" },
 ];
+
+const HELP_KEYS: Record<InsightSignalType, string> = {
+  streak: "signal.streak",
+  intensity: "signal.intensity",
+  divergence: "signal.divergence",
+};
 
 const CAPTIONS: Record<InsightSignalType, string> = {
   streak: "동일 투자자가 여러 거래일 연속으로 순매수/순매도 중인 종목",
@@ -99,7 +106,10 @@ const SignalsSection: React.FC = () => {
         />
       ) : (
         <div className="flex flex-col gap-3">
-          <p className="text-xs text-ink-muted">{CAPTIONS[type]}</p>
+          <p className="text-xs text-ink-muted flex items-center gap-1.5">
+            <span>{CAPTIONS[type]}</span>
+            <InfoTip helpKey={HELP_KEYS[type]} />
+          </p>
           <div className="overflow-x-auto">
             {type === "streak" && (
               <table className="w-full text-sm">

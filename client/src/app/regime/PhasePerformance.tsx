@@ -7,6 +7,7 @@ import {
   useFetchRegimePhaseQuery,
 } from "@/state/api";
 import Card from "@/components/ui/Card";
+import InfoTip from "@/components/ui/InfoTip";
 import LoadingState from "@/components/ui/LoadingState";
 import ErrorState from "@/components/ui/ErrorState";
 import EmptyState from "@/components/ui/EmptyState";
@@ -47,7 +48,12 @@ const PhasePerformance: React.FC = () => {
 
   return (
     <Card
-      title="Phase Performance"
+      title={
+        <span className="inline-flex items-center gap-1.5">
+          Phase Performance
+          <InfoTip helpKey="regime.performance" />
+        </span>
+      }
       action={
         data?.as_of && (
           <span className="text-xs text-ink-muted num">as of {data.as_of}</span>

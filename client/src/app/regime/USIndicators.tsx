@@ -93,6 +93,7 @@ const USIndicators: React.FC = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatTile
             label="Yield Spread (10Y-2Y)"
+            helpKey="macro.t10y2y"
             value={`${latestT10Y2Y?.value?.toFixed(2) ?? "—"}%`}
             deltaType={
               latestT10Y2Y && latestT10Y2Y.value >= 0 ? "gain" : "loss"
@@ -100,10 +101,12 @@ const USIndicators: React.FC = () => {
           />
           <StatTile
             label="Unemployment Rate"
+            helpKey="macro.unrate"
             value={`${latestUnemployment?.value?.toFixed(1) ?? "—"}%`}
           />
           <StatTile
             label="Fed Funds Rate"
+            helpKey="macro.fedfunds"
             value={`${latestFedFund?.value?.toFixed(2) ?? "—"}%`}
           />
           <StatTile
@@ -121,6 +124,7 @@ const USIndicators: React.FC = () => {
           primaryLabel={t10y2yInfo.description ?? "T10Y2Y"}
           recessionLabel={recessionInfo.description ?? "US Recession"}
           title="10-Year Minus 2-Year Treasury Spread"
+          helpKey="macro.t10y2y"
           baseline={0}
         />
 
@@ -130,6 +134,7 @@ const USIndicators: React.FC = () => {
           primaryLabel={unemploymentInfo.description ?? "Unemployment Rate"}
           recessionLabel={recessionInfo.description ?? "US Recession"}
           title="Unemployment Rate"
+          helpKey="macro.unrate"
           baseline={5}
         />
 
@@ -139,6 +144,7 @@ const USIndicators: React.FC = () => {
           primaryLabel={employeesInfo.description ?? "Nonfarm Payrolls"}
           recessionLabel={recessionInfo.description ?? "US Recession"}
           title="All Employees, Total Nonfarm"
+          helpKey="macro.payems"
           baseline={150000}
         />
 
@@ -148,6 +154,7 @@ const USIndicators: React.FC = () => {
           primaryLabel={fedFundInfo.description ?? "Federal Funds Rate"}
           recessionLabel={recessionInfo.description ?? "US Recession"}
           title="Federal Funds Rate"
+          helpKey="macro.fedfunds"
         />
 
         <MacroChart
@@ -156,6 +163,7 @@ const USIndicators: React.FC = () => {
           primaryLabel={cpiInfo.description ?? "CPI"}
           recessionLabel={recessionInfo.description ?? "US Recession"}
           title="Consumer Price Index for All Urban Consumers"
+          helpKey="macro.cpi"
           baseline={0.02}
         />
       </div>
