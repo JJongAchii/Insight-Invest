@@ -5,6 +5,8 @@ import { InsightMarket } from "@/state/api";
 import PageHeader from "@/components/ui/PageHeader";
 import IndexBreadthStrip from "./IndexBreadthStrip";
 import FlowsSection from "./FlowsSection";
+import SectorSection from "./SectorSection";
+import ValuationSection from "./ValuationSection";
 import SignalsSection from "./SignalsSection";
 import BreadthHistory from "./BreadthHistory";
 
@@ -26,10 +28,16 @@ const InsightPage = () => {
       {/* 2. Foreign/Institution flows */}
       <FlowsSection />
 
-      {/* 3. Flow signals */}
+      {/* 3. Sector heatmap & rotation */}
+      <SectorSection />
+
+      {/* 4. Market valuation */}
+      <ValuationSection />
+
+      {/* 5. Flow signals */}
       <SignalsSection />
 
-      {/* 4. Breadth history */}
+      {/* 6. Breadth history */}
       <BreadthHistory market={market} onMarketChange={setMarket} />
     </div>
   );

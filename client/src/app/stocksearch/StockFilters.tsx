@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { FilterState, MarketFilter, CapFilter } from "./types";
+import { FilterState, MarketFilter, CapFilter, TypeFilter } from "./types";
 
 interface StockFiltersProps {
   filters: FilterState;
@@ -13,6 +13,12 @@ const MARKET_OPTIONS: { value: MarketFilter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "US", label: "US" },
   { value: "KR", label: "KR" },
+];
+
+const TYPE_OPTIONS: { value: TypeFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "stock", label: "Stock" },
+  { value: "etf", label: "ETF" },
 ];
 
 const CAP_OPTIONS: { value: CapFilter; label: string }[] = [
@@ -29,6 +35,10 @@ const StockFilters: React.FC<StockFiltersProps> = ({
 }) => {
   const handleMarketChange = (market: MarketFilter) => {
     onFilterChange({ ...filters, market });
+  };
+
+  const handleTypeChange = (type: TypeFilter) => {
+    onFilterChange({ ...filters, type });
   };
 
   const handleSectorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -49,6 +59,23 @@ const StockFilters: React.FC<StockFiltersProps> = ({
             onClick={() => handleMarketChange(option.value)}
             className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
               filters.market === option.value
+                ? "bg-overlay text-ink shadow-sm"
+                : "text-ink-secondary hover:text-ink"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Security Type Tabs */}
+      <div className="flex rounded-lg bg-raised p-1">
+        {TYPE_OPTIONS.map((option) => (
+          <button
+            key={option.value}
+            onClick={() => handleTypeChange(option.value)}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
+              filters.type === option.value
                 ? "bg-overlay text-ink shadow-sm"
                 : "text-ink-secondary hover:text-ink"
             }`}

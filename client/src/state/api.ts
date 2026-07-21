@@ -69,6 +69,13 @@ export interface PriceHistoryResponse {
   meta: StockMeta;
 }
 
+export interface PriceSummaryFlows {
+  /** 20-day cumulative foreign net buying, KRW. */
+  frgn_net_20d: number;
+  /** 20-day cumulative institution net buying, KRW. */
+  inst_net_20d: number;
+}
+
 export interface PriceSummaryResponse {
   meta_id: number;
   ticker: string;
@@ -76,6 +83,15 @@ export interface PriceSummaryResponse {
   metrics: StockMetrics;
   latest_price: number | null;
   latest_date: string | null;
+  /** Latest daily traded value, KRW (KR only). */
+  value: number | null;
+  /** Market cap, KRW (KR only). */
+  mktcap: number | null;
+  per: number | null;
+  pbr: number | null;
+  /** Dividend yield, %. */
+  div: number | null;
+  flows_recent: PriceSummaryFlows | null;
 }
 
 export interface SparklineResponse {
@@ -416,6 +432,60 @@ export interface InsightSignalsResponse {
   rows: InsightSignalRow[];
 }
 
+export type InsightSectorPeriod = "1d" | "1w" | "1m" | "3m" | "ytd";
+
+export interface InsightSectorHeatmapRow {
+  market: InsightMarket;
+  sector: string;
+  ret_1d: number | null;
+  ret_1w: number | null;
+  ret_1m: number | null;
+  ret_3m: number | null;
+  ret_ytd: number | null;
+  n_stocks: number;
+  /** Sector's share of market cap within its market (0–1). */
+  mktcap_weight: number;
+}
+
+export interface InsightSectorHeatmapResponse {
+  as_of: string;
+  rows: InsightSectorHeatmapRow[];
+}
+
+export interface InsightSectorRotationRow {
+  date: string;
+  market: InsightMarket;
+  sector: string;
+  index_value: number;
+}
+
+export interface InsightSectorRotationResponse {
+  as_of: string;
+  rows: InsightSectorRotationRow[];
+}
+
+export interface InsightValuationRow {
+  date: string;
+  per: number | null;
+  pbr: number | null;
+  div: number | null;
+}
+
+export interface InsightValuationCurrent {
+  per: number | null;
+  pbr: number | null;
+  div: number | null;
+  /** Historical percentile rank, 0–100 (lower = cheaper). */
+  pct_rank_per: number | null;
+  pct_rank_pbr: number | null;
+}
+
+export interface InsightValuationResponse {
+  as_of: string;
+  rows: InsightValuationRow[];
+  current: InsightValuationCurrent | null;
+}
+
 export interface InsightIndexRow {
   date: string;
   index: InsightMarket;
@@ -570,6 +640,23 @@ export const api = createApi({
     fetchInsightIndex: builder.query<InsightIndexResponse, { days?: number }>({
       query: ({ days = 365 }) => `/insight/index?days=${days}`,
     }),
+    fetchInsightSectorHeatmap: builder.query<InsightSectorHeatmapResponse, void>(
+      {
+        query: () => "/insight/sector/heatmap",
+      }
+    ),
+    fetchInsightSectorRotation: builder.query<
+      InsightSectorRotationResponse,
+      { months?: number }
+    >({
+      query: ({ months = 12 }) => `/insight/sector/rotation?months=${months}`,
+    }),
+    fetchInsightValuation: builder.query<
+      InsightValuationResponse,
+      { market: InsightMarket }
+    >({
+      query: ({ market }) => `/insight/valuation?market=${market}`,
+    }),
 
     // Mutation endpoints
     runBacktest: builder.mutation<BacktestRunResult, BacktestPayload>({
@@ -645,6 +732,9 @@ export const {
   useFetchInsightBreadthQuery,
   useFetchInsightSignalsQuery,
   useFetchInsightIndexQuery,
+  useFetchInsightSectorHeatmapQuery,
+  useFetchInsightSectorRotationQuery,
+  useFetchInsightValuationQuery,
   // Mutation hooks
   useRunBacktestMutation,
   useRunBacktestFromWeightsMutation,

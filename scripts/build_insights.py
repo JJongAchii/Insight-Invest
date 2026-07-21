@@ -14,6 +14,11 @@ krx_flows 전체 로드(수백 MB)는 로컬에서만 허용 — Lambda에서는
 - breadth_daily: 시장폭 (등락 종목수·52주 신고/신저·상하한·MA20 상회 비율).
 - flows_signals: 종목×투자자 최신 스냅샷 — 연속 순매수/도 일수, 20일 강도,
   수급-가격 다이버전스.
+- sector_index: 시장×업종 일별 시총가중 지수 (2016~, 시작 100 체인).
+- sector_perf: 업종별 최신 성과 스냅샷 (1d/1w/1m/3m/YTD + 시총 비중).
+- kr_etf_meta: 현재 상장 KRX ETF 유니버스 → 앱 meta 확장용 (APP_DATA 루트에 저장).
+- valuation_daily: 시장별 밸류에이션 집계 (시총가중 조화 PER·PBR, 배당수익률)
+  — krx_fundamental 미수집 시 스킵.
 
 모든 테이블에 as_of(마지막 거래일 "YYYY-MM-DD") 컬럼 포함.
 
@@ -329,25 +334,218 @@ def build_flows_signals() -> pd.DataFrame:
     return df
 
 
+MIN_SECTOR_STOCKS = 5  # 구성 종목 5개 미만 업종은 지수 제외 (노이즈 컷)
+ETF_META_ID_BASE = 900_000  # KR ETF meta_id = 900000 + int(ticker); 비숫자 티커는 990000+ 순번
+
+
+def _sector_index() -> pd.DataFrame:
+    """시장×업종 일별 시총가중 지수 — sector_index/sector_perf 공용 (1회 계산 캐시).
+
+    업종 분류는 월별 스냅샷 — 각 일자에 그 이전 최근 스냅샷을 merge_asof로 매핑.
+    일별 업종 수익률 = 전일 시총 가중 평균 (adj_close pct_change), 시작 100 체인.
+    """
+    if "sector_index" in _cache:
+        return _cache["sector_index"]
+
+    px = qdata_api.load_krx_prices(start="2016-01-01", columns=["adj_close", "mktcap"])
+    sec = qdata_api.load_krx_sector()[["date", "ticker", "market", "sector"]]
+
+    merged = pd.merge_asof(
+        px.sort_values("date"),
+        sec.sort_values("date"),
+        on="date",
+        by="ticker",
+        direction="backward",
+    ).dropna(subset=["sector"])
+
+    merged = merged.sort_values(["ticker", "date"])
+    g = merged.groupby("ticker")
+    merged["ret"] = g["adj_close"].pct_change()
+    merged["w"] = g["mktcap"].shift(1)  # 전일 시총 가중 (look-ahead 방지)
+    valid = merged.dropna(subset=["ret", "w"]).copy()
+    valid["wret"] = valid["ret"] * valid["w"]
+
+    agg = (
+        valid.groupby(["date", "market", "sector"], as_index=False)
+        .agg(wret=("wret", "sum"), w=("w", "sum"), n_stocks=("ret", "size"))
+    )
+    agg = agg[(agg["n_stocks"] >= MIN_SECTOR_STOCKS) & (agg["w"] > 0)].copy()
+    agg["ret_1d"] = agg["wret"] / agg["w"]
+
+    agg = agg.sort_values(["market", "sector", "date"]).reset_index(drop=True)
+    keys = [agg["market"], agg["sector"]]
+    cum = (1.0 + agg["ret_1d"]).groupby(keys).cumprod()
+    agg["index_value"] = 100.0 * cum / cum.groupby(keys).transform("first")
+    agg["ret_1d"] = agg["ret_1d"] * 100  # 출력은 %
+    agg["n_stocks"] = agg["n_stocks"].astype(int)
+
+    df = agg[["date", "market", "sector", "index_value", "ret_1d", "n_stocks"]].copy()
+    df["as_of"] = pd.Timestamp(px["date"].max()).strftime("%Y-%m-%d")
+    _cache["sector_index"] = df
+    return df
+
+
+def build_sector_index() -> pd.DataFrame:
+    return _sector_index()
+
+
+def build_sector_perf() -> pd.DataFrame:
+    """업종별 최신 성과 스냅샷 — sector_index 체인에서 1d/1w/1m/3m/YTD 수익률(%).
+
+    mktcap_weight: 최신 업종 스냅샷 기준 해당 시장 시총 대비 업종 시총 비중(%).
+    """
+    si = _sector_index()
+    as_of = si["as_of"].iloc[0]
+    last_date = si["date"].max()
+    year_start = pd.Timestamp(pd.Timestamp(last_date).year, 1, 1)
+
+    # 시장별 업종 시총 비중 — 최신 가격 스냅샷 × 최신 업종 분류
+    sec = qdata_api.load_krx_sector()
+    latest_sec = sec[sec["date"] == sec["date"].max()][["ticker", "market", "sector"]]
+    snap = _latest_price_snapshot()[["mktcap"]]
+    cap = latest_sec.join(snap, on="ticker").dropna(subset=["mktcap"])
+    sector_cap = cap.groupby(["market", "sector"])["mktcap"].sum()
+    market_cap = cap.groupby("market")["mktcap"].sum()
+    weight = (sector_cap / market_cap * 100).rename("mktcap_weight")
+
+    rows = []
+    for (market, sector), grp in si.groupby(["market", "sector"]):
+        grp = grp.sort_values("date")
+        if grp["date"].iloc[-1] != last_date:  # 최신일에 없는 업종(개편·소멸) 제외
+            continue
+        iv = grp["index_value"].to_numpy()
+        last = iv[-1]
+
+        def _ret(n: int):
+            return (last / iv[-1 - n] - 1) * 100 if len(iv) > n else None
+
+        ytd_base = grp[grp["date"] < year_start]
+        ret_ytd = (
+            (last / ytd_base["index_value"].iloc[-1] - 1) * 100 if not ytd_base.empty else None
+        )
+        rows.append(
+            {
+                "market": market,
+                "sector": sector,
+                "ret_1d": grp["ret_1d"].iloc[-1],
+                "ret_1w": _ret(5),
+                "ret_1m": _ret(21),
+                "ret_3m": _ret(63),
+                "ret_ytd": ret_ytd,
+                "n_stocks": int(grp["n_stocks"].iloc[-1]),
+                "mktcap_weight": weight.get((market, sector)),
+            }
+        )
+    df = pd.DataFrame(rows).sort_values(["market", "sector"]).reset_index(drop=True)
+    df["as_of"] = as_of
+    return df
+
+
+def build_kr_etf_meta() -> pd.DataFrame:
+    """현재 상장 KRX ETF → 앱 meta 스키마 행.
+
+    meta_id = 900000 + int(ticker) (6자리 숫자 티커); 비숫자·충돌 시 990000+ 순번.
+    krx_etf에는 종목명·시총이 없어 name=ticker, marketcap=None (클라이언트는 티커 표시).
+    """
+    etf = qdata_api.load_krx_etf_prices()
+    last = etf["date"].max()
+    live = sorted(etf.loc[etf["date"] == last, "ticker"].unique())
+    rng = etf[etf["ticker"].isin(live)].groupby("ticker")["date"].agg(["min", "max"])
+
+    used: set[int] = set()
+    next_seq = ETF_META_ID_BASE + 90_000  # 990000
+    rows = []
+    for ticker in live:
+        if ticker.isdigit() and ETF_META_ID_BASE + int(ticker) not in used:
+            mid = ETF_META_ID_BASE + int(ticker)
+        else:
+            while next_seq in used:
+                next_seq += 1
+            mid = next_seq
+        used.add(mid)
+        rows.append(
+            {
+                "meta_id": mid,
+                "ticker": ticker,
+                "name": ticker,
+                "security_type": "etf",
+                "asset_class": None,
+                "sector": None,
+                "iso_code": "KR",
+                "marketcap": None,
+                "min_date": rng.loc[ticker, "min"].strftime("%Y-%m-%d"),
+                "max_date": rng.loc[ticker, "max"].strftime("%Y-%m-%d"),
+            }
+        )
+    df = pd.DataFrame(rows)
+    df["as_of"] = pd.Timestamp(last).strftime("%Y-%m-%d")
+    return df
+
+
+def build_valuation_daily():
+    """시장별 일별 밸류에이션 — 시총가중 조화 PER/PBR + 시총가중 배당수익률.
+
+    PER/PBR=0은 KRX 결측 표기(적자 등)라 양수만 사용. pct_rank는 전 기간 백분위.
+    krx_fundamental 미수집(백필 중)이면 None 반환 → main이 스킵.
+    """
+    try:
+        f = qdata_api.load_krx_fundamental(columns=["market", "per", "pbr", "div"])
+    except FileNotFoundError:
+        print("[skip] valuation (fundamental 미수집)")
+        return None
+
+    start = pd.Timestamp(f["date"].min()).strftime("%Y-%m-%d")
+    px = qdata_api.load_krx_prices(start=start, columns=["mktcap"])
+    m = f.merge(px[["date", "ticker", "mktcap"]], on=["date", "ticker"], how="inner")
+    m = m[m["mktcap"] > 0]
+
+    def _agg(g: pd.DataFrame) -> pd.Series:
+        pe = g[g["per"] > 0]
+        pb = g[g["pbr"] > 0]
+        dv = g.dropna(subset=["div"])
+        return pd.Series(
+            {
+                "per": pe["mktcap"].sum() / (pe["mktcap"] / pe["per"]).sum() if len(pe) else np.nan,
+                "pbr": pb["mktcap"].sum() / (pb["mktcap"] / pb["pbr"]).sum() if len(pb) else np.nan,
+                "div": (dv["div"] * dv["mktcap"]).sum() / dv["mktcap"].sum() if len(dv) else np.nan,
+            }
+        )
+
+    df = m.groupby(["date", "market"]).apply(_agg, include_groups=False).reset_index()
+    df = df.sort_values(["market", "date"]).reset_index(drop=True)
+    for col in ("pbr", "per"):
+        df[f"pct_rank_{col}"] = df.groupby("market")[col].rank(pct=True) * 100
+    df = df[["date", "market", "per", "pbr", "div", "pct_rank_pbr", "pct_rank_per"]]
+    df["as_of"] = pd.Timestamp(m["date"].max()).strftime("%Y-%m-%d")
+    return df
+
+
 # ---------------------------------------------------------------- 실행
 
 
 BUILDERS = [
-    ("regime_asset_perf", build_regime_asset_perf, {}),
-    ("flows_summary", build_flows_summary, {}),
-    ("flows_top", build_flows_top, {}),
-    ("flows_by_ticker", build_flows_by_ticker, {"row_group_size": 100_000}),
-    ("breadth_daily", build_breadth_daily, {}),
-    ("flows_signals", build_flows_signals, {}),
+    ("insight/regime_asset_perf.parquet", build_regime_asset_perf, {}),
+    ("insight/flows_summary.parquet", build_flows_summary, {}),
+    ("insight/flows_top.parquet", build_flows_top, {}),
+    ("insight/flows_by_ticker.parquet", build_flows_by_ticker, {"row_group_size": 100_000}),
+    ("insight/breadth_daily.parquet", build_breadth_daily, {}),
+    ("insight/flows_signals.parquet", build_flows_signals, {}),
+    ("insight/sector_index.parquet", build_sector_index, {}),
+    ("insight/sector_perf.parquet", build_sector_perf, {}),
+    ("kr_etf_meta.parquet", build_kr_etf_meta, {}),  # 앱 루트 — meta_df()가 union
+    ("insight/valuation_daily.parquet", build_valuation_daily, {}),
 ]
 
 
 def main():
     failed = []
-    for name, builder, write_kwargs in BUILDERS:
+    for relpath, builder, write_kwargs in BUILDERS:
+        name = relpath.rsplit("/", 1)[-1].removesuffix(".parquet")
         try:
             df = builder()
-            target = storage.write_parquet(df, "insight", f"{name}.parquet", **write_kwargs)
+            if df is None:  # 소스 미수집 등으로 빌더가 스스로 스킵
+                continue
+            target = storage.write_parquet(df, *relpath.split("/"), **write_kwargs)
             print(f"{name} → {target} ({len(df)} rows, as_of={df['as_of'].iloc[0]})")
         except Exception:
             failed.append(name)

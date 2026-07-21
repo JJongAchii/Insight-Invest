@@ -19,6 +19,10 @@ export interface TimeSeriesSeries {
   key: string;
   name?: string;
   color?: string;
+  /** Line width; defaults to 1.8. */
+  strokeWidth?: number;
+  /** Line opacity (0–1); defaults to 1. Useful to mute non-highlighted series. */
+  opacity?: number;
 }
 
 export interface TimeSeriesReferenceArea {
@@ -124,7 +128,8 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
             dataKey={s.key}
             name={s.name ?? s.key}
             stroke={s.color ?? DEFAULT_COLORS[i % DEFAULT_COLORS.length]}
-            strokeWidth={1.8}
+            strokeWidth={s.strokeWidth ?? 1.8}
+            strokeOpacity={s.opacity ?? 1}
             dot={false}
             connectNulls
           />

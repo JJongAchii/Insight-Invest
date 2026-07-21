@@ -270,61 +270,6 @@ body,
   }
 }
 
-/* ============================================
-   MUI DATAGRID 브리지 (Phase 5에서 TanStack 교체 전까지)
-   ============================================ */
-.MuiDataGrid-root {
-  border: none !important;
-  background: var(--surface) !important;
-  border-radius: 16px !important;
-  color: var(--text-primary) !important;
-  --DataGrid-containerBackground: var(--surface-raised) !important;
-  --DataGrid-rowBorderColor: var(--border) !important;
-}
-
-.MuiDataGrid-columnHeaders {
-  background: var(--surface-raised) !important;
-  border-bottom: 1px solid var(--border) !important;
-  border-radius: 16px 16px 0 0 !important;
-}
-
-.MuiDataGrid-columnHeaderTitle {
-  font-size: 0.75rem !important;
-  font-weight: 600 !important;
-  color: var(--text-secondary) !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.05em !important;
-}
-
-.MuiDataGrid-cell {
-  font-size: 0.875rem !important;
-  color: var(--text-primary) !important;
-  border-bottom: 1px solid var(--border) !important;
-}
-
-.MuiDataGrid-row:hover {
-  background: var(--surface-overlay) !important;
-}
-
-.MuiDataGrid-footerContainer,
-.MuiTablePagination-root,
-.MuiTablePagination-root .MuiSvgIcon-root {
-  color: var(--text-secondary) !important;
-}
-
-.MuiDataGrid-toolbarContainer .MuiInputBase-root,
-.MuiDataGrid-toolbarContainer .MuiButtonBase-root {
-  color: var(--text-secondary) !important;
-}
-
-.MuiCheckbox-root {
-  color: var(--text-muted) !important;
-}
-
-.MuiCheckbox-root.Mui-checked {
-  color: var(--primary) !important;
-}
-
 /* Financial value colors */
 .text-gains {
   color: var(--gains) !important;

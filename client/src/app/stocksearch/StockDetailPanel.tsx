@@ -12,6 +12,8 @@ import {
 
 import { useFetchPriceHistoryQuery, useFetchPriceSummaryQuery } from "@/state/api";
 import { MetaRow } from "./types";
+import InfoTip from "@/components/ui/InfoTip";
+import { fmtEok, fmtJo } from "../insight/format";
 
 interface StockDetailPanelProps {
   stock: MetaRow | null;
@@ -99,6 +101,9 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
 
   const isLoading = priceLoading || summaryLoading;
   const metrics = summaryData?.metrics;
+  const isKr = stock.iso_code === "KR";
+  const mktcap = summaryData?.mktcap ?? stock.marketcap ?? null;
+  const flows = summaryData?.flows_recent ?? null;
 
   return (
     <div className="fixed inset-y-0 right-0 w-[400px] bg-surface shadow-2xl z-50 flex flex-col">
@@ -132,6 +137,20 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
+        {/* Top meta tiles: market cap & traded value */}
+        <div className="grid grid-cols-2 gap-3">
+          <MetricCard
+            label="시가총액"
+            value={isKr ? fmtJo(mktcap) : formatMarketCap(mktcap)}
+          />
+          <MetricCard
+            label="거래대금"
+            value={
+              summaryData?.value != null ? fmtJo(summaryData.value) : "—"
+            }
+          />
+        </div>
+
         {/* Price Chart */}
         <div>
           <div className="flex items-center justify-between mb-3">
@@ -244,6 +263,71 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
             />
           </div>
         </div>
+
+        {/* Valuation */}
+        <div>
+          <h3 className="text-sm font-medium text-ink-secondary mb-3">
+            Valuation
+          </h3>
+          <div className="grid grid-cols-3 gap-3">
+            <MetricCard
+              label="PER"
+              value={summaryData?.per != null ? summaryData.per.toFixed(2) : "—"}
+            />
+            <MetricCard
+              label="PBR"
+              value={summaryData?.pbr != null ? summaryData.pbr.toFixed(2) : "—"}
+            />
+            <MetricCard
+              label="배당수익률"
+              value={
+                summaryData?.div != null
+                  ? `${summaryData.div.toFixed(2)}%`
+                  : "—"
+              }
+            />
+          </div>
+        </div>
+
+        {/* Recent investor flows (KR only) */}
+        {flows && (
+          <div>
+            <h3 className="text-sm font-medium text-ink-secondary mb-3 flex items-center gap-1">
+              최근 수급 (20일)
+              <InfoTip helpKey="signal.intensity" />
+            </h3>
+            <div className="space-y-2 text-sm bg-raised rounded-lg p-3">
+              <div className="flex justify-between">
+                <span className="text-ink-muted">외국인 20일 순매수</span>
+                <span
+                  className={`num font-medium ${
+                    flows.frgn_net_20d > 0
+                      ? "text-gains"
+                      : flows.frgn_net_20d < 0
+                        ? "text-losses"
+                        : "text-ink"
+                  }`}
+                >
+                  {fmtEok(flows.frgn_net_20d)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-ink-muted">기관 20일 순매수</span>
+                <span
+                  className={`num font-medium ${
+                    flows.inst_net_20d > 0
+                      ? "text-gains"
+                      : flows.inst_net_20d < 0
+                        ? "text-losses"
+                        : "text-ink"
+                  }`}
+                >
+                  {fmtEok(flows.inst_net_20d)}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Stock Info */}
         <div>

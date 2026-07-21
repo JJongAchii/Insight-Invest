@@ -94,6 +94,80 @@ def _calculate_metrics(prices: pd.Series) -> Dict[str, Optional[float]]:
     }
 
 
+def _kr_summary_extras(ticker: str) -> Dict:
+    """KR 종목 부가 정보 — 최근일 거래대금·시총, 최신 PER/PBR/배당수익률, 20일 수급.
+
+    소스별 독립 try/except — 어떤 소스가 없어도 (fundamental 백필 중 등) None으로 응답.
+    """
+    extras: Dict = {
+        "value": None,
+        "mktcap": None,
+        "per": None,
+        "pbr": None,
+        "div": None,
+        "flows_recent": None,
+    }
+    start = (date.today() - timedelta(days=14)).isoformat()
+
+    try:
+        from qdata import api as qdata_api
+
+        px = qdata_api.load_krx_prices(start=start, tickers=[ticker], columns=["value", "mktcap"])
+        if not px.empty:
+            row = px.sort_values("date").iloc[-1]
+            extras["value"] = float(row["value"]) if pd.notna(row["value"]) else None
+            extras["mktcap"] = float(row["mktcap"]) if pd.notna(row["mktcap"]) else None
+    except Exception:
+        logger.warning(f"KR price extras 조회 실패: {ticker}", exc_info=True)
+
+    try:
+        from qdata import api as qdata_api
+
+        fund = qdata_api.load_krx_fundamental(
+            start=start, tickers=[ticker], columns=["per", "pbr", "div"]
+        )
+        if not fund.empty:
+            row = fund.sort_values("date").iloc[-1]
+            # KRX는 PER/PBR=0을 결측(적자·산출불가) 표기로 사용 — 0은 None 처리
+            per = float(row["per"]) if pd.notna(row["per"]) else 0.0
+            pbr = float(row["pbr"]) if pd.notna(row["pbr"]) else 0.0
+            extras["per"] = per if per > 0 else None
+            extras["pbr"] = pbr if pbr > 0 else None
+            extras["div"] = float(row["div"]) if pd.notna(row["div"]) else None
+    except Exception:
+        logger.debug(f"KR fundamental 조회 실패 (미수집 가능): {ticker}")
+
+    try:
+        from datastore import storage
+
+        sig = storage.read_parquet(
+            "insight",
+            "flows_signals.parquet",
+            columns=["ticker", "investor", "net_20d"],
+            filters=[("ticker", "==", ticker)],
+        )
+        if not sig.empty:
+            net = sig.set_index("investor")["net_20d"]
+            extras["flows_recent"] = {
+                "frgn_net_20d": float(net["frgn"]) if "frgn" in net.index else None,
+                "inst_net_20d": float(net["inst"]) if "inst" in net.index else None,
+            }
+    except Exception:
+        logger.debug(f"flows_signals 조회 실패: {ticker}")
+
+    return extras
+
+
+_EMPTY_EXTRAS: Dict = {
+    "value": None,
+    "mktcap": None,
+    "per": None,
+    "pbr": None,
+    "div": None,
+    "flows_recent": None,
+}
+
+
 @router.get("/sparklines")
 def get_sparklines(
     meta_ids: str = Query(..., description="Comma-separated meta_ids"),
@@ -413,6 +487,10 @@ def get_price_summary(meta_id: int):
         end_date=end_date,
     )
 
+    extras = (
+        _kr_summary_extras(meta_row.iloc[0]["ticker"]) if iso_code == "KR" else dict(_EMPTY_EXTRAS)
+    )
+
     if price_df.empty:
         return {
             "meta_id": meta_id,
@@ -428,6 +506,7 @@ def get_price_summary(meta_id: int):
             },
             "latest_price": None,
             "latest_date": None,
+            **extras,
         }
 
     price_df = price_df.sort_values("trade_date")
@@ -446,4 +525,5 @@ def get_price_summary(meta_id: int):
             if hasattr(price_df["trade_date"].iloc[-1], "isoformat")
             else str(price_df["trade_date"].iloc[-1])
         ),
+        **extras,
     }

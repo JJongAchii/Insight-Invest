@@ -20,6 +20,7 @@ from datastore import meta, storage
 logger = logging.getLogger(__name__)
 
 US_ARCHIVE = "us_prices.parquet"
+KR_ETF_META_ID_MIN = 900_000  # kr_etf_meta.parquet의 meta_id 대역 — ETF 소스 라우팅 기준
 
 
 @lru_cache(maxsize=1)
@@ -54,6 +55,24 @@ def _kr_prices(mapping: pd.DataFrame, start_date, end_date) -> pd.DataFrame:
     out["gross_return"] = out["chg_pct"] / 100.0
     out = out.merge(mapping[["meta_id", "ticker"]], on="ticker", how="inner")
     return out[["meta_id", "trade_date", "ticker", "adj_close", "gross_return"]]
+
+
+def _kr_etf_prices(mapping: pd.DataFrame, start_date, end_date) -> pd.DataFrame:
+    """qdata KRX ETF 패널 — adj_close:=close(무수정), gross_return은 close 파생."""
+    df = qdata_api.load_krx_etf_prices(
+        start=str(start_date) if start_date else None,
+        end=str(end_date) if end_date else None,
+        tickers=mapping["ticker"].tolist(),
+    )
+    if df.empty:
+        return pd.DataFrame()
+    out = df.rename(columns={"date": "trade_date"})[["trade_date", "ticker", "close"]].copy()
+    out = out.sort_values(["ticker", "trade_date"])
+    out["adj_close"] = out["close"].astype("float64")
+    out["gross_return"] = out.groupby("ticker")["adj_close"].pct_change()
+    return out.merge(mapping[["meta_id", "ticker"]], on="ticker", how="inner")[
+        ["meta_id", "trade_date", "ticker", "adj_close", "gross_return"]
+    ]
 
 
 def _us_fresh_prices(mapping: pd.DataFrame, start_date, end_date) -> pd.DataFrame:
@@ -102,7 +121,15 @@ def read_price_data(
 
     try:
         if iso_code == "KR":
-            out = _kr_prices(mapping, start_date, end_date)
+            etf = mapping[mapping["meta_id"] >= KR_ETF_META_ID_MIN]
+            stock = mapping[mapping["meta_id"] < KR_ETF_META_ID_MIN]
+            frames = []
+            if not stock.empty:
+                frames.append(_kr_prices(stock, start_date, end_date))
+            if not etf.empty:
+                frames.append(_kr_etf_prices(etf, start_date, end_date))
+            frames = [f for f in frames if not f.empty]
+            out = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
         else:
             fresh_set = _qdata_us_tickers()
             fresh = mapping[mapping["ticker"].isin(fresh_set)]

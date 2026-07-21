@@ -152,6 +152,65 @@ async def get_flows_signals(
     return _round2({"as_of": _as_of(df), "rows": rows})
 
 
+@router.get("/sector/heatmap")
+async def get_sector_heatmap():
+    """업종별 최신 성과 스냅샷 (1d/1w/1m/3m/YTD %, 구성 종목수, 시총 비중)."""
+    df = _read("sector_perf.parquet")
+    if df is None or df.empty:
+        return {"as_of": None, "rows": []}
+    rows = df.drop(columns=["as_of"]).to_dict(orient="records")
+    return _round2({"as_of": _as_of(df), "rows": rows})
+
+
+@router.get("/sector/rotation")
+async def get_sector_rotation(months: int = 12):
+    """업종 지수 체인 — 최근 N개월, 주간 마지막 값으로 다운샘플."""
+    df = _read(
+        "sector_index.parquet", columns=["date", "market", "sector", "index_value", "as_of"]
+    )
+    if df is None or df.empty:
+        return {"as_of": None, "rows": []}
+    cutoff = df["date"].max() - pd.DateOffset(months=months)
+    df = df[df["date"] >= cutoff].sort_values("date").copy()
+    df["week"] = df["date"].dt.to_period("W").astype(str)
+    df = df.groupby(["market", "sector", "week"], as_index=False).last()
+    df = _date_str(df.sort_values(["market", "sector", "date"]))
+    return _round2(
+        {
+            "as_of": _as_of(df),
+            "rows": df[["date", "market", "sector", "index_value"]].to_dict(orient="records"),
+        }
+    )
+
+
+@router.get("/valuation")
+async def get_valuation(market: str = "KOSPI"):
+    """시장 밸류에이션 — 주간 다운샘플 전 기간 + 현재값·역사적 백분위."""
+    df = _read("valuation_daily.parquet", filters=[("market", "==", market)])
+    if df is None or df.empty:
+        return {"market": market, "as_of": None, "rows": [], "current": None}
+    df = df.sort_values("date")
+    last = df.iloc[-1]
+    current = {
+        "per": last["per"],
+        "pbr": last["pbr"],
+        "div": last["div"],
+        "pct_rank_per": last["pct_rank_per"],
+        "pct_rank_pbr": last["pct_rank_pbr"],
+    }
+    wk = df.copy()
+    wk["week"] = wk["date"].dt.to_period("W").astype(str)
+    wk = _date_str(wk.groupby("week", as_index=False).last())
+    return _round2(
+        {
+            "market": market,
+            "as_of": _as_of(df),
+            "rows": wk[["date", "per", "pbr", "div"]].to_dict(orient="records"),
+            "current": current,
+        }
+    )
+
+
 @router.get("/index")
 async def get_index(days: int = 365):
     """KOSPI/KOSDAQ 지수 종가 — 앱 데이터가 아닌 qdata 레이크 직접 읽기."""

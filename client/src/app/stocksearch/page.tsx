@@ -28,6 +28,7 @@ const StockSearchContent = () => {
     market: "all",
     sector: "",
     cap: "all",
+    type: "all",
     search: "",
   });
 

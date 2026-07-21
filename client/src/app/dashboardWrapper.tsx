@@ -4,7 +4,6 @@ import React, { useEffect } from "react";
 import Navbar from "./(components)/Navbar";
 import Sidebar from "./(components)/Sidebar";
 import StoreProvider, { useAppSelector } from "./redux";
-import MuiThemeBridge from "@/components/ui/MuiThemeBridge";
 
 const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   const isSidebarCollapsed = useAppSelector(
@@ -35,9 +34,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
         `}
       >
         <Navbar />
-        <div className="flex-grow">
-          <MuiThemeBridge>{children}</MuiThemeBridge>
-        </div>
+        <div className="flex-grow">{children}</div>
       </main>
     </div>
   );

@@ -17,10 +17,13 @@ export type MarketFilter = "all" | "US" | "KR";
 
 export type CapFilter = "all" | "large" | "mid" | "small";
 
+export type TypeFilter = "all" | "stock" | "etf";
+
 export interface FilterState {
   market: MarketFilter;
   sector: string;
   cap: CapFilter;
+  type: TypeFilter;
   search: string;
 }
 

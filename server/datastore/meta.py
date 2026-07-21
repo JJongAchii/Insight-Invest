@@ -14,8 +14,16 @@ from datastore import storage
 @lru_cache(maxsize=1)
 def meta_df() -> pd.DataFrame:
     """tb_meta 전체: meta_id, ticker, name, isin, security_type, asset_class,
-    sector, iso_code, marketcap, fee, remark, min_date, max_date."""
-    return storage.read_parquet("meta.parquet")
+    sector, iso_code, marketcap, fee, remark, min_date, max_date.
+
+    {APP_DATA}/kr_etf_meta.parquet(빌더 산출 — KR ETF, meta_id≥900000)이 있으면
+    같은 스키마로 정렬해 union한다 (없는 컬럼은 결측)."""
+    df = storage.read_parquet("meta.parquet")
+    if storage.exists("kr_etf_meta.parquet"):
+        etf = storage.read_parquet("kr_etf_meta.parquet")
+        etf = etf.reindex(columns=df.columns)  # meta 스키마에 없는 컬럼(as_of 등) 제거, 결측→NaN
+        df = pd.concat([df, etf], ignore_index=True)
+    return df
 
 
 @lru_cache(maxsize=1)

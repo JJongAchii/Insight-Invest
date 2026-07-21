@@ -9,11 +9,8 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@emotion/react": "^11.13.3",
-    "@emotion/styled": "^11.13.0",
-    "@mui/material": "^6.1.5",
-    "@mui/x-data-grid": "^7.22.0",
     "@reduxjs/toolkit": "^2.3.0",
+    "@tanstack/react-table": "^8.21.3",
     "dayjs": "^1.11.13",
     "dotenv": "^16.4.5",
     "lucide-react": "^0.453.0",
