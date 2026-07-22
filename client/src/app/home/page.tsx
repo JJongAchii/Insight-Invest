@@ -9,6 +9,8 @@ import WatchlistCard from "./WatchlistCard";
 import StrategiesCard from "./StrategiesCard";
 import FlowsTopCard from "./FlowsTopCard";
 import NewsCompactList from "./NewsCompactList";
+import AttentionLane from "./AttentionLane";
+import PortfolioCard from "./PortfolioCard";
 
 const Home = () => {
   const isDarkMode = useAppSelector((state) => state.global.isDarkMode);
@@ -47,7 +49,10 @@ const Home = () => {
         description="시장 현황과 내 포트폴리오를 한눈에"
       />
 
-      {/* Row 0: Ticker Tape */}
+      {/* Row 0: 오늘 주목 attention lane (top) */}
+      <AttentionLane />
+
+      {/* Row 1: Ticker Tape */}
       <div className="rounded-xl border border-edge overflow-hidden">
         <TradingViewWidget
           key={`tape-${colorTheme}`}
@@ -56,16 +61,19 @@ const Home = () => {
         />
       </div>
 
-      {/* Row 1: Index snapshots + regime/gauge chips */}
+      {/* Row 2: Index snapshots + regime/gauge chips */}
       <MarketTiles />
 
-      {/* Row 2: Watchlist + strategies */}
+      {/* Row 3: My Portfolio (prominent, full width) */}
+      <PortfolioCard />
+
+      {/* Row 4: Watchlist + strategies */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <WatchlistCard />
         <StrategiesCard />
       </div>
 
-      {/* Row 3: Foreign net-buy top 5 + latest news */}
+      {/* Row 5: Foreign net-buy top 5 + latest news */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <FlowsTopCard />
         <NewsCompactList />

@@ -560,6 +560,25 @@ def get_stock_detail(meta_id: int):
     except Exception:
         logger.debug(f"watchlist 조회 실패: {meta_id}")
 
+    holding = None
+    try:
+        from datastore import holdings as holdings_store
+
+        hd = holdings_store.list_items()
+        hrow = hd[hd["meta_id"] == meta_id] if not hd.empty else hd
+        if not hrow.empty:
+            h = hrow.iloc[0]
+            opened_at = h["opened_at"]
+            holding = {
+                "shares": float(h["shares"]) if pd.notna(h["shares"]) else None,
+                "avg_cost": float(h["avg_cost"]) if pd.notna(h["avg_cost"]) else None,
+                "currency": h["currency"] if pd.notna(h["currency"]) else None,
+                "opened_at": opened_at.isoformat() if pd.notna(opened_at) else None,
+                "note": h["note"] if pd.notna(h["note"]) else None,
+            }
+    except Exception:
+        logger.debug(f"holdings 조회 실패: {meta_id}")
+
     def _na(v):
         try:
             return None if pd.isna(v) else v
@@ -578,4 +597,5 @@ def get_stock_detail(meta_id: int):
         },
         "summary": _build_summary(meta_id, row),
         "in_watchlist": in_watchlist,
+        "holding": holding,
     }

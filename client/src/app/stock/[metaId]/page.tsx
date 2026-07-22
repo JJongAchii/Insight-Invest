@@ -16,6 +16,7 @@ import LoadingState from "@/components/ui/LoadingState";
 import ErrorState from "@/components/ui/ErrorState";
 import EmptyState from "@/components/ui/EmptyState";
 import WatchlistStar from "@/components/ui/WatchlistStar";
+import HoldingButton from "@/components/HoldingButton";
 import { fmtEok, fmtJo, Segmented } from "../../insight/format";
 import StockPriceFlowsChart from "./StockPriceFlowsChart";
 
@@ -165,6 +166,13 @@ const StockDetailPage = () => {
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="page-title">{meta.name ?? meta.ticker}</h1>
               <WatchlistStar metaId={meta.meta_id} />
+              <HoldingButton
+                metaId={meta.meta_id}
+                ticker={meta.ticker}
+                name={meta.name}
+                isoCode={meta.iso_code}
+                holding={detail.holding}
+              />
             </div>
             <div className="flex flex-wrap items-center gap-2 mt-1 text-sm text-ink-muted">
               <span className="num">{meta.ticker}</span>

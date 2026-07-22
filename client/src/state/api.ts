@@ -109,10 +109,25 @@ export interface StockDetailMeta {
   marketcap: number | null;
 }
 
+/** Current holding attached to a stock detail response (null when not held). */
+export interface StockHolding {
+  shares: number;
+  avg_cost: number;
+  currency: string;
+  latest_price?: number | null;
+  market_value_native?: number;
+  cost_value_native?: number;
+  unrealized_pnl_native?: number;
+  /** Fraction, e.g. 0.12 = +12%. */
+  unrealized_pnl_pct?: number | null;
+}
+
 export interface StockDetailResponse {
   meta: StockDetailMeta;
   summary: PriceSummaryResponse;
   in_watchlist: boolean;
+  /** Current position for this stock, or null when not held. */
+  holding: StockHolding | null;
 }
 
 export interface WatchlistItem {
@@ -135,6 +150,94 @@ export interface WatchlistResponse {
 
 export interface WatchlistMutationResponse {
   count: number;
+}
+
+// Types for holdings (real positions) operations
+export interface HoldingPosition {
+  meta_id: number;
+  ticker: string;
+  name: string | null;
+  iso_code: string;
+  security_type: string | null;
+  sector: string | null;
+  shares: number;
+  avg_cost: number;
+  currency: string;
+  latest_price: number | null;
+  /** Day change, %. */
+  day_chg_pct: number | null;
+  market_value_native: number;
+  cost_value_native: number;
+  unrealized_pnl_native: number;
+  /** Fraction, e.g. 0.12 = +12%. */
+  unrealized_pnl_pct: number;
+  market_value_krw: number;
+  /** Fraction of total portfolio value (0..1). */
+  weight: number;
+}
+
+export interface HoldingsSectorAlloc {
+  sector: string;
+  /** Fraction (0..1). */
+  weight: number;
+}
+
+export interface HoldingsMarketAlloc {
+  label: string;
+  /** Fraction (0..1). */
+  weight: number;
+}
+
+export interface HoldingsSummary {
+  total_value_krw: number;
+  total_cost_krw: number;
+  total_pnl_krw: number;
+  /** Fraction, e.g. 0.12 = +12%. */
+  total_pnl_pct: number;
+  day_pnl_krw: number;
+  n_positions: number;
+  sector_alloc: HoldingsSectorAlloc[];
+  market_alloc: HoldingsMarketAlloc[];
+  /** Largest single-position weight, fraction (0..1). */
+  top_weight: number;
+  /** Herfindahl index Σ(weight²), 0..1. */
+  hhi: number;
+}
+
+export interface HoldingsResponse {
+  positions: HoldingPosition[];
+  summary: HoldingsSummary;
+}
+
+export interface AddHoldingPayload {
+  meta_id: number;
+  shares: number;
+  avg_cost: number;
+  currency?: string;
+  note?: string;
+}
+
+export interface HoldingMutationResponse {
+  n_positions: number;
+}
+
+// Types for the "오늘 주목" attention lane
+export type AttentionSeverity = "high" | "medium" | "low";
+
+export interface AttentionItem {
+  severity: AttentionSeverity;
+  category: string;
+  ticker?: string;
+  name?: string;
+  meta_id?: number;
+  title: string;
+  detail: string;
+  link: string;
+}
+
+export interface AttentionResponse {
+  as_of: string;
+  items: AttentionItem[];
 }
 
 export interface CompareStock {
@@ -584,7 +687,14 @@ export const api = createApi({
       return headers;
     },
   }),
-  tagTypes: ["Strategy", "Portfolio", "News", "Watchlist"],
+  tagTypes: [
+    "Strategy",
+    "Portfolio",
+    "News",
+    "Watchlist",
+    "Holdings",
+    "Attention",
+  ],
   endpoints: (builder) => ({
     // Query endpoints
     fetchMetaData: builder.query({
@@ -672,8 +782,8 @@ export const api = createApi({
     // Stock detail / watchlist endpoints
     fetchStockDetail: builder.query<StockDetailResponse, number>({
       query: (metaId) => `/stock/${metaId}`,
-      // in_watchlist must refresh when the watchlist mutates
-      providesTags: ["Watchlist"],
+      // in_watchlist / holding must refresh when either mutates
+      providesTags: ["Watchlist", "Holdings"],
     }),
     fetchWatchlist: builder.query<WatchlistResponse, void>({
       query: () => "/watchlist",
@@ -696,6 +806,33 @@ export const api = createApi({
         method: "DELETE",
       }),
       invalidatesTags: ["Watchlist"],
+    }),
+
+    // Holdings (real positions) endpoints
+    fetchHoldings: builder.query<HoldingsResponse, void>({
+      query: () => "/holdings",
+      providesTags: ["Holdings"],
+    }),
+    addHolding: builder.mutation<HoldingMutationResponse, AddHoldingPayload>({
+      query: (body) => ({
+        url: "/holdings",
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: ["Holdings", "Attention"],
+    }),
+    removeHolding: builder.mutation<HoldingMutationResponse, number>({
+      query: (metaId) => ({
+        url: `/holdings/${metaId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: ["Holdings", "Attention"],
+    }),
+
+    // Attention ("오늘 주목") endpoint
+    fetchAttention: builder.query<AttentionResponse, void>({
+      query: () => "/attention",
+      providesTags: ["Attention"],
     }),
 
     // News endpoints
@@ -846,6 +983,12 @@ export const {
   useFetchWatchlistQuery,
   useAddToWatchlistMutation,
   useRemoveFromWatchlistMutation,
+  // Holdings hooks
+  useFetchHoldingsQuery,
+  useAddHoldingMutation,
+  useRemoveHoldingMutation,
+  // Attention hook
+  useFetchAttentionQuery,
   // News hooks
   useFetchNewsQuery,
   // KR insight hooks

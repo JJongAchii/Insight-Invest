@@ -14,6 +14,7 @@ import {
   IoChevronDown,
   IoOptions,
   IoTrendingUp,
+  IoBriefcase,
 } from "react-icons/io5";
 import { FaRunning, FaList } from "react-icons/fa";
 import { IconType } from "react-icons";
@@ -161,6 +162,12 @@ const Sidebar = () => {
 
         {/* PORTFOLIO */}
         <SectionHeader label="Portfolio" isCollapsed={isSidebarCollapsed} />
+        <SidebarLink
+          href="/portfolio"
+          icon={IoBriefcase}
+          label="Portfolio"
+          isCollapsed={isSidebarCollapsed}
+        />
 
         {/* Backtest Section */}
         <div>
