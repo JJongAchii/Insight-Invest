@@ -51,6 +51,7 @@ Resources:
                   - !Sub arn:aws:s3:::${DataBucket}/app/portfolio/*
                   - !Sub arn:aws:s3:::${DataBucket}/app/tmp_results/*
                   - !Sub arn:aws:s3:::${DataBucket}/app/watchlist.parquet
+                  - !Sub arn:aws:s3:::${DataBucket}/app/holdings.parquet
 
   ApiFunction:
     Type: AWS::Lambda::Function
