@@ -19,6 +19,8 @@ krx_flows 전체 로드(수백 MB)는 로컬에서만 허용 — Lambda에서는
 - kr_etf_meta: 현재 상장 KRX ETF 유니버스 → 앱 meta 확장용 (APP_DATA 루트에 저장).
 - valuation_daily: 시장별 밸류에이션 집계 (시총가중 조화 PER·PBR, 배당수익률)
   — krx_fundamental 미수집 시 스킵.
+- track_strategies: 저장된 전략의 실전(저장 후) NAV 추적 (P7)
+  → {APP_DATA}/portfolio/live_nav.parquet [port_id, trade_date, value, as_of].
 
 모든 테이블에 as_of(마지막 거래일 "YYYY-MM-DD") 컬럼 포함.
 
@@ -26,6 +28,7 @@ krx_flows 전체 로드(수백 MB)는 로컬에서만 허용 — Lambda에서는
     APP_DATA=... QDATA_LAKE=... python scripts/build_insights.py
 """
 
+import json
 import os
 import sys
 import traceback
@@ -35,8 +38,10 @@ import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "server"))
 
-from datastore import storage  # noqa: E402
+from datastore import fx, meta, portfolio, storage  # noqa: E402
 from module import regime  # noqa: E402
+from module.backtest import Backtest  # noqa: E402
+from module.util import backtest_result  # noqa: E402
 from qdata import api as qdata_api  # noqa: E402
 
 ETF_TICKERS = ["SPY", "QQQ", "TLT", "GLD", "DBC"]
@@ -520,6 +525,108 @@ def build_valuation_daily():
     return df
 
 
+MOMENTUM_WARMUP_DAYS = 400  # 모멘텀 12개월 룩백 + 여유 (저장 시점 이전 워밍업 데이터)
+
+
+def build_track_strategies():
+    """저장된 전략 실전 추적 (P7) — 저장 시점(created_at)부터 오늘까지
+    POST /backtest와 동일한 엔진으로 NAV를 다시 굴린다.
+
+    행: [port_id, trade_date, value, as_of]. NAV는 saved_at 기준 1000 시작.
+    포트폴리오 단위 실패는 경고 후 스킵 (예: US 개별주 아카이브가 끝난 종목은
+    가격이 있는 데까지만 커브가 나온다 — 엔진이 자동 처리).
+    """
+    ports = portfolio.records()
+    if ports.empty:
+        print("[skip] track_strategies (저장된 포트폴리오 없음)")
+        return None
+
+    st = meta.strategy_df().set_index("strategy_id")["strategy"]
+    frames = []
+    for p in ports.itertuples():
+        try:
+            saved_at = pd.Timestamp(p.created_at)
+
+            cfg = None
+            raw = getattr(p, "config", None)
+            if isinstance(raw, str) and raw.strip():
+                cfg = json.loads(raw)
+            if not cfg:  # P2 이전 행 — config 컬럼 부재/None
+                cfg = {
+                    "algorithm": st.get(p.strategy_id, "eq"),
+                    "rebal_freq": "M",
+                    "cost_bps": 10.0,
+                    "params": {},
+                }
+            algorithm = cfg.get("algorithm") or "eq"
+            freq = cfg.get("rebal_freq") or "M"
+            cost_bps = float(cfg.get("cost_bps") or 10.0)
+            params = cfg.get("params") or {}
+
+            meta_ids = portfolio.universe(int(p.port_id))
+            if not meta_ids:
+                raise ValueError("유니버스가 비어 있음")
+
+            bt = Backtest(strategy_name=p.port_name)
+            warmup_start = (saved_at - pd.Timedelta(days=MOMENTUM_WARMUP_DAYS)).date()
+            price = bt.data(meta_id=meta_ids, start_date=warmup_start, end_date=None)
+            if price.empty:
+                raise ValueError("가격 데이터 없음")
+            if cfg.get("currency") == "KRW":
+                mapping = meta.resolve(meta_ids=meta_ids)
+                price = fx.to_krw(price, dict(zip(mapping["ticker"], mapping["iso_code"])))
+
+            weight = bt.rebalance(
+                price=price,
+                method=algorithm,
+                freq=freq,
+                custom_weight=params.get("weights"),
+                params=params,
+            )
+            if weight is None or weight.empty:
+                raise ValueError("리밸런스 비중 산출 실패")
+
+            # 저장 시점의 목표 배분은 즉시 실행된 것으로 본다 — saved_at 이전
+            # 마지막 리밸런스 행을 saved_at으로 재날짜해 시드로 쓰고, 이후 행과
+            # 이어붙인다 (기간 중간 저장도 다음 리밸런스 전까지 커브가 나온다).
+            weight = weight.sort_index()
+            weight.index = pd.to_datetime(weight.index)
+            saved_norm = saved_at.normalize()
+            pre = weight.loc[:saved_norm]
+            if pre.empty:
+                raise ValueError("저장 시점 이전 리밸런스 비중 없음 (워밍업 부족)")
+            seed = pre.iloc[[-1]].copy()
+            seed.index = pd.DatetimeIndex([saved_norm])
+            weight = pd.concat([seed, weight.loc[weight.index > saved_norm]])
+
+            _, nav, _ = backtest_result(
+                weight=weight, price=price, start_date=saved_at.date(), cost_bps=cost_bps
+            )
+            nav = nav.dropna()
+            if nav.empty:
+                raise ValueError("NAV 비어 있음")
+
+            part = nav.reset_index()
+            part.columns = ["trade_date", "value"]
+            part.insert(0, "port_id", int(p.port_id))
+            frames.append(part)
+        except Exception as e:
+            print(
+                f"[warn] track_strategies port_id={p.port_id}({p.port_name}) 실패: {e}",
+                file=sys.stderr,
+            )
+
+    if not frames:
+        print("[skip] track_strategies (추적 가능한 포트폴리오 없음)")
+        return None
+
+    df = pd.concat(frames, ignore_index=True)
+    df["trade_date"] = pd.to_datetime(df["trade_date"])
+    df = df.sort_values(["port_id", "trade_date"]).reset_index(drop=True)
+    df["as_of"] = pd.Timestamp(df["trade_date"].max()).strftime("%Y-%m-%d")
+    return df
+
+
 # ---------------------------------------------------------------- 실행
 
 
@@ -534,6 +641,7 @@ BUILDERS = [
     ("insight/sector_perf.parquet", build_sector_perf, {}),
     ("kr_etf_meta.parquet", build_kr_etf_meta, {}),  # 앱 루트 — meta_df()가 union
     ("insight/valuation_daily.parquet", build_valuation_daily, {}),
+    ("portfolio/live_nav.parquet", build_track_strategies, {}),  # 전략 실전 추적 (P7)
 ]
 
 

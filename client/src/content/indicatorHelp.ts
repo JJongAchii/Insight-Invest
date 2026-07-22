@@ -238,6 +238,15 @@ export const INDICATOR_HELP: Record<string, IndicatorHelp> = {
       "백테스트 전체 수익보다 이 표를 먼저 볼 것",
     ],
   },
+  "bt.live": {
+    title: "실전 추적 (Live)",
+    what: "전략 저장일 이후 구간을 저장된 규칙 그대로 매일 연장해 계산한 아웃오브샘플 성적.",
+    how: [
+      "백테스트 지표와 격차가 크면 과최적화 신호",
+      "저장 후 구간이 길수록 신뢰 상승",
+    ],
+    caution: "저장 직후엔 표본이 짧아 지표 변동이 큼.",
+  },
   "bt.cost": {
     title: "거래비용 (bps)",
     what: "리밸런싱 턴오버에 비례해 차감되는 비용 (편도 기준).",

@@ -266,6 +266,19 @@ export interface SaveStrategyResponse {
   message: string;
 }
 
+/** 실전 추적(라이브) 응답 — 저장일 이후 out-of-sample NAV와 지표. */
+export interface StrategyLiveResponse {
+  port_id: number;
+  /** 전략 저장일 (YYYY-MM-DD). 추적 미시작이면 null. */
+  saved_at: string | null;
+  /** 라이브 지표 계산 기준일. */
+  as_of: string | null;
+  /** 저장일 ~1000 기준 NAV. 추적 데이터가 없으면 []. */
+  nav: NavPoint[];
+  metrics_live: Partial<MetricSet>;
+  metrics_backtest: Partial<MetricSet>;
+}
+
 // Types for regime operations
 export type RegimePhaseName =
   | "Goldilocks"
@@ -606,6 +619,10 @@ export const api = createApi({
     fetchBmById: builder.query({
       query: (port_id) => `backtest/strategy/bm/${port_id}`,
     }),
+    fetchStrategyLiveById: builder.query<StrategyLiveResponse, number>({
+      query: (port_id) => `backtest/strategy/live/${port_id}`,
+      providesTags: ["Portfolio"],
+    }),
     fetchMacroInfo: builder.query({
       query: () => "/regime/info",
     }),
@@ -812,6 +829,7 @@ export const {
   useFetchStNavByIdQuery,
   useFetchStRebalByIdQuery,
   useFetchBmByIdQuery,
+  useFetchStrategyLiveByIdQuery,
   useFetchMacroInfoQuery,
   useFetchMacroDataQuery,
   useFetchRegimePhaseQuery,

@@ -26,6 +26,8 @@ _EMPTY = {
     "metrics.parquet": ["port_id", *METRIC_COLS, "updated_at"],
     "benchmark_nav.parquet": ["port_id", "trade_date", "value"],
     "benchmark_metrics.parquet": ["port_id", *METRIC_COLS, "updated_at"],
+    # live_nav: 저장 시점 이후 실전 데이터로 굴린 NAV — build_insights의 track_strategies가 생성
+    "live_nav.parquet": ["port_id", "trade_date", "value", "as_of"],
 }
 
 
@@ -53,6 +55,30 @@ def registry() -> pd.DataFrame:
         return pd.DataFrame(columns=["port_id", "port_name", "strategy_name"])
     st = meta.strategy_df()[["strategy_id", "strategy_name"]]
     return ports.merge(st, on="strategy_id", how="left")[["port_id", "port_name", "strategy_name"]]
+
+
+def records() -> pd.DataFrame:
+    """portfolio.parquet 원본 행 전체 [port_id, port_name, strategy_id, created_at, config].
+
+    config는 JSON 문자열 (P2 이전 행은 컬럼 부재 → None으로 채움).
+    """
+    df = _read("portfolio.parquet")
+    if "config" not in df.columns:
+        df = df.copy()
+        df["config"] = None
+    return df
+
+
+def universe(port_id: int) -> list[int]:
+    """포트폴리오 유니버스 meta_id 목록."""
+    df = _read("universe.parquet", filters=[("port_id", "==", port_id)])
+    return [int(m) for m in df["meta_id"]]
+
+
+def live_nav(port_id: int) -> pd.DataFrame:
+    """실전 추적 NAV [trade_date, value, as_of] — 없으면 빈 프레임."""
+    df = _read("live_nav.parquet", filters=[("port_id", "==", port_id)])
+    return df[["trade_date", "value", "as_of"]].sort_values("trade_date").reset_index(drop=True)
 
 
 def port_summary() -> pd.DataFrame:

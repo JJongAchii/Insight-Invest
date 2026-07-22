@@ -12,7 +12,7 @@ import {
 import Card from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
-import SparklineChart from "@/components/charts/SparklineChart";
+import LiveBadge, { LiveSparkline } from "@/components/LiveBadge";
 
 interface StrategyRow {
   port_id: number;
@@ -104,17 +104,19 @@ const StrategiesCard: React.FC = () => {
                         {s.ann_ret >= 0 ? "+" : ""}
                         {s.ann_ret}%
                       </span>
+                      <LiveBadge portId={s.port_id} className="ml-1.5" />
                     </td>
                     <td className="table-cell text-right">
                       <span className="num text-ink-secondary">{s.sharpe}</span>
                     </td>
                     <td className="table-cell">
                       <div className="flex justify-end">
-                        <SparklineChart
-                          data={navValues}
+                        {/* Prefers live (post-save) NAV in amber when available */}
+                        <LiveSparkline
+                          portId={s.port_id}
+                          fallbackData={navValues}
                           width={90}
                           height={28}
-                          color="var(--chart-1)"
                         />
                       </div>
                     </td>

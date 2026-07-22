@@ -2,6 +2,7 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import SparklineChart from "@/components/charts/SparklineChart";
 import EmptyState from "@/components/ui/EmptyState";
+import LiveBadge from "@/components/LiveBadge";
 
 export interface Strategy {
   port_id: number;
@@ -88,12 +89,19 @@ const Contents = ({
                 </div>
               </div>
             </div>
-            <div className="w-1/2 flex items-center justify-center">
+            <div className="w-1/2 flex flex-col items-center justify-center gap-1.5">
               <SparklineChart
                 data={navValues}
                 width={140}
                 height={60}
                 color="var(--chart-1)"
+              />
+              {/* Live (post-save) track — hidden until tracking data exists */}
+              <LiveBadge
+                portId={strategy.port_id}
+                showSparkline
+                sparkWidth={70}
+                sparkHeight={20}
               />
             </div>
           </div>

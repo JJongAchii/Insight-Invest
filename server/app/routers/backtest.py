@@ -294,6 +294,55 @@ async def get_all_monthly_nav():
     return portfolio.monthly_nav().to_dict(orient="records")
 
 
+@router.get("/strategy/live/{port_id}")
+async def get_strategy_live(port_id: int):
+    """실전 추적 (P7) — 저장 시점 이후 실제 데이터 NAV + 라이브 지표 vs 백테스트 지표.
+
+    live_nav.parquet은 로컬 파이프라인(build_insights의 track_strategies)이 생성한다.
+    파일이 없거나 해당 포트폴리오 행이 없으면 nav=[]로 200 응답.
+    """
+    reg = portfolio.records()
+    row = reg[reg["port_id"] == port_id]
+    saved_at = (
+        pd.Timestamp(row["created_at"].iloc[0]).strftime("%Y-%m-%d") if not row.empty else None
+    )
+
+    try:
+        live = portfolio.live_nav(port_id)
+    except Exception as e:
+        logger.warning(f"live_nav 조회 실패: port_id={port_id}, error={e}")
+        live = pd.DataFrame(columns=["trade_date", "value", "as_of"])
+
+    nav_points: List[dict] = []
+    as_of = None
+    metrics_live: dict = {}
+    if not live.empty:
+        s = pd.Series(
+            live["value"].astype(float).to_numpy(), index=pd.to_datetime(live["trade_date"])
+        )
+        as_of = str(live["as_of"].iloc[-1])
+        nav_points = _serialize_series(s)
+        if len(s) >= 10:  # 표본이 너무 짧으면 지표 생략 (None-safe)
+            metrics_live = _short_metrics(result_metrics(s))
+
+    metrics_df = portfolio.metrics(port_id=port_id)
+    metrics_backtest: dict = {}
+    if not metrics_df.empty:
+        metrics_backtest = {
+            k: _finite(metrics_df.iloc[0][k]) if k in metrics_df.columns else None
+            for k in METRIC_KEY_MAP  # 저장본에는 sortino/calmar/omega가 없음 → None
+        }
+
+    return {
+        "port_id": port_id,
+        "saved_at": saved_at,
+        "as_of": as_of,
+        "nav": nav_points,
+        "metrics_live": metrics_live,
+        "metrics_backtest": metrics_backtest,
+    }
+
+
 @router.get("/strategy/{port_id}")
 async def get_strategy_id_info(port_id: int):
     """포트폴리오 정보 + 성과지표 (parquet 스토어)"""

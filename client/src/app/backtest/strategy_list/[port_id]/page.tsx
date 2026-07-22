@@ -5,10 +5,12 @@ import {
   useFetchStNavByIdQuery,
   useFetchStRebalByIdQuery,
   useFetchStrategyByIdQuery,
+  useFetchStrategyLiveByIdQuery,
 } from "@/state/api";
 import React, { useMemo } from "react";
 import MetricSummary from "./MetricSummary";
 import LineChart from "./LineChart";
+import LiveMetricsTable from "./LiveMetricsTable";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
@@ -42,6 +44,7 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
   const { data: strategyNav } = useFetchStNavByIdQuery(port_id);
   const { data: strategyRebal } = useFetchStRebalByIdQuery(port_id);
   const { data: bmDetails } = useFetchBmByIdQuery(port_id);
+  const { data: liveData } = useFetchStrategyLiveByIdQuery(port_id);
 
   const bmNavData: NavPoint[] = useMemo(
     () => (bmDetails?.nav ? JSON.parse(bmDetails.nav) : []),
@@ -104,7 +107,10 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
         strategyName={strategyName}
         strategyNav={strategyNav}
         bmNav={bmDetails.nav}
+        liveNav={liveData?.nav}
+        savedAt={liveData?.saved_at}
       />
+      <LiveMetricsTable live={liveData} />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card">
           <h4 className="text-base font-semibold text-ink mb-4">

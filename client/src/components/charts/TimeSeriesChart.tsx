@@ -31,6 +31,13 @@ export interface TimeSeriesReferenceArea {
   color?: string;
 }
 
+export interface TimeSeriesReferenceLineX {
+  /** Date (x-axis category) the vertical line is drawn at. */
+  x: string;
+  label?: string;
+  color?: string;
+}
+
 export interface TimeSeriesChartProps {
   data: { date: string; [series: string]: number | string | null }[];
   series: TimeSeriesSeries[];
@@ -38,6 +45,8 @@ export interface TimeSeriesChartProps {
   yFormatter?: (value: number) => string;
   showBrush?: boolean;
   referenceAreas?: TimeSeriesReferenceArea[];
+  /** Vertical dashed markers (e.g. strategy save date). */
+  referenceLinesX?: TimeSeriesReferenceLineX[];
   baseline?: number;
 }
 
@@ -65,6 +74,7 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
   yFormatter,
   showBrush = false,
   referenceAreas,
+  referenceLinesX,
   baseline,
 }) => {
   return (
@@ -112,6 +122,24 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
             fill={area.color ?? "var(--losses)"}
             fillOpacity={0.08}
             strokeOpacity={0}
+          />
+        ))}
+        {referenceLinesX?.map((line, i) => (
+          <ReferenceLine
+            key={`${line.x}-${i}`}
+            x={line.x}
+            stroke={line.color ?? "var(--text-muted)"}
+            strokeDasharray="4 4"
+            label={
+              line.label
+                ? {
+                    value: line.label,
+                    position: "insideTopRight",
+                    fill: line.color ?? "var(--text-muted)",
+                    fontSize: 11,
+                  }
+                : undefined
+            }
           />
         ))}
         {baseline !== undefined && (
