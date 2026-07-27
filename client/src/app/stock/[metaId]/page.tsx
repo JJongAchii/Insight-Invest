@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 
 import {
+  useFetchInsightFactorExposureQuery,
   useFetchInsightFlowsTickerQuery,
   useFetchPriceHistoryQuery,
   useFetchStockDetailQuery,
@@ -17,6 +18,7 @@ import ErrorState from "@/components/ui/ErrorState";
 import EmptyState from "@/components/ui/EmptyState";
 import WatchlistStar from "@/components/ui/WatchlistStar";
 import HoldingButton from "@/components/HoldingButton";
+import FactorBars from "@/components/charts/FactorBars";
 import { fmtEok, fmtJo, Segmented } from "../../insight/format";
 import StockPriceFlowsChart from "./StockPriceFlowsChart";
 
@@ -117,6 +119,12 @@ const StockDetailPage = () => {
     { ticker: meta?.ticker ?? "", months: periodOption.months },
     { skip: !isKr || !meta?.ticker }
   );
+
+  // Factor percentiles for this KR name (server skips US/ETF via `note`).
+  const factorArg = useMemo(() => [metaId], [metaId]);
+  const { data: factorData } = useFetchInsightFactorExposureQuery(factorArg, {
+    skip: !isKr || isEtf || !Number.isFinite(metaId) || metaId <= 0,
+  });
 
   if (!Number.isFinite(metaId) || metaId <= 0) {
     return (
@@ -343,6 +351,26 @@ const StockDetailPage = () => {
           </div>
         </Card>
       )}
+
+      {/* Factor scores (KR only; hidden for US/ETF or when server skips) */}
+      {isKr &&
+        !isEtf &&
+        factorData &&
+        !factorData.note &&
+        factorData.exposures.length > 0 && (
+          <Card
+            title={
+              <span className="inline-flex items-center gap-1.5">
+                팩터
+                <InfoTip helpKey="factor.exposure" />
+              </span>
+            }
+          >
+            <div className="max-w-md">
+              <FactorBars exposures={factorData.exposures} compact />
+            </div>
+          </Card>
+        )}
     </div>
   );
 };

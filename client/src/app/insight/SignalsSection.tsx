@@ -6,7 +6,10 @@ import {
   InsightInvestor,
   InsightSignalRow,
   InsightSignalType,
+  SignalStudyRow,
+  SignalStudyType,
   useFetchInsightSignalsQuery,
+  useFetchInsightSignalStudyQuery,
   useFetchMetaDataQuery,
 } from "@/state/api";
 import Card from "@/components/ui/Card";
@@ -49,6 +52,73 @@ const CAPTIONS: Record<InsightSignalType, string> = {
     "매집형: 주가는 내렸지만 수급이 유입 · 이탈형: 주가는 올랐지만 수급이 이탈",
 };
 
+/** Signal-tab → event-study signal_type. */
+const STUDY_TYPE: Record<InsightSignalType, SignalStudyType> = {
+  streak: "frgn_streak10",
+  intensity: "high_intensity",
+  divergence: "bull_divergence",
+};
+
+const STUDY_HORIZONS: (5 | 20 | 60)[] = [5, 20, 60];
+
+/**
+ * Honest historical track record for a signal: forward excess return vs KOSPI
+ * at 5/20/60d. Foreign flow-chasing mean-reverts, so most medians are negative —
+ * the strip surfaces that rather than framing these as buy signals.
+ */
+const TrackRecordStrip: React.FC<{ rows: SignalStudyRow[] }> = ({ rows }) => {
+  const byHorizon = new Map(rows.map((r) => [r.horizon, r]));
+  const h20 = byHorizon.get(20);
+  const showWarning = h20 !== undefined && h20.median_excess < 0;
+
+  return (
+    <div className="rounded-xl border border-edge bg-raised p-3 flex flex-col gap-2.5">
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs font-semibold text-ink-secondary">
+          역사적 성과 · KOSPI 대비 (2016~)
+        </span>
+        <InfoTip helpKey="signal.study" />
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {STUDY_HORIZONS.map((h) => {
+          const r = byHorizon.get(h);
+          return (
+            <div
+              key={h}
+              className="rounded-lg border border-edge bg-surface px-3 py-2"
+            >
+              <p className="text-[11px] text-ink-muted">{h}일 후 초과수익</p>
+              {r ? (
+                <>
+                  <p className="mt-0.5">
+                    <span className="text-[11px] text-ink-muted">중앙값 </span>
+                    <span
+                      className={`${signClass(r.median_excess)} font-semibold`}
+                    >
+                      {fmtPct(r.median_excess)}
+                    </span>
+                  </p>
+                  <p className="text-[11px] text-ink-muted num mt-0.5">
+                    히트율 {r.hit_rate.toFixed(0)}% · N=
+                    {r.n_events.toLocaleString()}건
+                  </p>
+                </>
+              ) : (
+                <p className="mt-0.5 num text-ink-muted">—</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {showWarning && (
+        <p className="text-[11px] text-losses">
+          ⚠ 이 신호는 역사적으로 KOSPI 대비 초과수익이 낮습니다 — 참고 지표로만.
+        </p>
+      )}
+    </div>
+  );
+};
+
 const NameCell: React.FC<{ row: InsightSignalRow }> = ({ row }) => (
   <td className="table-cell">
     <span className="font-medium text-ink">{row.name}</span>
@@ -72,6 +142,16 @@ const SignalsSection: React.FC = () => {
       ? (data?.rows ?? []).filter((r) => r.divergence !== null)
       : (data?.rows ?? [])
   ).slice(0, MAX_ROWS);
+
+  // Event-study track record for the active signal tab (one fetch, all types).
+  const { data: studyData } = useFetchInsightSignalStudyQuery();
+  const studyRows = useMemo(
+    () =>
+      (studyData?.rows ?? []).filter(
+        (r) => r.signal_type === STUDY_TYPE[type]
+      ),
+    [studyData, type]
+  );
 
   // Signal rows only carry tickers; resolve meta_id via the cached meta list.
   const { data: metaData } = useFetchMetaDataQuery({});
@@ -122,6 +202,7 @@ const SignalsSection: React.FC = () => {
         />
       ) : (
         <div className="flex flex-col gap-3">
+          {studyRows.length > 0 && <TrackRecordStrip rows={studyRows} />}
           <p className="text-xs text-ink-muted flex items-center gap-1.5">
             <span>{CAPTIONS[type]}</span>
             <InfoTip helpKey={HELP_KEYS[type]} />

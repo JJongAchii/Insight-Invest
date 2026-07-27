@@ -24,6 +24,7 @@ import {
 } from "./format";
 import PortfolioTable from "./PortfolioTable";
 import AllocationCard from "./AllocationCard";
+import FactorExposureCard from "./FactorExposureCard";
 import HoldingModal from "./HoldingModal";
 
 const PortfolioPage = () => {
@@ -128,6 +129,9 @@ const PortfolioPage = () => {
 
           {/* Allocation breakdown */}
           <AllocationCard summary={summary} />
+
+          {/* Portfolio factor exposure (KR holdings only) */}
+          <FactorExposureCard positions={positions} />
         </>
       )}
 

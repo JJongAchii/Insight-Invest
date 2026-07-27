@@ -8,15 +8,28 @@
 import math
 import os
 import sys
-from typing import Optional
+from functools import lru_cache
+from typing import List, Optional
 
 import pandas as pd
 from fastapi import APIRouter, Query
+from pydantic import BaseModel, Field
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../../../")))
+from datastore import meta as meta_store
 from datastore import storage
 
 router = APIRouter(prefix="/insight", tags=["Insight"])
+
+MKTCAP_FLOOR = 1e10  # 유동성 컷 — build_insights의 팩터/신호 유니버스와 동일
+FACTOR_NAMES = ("momentum", "value", "size", "lowvol")
+# 팩터별 (고백분위 라벨, 저백분위 라벨) — factor-exposure tilt 요약용
+TILT_LABELS = {
+    "momentum": ("고모멘텀", "저모멘텀"),
+    "value": ("저평가", "고평가"),
+    "size": ("소형", "대형"),
+    "lowvol": ("저변동성", "고변동성"),
+}
 
 
 def _finite(x) -> Optional[float]:
@@ -209,6 +222,121 @@ async def get_valuation(market: str = "KOSPI"):
             "current": current,
         }
     )
+
+
+@router.get("/signals/study")
+async def get_signals_study():
+    """신호 이벤트 스터디 — 신호×지평선별 전방 초과성과 집계 (signal_study.parquet)."""
+    df = _read("signal_study.parquet")
+    if df is None or df.empty:
+        return {"as_of": None, "rows": []}
+    cols = [
+        "signal_type", "horizon", "n_events",
+        "mean_excess", "median_excess", "hit_rate", "avg_fwd_ret",
+    ]
+    return _round2({"as_of": _as_of(df), "rows": df[cols].to_dict(orient="records")})
+
+
+@router.get("/factors")
+async def get_factors():
+    """팩터 렌즈 — 현재 스냅샷 + 누적지수 이력(최근 ~3년, 주간 다운샘플)."""
+    cur = _read("factor_current.parquet")
+    hist = _read("factor_returns.parquet", columns=["date", "factor", "cum_index", "as_of"])
+
+    current = []
+    if cur is not None and not cur.empty:
+        current = cur[["factor", "ret_1d", "ret_1w", "ret_1m", "ret_ytd"]].to_dict(orient="records")
+
+    history, as_of = [], None
+    if hist is not None and not hist.empty:
+        as_of = _as_of(hist)
+        cutoff = hist["date"].max() - pd.DateOffset(years=3)
+        h = hist[hist["date"] >= cutoff].copy()
+        h["week"] = h["date"].dt.to_period("W").astype(str)
+        h = h.groupby(["factor", "week"], as_index=False).last()
+        h = _date_str(h.sort_values(["factor", "date"]))
+        history = h[["date", "factor", "cum_index"]].to_dict(orient="records")
+    if as_of is None and cur is not None and not cur.empty:
+        as_of = _as_of(cur)
+
+    return _round2({"as_of": as_of, "current": current, "history": history})
+
+
+@lru_cache(maxsize=1)
+def _universe_factor_pct():
+    """현재 유동성 유니버스의 팩터별 종목 백분위(0-100) — 최신 거래일 기준.
+
+    반환 (dict[factor -> Series(ticker->percentile)], as_of). 백분위 高 = 팩터 롱 방향
+    (고모멘텀/저평가/소형/저변동). build_insights의 팩터 정의와 동일. 프로세스 내 캐시.
+    """
+    from qdata import api as qdata_api
+
+    start = (pd.Timestamp.today() - pd.Timedelta(days=520)).strftime("%Y-%m-%d")
+    px = qdata_api.load_krx_prices(start=start, columns=["adj_close", "mktcap"])
+    P = px.pivot(index="date", columns="ticker", values="adj_close").sort_index()
+    M = px.pivot(index="date", columns="ticker", values="mktcap").sort_index()
+    try:
+        fund = qdata_api.load_krx_fundamental(start=start, columns=["per"])
+        PER = (
+            fund.pivot(index="date", columns="ticker", values="per")
+            .sort_index()
+            .reindex(index=P.index, columns=P.columns)
+        )
+    except FileNotFoundError:
+        PER = pd.DataFrame(index=P.index, columns=P.columns, dtype="float64")
+
+    last = P.index[-1]
+    returns = P.pct_change(fill_method=None)
+    scores = {
+        "momentum": (P.shift(21) / P.shift(252) - 1).loc[last],
+        "value": (1.0 / PER).where(PER > 0).loc[last],
+        "size": (-M).loc[last],
+        "lowvol": (-(returns.rolling(60, min_periods=40).std())).loc[last],
+    }
+    liquid = M.loc[last] >= MKTCAP_FLOOR
+    pct = {f: (scores[f].where(liquid).rank(pct=True) * 100).dropna() for f in FACTOR_NAMES}
+    return pct, pd.Timestamp(last).strftime("%Y-%m-%d")
+
+
+class FactorExposureRequest(BaseModel):
+    meta_id: List[int] = Field(..., min_length=1, max_length=50)
+
+
+@router.post("/factor-exposure")
+async def post_factor_exposure(req: FactorExposureRequest):
+    """주어진 종목(KR)의 팩터 노출 — 현재 유니버스 내 백분위 평균(0-100) + 편향 요약.
+
+    US 종목은 스킵(KR 팩터 유니버스). 전부 스킵되면 note로 알린다.
+    """
+    mapping = meta_store.resolve(meta_ids=req.meta_id)
+    kr = mapping[mapping["iso_code"] == "KR"]
+    n_us = len(mapping) - len(kr)
+    if kr.empty:
+        return {"as_of": None, "exposures": [], "tilt": "", "note": "KR 종목 없음 — 전부 스킵됨"}
+
+    pct, as_of = _universe_factor_pct()
+    tickers = kr["ticker"].tolist()
+    exposures, strengths = [], []
+    for f in FACTOR_NAMES:
+        vals = pct[f].reindex(tickers).dropna()
+        p = float(vals.mean()) if not vals.empty else None
+        exposures.append({"factor": f, "percentile": p})
+        if p is not None:
+            strengths.append((f, p))
+
+    # tilt: 50에서 가장 먼 1-2 팩터를 방향 라벨로 (유의미한 편향만)
+    strengths.sort(key=lambda fp: abs(fp[1] - 50), reverse=True)
+    labels = [
+        (TILT_LABELS[f][0] if p >= 50 else TILT_LABELS[f][1])
+        for f, p in strengths[:2]
+        if abs(p - 50) >= 5
+    ]
+    tilt = "·".join(labels) + " 편향" if labels else "뚜렷한 편향 없음"
+
+    resp = {"as_of": as_of, "exposures": exposures, "tilt": tilt}
+    if n_us:
+        resp["note"] = f"US {n_us}개 종목 스킵됨 (KR만 계산)"
+    return _round2(resp)
 
 
 @router.get("/index")

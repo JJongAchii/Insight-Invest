@@ -627,6 +627,262 @@ def build_track_strategies():
     return df
 
 
+# ---------------------------------------------------------------- Track B: 신호 이벤트 스터디 / 팩터 렌즈
+
+
+SIGNAL_HORIZONS = (5, 20, 60)  # 이벤트 이후 성과 측정 거래일 수
+SIGNAL_COOLDOWN = 20  # 종목별 이벤트 재발화 최소 간격(거래일) — 연속 참 구간 dedup
+
+
+def _kospi_close(index: pd.Index) -> np.ndarray:
+    """KOSPI 지수 종가를 패널 거래일 index에 정렬한 numpy 배열 (ffill 보정)."""
+    idx = qdata_api.load_krx_index()
+    kospi = idx[idx["index"] == "KOSPI"].set_index("date")["close"].sort_index()
+    return kospi.reindex(index).ffill().to_numpy(dtype="float64")
+
+
+def _signed_streak(F: pd.DataFrame) -> pd.DataFrame:
+    """일자×종목 부호 연속일수 (매수 연속=양수, 매도 연속=음수, 0/미상장=0).
+
+    각 일자에서 전일과 부호가 같으면 런 길이+1, 부호가 바뀌거나 NaN이면 리셋.
+    """
+    S = np.sign(F.to_numpy(dtype="float64"))  # NaN 보존 (미거래일 → 런 단절)
+    n = S.shape[0]
+    run = np.zeros_like(S)
+    run[0] = np.where(np.isnan(S[0]), 0.0, 1.0)
+    prev = S[0]
+    for i in range(1, n):
+        cur = S[i]
+        same = (cur == prev) & ~np.isnan(cur)  # NaN==x → False (단절)
+        run[i] = np.where(same, run[i - 1] + 1.0, np.where(np.isnan(cur), 0.0, 1.0))
+        prev = cur
+    return pd.DataFrame(run * np.nan_to_num(S), index=F.index, columns=F.columns)
+
+
+def _event_cooldown(pos: np.ndarray, cooldown: int) -> np.ndarray:
+    """crossing 발화 좌표 [(date_pos, ticker_pos), ...]에 종목별 쿨다운 적용.
+
+    같은 종목에서 직전 채택 이벤트로부터 cooldown 거래일 미만이면 스킵.
+    """
+    if len(pos) == 0:
+        return np.empty((0, 2), dtype=int)
+    order = np.lexsort((pos[:, 0], pos[:, 1]))  # 1순위 ticker, 2순위 date
+    p = pos[order]
+    keep = []
+    last_ticker, last_date = -1, -(10 ** 9)
+    for dpos, tpos in p:
+        if tpos != last_ticker or dpos - last_date >= cooldown:
+            keep.append((dpos, tpos))
+            last_ticker, last_date = tpos, dpos
+    return np.array(keep, dtype=int)
+
+
+def build_signal_study():
+    """수급 신호 이벤트 스터디 — 전 기간(2016~) 신호 발생 재구성 + 전방 초과성과.
+
+    유동성 종목(시총≥100억)에 한해 3개 신호를 정의하고, 각 이벤트 이후
+    h∈{5,20,60} 거래일 KOSPI 대비 초과수익(adj_close 기반)을 집계한다.
+    최중량 빌더 — 실패해도 파이프라인 비중단(내부 try/except → None).
+    """
+    try:
+        px = qdata_api.load_krx_prices(columns=["adj_close", "close", "chg_pct", "mktcap"])
+        px = px[["date", "ticker", "adj_close", "mktcap"]]  # close/chg_pct 미사용 — 즉시 폐기
+        P = px.pivot(index="date", columns="ticker", values="adj_close").sort_index()
+        M = px.pivot(index="date", columns="ticker", values="mktcap").sort_index()
+        del px
+
+        frgn = _flows()
+        frgn = frgn[frgn["investor"] == "frgn"][["date", "ticker", "net_value"]]
+        F = frgn.pivot(index="date", columns="ticker", values="net_value")
+        del frgn
+        F = F.reindex(index=P.index, columns=P.columns)
+
+        ret_20d = (P / P.shift(20) - 1) * 100
+        frgn_net_20d = F.rolling(20, min_periods=20).sum()
+        intensity_20d = frgn_net_20d / M * 100
+        streak = _signed_streak(F)
+        liquid = M >= MKTCAP_FLOOR
+        del frgn_net_20d, F
+
+        conds = {
+            "bull_divergence": (ret_20d < -5) & (intensity_20d > 0.3) & liquid,
+            "frgn_streak10": (streak >= 10) & liquid,
+            "high_intensity": (intensity_20d >= 1.0) & liquid,
+        }
+        del ret_20d, intensity_20d, streak, liquid, M
+
+        Pv = P.to_numpy(dtype="float64")
+        K = _kospi_close(P.index)
+        n_dates = len(P.index)
+        del P
+
+        rows = []
+        for sig, cond in conds.items():
+            crossing = cond & ~cond.shift(1, fill_value=False)  # 조건이 처음 참이 되는 날
+            events = _event_cooldown(np.argwhere(crossing.to_numpy()), SIGNAL_COOLDOWN)
+            for h in SIGNAL_HORIZONS:
+                dpos, tpos = events[:, 0], events[:, 1]
+                ok = dpos + h < n_dates  # 지평선이 이력 밖이면 제외
+                dpos, tpos = dpos[ok], tpos[ok]
+                fwd_ret = (Pv[dpos + h, tpos] / Pv[dpos, tpos] - 1) * 100
+                kospi_ret = (K[dpos + h] / K[dpos] - 1) * 100
+                excess = fwd_ret - kospi_ret
+                m = np.isfinite(excess) & np.isfinite(fwd_ret)  # 상폐 등 결측 제외
+                excess, fwd_ret = excess[m], fwd_ret[m]
+                rows.append(
+                    {
+                        "signal_type": sig,
+                        "horizon": h,
+                        "n_events": int(len(excess)),
+                        "mean_excess": float(np.mean(excess)) if len(excess) else np.nan,
+                        "median_excess": float(np.median(excess)) if len(excess) else np.nan,
+                        "hit_rate": float((excess > 0).mean() * 100) if len(excess) else np.nan,
+                        "avg_fwd_ret": float(np.mean(fwd_ret)) if len(fwd_ret) else np.nan,
+                    }
+                )
+        df = pd.DataFrame(rows)
+        df["as_of"] = _as_of()
+        print("[signal_study]")
+        print(df.to_string(index=False))
+        return df
+    except Exception:
+        print("[warn] signal_study 실패 (비중단):", file=sys.stderr)
+        traceback.print_exc()
+        return None
+
+
+FACTOR_NAMES = ("momentum", "value", "size", "lowvol")
+
+
+def _factor_scores(P: pd.DataFrame, M: pd.DataFrame, PER: pd.DataFrame) -> dict:
+    """일자×종목 팩터 점수 (점수 높을수록 팩터 롱 방향).
+
+    momentum: 12-1개월 수익(252d 전→21d 전) 고→저.  value: 이익수익률 1/PER(>0) 고→저.
+    size: −시총 (소형−대형).  lowvol: −(60일 실현변동성) (저변동−고변동).
+    """
+    returns = P.pct_change(fill_method=None)
+    return {
+        "momentum": P.shift(21) / P.shift(252) - 1,
+        "value": (1.0 / PER).where(PER > 0),
+        "size": -M,
+        "lowvol": -(returns.rolling(60, min_periods=40).std()),
+    }
+
+
+def _factor_returns_df():
+    """일별 롱숏 5분위 스프레드 (KOSPI+KOSDAQ 유동성 유니버스) — 1회 계산 캐시.
+
+    각 일자 횡단면을 팩터별로 5분위 랭크, 상위20% 평균 익일수익 − 하위20% 평균
+    (등가중, 익일수익으로 look-ahead 방지). cum_index는 시작 100 재기준화 체인.
+    """
+    if "factor_returns" in _cache:
+        return _cache["factor_returns"]
+
+    px = qdata_api.load_krx_prices(columns=["adj_close", "mktcap"])
+    P = px.pivot(index="date", columns="ticker", values="adj_close").sort_index()
+    M = px.pivot(index="date", columns="ticker", values="mktcap").sort_index()
+    del px
+
+    fund = qdata_api.load_krx_fundamental(columns=["per"])  # 미수집 시 FileNotFoundError
+    PER = (
+        fund.pivot(index="date", columns="ticker", values="per")
+        .sort_index()
+        .reindex(index=P.index, columns=P.columns)
+    )
+    del fund
+
+    liquid = M >= MKTCAP_FLOOR
+    fwd_1d = P.shift(-1) / P - 1  # 익일수익 (t→t+1) — look-ahead 방지
+    scores = _factor_scores(P, M, PER)
+    del PER
+
+    frames = []
+    for factor in FACTOR_NAMES:
+        valid = liquid & scores[factor].notna() & fwd_1d.notna()
+        ranks = scores[factor].where(valid).rank(axis=1, pct=True)  # 횡단면 백분위
+        top = fwd_1d.where(ranks > 0.8).mean(axis=1)  # 상위 5분위 등가중
+        bot = fwd_1d.where(ranks <= 0.2).mean(axis=1)  # 하위 5분위 등가중
+        spread = ((top - bot) * 100).dropna()
+        norm = (1 + spread / 100).cumprod()
+        cum_index = 100.0 * norm / norm.iloc[0]  # 시작 100 재기준화 (sector_index 관례)
+        frames.append(
+            pd.DataFrame(
+                {
+                    "date": spread.index,
+                    "factor": factor,
+                    "spread": spread.to_numpy(),
+                    "cum_index": cum_index.to_numpy(),
+                }
+            )
+        )
+    df = pd.concat(frames, ignore_index=True).sort_values(["factor", "date"]).reset_index(drop=True)
+    df["as_of"] = pd.Timestamp(P.index[-1]).strftime("%Y-%m-%d")
+    _cache["factor_returns"] = df
+    return df
+
+
+def build_factor_returns():
+    """팩터 일별 스프레드·누적지수 전 기간 [date, factor, spread, cum_index]."""
+    try:
+        df = _factor_returns_df()
+        print("[factor_returns]")
+        print(
+            df.groupby("factor")
+            .agg(n=("spread", "size"), spread_mean=("spread", "mean"),
+                 cum_last=("cum_index", "last"))
+            .to_string()
+        )
+        return df
+    except FileNotFoundError:
+        print("[skip] factor_returns (fundamental 미수집)")
+        return None
+    except Exception:
+        print("[warn] factor_returns 실패 (비중단):", file=sys.stderr)
+        traceback.print_exc()
+        return None
+
+
+def build_factor_current():
+    """팩터 현재 스냅샷 [factor, ret_1d, ret_1w, ret_1m, ret_ytd] — cum_index 파생."""
+    try:
+        fr = _factor_returns_df()
+    except FileNotFoundError:
+        print("[skip] factor_current (fundamental 미수집)")
+        return None
+    except Exception:
+        print("[warn] factor_current 실패 (비중단):", file=sys.stderr)
+        traceback.print_exc()
+        return None
+    if fr is None or fr.empty:
+        return None
+
+    last_date = fr["date"].max()
+    year_start = pd.Timestamp(pd.Timestamp(last_date).year, 1, 1)
+    rows = []
+    for factor, g in fr.groupby("factor"):
+        cum = g.sort_values("date").set_index("date")["cum_index"]
+
+        def _ret(n: int):
+            return (cum.iloc[-1] / cum.iloc[-1 - n] - 1) * 100 if len(cum) > n else None
+
+        ytd_base = cum[cum.index < year_start]
+        ret_ytd = (cum.iloc[-1] / ytd_base.iloc[-1] - 1) * 100 if not ytd_base.empty else None
+        rows.append(
+            {
+                "factor": factor,
+                "ret_1d": _ret(1),
+                "ret_1w": _ret(5),
+                "ret_1m": _ret(21),
+                "ret_ytd": ret_ytd,
+            }
+        )
+    df = pd.DataFrame(rows)
+    df["as_of"] = fr["as_of"].iloc[0]
+    print("[factor_current]")
+    print(df.to_string(index=False))
+    return df
+
+
 # ---------------------------------------------------------------- 실행
 
 
@@ -641,6 +897,9 @@ BUILDERS = [
     ("insight/sector_perf.parquet", build_sector_perf, {}),
     ("kr_etf_meta.parquet", build_kr_etf_meta, {}),  # 앱 루트 — meta_df()가 union
     ("insight/valuation_daily.parquet", build_valuation_daily, {}),
+    ("insight/signal_study.parquet", build_signal_study, {}),  # Track B: 신호 이벤트 스터디
+    ("insight/factor_returns.parquet", build_factor_returns, {}),  # Track B: 팩터 렌즈
+    ("insight/factor_current.parquet", build_factor_current, {}),  # (factor_returns 캐시 파생)
     ("portfolio/live_nav.parquet", build_track_strategies, {}),  # 전략 실전 추적 (P7)
 ]
 

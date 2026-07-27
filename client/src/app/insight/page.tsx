@@ -6,6 +6,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import IndexBreadthStrip from "./IndexBreadthStrip";
 import FlowsSection from "./FlowsSection";
 import SectorSection from "./SectorSection";
+import FactorSection from "./FactorSection";
 import ValuationSection from "./ValuationSection";
 import SignalsSection from "./SignalsSection";
 import BreadthHistory from "./BreadthHistory";
@@ -30,6 +31,9 @@ const InsightPage = () => {
 
       {/* 3. Sector heatmap & rotation */}
       <SectorSection />
+
+      {/* 3b. Factor lens */}
+      <FactorSection />
 
       {/* 4. Market valuation */}
       <ValuationSection />

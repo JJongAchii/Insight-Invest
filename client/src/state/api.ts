@@ -676,6 +676,70 @@ export interface InsightIndexResponse {
   rows: InsightIndexRow[];
 }
 
+// Types for signal event-study, factor lens & factor exposure (Track B)
+export type SignalStudyType =
+  | "bull_divergence"
+  | "frgn_streak10"
+  | "high_intensity";
+
+export interface SignalStudyRow {
+  signal_type: SignalStudyType;
+  horizon: 5 | 20 | 60;
+  n_events: number;
+  /** Mean forward excess return vs KOSPI, %. */
+  mean_excess: number;
+  /** Median forward excess return vs KOSPI, %. */
+  median_excess: number;
+  /** Share of events with positive excess return, %. */
+  hit_rate: number;
+  /** Mean absolute forward return, %. */
+  avg_fwd_ret: number;
+}
+
+export interface SignalStudyResponse {
+  as_of: string;
+  rows: SignalStudyRow[];
+}
+
+export type FactorName = "momentum" | "value" | "size" | "lowvol";
+
+export interface FactorCurrentRow {
+  factor: FactorName;
+  /** Long-short factor spread returns, %. */
+  ret_1d: number;
+  ret_1w: number;
+  ret_1m: number;
+  ret_ytd: number;
+}
+
+export interface FactorHistoryPoint {
+  date: string;
+  factor: FactorName;
+  /** Cumulative factor-spread index (rebased client-side). */
+  cum_index: number;
+}
+
+export interface FactorLensResponse {
+  as_of: string;
+  current: FactorCurrentRow[];
+  history: FactorHistoryPoint[];
+}
+
+export interface FactorExposureRow {
+  factor: FactorName;
+  /** Portfolio factor score as a 0–100 percentile of the universe. */
+  percentile: number;
+}
+
+export interface FactorExposureResponse {
+  as_of: string;
+  exposures: FactorExposureRow[];
+  /** One-line human tilt summary, e.g. "소형·저변동 쏠림". */
+  tilt: string;
+  /** Present when the request was partially/fully skipped (e.g. US-only). */
+  note?: string;
+}
+
 export const api = createApi({
   reducerPath: "api",
   baseQuery: fetchBaseQuery({
@@ -904,6 +968,23 @@ export const api = createApi({
     >({
       query: ({ market }) => `/insight/valuation?market=${market}`,
     }),
+    fetchInsightSignalStudy: builder.query<SignalStudyResponse, void>({
+      query: () => "/insight/signals/study",
+    }),
+    fetchInsightFactors: builder.query<FactorLensResponse, void>({
+      query: () => "/insight/factors",
+    }),
+    // POST query: auto-fetches for a holdings meta_id set; server skips US.
+    fetchInsightFactorExposure: builder.query<
+      FactorExposureResponse,
+      number[]
+    >({
+      query: (metaIds) => ({
+        url: "/insight/factor-exposure",
+        method: "POST",
+        body: { meta_id: metaIds },
+      }),
+    }),
 
     // Mutation endpoints
     runBacktest: builder.mutation<BacktestRunResult, BacktestPayload>({
@@ -1001,6 +1082,9 @@ export const {
   useFetchInsightSectorHeatmapQuery,
   useFetchInsightSectorRotationQuery,
   useFetchInsightValuationQuery,
+  useFetchInsightSignalStudyQuery,
+  useFetchInsightFactorsQuery,
+  useFetchInsightFactorExposureQuery,
   // Mutation hooks
   useRunBacktestMutation,
   useRunBacktestFromWeightsMutation,
