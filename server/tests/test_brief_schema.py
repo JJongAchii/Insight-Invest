@@ -52,6 +52,17 @@ def test_evidence가_비어있으면_드롭():
     assert dropped[0]["bad_refs"] == []
 
 
+def test_evidence가_리스트가_아니면_드롭():
+    pack = {"a": 1}
+    # Test various non-list types: bool, int, str, None, dict
+    non_list_values = [True, 5, "flows.frgn.streak", None, {"a": 1}]
+    for val in non_list_values:
+        kept, dropped = validate_points([{"claim": "테스트", "evidence": val}], pack)
+        assert kept == [], f"Expected empty kept for evidence={val!r}, got {kept}"
+        assert len(dropped) == 1, f"Expected 1 dropped for evidence={val!r}"
+        assert dropped[0]["bad_refs"] == [], f"Expected empty bad_refs for evidence={val!r}"
+
+
 def test_길이_초과_필드를_자르고_보고한다():
     judge = {"one_liner": "가" * 80, "summary": "나" * 250, "tension": "다"}
     out, truncated = enforce_lengths(judge)

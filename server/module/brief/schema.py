@@ -87,7 +87,9 @@ def validate_points(points: list, pack: dict) -> tuple[list, list]:
     valid = flatten_keys(pack)
     kept, dropped = [], []
     for p in points:
-        refs = p.get("evidence") or []
+        refs = p.get("evidence")
+        if not isinstance(refs, list):
+            refs = []
         bad = [e for e in refs if e not in valid]
         if bad or not refs:
             dropped.append({**p, "bad_refs": bad})
