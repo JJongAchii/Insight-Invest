@@ -8,12 +8,17 @@ bull과 bear는 서로의 출력을 보지 못한다. 한 컨텍스트에서 양
 import json
 import logging
 
+import anthropic
+
 from module.brief.schema import BULL_BEAR_SCHEMA, JUDGE_SCHEMA, enforce_lengths, validate_points
 
 logger = logging.getLogger(__name__)
 
 MODEL = "claude-opus-5"
-MAX_TOKENS = 8000
+# Opus 5는 thinking이 기본 on이고 max_tokens가 thinking+응답 텍스트를 합쳐서 제한한다.
+# effort: high에서 8000은 큰 evidence pack에서 thinking이 대부분을 먹어 judge JSON이
+# 중간에 잘릴 수 있다. 16000은 스트리밍 없이 쓸 수 있는 상한이다.
+MAX_TOKENS = 16000
 
 # Claude Opus 5: $5 in / $25 out per MTok. 캐시 쓰기 1.25×, 캐시 읽기 0.1×.
 PRICE_PER_TOKEN = {
@@ -73,23 +78,30 @@ def _system_blocks(market_context: str) -> list:
 
 
 def _call(client, system, user_text, schema):
-    """단일 호출. 실패·거부·파싱 불가 시 (None, usage, refused).
+    """단일 호출. 실패·거부·파싱 불가·API 예외 시 (None, usage, refused).
 
     refused는 stop_reason == "refusal"이었는지만 별도로 알려준다 — 거부는
     "이 콜만 못 씀"이 아니라 "이 브리프 전체를 포기"로 이어지는 신호라서,
     한쪽만 파싱 실패한 경우(다른 쪽으로 진행)와 구분해야 한다.
+
+    anthropic.APIError(상태 오류·연결 오류 등)가 나면 응답 자체가 없으므로
+    usage는 빈 dict로 돌려준다 — 이 콜에 대해 과금됐다고 볼 근거가 없다.
     """
-    resp = client.messages.create(
-        model=MODEL,
-        max_tokens=MAX_TOKENS,
-        thinking={"type": "adaptive"},
-        output_config={
-            "effort": "high",
-            "format": {"type": "json_schema", "schema": schema},
-        },
-        system=system,
-        messages=[{"role": "user", "content": user_text}],
-    )
+    try:
+        resp = client.messages.create(
+            model=MODEL,
+            max_tokens=MAX_TOKENS,
+            thinking={"type": "adaptive"},
+            output_config={
+                "effort": "high",
+                "format": {"type": "json_schema", "schema": schema},
+            },
+            system=system,
+            messages=[{"role": "user", "content": user_text}],
+        )
+    except anthropic.APIError:
+        logger.warning("브리프 콜에서 anthropic.APIError 발생", exc_info=True)
+        return None, {}, False
     usage = _usage_of(resp)
 
     if resp.stop_reason == "refusal":

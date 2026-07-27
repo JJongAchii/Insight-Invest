@@ -1,6 +1,9 @@
 import json
 from types import SimpleNamespace
 
+import anthropic
+import httpx
+
 from module.brief.llm import PRICE_PER_TOKEN, generate_brief
 
 
@@ -17,7 +20,11 @@ class _FakeResponse:
 
 
 class _FakeClient:
-    """호출 순서대로 준비된 응답을 돌려준다 (bull, bear, judge)."""
+    """호출 순서대로 준비된 응답을 돌려준다 (bull, bear, judge).
+
+    큐에 예외 인스턴스를 넣어두면 그 차례에 응답 대신 예외를 던진다 —
+    anthropic.APIError 같은 통신 실패를 흉내내기 위함.
+    """
 
     def __init__(self, responses):
         self._responses = list(responses)
@@ -26,7 +33,10 @@ class _FakeClient:
 
     def _create(self, **kwargs):
         self.calls.append(kwargs)
-        return self._responses.pop(0)
+        item = self._responses.pop(0)
+        if isinstance(item, BaseException):
+            raise item
+        return item
 
 
 PACK = {"flows": {"frgn": {"streak": 12}}, "identity": {"ticker": "005930"}}
@@ -115,6 +125,17 @@ def test_bull만_실패해도_bear로_judge를_진행한다():
     assert out is not None
     assert out["bull_points"] == []
     assert out["judge"]["one_liner"] == "수급 우위, 근거는 얇음"
+
+
+def test_bull_콜에서_APIError가_나도_bear로_judge를_진행한다():
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    boom = anthropic.APIConnectionError(message="일시적 통신 장애", request=request)
+    client = _FakeClient([boom, _FakeResponse(BEAR), _FakeResponse(JUDGE)])
+    out = generate_brief(PACK, client, "시장 맥락")
+    assert out is not None
+    assert out["bull_points"] == []
+    assert out["judge"]["one_liner"] == "수급 우위, 근거는 얇음"
+    assert len(client.calls) == 3
 
 
 def test_usage와_비용이_집계된다():
