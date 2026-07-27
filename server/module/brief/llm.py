@@ -1,4 +1,4 @@
-"""Claude Opus 5 3콜 오케스트레이션 — bull ∥ bear → judge.
+"""Claude 3콜 오케스트레이션 — bull ∥ bear → judge.
 
 bull과 bear는 서로의 출력을 보지 못한다. 한 컨텍스트에서 양쪽을 쓰게 하면
 모델이 균형을 맞춰버려 "강세 3개, 약세 3개, 결론은 중립" 같은 무해하고
@@ -14,18 +14,26 @@ from module.brief.schema import BULL_BEAR_SCHEMA, JUDGE_SCHEMA, enforce_lengths,
 
 logger = logging.getLogger(__name__)
 
-MODEL = "claude-opus-5"
-# Opus 5는 thinking이 기본 on이고 max_tokens가 thinking+응답 텍스트를 합쳐서 제한한다.
-# effort: high에서 8000은 큰 evidence pack에서 thinking이 대부분을 먹어 judge JSON이
-# 중간에 잘릴 수 있다. 16000은 스트리밍 없이 쓸 수 있는 상한이다.
+MODEL = "claude-sonnet-5"
+# max_tokens는 thinking과 응답 텍스트를 합쳐서 제한한다. effort: high에서 8000은
+# 큰 evidence pack에서 thinking이 대부분을 먹어 judge JSON이 중간에 잘릴 수 있다.
+# 16000은 스트리밍 없이 쓸 수 있는 상한이다.
 MAX_TOKENS = 16000
 
-# Claude Opus 5: $5 in / $25 out per MTok. 캐시 쓰기 1.25×, 캐시 읽기 0.1×.
+# Claude Sonnet 5: $3 in / $15 out per MTok. 캐시 쓰기 1.25×, 캐시 읽기 0.1×.
+#
+# 2026-08-31까지는 도입가 $2/$10이 적용되지만 여기엔 정상가를 넣는다 —
+# cost_usd가 실제 청구보다 높게 나오는 쪽이 안전하고(비용 상한이 먼저 걸린다),
+# 도입가 만료일에 상수를 고쳐야 하는 부채도 남지 않는다.
+#
+# 주의: Sonnet 5의 프롬프트 캐시 최소 길이는 1024 토큰이다(Opus 5는 512).
+# 현재 캐시 접두부(시스템 규칙 + 시장 맥락)는 ~1,700 토큰이라 넘지만 여유가 줄었다.
+# market_context가 짧아지면 캐시가 조용히 무효화되니 cache_read_input_tokens를 확인할 것.
 PRICE_PER_TOKEN = {
-    "input": 5.0 / 1_000_000,
-    "output": 25.0 / 1_000_000,
-    "cache_write": 6.25 / 1_000_000,
-    "cache_read": 0.5 / 1_000_000,
+    "input": 3.0 / 1_000_000,
+    "output": 15.0 / 1_000_000,
+    "cache_write": 3.75 / 1_000_000,
+    "cache_read": 0.3 / 1_000_000,
 }
 
 SYSTEM_RULES = """너는 한국 주식 시장의 리서치 애널리스트다.
