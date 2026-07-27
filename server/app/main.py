@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 from .routers import (
     attention,
     backtest,
+    brief,
     holdings,
     insight,
     meta,
@@ -68,6 +69,7 @@ app.include_router(optimization.router)
 app.include_router(watchlist.router)
 app.include_router(holdings.router)
 app.include_router(attention.router)
+app.include_router(brief.router)
 app.include_router(price.stock_router)
 
 
