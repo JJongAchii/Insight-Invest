@@ -19,6 +19,8 @@ krx_flows 전체 로드(수백 MB)는 로컬에서만 허용 — Lambda에서는
 - kr_etf_meta: 현재 상장 KRX ETF 유니버스 → 앱 meta 확장용 (APP_DATA 루트에 저장).
 - valuation_daily: 시장별 밸류에이션 집계 (시총가중 조화 PER·PBR, 배당수익률)
   — krx_fundamental 미수집 시 스킵.
+- signal_study: 신호 11종 × 지평선 3개 전방 초과성과. 벤치마크는 유동성 유니버스
+  동일가중 횡단면 평균이고, 조건 없는 baseline 행이 비교 기준으로 함께 들어간다.
 - track_strategies: 저장된 전략의 실전(저장 후) NAV 추적 (P7)
   → {APP_DATA}/portfolio/live_nav.parquet [port_id, trade_date, value, as_of].
 
@@ -32,6 +34,7 @@ import json
 import os
 import sys
 import traceback
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -634,13 +637,6 @@ SIGNAL_HORIZONS = (5, 20, 60)  # 이벤트 이후 성과 측정 거래일 수
 SIGNAL_COOLDOWN = 20  # 종목별 이벤트 재발화 최소 간격(거래일) — 연속 참 구간 dedup
 
 
-def _kospi_close(index: pd.Index) -> np.ndarray:
-    """KOSPI 지수 종가를 패널 거래일 index에 정렬한 numpy 배열 (ffill 보정)."""
-    idx = qdata_api.load_krx_index()
-    kospi = idx[idx["index"] == "KOSPI"].set_index("date")["close"].sort_index()
-    return kospi.reindex(index).ffill().to_numpy(dtype="float64")
-
-
 def _signed_streak(F: pd.DataFrame) -> pd.DataFrame:
     """일자×종목 부호 연속일수 (매수 연속=양수, 매도 연속=음수, 0/미상장=0).
 
@@ -677,18 +673,42 @@ def _event_cooldown(pos: np.ndarray, cooldown: int) -> np.ndarray:
     return np.array(keep, dtype=int)
 
 
-def build_signal_study():
-    """수급 신호 이벤트 스터디 — 전 기간(2016~) 신호 발생 재구성 + 전방 초과성과.
+def _study_row(sig: str, h: int, excess: np.ndarray, fwd_ret: np.ndarray) -> dict:
+    """signal_study 한 행. 표본이 비면 통계는 NaN — 행 자체는 남긴다."""
+    return {
+        "signal_type": sig,
+        "horizon": h,
+        "n_events": int(len(excess)),
+        "mean_excess": float(np.mean(excess)) if len(excess) else np.nan,
+        "median_excess": float(np.median(excess)) if len(excess) else np.nan,
+        "hit_rate": float((excess > 0).mean() * 100) if len(excess) else np.nan,
+        "avg_fwd_ret": float(np.mean(fwd_ret)) if len(fwd_ret) else np.nan,
+    }
 
-    유동성 종목(시총≥100억)에 한해 3개 신호를 정의하고, 각 이벤트 이후
-    h∈{5,20,60} 거래일 KOSPI 대비 초과수익(adj_close 기반)을 집계한다.
+
+def build_signal_study():
+    """신호 이벤트 스터디 — 전 기간(2016~) 신호 발생 재구성 + 전방 초과성과.
+
+    유동성 종목(시총≥100억)에 한해 11개 신호를 정의하고, 각 이벤트 이후
+    h∈{5,20,60} 거래일 초과수익(adj_close 기반)을 집계한다.
+
+    벤치마크는 **유동성 유니버스 동일가중 횡단면 평균**이다. 시총가중 KOSPI를
+    쓰면 (1) KOSDAQ 종목을 KOSPI 지수에 대고 재게 되고 (2) 지수를 소수 대형주가
+    끌기 때문에 중앙값 종목이 구조적으로 지수를 못 따라가, 모든 신호가 음수로
+    보여 "이 신호는 나쁘다"로 오독된다. baseline 행이 그 기준을 명시한다 —
+    어떤 신호든 baseline과의 차이로만 판정해야 한다.
+
+    n_events는 신호 간 비교 불가다. 상태형 신호에만 crossing+cooldown을
+    적용하기 때문이다(아래 참조). 중앙값·승률만 비교한다.
+
     최중량 빌더 — 실패해도 파이프라인 비중단(내부 try/except → None).
     """
     try:
         px = qdata_api.load_krx_prices(columns=["adj_close", "close", "chg_pct", "mktcap"])
-        px = px[["date", "ticker", "adj_close", "mktcap"]]  # close/chg_pct 미사용 — 즉시 폐기
+        px = px[["date", "ticker", "adj_close", "chg_pct", "mktcap"]]  # close 미사용
         P = px.pivot(index="date", columns="ticker", values="adj_close").sort_index()
-        M = px.pivot(index="date", columns="ticker", values="mktcap").sort_index()
+        M = px.pivot(index="date", columns="ticker", values="mktcap").reindex_like(P)
+        CH = px.pivot(index="date", columns="ticker", values="chg_pct").reindex_like(P)
         del px
 
         frgn = _flows()
@@ -697,51 +717,74 @@ def build_signal_study():
         del frgn
         F = F.reindex(index=P.index, columns=P.columns)
 
+        ret_5d = (P / P.shift(5) - 1) * 100
         ret_20d = (P / P.shift(20) - 1) * 100
+        hi_252 = P.rolling(252, min_periods=200).max()
         frgn_net_20d = F.rolling(20, min_periods=20).sum()
         intensity_20d = frgn_net_20d / M * 100
         streak = _signed_streak(F)
         liquid = M >= MKTCAP_FLOOR
         del frgn_net_20d, F
 
-        conds = {
+        # 상태형 — 한 번 참이 되면 며칠 유지된다. crossing으로 첫날만 잡고
+        # cooldown으로 재발화를 걸러야 한 사건이 여러 번 세어지지 않는다.
+        state_conds = {
             "bull_divergence": (ret_20d < -5) & (intensity_20d > 0.3) & liquid,
             "frgn_streak10": (streak >= 10) & liquid,
             "high_intensity": (intensity_20d >= 1.0) & liquid,
+            "spike_5d_15": (ret_5d >= 15) & liquid,
+            "spike_20d_20": (ret_20d >= 20) & liquid,
+            "spike_20d_50": (ret_20d >= 50) & liquid,
+            "near_52w_high": (P >= hi_252 * 0.98) & liquid,
         }
-        del ret_20d, intensity_20d, streak, liquid, M
+        # 하루짜리 사건 — crossing은 거의 무의미하고(연속 급등일은 드물다),
+        # cooldown은 서로 다른 진짜 급등을 임의로 버린다. 조건 그대로 쓴다.
+        daily_conds = {
+            "spike_1d_5": (CH >= 5) & liquid,
+            "spike_1d_10": (CH >= 10) & liquid,
+            "drop_1d_5": (CH <= -5) & liquid,
+        }
+        del ret_5d, ret_20d, hi_252, intensity_20d, streak, CH, M
 
         Pv = P.to_numpy(dtype="float64")
-        K = _kospi_close(P.index)
+        Lv = liquid.to_numpy()
         n_dates = len(P.index)
-        del P
+        as_of = _as_of()
+        del P, liquid
+
+        events = {}  # 지평선 루프에서 재사용 — 좌표 계산은 한 번이면 된다
+        for sig, cond in state_conds.items():
+            crossing = cond & ~cond.shift(1, fill_value=False)  # 조건이 처음 참이 되는 날
+            events[sig] = _event_cooldown(np.argwhere(crossing.to_numpy()), SIGNAL_COOLDOWN)
+        for sig, cond in daily_conds.items():
+            events[sig] = np.argwhere(cond.to_numpy())
+        del state_conds, daily_conds
 
         rows = []
-        for sig, cond in conds.items():
-            crossing = cond & ~cond.shift(1, fill_value=False)  # 조건이 처음 참이 되는 날
-            events = _event_cooldown(np.argwhere(crossing.to_numpy()), SIGNAL_COOLDOWN)
-            for h in SIGNAL_HORIZONS:
-                dpos, tpos = events[:, 0], events[:, 1]
-                ok = dpos + h < n_dates  # 지평선이 이력 밖이면 제외
-                dpos, tpos = dpos[ok], tpos[ok]
-                fwd_ret = (Pv[dpos + h, tpos] / Pv[dpos, tpos] - 1) * 100
-                kospi_ret = (K[dpos + h] / K[dpos] - 1) * 100
-                excess = fwd_ret - kospi_ret
-                m = np.isfinite(excess) & np.isfinite(fwd_ret)  # 상폐 등 결측 제외
-                excess, fwd_ret = excess[m], fwd_ret[m]
-                rows.append(
-                    {
-                        "signal_type": sig,
-                        "horizon": h,
-                        "n_events": int(len(excess)),
-                        "mean_excess": float(np.mean(excess)) if len(excess) else np.nan,
-                        "median_excess": float(np.median(excess)) if len(excess) else np.nan,
-                        "hit_rate": float((excess > 0).mean() * 100) if len(excess) else np.nan,
-                        "avg_fwd_ret": float(np.mean(fwd_ret)) if len(fwd_ret) else np.nan,
-                    }
-                )
+        for h in SIGNAL_HORIZONS:
+            fwd = np.full_like(Pv, np.nan)
+            fwd[: n_dates - h] = (Pv[h:] / Pv[: n_dates - h] - 1) * 100
+            fwd = np.where(Lv, fwd, np.nan)  # 벤치마크·기준선 모두 유동성 유니버스
+            with warnings.catch_warnings():  # 상장 전/상폐 후 전부-NaN 행 → 빈 평균
+                warnings.simplefilter("ignore", RuntimeWarning)
+                bench = np.nanmean(fwd, axis=1, keepdims=True)
+            exc = fwd - bench
+
+            # baseline — 이벤트가 아니라 유동성 전 종목-일. cooldown은 정의상 없다.
+            ok = np.isfinite(exc)
+            rows.append(_study_row("baseline", h, exc[ok], fwd[ok]))
+
+            for sig, ev in events.items():
+                dpos, tpos = ev[:, 0], ev[:, 1]
+                keep = dpos + h < n_dates  # 지평선이 이력 밖이면 제외
+                dpos, tpos = dpos[keep], tpos[keep]
+                e, f = exc[dpos, tpos], fwd[dpos, tpos]
+                m = np.isfinite(e) & np.isfinite(f)  # 상폐 등 결측 제외
+                rows.append(_study_row(sig, h, e[m], f[m]))
+            del fwd, bench, exc, ok
+
         df = pd.DataFrame(rows)
-        df["as_of"] = _as_of()
+        df["as_of"] = as_of
         print("[signal_study]")
         print(df.to_string(index=False))
         return df
