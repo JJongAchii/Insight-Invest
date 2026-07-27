@@ -1,6 +1,5 @@
 import pandas as pd
 import pytest
-
 from module.brief.evidence import attach_base_rates, match_base_rate_signals
 
 
@@ -109,3 +108,152 @@ def test_attach_base_rates는_결측_통계를_None으로():
     out = attach_base_rates(["high_intensity"], study)
     assert out["high_intensity"]["h20"]["median_excess"] is None
     assert out["high_intensity"]["h20"]["n_events"] == 0
+
+
+from module.brief.evidence import build_evidence_pack
+
+
+def _sources():
+    """최소 픽스처 — 모든 소스가 존재하는 정상 케이스."""
+    return {
+        "meta": {"name": "테스트전자", "market": "KOSPI", "sector": "반도체"},
+        "flows_signals": pd.DataFrame(
+            [
+                {
+                    "ticker": "005930",
+                    "investor": "frgn",
+                    "streak": 12,
+                    "net_20d": 5e11,
+                    "intensity_20d": 1.4,
+                    "ret_20d": -6.0,
+                    "divergence": "bull",
+                    "close": 70000,
+                    "chg_pct": 1.2,
+                    "mktcap": 4e14,
+                },
+                {
+                    "ticker": "005930",
+                    "investor": "inst",
+                    "streak": -3,
+                    "net_20d": -1e11,
+                    "intensity_20d": -0.2,
+                    "ret_20d": -6.0,
+                    "divergence": None,
+                    "close": 70000,
+                    "chg_pct": 1.2,
+                    "mktcap": 4e14,
+                },
+            ]
+        ),
+        "signal_study": pd.DataFrame(
+            [
+                {
+                    "signal_type": "frgn_streak10",
+                    "horizon": 20,
+                    "n_events": 1847,
+                    "median_excess": 2.1,
+                    "hit_rate": 54.0,
+                    "mean_excess": 2.4,
+                    "avg_fwd_ret": 3.1,
+                }
+            ]
+        ),
+        "factor_pct": pd.DataFrame(
+            [
+                {
+                    "ticker": "005930",
+                    "momentum": 92.0,
+                    "value": 19.0,
+                    "size": 3.0,
+                    "lowvol": 61.0,
+                }
+            ]
+        ),
+        "sector_perf": pd.DataFrame(
+            [
+                {
+                    "market": "KOSPI",
+                    "sector": "반도체",
+                    "ret_1d": 0.8,
+                    "ret_1w": 2.1,
+                    "ret_1m": 5.5,
+                    "ret_3m": 12.0,
+                    "ret_ytd": 20.0,
+                    "weight": 18.4,
+                }
+            ]
+        ),
+        "breadth": {"advancers": 480, "decliners": 420, "above_ma20_pct": 55.2},
+        "valuation": {"market": "KOSPI", "per": 11.2, "pbr": 1.05, "div_yield": 2.1},
+        "regime": {"phase": "회복", "risk_gauge": 42},
+        "holdings": {
+            "005930": {
+                "shares": 10,
+                "avg_cost": 65000,
+                "pnl_pct": 7.7,
+                "weight_pct": 12.0,
+            }
+        },
+        "news": [{"title": "테스트 헤드라인", "source": "연합", "date": "2026-07-25"}],
+        "prior_brief": {
+            "as_of": "2026-07-20",
+            "stance_note": "수급 우위",
+            "price_change_since": 4.1,
+        },
+    }
+
+
+def test_evidence_pack_기본_구조():
+    pack = build_evidence_pack("005930", _sources())
+    assert set(pack) == {
+        "identity",
+        "flows",
+        "base_rates",
+        "factors",
+        "sector",
+        "market",
+        "holding",
+        "news",
+        "prior_brief",
+    }
+    assert pack["identity"]["ticker"] == "005930"
+    assert pack["identity"]["name"] == "테스트전자"
+
+
+def test_evidence_pack이_frgn_기준으로_기저율을_붙인다():
+    pack = build_evidence_pack("005930", _sources())
+    # streak 12 → frgn_streak10 발화, intensity 1.4 → high_intensity 발화,
+    # ret_20d -6.0 & intensity 1.4 → bull_divergence 발화.
+    # 단 signal_study에 행이 있는 건 frgn_streak10뿐이므로 그것만 남는다.
+    assert set(pack["base_rates"]) == {"frgn_streak10"}
+    assert pack["base_rates"]["frgn_streak10"]["h20"]["n_events"] == 1847
+
+
+def test_evidence_pack이_투자자별_수급을_분리한다():
+    pack = build_evidence_pack("005930", _sources())
+    assert pack["flows"]["frgn"]["streak"] == 12
+    assert pack["flows"]["inst"]["streak"] == -3
+
+
+def test_미보유_종목은_holding이_None():
+    src = _sources()
+    src["holdings"] = {}
+    pack = build_evidence_pack("005930", src)
+    assert pack["holding"] is None
+
+
+def test_소스_결손시_해당_섹션만_None이고_예외없음():
+    src = _sources()
+    src["factor_pct"] = pd.DataFrame(columns=["ticker", "momentum", "value", "size", "lowvol"])
+    src["news"] = []
+    src["prior_brief"] = None
+    pack = build_evidence_pack("005930", src)
+    assert pack["factors"] is None
+    assert pack["news"] == []
+    assert pack["prior_brief"] is None
+    assert pack["identity"]["ticker"] == "005930"  # 나머지는 정상
+
+
+def test_flows_signals에_없는_종목이면_ValueError():
+    with pytest.raises(ValueError, match="flows_signals"):
+        build_evidence_pack("999999", _sources())
