@@ -34,7 +34,13 @@ from module.brief.select import select_targets  # noqa: E402
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("build_briefs")
 
-MAX_COST_USD = 5.0  # 하루 누적 상한 — 초과 시 중단 (폭주 방지)
+# 비용 가드레일 2단
+#   MAX_COST_USD       1회 실행 상한 — 한 번의 폭주를 막는다 (2종목 기준 1회 ~$0.14)
+#   MAX_MONTH_COST_USD 월 예산 상한 — 매일 조금씩 새는 것을 막는다
+# 월 상한은 briefs.parquet의 generated_at(UTC) 기준으로 누적을 세므로, 실행이
+# 여러 번 나뉘어도 합산된다.
+MAX_COST_USD = 5.0
+MAX_MONTH_COST_USD = 30.0
 
 # 뉴스 헤드라인은 Task 14에서 연결한다 (NewsService.fetch_news가 async라 배관이 별건).
 # 그때까지 evidence pack의 news는 빈 목록이고, 프롬프트는 정량 근거만 쓴다.
@@ -159,10 +165,28 @@ def main() -> int:
     ctx = _market_context(breadth, valuation, regime)
 
     # ---- 종목별 생성
+    month = datetime.now(timezone.utc).strftime("%Y-%m")
+    month_spent = briefs_store.month_cost(month)
+    if month_spent >= MAX_MONTH_COST_USD:
+        print(
+            f"[skip] build_briefs — {month} 누적 ${month_spent:.2f} 가 "
+            f"월 상한 ${MAX_MONTH_COST_USD:.2f} 도달. 다음 달까지 생성하지 않는다."
+        )
+        return 0
+    logger.info("%s 누적 $%.2f / 상한 $%.2f", month, month_spent, MAX_MONTH_COST_USD)
+
     rows, total_cost = [], 0.0
     for ticker in picked:
         if total_cost >= MAX_COST_USD:
-            logger.error("비용 상한 $%.2f 도달 — 남은 종목 중단", MAX_COST_USD)
+            logger.error("1회 실행 상한 $%.2f 도달 — 남은 종목 중단", MAX_COST_USD)
+            break
+        if month_spent + total_cost >= MAX_MONTH_COST_USD:
+            logger.error(
+                "월 상한 $%.2f 도달 (누적 $%.2f + 이번 실행 $%.2f) — 남은 종목 중단",
+                MAX_MONTH_COST_USD,
+                month_spent,
+                total_cost,
+            )
             break
         try:
             m = meta_by_ticker.get(ticker, {})
@@ -226,7 +250,10 @@ def main() -> int:
 
     briefs_store.upsert_many(rows)
     n_dropped = sum(len(json.loads(r["dropped_refs"])) for r in rows)
-    print(f"브리프 {len(rows)}건 생성, 총 ${total_cost:.4f}, 근거 드롭 {n_dropped}건")
+    print(
+        f"브리프 {len(rows)}건 생성, 총 ${total_cost:.4f}, 근거 드롭 {n_dropped}건 "
+        f"| {month} 누적 ${month_spent + total_cost:.2f} / 상한 ${MAX_MONTH_COST_USD:.2f}"
+    )
     return 0
 
 
