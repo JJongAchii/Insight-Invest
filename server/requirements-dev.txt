@@ -1,0 +1,3 @@
+# 개발 전용 — Lambda 이미지(requirements.txt)에는 넣지 않는다.
+#   pip install -r requirements.txt -r requirements-dev.txt
+pytest>=8.0
