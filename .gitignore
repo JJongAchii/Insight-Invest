@@ -79,3 +79,6 @@ dmypy.json
 
 .api-token
 .claude/settings.local.json
+
+# superpowers SDD 작업공간 (스크래치)
+.superpowers/
