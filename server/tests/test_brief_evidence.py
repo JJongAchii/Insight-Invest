@@ -57,27 +57,54 @@ def test_복수_신호_동시_발화():
 def test_attach_base_rates가_지평선별로_묶는다():
     study = pd.DataFrame(
         [
-            {"signal_type": "frgn_streak10", "horizon": 5, "n_events": 1800,
-             "median_excess": 0.4, "hit_rate": 51.2, "mean_excess": 0.5, "avg_fwd_ret": 0.9},
-            {"signal_type": "frgn_streak10", "horizon": 20, "n_events": 1847,
-             "median_excess": 2.1, "hit_rate": 54.0, "mean_excess": 2.4, "avg_fwd_ret": 3.1},
-            {"signal_type": "high_intensity", "horizon": 20, "n_events": 900,
-             "median_excess": 1.0, "hit_rate": 52.0, "mean_excess": 1.2, "avg_fwd_ret": 2.0},
+            {
+                "signal_type": "frgn_streak10",
+                "horizon": 5,
+                "n_events": 1800,
+                "median_excess": 0.4,
+                "hit_rate": 51.2,
+                "mean_excess": 0.5,
+                "avg_fwd_ret": 0.9,
+            },
+            {
+                "signal_type": "frgn_streak10",
+                "horizon": 20,
+                "n_events": 1847,
+                "median_excess": 2.1,
+                "hit_rate": 54.0,
+                "mean_excess": 2.4,
+                "avg_fwd_ret": 3.1,
+            },
+            {
+                "signal_type": "high_intensity",
+                "horizon": 20,
+                "n_events": 900,
+                "median_excess": 1.0,
+                "hit_rate": 52.0,
+                "mean_excess": 1.2,
+                "avg_fwd_ret": 2.0,
+            },
         ]
     )
     out = attach_base_rates(["frgn_streak10"], study)
     assert set(out) == {"frgn_streak10"}
-    assert out["frgn_streak10"]["h20"] == {
-        "n_events": 1847, "median_excess": 2.1, "hit_rate": 54.0
-    }
+    assert out["frgn_streak10"]["h20"] == {"n_events": 1847, "median_excess": 2.1, "hit_rate": 54.0}
     assert "h5" in out["frgn_streak10"]
 
 
 def test_attach_base_rates는_결측_통계를_None으로():
     study = pd.DataFrame(
-        [{"signal_type": "high_intensity", "horizon": 20, "n_events": 0,
-          "median_excess": float("nan"), "hit_rate": float("nan"),
-          "mean_excess": float("nan"), "avg_fwd_ret": float("nan")}]
+        [
+            {
+                "signal_type": "high_intensity",
+                "horizon": 20,
+                "n_events": 0,
+                "median_excess": float("nan"),
+                "hit_rate": float("nan"),
+                "mean_excess": float("nan"),
+                "avg_fwd_ret": float("nan"),
+            }
+        ]
     )
     out = attach_base_rates(["high_intensity"], study)
     assert out["high_intensity"]["h20"]["median_excess"] is None

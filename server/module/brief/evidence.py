@@ -44,9 +44,7 @@ def attach_base_rates(matched: list[str], study: pd.DataFrame) -> dict:
             f"h{int(r.horizon)}": {
                 "n_events": int(r.n_events),
                 "median_excess": (
-                    None
-                    if pd.isna(r.median_excess)
-                    else round(float(r.median_excess), 2)
+                    None if pd.isna(r.median_excess) else round(float(r.median_excess), 2)
                 ),
                 "hit_rate": None if pd.isna(r.hit_rate) else round(float(r.hit_rate), 1),
             }
