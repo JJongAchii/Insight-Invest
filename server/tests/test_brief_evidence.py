@@ -1,5 +1,6 @@
 import pandas as pd
 import pytest
+
 from module.brief.evidence import attach_base_rates, match_base_rate_signals
 
 
