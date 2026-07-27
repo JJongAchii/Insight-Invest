@@ -883,6 +883,52 @@ def build_factor_current():
     return df
 
 
+def build_factor_pct_ticker():
+    """종목별 팩터 백분위 (0-100) 스냅샷 [ticker, momentum, value, size, lowvol].
+
+    백분위 高 = 팩터 롱 방향(고모멘텀/저평가/소형/저변동). 유동성 유니버스 내 순위.
+    _factor_scores와 같은 정의를 쓰되 최신 거래일 단면만 취한다.
+    브리프 재료이자, Lambda /factor-exposure의 520일 로드를 대체한다.
+    """
+    try:
+        start = (pd.Timestamp.today() - pd.Timedelta(days=520)).strftime("%Y-%m-%d")
+        px = qdata_api.load_krx_prices(start=start, columns=["adj_close", "mktcap"])
+        P = px.pivot(index="date", columns="ticker", values="adj_close").sort_index()
+        M = px.pivot(index="date", columns="ticker", values="mktcap").sort_index()
+        del px
+        try:
+            fund = qdata_api.load_krx_fundamental(start=start, columns=["per"])
+            PER = (
+                fund.pivot(index="date", columns="ticker", values="per")
+                .sort_index()
+                .reindex(index=P.index, columns=P.columns)
+            )
+        except FileNotFoundError:
+            PER = pd.DataFrame(index=P.index, columns=P.columns, dtype="float64")
+
+        last = P.index[-1]
+        returns = P.pct_change(fill_method=None)
+        scores = {
+            "momentum": (P.shift(21) / P.shift(252) - 1).loc[last],
+            "value": (1.0 / PER).where(PER > 0).loc[last],
+            "size": (-M).loc[last],
+            "lowvol": (-(returns.rolling(60, min_periods=40).std())).loc[last],
+        }
+        liquid = M.loc[last] >= MKTCAP_FLOOR
+        df = pd.DataFrame(
+            {f: (scores[f].where(liquid).rank(pct=True) * 100) for f in FACTOR_NAMES}
+        )
+        df = df.dropna(how="all").reset_index().rename(columns={"index": "ticker"})
+        df.columns.name = None
+        df["as_of"] = pd.Timestamp(last).strftime("%Y-%m-%d")
+        print(f"[factor_pct_ticker] {len(df)} 종목, as_of={df['as_of'].iloc[0]}")
+        return df
+    except Exception:
+        print("[warn] factor_pct_ticker 실패 (비중단):", file=sys.stderr)
+        traceback.print_exc()
+        return None
+
+
 # ---------------------------------------------------------------- 실행
 
 
@@ -900,6 +946,7 @@ BUILDERS = [
     ("insight/signal_study.parquet", build_signal_study, {}),  # Track B: 신호 이벤트 스터디
     ("insight/factor_returns.parquet", build_factor_returns, {}),  # Track B: 팩터 렌즈
     ("insight/factor_current.parquet", build_factor_current, {}),  # (factor_returns 캐시 파생)
+    ("insight/factor_pct_ticker.parquet", build_factor_pct_ticker, {}),  # 브리프 재료 + Lambda 부담 경감
     ("portfolio/live_nav.parquet", build_track_strategies, {}),  # 전략 실전 추적 (P7)
 ]
 

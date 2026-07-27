@@ -81,7 +81,17 @@ async def get_flows_top(window: str = "1w", investor: str = "frgn"):
     if df is None or df.empty:
         return {"window": window, "investor": investor, "as_of": None, "buys": [], "sells": []}
 
-    cols = ["rank", "ticker", "name", "market", "net_value", "net_volume", "close", "chg_pct", "mktcap"]
+    cols = [
+        "rank",
+        "ticker",
+        "name",
+        "market",
+        "net_value",
+        "net_volume",
+        "close",
+        "chg_pct",
+        "mktcap",
+    ]
     buys = df[df["rank"] > 0].sort_values("rank")[cols]
     sells = df[df["rank"] < 0].sort_values("rank", ascending=False)[cols].copy()
     sells["rank"] = -sells["rank"]  # 순매도 목록은 양수 rank 1..30으로 제공
@@ -178,9 +188,7 @@ async def get_sector_heatmap():
 @router.get("/sector/rotation")
 async def get_sector_rotation(months: int = 12):
     """업종 지수 체인 — 최근 N개월, 주간 마지막 값으로 다운샘플."""
-    df = _read(
-        "sector_index.parquet", columns=["date", "market", "sector", "index_value", "as_of"]
-    )
+    df = _read("sector_index.parquet", columns=["date", "market", "sector", "index_value", "as_of"])
     if df is None or df.empty:
         return {"as_of": None, "rows": []}
     cutoff = df["date"].max() - pd.DateOffset(months=months)
@@ -231,8 +239,13 @@ async def get_signals_study():
     if df is None or df.empty:
         return {"as_of": None, "rows": []}
     cols = [
-        "signal_type", "horizon", "n_events",
-        "mean_excess", "median_excess", "hit_rate", "avg_fwd_ret",
+        "signal_type",
+        "horizon",
+        "n_events",
+        "mean_excess",
+        "median_excess",
+        "hit_rate",
+        "avg_fwd_ret",
     ]
     return _round2({"as_of": _as_of(df), "rows": df[cols].to_dict(orient="records")})
 
@@ -269,6 +282,12 @@ def _universe_factor_pct():
     반환 (dict[factor -> Series(ticker->percentile)], as_of). 백분위 高 = 팩터 롱 방향
     (고모멘텀/저평가/소형/저변동). build_insights의 팩터 정의와 동일. 프로세스 내 캐시.
     """
+    # 빌더가 떨어뜨린 스냅샷이 있으면 그걸 쓴다 — 520일 전종목 로드 회피.
+    if storage.exists("insight/factor_pct_ticker.parquet"):
+        df = storage.read_parquet("insight/factor_pct_ticker.parquet")
+        pct = {f: df.set_index("ticker")[f].dropna() for f in FACTOR_NAMES}
+        return pct, str(df["as_of"].iloc[0])
+
     from qdata import api as qdata_api
 
     start = (pd.Timestamp.today() - pd.Timedelta(days=520)).strftime("%Y-%m-%d")
