@@ -15,7 +15,6 @@ from fastapi import APIRouter
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../../../")))
 
-from datastore import briefs as briefs_store
 from datastore import holdings as holdings_store
 from datastore import meta, portfolio, storage
 from datastore import watchlist as watchlist_store
@@ -271,20 +270,6 @@ def get_attention():
                 )
     except Exception:
         logger.debug("attention strategy drawdown 실패", exc_info=True)
-
-    # 브리프 한 줄 요약 조인 — 없으면 조용히 생략 (attention은 절대 500 없음)
-    try:
-        bdf = briefs_store.list_items()
-        if not bdf.empty:
-            latest_as_of = bdf["as_of"].max()
-            one_liners = (
-                bdf[bdf["as_of"] == latest_as_of].set_index("ticker")["one_liner"].to_dict()
-            )
-            for it in items:
-                if it.get("ticker") in one_liners:
-                    it["one_liner"] = one_liners[it["ticker"]]
-    except Exception:
-        logger.warning("브리프 one_liner 조인 실패 — 생략", exc_info=True)
 
     items.sort(key=_sort_key)
     items = items[:CAP]

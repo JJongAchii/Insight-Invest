@@ -408,36 +408,6 @@ def _section_strategies() -> str | None:
     return "<b>내 전략 (저장 후)</b>\n" + "\n".join(lines)
 
 
-BRIEF_CAP = 3
-
-
-def _section_briefs() -> str | None:
-    """종목 브리프 — 오늘자 상위 N건의 한 줄 요약."""
-    from datastore import briefs as briefs_store
-
-    df = briefs_store.list_items()
-    if df.empty:
-        return None
-    as_of = df["as_of"].max()
-    today = df[df["as_of"] == as_of]
-    if today.empty:
-        return None
-
-    # 신뢰도 높은 것부터, 동률이면 종목명 순
-    rank = {"high": 0, "medium": 1, "low": 2}
-    today = today.assign(_r=today["confidence"].map(rank).fillna(9)).sort_values(["_r", "name"])
-
-    lines = [f"<b>🧭 오늘 주목 종목</b> <i>({_esc(as_of)})</i>"]
-    for r in today.head(BRIEF_CAP).itertuples():
-        lines.append(f"• <b>{_esc(r.name)}</b> — {_esc(r.one_liner)}")
-        lines.append(f"  {_esc(r.summary)}")
-    rest = len(today) - BRIEF_CAP
-    if rest > 0:
-        lines.append(f"<i>외 {rest}종목</i>")
-    _ctx["brief_count"] = len(today)
-    return "\n".join(lines)
-
-
 def _section_summary() -> str | None:
     """룰 기반 한 줄 요약 — 다른 섹션이 채운 _ctx로 문장 1~2개 조합."""
     base = None
@@ -487,7 +457,6 @@ def compose_message() -> str:
         ("macro", _section_macro),
         ("watchlist", _section_watchlist),
         ("strategies", _section_strategies),
-        ("briefs", _section_briefs),
         ("summary", _section_summary),  # 마지막 — 앞 섹션들의 _ctx 사용
     ]:
         try:
