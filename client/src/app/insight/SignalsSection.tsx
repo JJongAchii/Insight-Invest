@@ -62,26 +62,41 @@ const STUDY_TYPE: Record<InsightSignalType, SignalStudyType> = {
 const STUDY_HORIZONS: (5 | 20 | 60)[] = [5, 20, 60];
 
 /**
- * Honest historical track record for a signal: forward excess return vs KOSPI
- * at 5/20/60d. Foreign flow-chasing mean-reverts, so most medians are negative —
- * the strip surfaces that rather than framing these as buy signals.
+ * Honest historical track record: forward excess return vs the equal-weight
+ * cross-sectional mean at 5/20/60d. The absolute medians are negative even for
+ * the unconditional baseline (the benchmark is a mean, returns are right-skewed),
+ * so the only readable number is the delta vs baseline — that's what's emphasized.
  */
-const TrackRecordStrip: React.FC<{ rows: SignalStudyRow[] }> = ({ rows }) => {
+const TrackRecordStrip: React.FC<{
+  rows: SignalStudyRow[];
+  baseline: SignalStudyRow[];
+}> = ({ rows, baseline }) => {
   const byHorizon = new Map(rows.map((r) => [r.horizon, r]));
+  const baseByHorizon = new Map(baseline.map((r) => [r.horizon, r]));
   const h20 = byHorizon.get(20);
-  const showWarning = h20 !== undefined && h20.median_excess < 0;
+  const b20 = baseByHorizon.get(20);
+  // baseline 행이 없는 구 parquet에서는 경고를 띄우지 않는다 — 비교 근거가 없다.
+  const showWarning =
+    h20 !== undefined &&
+    b20 !== undefined &&
+    h20.median_excess < b20.median_excess;
 
   return (
     <div className="rounded-xl border border-edge bg-raised p-3 flex flex-col gap-2.5">
       <div className="flex items-center gap-1.5">
         <span className="text-xs font-semibold text-ink-secondary">
-          역사적 성과 · KOSPI 대비 (2016~)
+          역사적 성과 · 동일가중 평균 대비 (2016~)
         </span>
         <InfoTip helpKey="signal.study" />
       </div>
       <div className="grid grid-cols-3 gap-2">
         {STUDY_HORIZONS.map((h) => {
           const r = byHorizon.get(h);
+          const b = baseByHorizon.get(h);
+          const delta =
+            r !== undefined && b !== undefined
+              ? r.median_excess - b.median_excess
+              : null;
           return (
             <div
               key={h}
@@ -90,17 +105,23 @@ const TrackRecordStrip: React.FC<{ rows: SignalStudyRow[] }> = ({ rows }) => {
               <p className="text-[11px] text-ink-muted">{h}일 후 초과수익</p>
               {r ? (
                 <>
-                  <p className="mt-0.5">
-                    <span className="text-[11px] text-ink-muted">중앙값 </span>
-                    <span
-                      className={`${signClass(r.median_excess)} font-semibold`}
-                    >
-                      {fmtPct(r.median_excess)}
-                    </span>
+                  {delta !== null && (
+                    <p className="mt-0.5">
+                      <span className="text-[11px] text-ink-muted">
+                        기준선 대비{" "}
+                      </span>
+                      <span className={`${signClass(delta)} font-semibold num`}>
+                        {delta >= 0 ? "+" : ""}
+                        {delta.toFixed(2)}%p
+                      </span>
+                    </p>
+                  )}
+                  <p className="text-[11px] text-ink-muted num mt-0.5">
+                    중앙값 {fmtPct(r.median_excess)} · 히트율{" "}
+                    {r.hit_rate.toFixed(0)}%
                   </p>
                   <p className="text-[11px] text-ink-muted num mt-0.5">
-                    히트율 {r.hit_rate.toFixed(0)}% · N=
-                    {r.n_events.toLocaleString()}건
+                    N={r.n_events.toLocaleString()}건
                   </p>
                 </>
               ) : (
@@ -110,9 +131,10 @@ const TrackRecordStrip: React.FC<{ rows: SignalStudyRow[] }> = ({ rows }) => {
           );
         })}
       </div>
-      {showWarning && (
+      {showWarning && h20 && b20 && (
         <p className="text-[11px] text-losses">
-          ⚠ 이 신호는 역사적으로 KOSPI 대비 초과수익이 낮습니다 — 참고 지표로만.
+          ⚠ 이 신호는 아무 종목이나 골랐을 때보다 20일 성과가 낮았습니다 — 승률{" "}
+          {h20.hit_rate.toFixed(1)}% vs 기준선 {b20.hit_rate.toFixed(1)}%.
         </p>
       )}
     </div>
@@ -151,6 +173,11 @@ const SignalsSection: React.FC = () => {
         (r) => r.signal_type === STUDY_TYPE[type]
       ),
     [studyData, type]
+  );
+  // 비교 기준 — 조건 없는 유동성 전 종목-일. 구 parquet에는 없을 수 있다.
+  const baselineRows = useMemo(
+    () => (studyData?.rows ?? []).filter((r) => r.signal_type === "baseline"),
+    [studyData]
   );
 
   // Signal rows only carry tickers; resolve meta_id via the cached meta list.
@@ -202,7 +229,9 @@ const SignalsSection: React.FC = () => {
         />
       ) : (
         <div className="flex flex-col gap-3">
-          {studyRows.length > 0 && <TrackRecordStrip rows={studyRows} />}
+          {studyRows.length > 0 && (
+            <TrackRecordStrip rows={studyRows} baseline={baselineRows} />
+          )}
           <p className="text-xs text-ink-muted flex items-center gap-1.5">
             <span>{CAPTIONS[type]}</span>
             <InfoTip helpKey={HELP_KEYS[type]} />

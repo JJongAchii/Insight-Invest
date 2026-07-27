@@ -678,17 +678,34 @@ export interface InsightIndexResponse {
 
 // Types for signal event-study, factor lens & factor exposure (Track B)
 export type SignalStudyType =
+  /** 조건 없는 유동성 전 종목-일 — 다른 모든 행의 비교 기준. */
+  | "baseline"
   | "bull_divergence"
   | "frgn_streak10"
-  | "high_intensity";
+  | "high_intensity"
+  | "spike_1d_5"
+  | "spike_1d_10"
+  | "drop_1d_5"
+  | "spike_5d_15"
+  | "spike_20d_20"
+  | "spike_20d_50"
+  | "near_52w_high";
 
 export interface SignalStudyRow {
   signal_type: SignalStudyType;
   horizon: 5 | 20 | 60;
+  /**
+   * 이벤트 수. 신호 간 비교 불가 — 상태형 신호에만 20일 쿨다운이 걸리고
+   * 1일 급등/급락과 baseline에는 걸리지 않는다.
+   */
   n_events: number;
-  /** Mean forward excess return vs KOSPI, %. */
+  /** Mean forward excess return vs equal-weight cross-sectional mean, %. */
   mean_excess: number;
-  /** Median forward excess return vs KOSPI, %. */
+  /**
+   * Median forward excess return vs equal-weight cross-sectional mean, %.
+   * 벤치마크가 평균이고 수익률 분포가 우편향이라 baseline조차 음수다 —
+   * 절대값이 아니라 baseline 행과의 차이로만 판정할 것.
+   */
   median_excess: number;
   /** Share of events with positive excess return, %. */
   hit_rate: number;
