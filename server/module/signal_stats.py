@@ -26,8 +26,6 @@ def load_study() -> pd.DataFrame | None:
     갱신된 값을 바로 읽는 쪽이 낫다.
     """
     try:
-        if not storage.exists(*_PARTS):
-            return None
         return storage.read_parquet(*_PARTS)
     except Exception:
         logger.debug("signal_study 로드 실패", exc_info=True)
