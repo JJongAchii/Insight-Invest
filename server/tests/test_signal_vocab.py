@@ -51,9 +51,15 @@ EXPECTED_SIGNAL_TYPES = frozenset(
     }
 )
 
-# attention.py가 signal_stats.evidence_phrase에 넘기는 literal 3개
-# (server/app/routers/attention.py의 가격 급변 분기).
+# attention.py 가격 급변 분기가 signal_stats.evidence_phrase에 넘기는 literal 3개.
+# 아래 테스트는 이 상수를 attention.py 소스에서 추출한 실제 값과 대조한다 —
+# 손으로 적은 목록끼리만 비교하면 "+5~10% 구간이 상위집합(spike_1d_5) 통계를
+# 인용"하던 원래 버그로 되돌아가도 통과해버린다(둘 다 빌더 어휘의 원소라서).
 ATTENTION_SIGNAL_TYPES = frozenset({"spike_1d_10", "spike_1d_5_10", "drop_1d_5"})
+
+_ATTENTION_PY = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "app", "routers", "attention.py")
+)
 
 
 def _skip_if_import_failed():
@@ -98,7 +104,37 @@ def test_builder_signal_vocabulary_matches_frozen_set():
     assert _emitted_vocabulary() == EXPECTED_SIGNAL_TYPES
 
 
-def test_attention_signal_literals_are_in_builder_vocabulary():
-    """attention.py가 쓰는 literal 3개는 항상 빌더 어휘의 부분집합이어야 한다."""
+def _attention_vocabulary() -> set[str]:
+    """attention.py의 `sig, sev, word = "<signal>", ...` 분기에서 signal_type 추출.
+
+    빌더처럼 임포트해서 읽지 않고 소스를 파싱한다 — attention.py를 임포트하면
+    datastore·qdata 체인이 통째로 딸려와 유닛 테스트로는 무겁다.
+    """
+    with open(_ATTENTION_PY, encoding="utf-8") as f:
+        tree = ast.parse(f.read())
+
+    found = set()
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Assign) and len(node.targets) == 1):
+            continue
+        target, value = node.targets[0], node.value
+        if not (isinstance(target, ast.Tuple) and isinstance(value, ast.Tuple)):
+            continue
+        names = [n.id for n in target.elts if isinstance(n, ast.Name)]
+        if names[:1] != ["sig"] or not value.elts:
+            continue
+        first = value.elts[0]
+        if isinstance(first, ast.Constant) and isinstance(first.value, str):
+            found.add(first.value)
+    return found
+
+
+def test_attention_signal_literals_match_source_and_builder():
+    """attention.py가 실제로 쓰는 literal이 기대값과 같고, 빌더 어휘 안에 있어야 한다.
+
+    앞 assert가 핵심이다 — 부분집합만 확인하면 +5~10% 구간을 spike_1d_5(=상위집합)로
+    되돌려도 통과한다. 소스에서 뽑은 집합과 정확히 일치시켜야 그 회귀가 잡힌다.
+    """
     _skip_if_import_failed()
+    assert _attention_vocabulary() == ATTENTION_SIGNAL_TYPES
     assert ATTENTION_SIGNAL_TYPES <= _emitted_vocabulary()

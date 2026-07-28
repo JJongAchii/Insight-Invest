@@ -22,8 +22,8 @@ _UNSET = object()  # "인자 미지정"과 "데이터 없음(None)"을 구분하
 def load_study() -> pd.DataFrame | None:
     """signal_study.parquet 로드. 부재·손상 시 None (호출부는 실측치를 생략한다).
 
-    33행짜리 테이블이라 캐시하지 않는다 — Lambda 컨테이너가 며칠 살아남아도
-    갱신된 값을 바로 읽는 쪽이 낫다.
+    신호 12종 × 지평선 3개 = 36행짜리 테이블이라 캐시하지 않는다 — Lambda
+    컨테이너가 며칠 살아남아도 갱신된 값을 바로 읽는 쪽이 낫다.
     """
     try:
         return storage.read_parquet(*_PARTS)
