@@ -285,18 +285,24 @@ def _section_signals() -> str | None:
         if ev:
             lines.append(f"  └ {_esc(ev)}")
 
-    bull = frgn[frgn["divergence"] == "bull"].copy()
+    # bull_divergence는 builder에서 ret_20d < -5 & intensity_20d > 0.3로
+    # 측정된다(build_insights.py). flows_signals의 divergence=="bull"은 더
+    # 넓은 ret_20d < 0 집단이라, 그대로 쓰면 측정되지 않은 population에
+    # "bull_divergence" 실측치를 붙이게 된다 — ret_20d < -5를 여기서 다시 건다.
+    bull = frgn[(frgn["divergence"] == "bull") & (frgn["ret_20d"] < -5)].copy()
     if not bull.empty:
         bull = bull.reindex(bull["intensity_20d"].abs().sort_values(ascending=False).index)
         names = " · ".join(_esc(n) for n in bull["name"].head(3))
         _append(f"매집형(주가↓·외인 매집): {names}", "bull_divergence")
 
-    streak = frgn[frgn["streak"] >= 7].sort_values("streak", ascending=False).head(3)
+    # frgn_streak10은 streak >= 10으로 측정된다(build_insights.py) — 임계값을
+    # 맞춘다.
+    streak = frgn[frgn["streak"] >= 10].sort_values("streak", ascending=False).head(3)
     if not streak.empty:
         items = " · ".join(
             f"{_esc(r['name'])}({int(r['streak'])}일)" for _, r in streak.iterrows()
         )
-        _append(f"외인 연속매수 7일+: {items}", "frgn_streak10")
+        _append(f"외인 연속매수 10일+: {items}", "frgn_streak10")
 
     if not lines:
         return None
