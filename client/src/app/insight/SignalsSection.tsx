@@ -80,6 +80,13 @@ const TrackRecordStrip: React.FC<{
     h20 !== undefined &&
     b20 !== undefined &&
     h20.median_excess < b20.median_excess;
+  // 경고 트리거(median_excess)와 배지에 보여줄 근거를 일치시킨다 — hit_rate만
+  // 보여주면 median은 기준선보다 낮은데 hit_rate는 높은 경우 경고 문구가
+  // 스스로 모순될 수 있다.
+  const delta20 =
+    h20 !== undefined && b20 !== undefined
+      ? h20.median_excess - b20.median_excess
+      : null;
 
   return (
     <div className="rounded-xl border border-edge bg-raised p-3 flex flex-col gap-2.5">
@@ -131,10 +138,12 @@ const TrackRecordStrip: React.FC<{
           );
         })}
       </div>
-      {showWarning && h20 && b20 && (
+      {showWarning && h20 && b20 && delta20 !== null && (
         <p className="text-[11px] text-losses">
-          ⚠ 이 신호는 아무 종목이나 골랐을 때보다 20일 성과가 낮았습니다 — 승률{" "}
-          {h20.hit_rate.toFixed(1)}% vs 기준선 {b20.hit_rate.toFixed(1)}%.
+          ⚠ 이 신호는 아무 종목이나 골랐을 때보다 20일 성과가 낮았습니다 —
+          중앙값 기준선 대비 {delta20 >= 0 ? "+" : ""}
+          {delta20.toFixed(2)}%p, 승률 {h20.hit_rate.toFixed(1)}% vs 기준선{" "}
+          {b20.hit_rate.toFixed(1)}%.
         </p>
       )}
     </div>
