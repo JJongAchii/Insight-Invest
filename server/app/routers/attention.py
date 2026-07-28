@@ -19,6 +19,7 @@ from datastore import holdings as holdings_store
 from datastore import meta, portfolio, storage
 from datastore import watchlist as watchlist_store
 from module import regime as regime_mod
+from module import signal_stats
 
 from .holdings import build_price_map
 
@@ -132,20 +133,33 @@ def get_attention():
         logger.debug("attention signals 실패 (flows_signals 부재 가능)", exc_info=True)
 
     # ── 가격 급변 (|오늘 등락| ≥ 5%) ─────────────────────────────────
+    # "관심/주의" 같은 가치판단 라벨을 붙이지 않는다. 2016~ 전 종목 측정에서
+    # 급등(+5%) 뒤 20일은 기준선 대비 -2.4%p, 급락(-5%) 뒤는 -1.2%p로 급등이
+    # 오히려 2배 나빴다. 사실과 실측치만 두고 판단은 사용자에게 맡긴다.
     try:
+        study = signal_stats.load_study()  # 루프 밖에서 한 번만 (부재 시 None)
         for mid, (price, chg) in price_map.items():
             if chg is None or abs(chg) < 5:
                 continue
-            up = chg > 0
+            if chg >= 10:
+                sig, sev, word = "spike_1d_10", "high", "급등"  # 60일 -9.2%p — 볼 만한 수준
+            elif chg > 0:
+                # 5~10% 구간 — spike_1d_5(≥5%)는 10%+를 포함하는 상위집합이라
+                # 그 통계를 이 구간에 붙이면 더 나쁜 population의 숫자를 인용하게
+                # 된다. spike_1d_5_10이 5≤chg<10 배타 구간의 정확한 통계.
+                sig, sev, word = "spike_1d_5_10", "medium", "급등"
+            else:
+                sig, sev, word = "drop_1d_5", "medium", "급락"
+            evidence = signal_stats.evidence_phrase(sig, 20, df=study)
             items.append(
                 {
-                    "severity": "medium",
+                    "severity": sev,
                     "category": "price",
                     "ticker": tk_by_id.get(mid),
                     "name": name_by_id.get(mid),
                     "meta_id": mid,
-                    "title": f"오늘 {chg:+.1f}% ({'관심' if up else '주의'})",
-                    "detail": f"{'급등' if up else '급락'} {chg:+.1f}% — {'관심' if up else '주의'} 종목",
+                    "title": f"오늘 {chg:+.1f}% {word}",
+                    "detail": evidence or "과거 성과 통계 없음",
                     "link": f"/stock/{mid}",
                 }
             )
