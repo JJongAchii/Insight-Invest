@@ -92,7 +92,9 @@ const TrackRecordStrip: React.FC<{
     <div className="rounded-xl border border-edge bg-raised p-3 flex flex-col gap-2.5">
       <div className="flex items-center gap-1.5">
         <span className="text-xs font-semibold text-ink-secondary">
-          역사적 성과 · 동일가중 평균 대비 (2016~)
+          역사적 성과 ·{" "}
+          {b20 ? "동일가중 평균 대비" : "구 벤치마크 기준 · 집계 갱신 대기"}{" "}
+          (2016~)
         </span>
         <InfoTip helpKey="signal.study" />
       </div>
@@ -238,7 +240,7 @@ const SignalsSection: React.FC = () => {
         />
       ) : (
         <div className="flex flex-col gap-3">
-          {studyRows.length > 0 && (
+          {investor === "frgn" && studyRows.length > 0 && (
             <TrackRecordStrip rows={studyRows} baseline={baselineRows} />
           )}
           <p className="text-xs text-ink-muted flex items-center gap-1.5">
