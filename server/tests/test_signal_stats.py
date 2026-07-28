@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from module import signal_stats
 from module.signal_stats import evidence_phrase, excess_vs_baseline, format_evidence
 
 
@@ -69,3 +70,37 @@ def test_evidence_phrase_composes_lookup_and_format():
 
 def test_evidence_phrase_returns_none_when_data_is_unusable():
     assert evidence_phrase("does_not_exist", 20, df=_study()) is None
+
+
+def test_evidence_phrase_explicit_none_short_circuits_without_reloading(monkeypatch):
+    """df=None을 명시하면 load_study()를 다시 호출하지 않는다.
+
+    attention.py처럼 루프 밖에서 load_study()를 한 번만 호출해 그 결과(부재
+    시 None)를 매 아이템에 그대로 넘기는 호출부가 있다. None을 "인자 미지정"
+    과 혼동하면 호출부의 캐싱이 무력화되고 아이템마다 재로드가 일어난다.
+    """
+    calls = []
+
+    def _counting_load_study():
+        calls.append(1)
+        return None
+
+    monkeypatch.setattr(signal_stats, "load_study", _counting_load_study)
+
+    assert evidence_phrase("spike_1d_5", 20, df=None) is None
+    assert len(calls) == 0
+
+
+def test_evidence_phrase_omitted_df_still_loads_exactly_once(monkeypatch):
+    """df를 아예 안 넘기면 여전히 load_study()로 한 번만 로드한다."""
+    calls = []
+
+    def _counting_load_study():
+        calls.append(1)
+        return _study()
+
+    monkeypatch.setattr(signal_stats, "load_study", _counting_load_study)
+
+    result = evidence_phrase("spike_1d_5", 20)
+    assert result == "과거 27.6만건 · 20일 뒤 기준선 대비 -2.4%p (승률 -3.1%p)"
+    assert len(calls) == 1

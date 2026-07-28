@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 _PARTS = ("insight", "signal_study.parquet")
 BASELINE = "baseline"
+_UNSET = object()  # "인자 미지정"과 "데이터 없음(None)"을 구분하기 위한 센티널
 
 
 def load_study() -> pd.DataFrame | None:
@@ -66,10 +67,20 @@ def format_evidence(n_events: int, median_delta: float, hit_delta: float, horizo
 
 
 def evidence_phrase(
-    signal_type: str, horizon: int = 20, df: pd.DataFrame | None = None
+    signal_type: str, horizon: int = 20, df: pd.DataFrame | None = _UNSET
 ) -> str | None:
-    """실측치 한 줄. df 미지정 시 load_study(). 데이터가 없으면 None."""
-    if df is None:
+    """실측치 한 줄.
+
+    df 인자는 세 가지 경우로 갈린다:
+    - 아예 생략(센티널 유지): load_study()를 호출해 직접 로드한다.
+    - 명시적으로 None을 전달: 호출부가 이미 load_study()를 시도했는데 결과가
+      없었다는 뜻이다 — 다시 로드하지 않고 곧장 None을 반환한다. attention.py
+      처럼 루프 밖에서 한 번만 로드해 넘기는 호출부에서, parquet 부재 시
+      load_study()가 None을 돌려준 것과 "안 넘겼다"를 구분하지 못하면 매
+      아이템마다 재로드해버려 캐싱이 무력화된다.
+    - 실제 DataFrame을 전달: 그대로 사용한다.
+    """
+    if df is _UNSET:
         df = load_study()
     if df is None:
         return None
