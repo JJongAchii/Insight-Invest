@@ -684,12 +684,13 @@ export type SignalStudyType =
   | "frgn_streak10"
   | "high_intensity"
   | "spike_1d_5"
+  | "spike_1d_5_10"
   | "spike_1d_10"
   | "drop_1d_5"
   | "spike_5d_15"
   | "spike_20d_20"
   | "spike_20d_50"
-  | "near_52w_high";
+  | "near_52w_high_entry";
 
 export interface SignalStudyRow {
   signal_type: SignalStudyType;

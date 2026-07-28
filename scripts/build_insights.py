@@ -19,7 +19,7 @@ krx_flows 전체 로드(수백 MB)는 로컬에서만 허용 — Lambda에서는
 - kr_etf_meta: 현재 상장 KRX ETF 유니버스 → 앱 meta 확장용 (APP_DATA 루트에 저장).
 - valuation_daily: 시장별 밸류에이션 집계 (시총가중 조화 PER·PBR, 배당수익률)
   — krx_fundamental 미수집 시 스킵.
-- signal_study: 신호 11종 × 지평선 3개 전방 초과성과. 벤치마크는 유동성 유니버스
+- signal_study: 신호 12종 × 지평선 3개 전방 초과성과. 벤치마크는 유동성 유니버스
   동일가중 횡단면 평균이고, 조건 없는 baseline 행이 비교 기준으로 함께 들어간다.
 - track_strategies: 저장된 전략의 실전(저장 후) NAV 추적 (P7)
   → {APP_DATA}/portfolio/live_nav.parquet [port_id, trade_date, value, as_of].
@@ -689,7 +689,7 @@ def _study_row(sig: str, h: int, excess: np.ndarray, fwd_ret: np.ndarray) -> dic
 def build_signal_study():
     """신호 이벤트 스터디 — 전 기간(2016~) 신호 발생 재구성 + 전방 초과성과.
 
-    유동성 종목(시총≥100억)에 한해 11개 신호를 정의하고, 각 이벤트 이후
+    유동성 종목(시총≥100억)에 한해 12개 신호를 정의하고, 각 이벤트 이후
     h∈{5,20,60} 거래일 초과수익(adj_close 기반)을 집계한다.
 
     벤치마크는 **유동성 유니버스 동일가중 횡단면 평균**이다. 시총가중 KOSPI를
@@ -701,10 +701,12 @@ def build_signal_study():
     n_events는 신호 간 비교 불가다. 상태형 신호에만 crossing+cooldown을
     적용하기 때문이다(아래 참조). 중앙값·승률만 비교한다.
 
-    near_52w_high도 상태형이라 "고점 근처에 머문 모든 날"이 아니라 "그 구간에
-    처음 진입한 날"만 센다. 진입일의 성과는 우상향 꼬리를 띠어 중앙값은
+    near_52w_high_entry도 상태형이라 "고점 근처에 머문 모든 날"이 아니라 "그
+    구간에 처음 진입한 날"만 센다. 진입일의 성과는 우상향 꼬리를 띠어 중앙값은
     기준선보다 낮고 승률·평균은 기준선보다 높다 — 중앙값만 보고 역방향으로
-    오독하지 않도록 주의.
+    오독하지 않도록 주의. "고점 근처에 머문 모든 날"(sustained proximity)은
+    부호가 반대(중앙값 기준선 대비 플러스)인 별개 집단이며 아직 빌더가 만들지
+    않는다 — 이름이 비슷하다고 섞어 읽지 말 것.
 
     최중량 빌더 — 실패해도 파이프라인 비중단(내부 try/except → None).
     """
@@ -740,12 +742,16 @@ def build_signal_study():
             "spike_5d_15": (ret_5d >= 15) & liquid,
             "spike_20d_20": (ret_20d >= 20) & liquid,
             "spike_20d_50": (ret_20d >= 50) & liquid,
-            "near_52w_high": (P >= hi_252 * 0.98) & liquid,
+            "near_52w_high_entry": (P >= hi_252 * 0.98) & liquid,
         }
         # 하루짜리 사건 — crossing은 거의 무의미하고(연속 급등일은 드물다),
         # cooldown은 서로 다른 진짜 급등을 임의로 버린다. 조건 그대로 쓴다.
+        # spike_1d_5(≥5%)는 spike_1d_10(≥10%)의 상위집합이라 그대로 두면
+        # "5~10%" 구간을 읽으려는 소비자가 10%+ 날짜까지 섞인 통계를 인용하게
+        # 된다 — spike_1d_5_10으로 배타적 구간을 별도로 둔다.
         daily_conds = {
             "spike_1d_5": (CH >= 5) & liquid,
+            "spike_1d_5_10": (CH >= 5) & (CH < 10) & liquid,
             "spike_1d_10": (CH >= 10) & liquid,
             "drop_1d_5": (CH <= -5) & liquid,
         }

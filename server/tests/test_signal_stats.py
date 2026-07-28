@@ -16,7 +16,7 @@ def _study() -> pd.DataFrame:
             ("baseline", 20, 6000695, -1.80, 41.2),
             ("spike_1d_5", 20, 276018, -4.19, 38.1),
             ("baseline", 60, 5877263, -3.83, 39.6),
-            ("near_52w_high", 60, 12000, -2.89, 42.0),
+            ("near_52w_high_entry", 60, 27381, -4.79, 46.0),
             ("broken", 20, 100, np.nan, np.nan),
         ],
         columns=["signal_type", "horizon", "n_events", "median_excess", "hit_rate"],
@@ -31,9 +31,15 @@ def test_excess_vs_baseline_subtracts_the_baseline_row():
 
 
 def test_excess_vs_baseline_is_horizon_scoped():
-    """60일 신호는 60일 기준선과 비교해야 한다 — 지평선을 섞으면 안 된다."""
-    _, med, _ = excess_vs_baseline(_study(), "near_52w_high", 60)
-    assert med == pytest.approx(0.94)
+    """60일 신호는 60일 기준선과 비교해야 한다 — 지평선을 섞으면 안 된다.
+
+    -4.79는 60일 기준선(-3.83)과 비교하면 델타 -0.96이다. 만약 구현이
+    horizon-blind해서 20일 기준선(-1.80)을 잘못 집어오면 -2.99가 나와
+    이 assert가 실패한다 — 그래서 이 테스트가 지평선 스코핑을 실제로
+    검증한다.
+    """
+    _, med, _ = excess_vs_baseline(_study(), "near_52w_high_entry", 60)
+    assert med == pytest.approx(-0.96)
 
 
 def test_excess_vs_baseline_returns_none_when_baseline_missing():

@@ -144,7 +144,10 @@ def get_attention():
             if chg >= 10:
                 sig, sev, word = "spike_1d_10", "high", "급등"  # 60일 -9.2%p — 볼 만한 수준
             elif chg > 0:
-                sig, sev, word = "spike_1d_5", "medium", "급등"
+                # 5~10% 구간 — spike_1d_5(≥5%)는 10%+를 포함하는 상위집합이라
+                # 그 통계를 이 구간에 붙이면 더 나쁜 population의 숫자를 인용하게
+                # 된다. spike_1d_5_10이 5≤chg<10 배타 구간의 정확한 통계.
+                sig, sev, word = "spike_1d_5_10", "medium", "급등"
             else:
                 sig, sev, word = "drop_1d_5", "medium", "급락"
             evidence = signal_stats.evidence_phrase(sig, 20, df=study)
