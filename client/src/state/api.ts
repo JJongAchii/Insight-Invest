@@ -720,7 +720,8 @@ export type SignalStudyType =
   | "spike_5d_15"
   | "spike_20d_20"
   | "spike_20d_50"
-  | "near_52w_high_entry";
+  | "near_52w_high_entry"
+  | "near_52w_high_hold";
 
 export interface SignalStudyRow {
   signal_type: SignalStudyType;

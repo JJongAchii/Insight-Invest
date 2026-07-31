@@ -77,8 +77,9 @@ const SpotlightCard: React.FC<{ group: SpotlightGroup; item: SpotlightItem }> = 
 };
 
 /** "오늘의 신호 종목" — 전시장 신호 스캔 (attention의 내 종목 트리아지와 별개).
- *  그룹 순서는 서버가 기준선 대비 우위 내림차순으로 준다. 에러·빈 데이터면
- *  레인 자체를 렌더하지 않는다 (AttentionLane 관례). */
+ *  그룹 순서는 서버가 기준선 대비 우위 내림차순으로 준다. 에러·로딩·빈 데이터면
+ *  레인을 렌더하지 않는다 — 선택적 레인이라 스피너를 띄웠다 사라지는 것보다
+ *  조용한 등장이 낫다 (스펙 §7의 미렌더 규칙; AttentionLane은 반대로 스피너를 쓴다). */
 const SpotlightLane: React.FC = () => {
   const { data, isLoading, error } = useFetchSpotlightQuery();
   if (error || isLoading) return null;
