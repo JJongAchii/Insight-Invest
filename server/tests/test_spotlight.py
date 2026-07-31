@@ -114,3 +114,29 @@ def test_select_with_no_near_high_candidates():
     df, _ = select_spotlight(_flows_fixture(), empty)
     assert "near_52w_high_hold" not in set(df["signal_type"])
     assert {"hold_days", "dist_pct", "also_in"} <= set(df.columns)
+
+
+def test_select_excludes_spac_from_all_groups():
+    """스팩은 공모가(청산가치) 부근에 구조적으로 고정돼 있어 streak·hold_days가
+    비정상적으로 높게 나온다 — 세 그룹 중 어디에도 뽑히면 안 된다, 상위 랭킹을
+    차지할 조건이어도."""
+    spac = pd.DataFrame(
+        [["000008", "교보15호스팩", "KOSDAQ", 2000.0, 0.0, 1e10, 15, 0.1, 1.0, None]],
+        columns=_FLOW_COLS,
+    )
+    f = pd.concat([_flows_fixture(), spac], ignore_index=True)
+    near = pd.concat(
+        [_near_fixture(), pd.DataFrame({"dist_pct": [-0.1], "hold_days": [500]}, index=["000008"])]
+    )
+
+    df, _ = select_spotlight(f, near)
+
+    assert "000008" not in set(df["ticker"])
+    # streak=15는 기존 최고(연속C, 12)보다 높아 원래대로면 1위를 차지했을 값이다.
+    assert list(df[df["signal_type"] == "frgn_streak10"]["ticker"]) == [
+        "000003",
+        "000006",
+        "000004",
+    ]
+    # hold_days=500은 기존 최고(고점F, 30)보다 높아 원래대로면 1위를 차지했을 값이다.
+    assert list(df[df["signal_type"] == "near_52w_high_hold"]["ticker"]) == ["000006", "000007"]

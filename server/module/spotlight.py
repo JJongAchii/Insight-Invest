@@ -65,7 +65,10 @@ def near_high_state(P: pd.DataFrame) -> pd.DataFrame:
 
 def _membership(flows_frgn: pd.DataFrame, near_high: pd.DataFrame) -> dict:
     """그룹별 후보 전체 (상한 적용 전, 그룹 내 정렬 완료)."""
-    f = flows_frgn
+    # 스팩 제외 — 공모가(청산가치) 부근에 구조적으로 고정돼 '신고가 근접 유지'를
+    # 항상 만족하는 아티팩트다. KRX 스팩은 종목명에 반드시 '스팩'이 들어간다.
+    # signal_study 통계에는 스팩 일수가 포함돼 있으므로 실측치 인용은 보수적이다.
+    f = flows_frgn[~flows_frgn["name"].astype(str).str.contains("스팩", na=False)]
     near = f.join(near_high, on="ticker", how="inner").sort_values(
         ["hold_days", "mktcap"], ascending=False
     )
