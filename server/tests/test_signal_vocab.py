@@ -33,7 +33,7 @@ except Exception as e:  # 환경 문제(자격증명·의존성 부재 등)는 �
     _IMPORT_ERROR = e
 
 
-# 이 branch(feat/signal-baseline)가 만드는 최종 어휘 — 12종(baseline 포함).
+# 빌더가 만드는 최종 어휘 — 13종(baseline 포함).
 EXPECTED_SIGNAL_TYPES = frozenset(
     {
         "baseline",
@@ -44,6 +44,7 @@ EXPECTED_SIGNAL_TYPES = frozenset(
         "spike_20d_20",
         "spike_20d_50",
         "near_52w_high_entry",
+        "near_52w_high_hold",
         "spike_1d_5",
         "spike_1d_5_10",
         "spike_1d_10",
