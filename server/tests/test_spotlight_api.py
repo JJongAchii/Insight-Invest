@@ -52,9 +52,27 @@ def test_spotlight_groups_ordered_and_marked(monkeypatch, tmp_path):
     monkeypatch.setenv("APP_DATA", str(tmp_path))
     import app.routers.insight as insight
 
-    # parquet에는 streak 그룹을 먼저 넣는다 — 정렬이 study 기반임을 증명하기 위해
+    # parquet에는 study에 없는 bull_divergence를 먼저 넣는다 — 정렬이 study 기반임과
+    # study 없는 그룹이 마지막으로 가는 규칙을 증명하기 위해
     spot = pd.DataFrame(
         [
+            [
+                "bull_divergence",
+                1,
+                "000001",
+                "매집A",
+                "KOSPI",
+                1000.0,
+                -1.0,
+                2e10,
+                3,
+                1.5,
+                -6.0,
+                None,
+                None,
+                "[]",
+                "2026-07-31",
+            ],
             [
                 "frgn_streak10",
                 1,
@@ -118,23 +136,32 @@ def test_spotlight_groups_ordered_and_marked(monkeypatch, tmp_path):
         ),
     )
     monkeypatch.setattr(
-        insight.holdings_store, "list_items", lambda: pd.DataFrame(columns=["meta_id"])
+        insight.holdings_store, "list_items", lambda: pd.DataFrame({"meta_id": [1]})
     )
     monkeypatch.setattr(
         insight.watchlist_store, "list_items", lambda: pd.DataFrame({"meta_id": [1]})
     )
 
     res = asyncio.run(insight.get_spotlight())
-    # +0.54%p(near) > +0.51%p(streak) — parquet 순서가 아니라 study로 정렬됐다
-    assert [g["signal_type"] for g in res["groups"]] == ["near_52w_high_hold", "frgn_streak10"]
+    # +0.54%p(near) > +0.51%p(streak) > None(bull) — parquet 순서 무시하고
+    # study 기반 정렬, study 없는 그룹은 마지막
+    assert [g["signal_type"] for g in res["groups"]] == [
+        "near_52w_high_hold",
+        "frgn_streak10",
+        "bull_divergence",
+    ]
     near = res["groups"][0]
     assert near["evidence"] is not None and "기준선 대비" in near["evidence"]
     item = near["items"][0]
     assert item["meta_id"] == 1
     assert item["link"] == "/stock/1"
-    assert item["mine"] == "watchlist"
+    assert item["mine"] == "holding"
     assert item["also_in"] == ["frgn_streak10"]
     assert item["hold_days"] == 30
     # meta에 없는 종목은 링크 없이 내려간다 (500 금지)
     streak_item = res["groups"][1]["items"][0]
     assert streak_item["meta_id"] is None and streak_item["mine"] is None
+    # study에 없는 그룹은 근거 없음
+    bull = res["groups"][2]
+    assert bull["signal_type"] == "bull_divergence"
+    assert bull["evidence"] is None
