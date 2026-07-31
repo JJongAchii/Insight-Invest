@@ -29,7 +29,7 @@ import pandas as pd
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "server"))
 
 from datastore import meta, portfolio, storage, watchlist  # noqa: E402
-from module import signal_stats  # noqa: E402
+from module import signal_stats, spotlight  # noqa: E402
 from qdata import api as qdata_api  # noqa: E402
 
 DEFAULT_ENV_FILE = str(Path.home() / "Quant" / "quant-data" / ".env")
@@ -272,37 +272,35 @@ def _section_sector() -> str | None:
 
 
 def _section_signals() -> str | None:
-    df = storage.read_parquet("insight", "flows_signals.parquet")
-    frgn = df[df["investor"] == "frgn"]
-    lines = []
-    # 신호마다 "과거에 통했는가"를 한 줄로 붙인다 — 이름만 나열하면 우위가 없는
-    # 신호와 있는 신호가 같은 무게로 읽힌다.
+    """오늘의 신호 종목 — spotlight.parquet (전시장 스캔, 그룹 상한 5 중 top 3).
+
+    선정·정렬·조건식은 전부 빌더(module/spotlight.py) 몫이다 — 여기서는 읽고
+    포맷만 한다. 웹 홈 레인과 같은 파일을 읽으므로 둘이 어긋나지 않는다.
+    """
+    df = storage.read_parquet("insight", "spotlight.parquet")
+    if df.empty:
+        return None
     study = signal_stats.load_study()
 
-    def _append(text: str, signal_type: str) -> None:
-        lines.append(text)
-        ev = signal_stats.evidence_phrase(signal_type, 20, df=study)
+    def _metric(sig: str, r) -> str:
+        if sig == "near_52w_high_hold":
+            return f"{int(r['hold_days'])}일째"
+        if sig == "frgn_streak10":
+            return f"{int(r['streak'])}일"
+        return f"강도 {r['intensity_20d']:.1f}%"
+
+    lines = []
+    for sig in spotlight.GROUP_ORDER:
+        sub = df[df["signal_type"] == sig].sort_values("rank").head(3)
+        if sub.empty:
+            continue
+        items = " · ".join(f"{_esc(r['name'])}({_metric(sig, r)})" for _, r in sub.iterrows())
+        lines.append(f"{_esc(spotlight.GROUP_TITLES[sig])}: {items}")
+        # 신호마다 "과거에 통했는가"를 한 줄로 붙인다 — 이름만 나열하면 우위가
+        # 없는 신호와 있는 신호가 같은 무게로 읽힌다.
+        ev = signal_stats.evidence_phrase(sig, 20, df=study)
         if ev:
             lines.append(f"  └ {_esc(ev)}")
-
-    # bull_divergence는 builder에서 ret_20d < -5 & intensity_20d > 0.3로
-    # 측정된다(build_insights.py). flows_signals의 divergence=="bull"은 더
-    # 넓은 ret_20d < 0 집단이라, 그대로 쓰면 측정되지 않은 population에
-    # "bull_divergence" 실측치를 붙이게 된다 — ret_20d < -5를 여기서 다시 건다.
-    bull = frgn[(frgn["divergence"] == "bull") & (frgn["ret_20d"] < -5)].copy()
-    if not bull.empty:
-        bull = bull.reindex(bull["intensity_20d"].abs().sort_values(ascending=False).index)
-        names = " · ".join(_esc(n) for n in bull["name"].head(3))
-        _append(f"매집형(주가↓·외인 매집): {names}", "bull_divergence")
-
-    # frgn_streak10은 streak >= 10으로 측정된다(build_insights.py) — 임계값을
-    # 맞춘다.
-    streak = frgn[frgn["streak"] >= 10].sort_values("streak", ascending=False).head(3)
-    if not streak.empty:
-        items = " · ".join(
-            f"{_esc(r['name'])}({int(r['streak'])}일)" for _, r in streak.iterrows()
-        )
-        _append(f"외인 연속매수 10일+: {items}", "frgn_streak10")
 
     if not lines:
         return None
