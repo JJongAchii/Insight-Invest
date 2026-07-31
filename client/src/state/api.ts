@@ -240,6 +240,36 @@ export interface AttentionResponse {
   items: AttentionItem[];
 }
 
+// Types for the "오늘의 신호 종목" market spotlight lane
+export interface SpotlightItem {
+  ticker: string;
+  name: string;
+  market: string;
+  close: number | null;
+  chg_pct: number | null;
+  streak: number | null;
+  intensity_20d: number | null;
+  ret_20d: number | null;
+  hold_days: number | null;
+  dist_pct: number | null;
+  also_in: string[];
+  meta_id: number | null;
+  link: string | null;
+  mine: "holding" | "watchlist" | null;
+}
+
+export interface SpotlightGroup {
+  signal_type: string;
+  title: string;
+  evidence: string | null;
+  items: SpotlightItem[];
+}
+
+export interface SpotlightResponse {
+  as_of: string | null;
+  groups: SpotlightGroup[];
+}
+
 export interface CompareStock {
   meta_id: number;
   ticker: string;
@@ -917,6 +947,11 @@ export const api = createApi({
       providesTags: ["Attention"],
     }),
 
+    // Market spotlight ("오늘의 신호 종목") endpoint
+    fetchSpotlight: builder.query<SpotlightResponse, void>({
+      query: () => "/insight/spotlight",
+    }),
+
     // News endpoints
     fetchNews: builder.query<NewsResponse, NewsQueryParams>({
       query: (params) => ({
@@ -1088,6 +1123,8 @@ export const {
   useRemoveHoldingMutation,
   // Attention hook
   useFetchAttentionQuery,
+  // Market spotlight hook
+  useFetchSpotlightQuery,
   // News hooks
   useFetchNewsQuery,
   // KR insight hooks
