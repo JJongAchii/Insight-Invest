@@ -24,7 +24,7 @@ EC2  qdata-collector (t4g.large, ARM)              ││
    2. quant-data·Insight-Invest git pull              ▲ Function URL + X-API-Key
    3. qdata krx/etf/macro/yf/FRED 갱신                │
    4. clean 재빌드 → S3 발행 ──────────────────────────┘
-   5. build_insights.py (파생 인사이트 14종)
+   5. build_insights.py (파생 인사이트 15종)
    6. send_briefing.py (텔레그램 시황 보고)     Vercel  Next.js 클라이언트
  ExecStopPost: 로그 S3 업로드 + shutdown
 
@@ -117,7 +117,7 @@ server/
 ├── Dockerfile             # Lambda 베이스 이미지 (BuildKit secret으로 qdata 설치)
 ├── requirements.txt       # 런타임 / requirements-dev.txt 개발 전용(pytest)
 scripts/
-├── build_insights.py      # 파생 인사이트 14종 빌더 (배치 EC2에서 실행)
+├── build_insights.py      # 파생 인사이트 15종 빌더 (배치 EC2에서 실행)
 └── send_briefing.py       # 텔레그램 시황 보고 (배치 EC2에서 실행)
 infra/template.yaml        # Lambda + Function URL + IAM (서빙 스택 전부)
 .isort.cfg                 # known_first_party 고정 — isort 결과의 cwd 의존성 제거

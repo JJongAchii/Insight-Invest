@@ -33,7 +33,7 @@ except Exception as e:  # 환경 문제(자격증명·의존성 부재 등)는 �
     _IMPORT_ERROR = e
 
 
-# 이 branch(feat/signal-baseline)가 만드는 최종 어휘 — 12종(baseline 포함).
+# 빌더가 만드는 최종 어휘 — 13종(baseline 포함).
 EXPECTED_SIGNAL_TYPES = frozenset(
     {
         "baseline",
@@ -44,6 +44,7 @@ EXPECTED_SIGNAL_TYPES = frozenset(
         "spike_20d_20",
         "spike_20d_50",
         "near_52w_high_entry",
+        "near_52w_high_hold",
         "spike_1d_5",
         "spike_1d_5_10",
         "spike_1d_10",
@@ -97,8 +98,8 @@ def _emitted_vocabulary() -> set[str]:
 def test_builder_signal_vocabulary_matches_frozen_set():
     """빌더가 정의하는 signal_type 전체가 이 테스트의 frozen 목록과 정확히 같아야 한다.
 
-    빌더에서 신호를 추가/삭제/rename하면 이 assert가 깨진다 — 그때 네 소비자
-    (attention.py, send_briefing.py, api.ts, 이 파일)를 함께 검토하라는 신호다.
+    빌더에서 신호를 추가/삭제/rename하면 이 assert가 깨진다 — 그때 다섯 소비자
+    (attention.py, send_briefing.py, api.ts, module/spotlight.py, 이 파일)를 함께 검토하라는 신호다.
     """
     _skip_if_import_failed()
     assert _emitted_vocabulary() == EXPECTED_SIGNAL_TYPES
@@ -138,3 +139,13 @@ def test_attention_signal_literals_match_source_and_builder():
     _skip_if_import_failed()
     assert _attention_vocabulary() == ATTENTION_SIGNAL_TYPES
     assert ATTENTION_SIGNAL_TYPES <= _emitted_vocabulary()
+
+
+def test_spotlight_group_order_is_subset_of_builder_vocabulary():
+    """spotlight의 그룹 어휘가 빌더 어휘 밖으로 드리프트하면 evidence_phrase가
+    조용히 None이 되고 그룹이 근거 없이 뒤로 밀린다 — 에러가 아니라 무근거
+    노출이므로 여기서 구조적으로 잡는다."""
+    _skip_if_import_failed()
+    from module.spotlight import GROUP_ORDER
+
+    assert set(GROUP_ORDER) <= _emitted_vocabulary()

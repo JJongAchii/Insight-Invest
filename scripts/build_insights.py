@@ -14,12 +14,14 @@ krx_flows 전체 로드(수백 MB)는 로컬에서만 허용 — Lambda에서는
 - breadth_daily: 시장폭 (등락 종목수·52주 신고/신저·상하한·MA20 상회 비율).
 - flows_signals: 종목×투자자 최신 스냅샷 — 연속 순매수/도 일수, 20일 강도,
   수급-가격 다이버전스.
+- spotlight: 오늘의 신호 종목 — 전시장 스캔 그룹 3종(신고가 유지·외인 연속매수
+  10일+·매집형) × 상한 5. 웹 홈 레인·텔레그램 신호 섹션 공용.
 - sector_index: 시장×업종 일별 시총가중 지수 (2016~, 시작 100 체인).
 - sector_perf: 업종별 최신 성과 스냅샷 (1d/1w/1m/3m/YTD + 시총 비중).
 - kr_etf_meta: 현재 상장 KRX ETF 유니버스 → 앱 meta 확장용 (APP_DATA 루트에 저장).
 - valuation_daily: 시장별 밸류에이션 집계 (시총가중 조화 PER·PBR, 배당수익률)
   — krx_fundamental 미수집 시 스킵.
-- signal_study: 신호 12종 × 지평선 3개 전방 초과성과. 벤치마크는 유동성 유니버스
+- signal_study: 신호 13종 × 지평선 3개 전방 초과성과. 벤치마크는 유동성 유니버스
   동일가중 횡단면 평균이고, 조건 없는 baseline 행이 비교 기준으로 함께 들어간다.
 - track_strategies: 저장된 전략의 실전(저장 후) NAV 추적 (P7)
   → {APP_DATA}/portfolio/live_nav.parquet [port_id, trade_date, value, as_of].
@@ -43,6 +45,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 from datastore import fx, meta, portfolio, storage  # noqa: E402
 from module import regime  # noqa: E402
+from module import spotlight  # noqa: E402
 from module.backtest import Backtest  # noqa: E402
 from module.util import backtest_result  # noqa: E402
 from qdata import api as qdata_api  # noqa: E402
@@ -339,6 +342,7 @@ def build_flows_signals() -> pd.DataFrame:
         ]
     ].reset_index(drop=True)
     df["as_of"] = _as_of()
+    _cache["flows_signals"] = df  # build_spotlight가 재사용 (재계산 방지)
     return df
 
 
@@ -689,8 +693,9 @@ def _study_row(sig: str, h: int, excess: np.ndarray, fwd_ret: np.ndarray) -> dic
 def build_signal_study():
     """신호 이벤트 스터디 — 전 기간(2016~) 신호 발생 재구성 + 전방 초과성과.
 
-    유동성 종목(시총≥100억)에 한해 12개 신호를 정의하고, 각 이벤트 이후
-    h∈{5,20,60} 거래일 초과수익(adj_close 기반)을 집계한다.
+    유동성 종목(시총≥100억, 스팩 제외)에 한해 13개 신호를 정의하고, 각 이벤트
+    이후 h∈{5,20,60} 거래일 초과수익(adj_close 기반)을 집계한다. baseline을
+    포함한 모든 신호가 이 유니버스를 공유한다.
 
     벤치마크는 **유동성 유니버스 동일가중 횡단면 평균**이다. 시총가중 KOSPI를
     쓰면 (1) KOSDAQ 종목을 KOSPI 지수에 대고 재게 되고 (2) 지수를 소수 대형주가
@@ -704,9 +709,9 @@ def build_signal_study():
     near_52w_high_entry도 상태형이라 "고점 근처에 머문 모든 날"이 아니라 "그
     구간에 처음 진입한 날"만 센다. 진입일의 성과는 우상향 꼬리를 띠어 중앙값은
     기준선보다 낮고 승률·평균은 기준선보다 높다 — 중앙값만 보고 역방향으로
-    오독하지 않도록 주의. "고점 근처에 머문 모든 날"(sustained proximity)은
-    부호가 반대(중앙값 기준선 대비 플러스)인 별개 집단이며 아직 빌더가 만들지
-    않는다 — 이름이 비슷하다고 섞어 읽지 말 것.
+    오독하지 않도록 주의. "고점 근처에 머문 모든 날"은 near_52w_high_hold
+    (daily_conds, cooldown 없음)로 별도 집계한다 — 부호가 반대(중앙값 기준선
+    대비 플러스)인 별개 집단이니 이름이 비슷하다고 섞어 읽지 말 것.
 
     최중량 빌더 — 실패해도 파이프라인 비중단(내부 try/except → None).
     """
@@ -730,11 +735,29 @@ def build_signal_study():
         frgn_net_20d = F.rolling(20, min_periods=20).sum()
         intensity_20d = frgn_net_20d / M * 100
         streak = _signed_streak(F)
-        liquid = M >= MKTCAP_FLOOR
+
+        # 스팩 제외 — 시점별 이름 기준. 스팩은 합병 시 같은 티커로 사명만 바뀌므로
+        # '한 번이라도 스팩'이 아니라 '그 시점에 스팩'으로 걸러야 한다. 스팩은
+        # 공모가 부근 고정이라 신고가류 신호 모집단을 오염시킨다(2026-07-31 실측:
+        # 당일 근접 유지 후보의 절반 가까이가 스팩). 선정(module/spotlight)과
+        # 통계가 같은 유니버스를 재야 실측치가 거짓말을 하지 않는다.
+        sec = qdata_api.load_krx_sector()[["date", "ticker", "name"]]
+        sec["is_spac"] = sec["name"].astype(str).str.contains("스팩", na=False)
+        S = (
+            sec.pivot_table(index="date", columns="ticker", values="is_spac", aggfunc="last")
+            .reindex(index=P.index, columns=P.columns)
+            .ffill()
+            .fillna(False)
+            .astype(bool)
+        )
+        del sec
+        liquid = (M >= MKTCAP_FLOOR) & ~S
+        del S
         del frgn_net_20d, F
 
         # 상태형 — 한 번 참이 되면 며칠 유지된다. crossing으로 첫날만 잡고
         # cooldown으로 재발화를 걸러야 한 사건이 여러 번 세어지지 않는다.
+        cond_52w = (P >= hi_252 * 0.98) & liquid  # entry(진입일)·hold(유지 전 일수)가 공유
         state_conds = {
             "bull_divergence": (ret_20d < -5) & (intensity_20d > 0.3) & liquid,
             "frgn_streak10": (streak >= 10) & liquid,
@@ -742,7 +765,7 @@ def build_signal_study():
             "spike_5d_15": (ret_5d >= 15) & liquid,
             "spike_20d_20": (ret_20d >= 20) & liquid,
             "spike_20d_50": (ret_20d >= 50) & liquid,
-            "near_52w_high_entry": (P >= hi_252 * 0.98) & liquid,
+            "near_52w_high_entry": cond_52w,
         }
         # 하루짜리 사건 — crossing은 거의 무의미하고(연속 급등일은 드물다),
         # cooldown은 서로 다른 진짜 급등을 임의로 버린다. 조건 그대로 쓴다.
@@ -754,6 +777,9 @@ def build_signal_study():
             "spike_1d_5_10": (CH >= 5) & (CH < 10) & liquid,
             "spike_1d_10": (CH >= 10) & liquid,
             "drop_1d_5": (CH <= -5) & liquid,
+            # 유지형 신고가 — "고점 근처에 머문 모든 날"의 분포라 cooldown이 없다
+            # (baseline과 같은 이유). 2026-07-27 사전 측정(§1.1)과 정확히 일치해야 한다.
+            "near_52w_high_hold": cond_52w,
         }
         del ret_5d, ret_20d, hi_252, intensity_20d, streak, CH, M
 
@@ -769,7 +795,7 @@ def build_signal_study():
             events[sig] = _event_cooldown(np.argwhere(crossing.to_numpy()), SIGNAL_COOLDOWN)
         for sig, cond in daily_conds.items():
             events[sig] = np.argwhere(cond.to_numpy())
-        del state_conds, daily_conds
+        del state_conds, daily_conds, cond_52w
 
         rows = []
         for h in SIGNAL_HORIZONS:
@@ -983,6 +1009,44 @@ def build_factor_pct_ticker():
         return None
 
 
+def build_spotlight():
+    """오늘의 신호 종목 — 전시장 스캔 그룹 3종 (선정 로직: module/spotlight.py).
+
+    수급·가격 필드는 flows_signals 스냅샷(유동성 유니버스)을 쓰고, 52주 신고가
+    근접 상태만 최근 800일(달력) adj_close 패널로 별도 계산한다 — hold_days는
+    창 길이에서 포화되므로 표시는 "N일+"로 읽는다. 실측치(기준선 대비)는 넣지
+    않는다 — 그 뺄셈은 서빙 시점에 signal_stats가 signal_study와 조인해서 한다.
+    """
+    try:
+        flows_sig = _cache.get("flows_signals")
+        if flows_sig is None:
+            flows_sig = build_flows_signals()
+        frgn = flows_sig[flows_sig["investor"] == "frgn"]
+
+        start = (pd.Timestamp.today() - pd.Timedelta(days=800)).strftime("%Y-%m-%d")
+        px = qdata_api.load_krx_prices(start=start, columns=["adj_close"])
+        P = px.pivot(index="date", columns="ticker", values="adj_close").sort_index()
+        del px
+
+        near = spotlight.near_high_state(P)
+        del P
+        n_spac = int(frgn["name"].astype(str).str.contains("스팩", na=False).sum())
+        print(f"[spotlight] 스팩 {n_spac}종목 유니버스 제외")
+        df, dropped = spotlight.select_spotlight(frgn, near)
+        for g, n in dropped.items():  # 조용한 절삭 금지
+            print(f"[spotlight] {g}: 상한 {spotlight.CAP_PER_GROUP} 적용, {n}종목 잘림")
+        if df.empty:
+            print("[spotlight] 후보 0 — 저장 생략 (전일 파일 유지)", file=sys.stderr)
+            return None
+        df["as_of"] = _as_of()
+        print(f"[spotlight] {len(df)} rows, as_of={df['as_of'].iloc[0]}")
+        return df
+    except Exception:
+        print("[warn] spotlight 실패 (비중단):", file=sys.stderr)
+        traceback.print_exc()
+        return None
+
+
 # ---------------------------------------------------------------- 실행
 
 
@@ -1001,6 +1065,7 @@ BUILDERS = [
     ("insight/factor_returns.parquet", build_factor_returns, {}),  # Track B: 팩터 렌즈
     ("insight/factor_current.parquet", build_factor_current, {}),  # (factor_returns 캐시 파생)
     ("insight/factor_pct_ticker.parquet", build_factor_pct_ticker, {}),  # 브리프 재료 + Lambda 부담 경감
+    ("insight/spotlight.parquet", build_spotlight, {}),  # 오늘의 신호 종목 (전시장 스캔)
     ("portfolio/live_nav.parquet", build_track_strategies, {}),  # 전략 실전 추적 (P7)
 ]
 

@@ -10,6 +10,7 @@ import StrategiesCard from "./StrategiesCard";
 import FlowsTopCard from "./FlowsTopCard";
 import NewsCompactList from "./NewsCompactList";
 import AttentionLane from "./AttentionLane";
+import SpotlightLane from "./SpotlightLane";
 import PortfolioCard from "./PortfolioCard";
 
 const Home = () => {
@@ -51,6 +52,9 @@ const Home = () => {
 
       {/* Row 0: 오늘 주목 attention lane (top) */}
       <AttentionLane />
+
+      {/* Row 0.5: 오늘의 신호 종목 — 전시장 스캔 (내 종목 밖 발굴) */}
+      <SpotlightLane />
 
       {/* Row 1: Ticker Tape */}
       <div className="rounded-xl border border-edge overflow-hidden">
