@@ -42,6 +42,19 @@ _OUT_COLS = [
 ]
 
 
+def active_tickers(V: pd.DataFrame) -> pd.Index:
+    """마지막 거래일에 실제 거래가 있었던 종목 (거래정지·무거래·미상장 제외).
+
+    V: 일자×종목 거래량 패널. 정지 종목은 가격이 동결돼 '신고가 근접 유지'를
+    공짜로 만족하고, 시장 급락기에는 살아있는 종목이 다 빠지는 동안 정지 종목만
+    남아 그룹을 지배한다 (2026-07-31 실측: 8거래일 거래량 0 종목이 1위).
+    거래할 수 없는 종목의 신호는 실행 불가능하므로 유니버스에서 뺀다 —
+    build_signal_study의 당일 거래량 조건과 같은 기준이다.
+    """
+    last = V.iloc[-1]
+    return last[last > 0].index
+
+
 def near_high_state(P: pd.DataFrame) -> pd.DataFrame:
     """마지막 거래일의 52주 신고가 근접 상태 [dist_pct, hold_days] (index=ticker).
 

@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from module.spotlight import CAP_PER_GROUP, near_high_state, select_spotlight
+from module.spotlight import CAP_PER_GROUP, active_tickers, near_high_state, select_spotlight
 
 
 def _panel(values: dict) -> pd.DataFrame:
@@ -140,3 +140,22 @@ def test_select_excludes_spac_from_all_groups():
     ]
     # hold_days=500은 기존 최고(고점F, 30)보다 높아 원래대로면 1위를 차지했을 값이다.
     assert list(df[df["signal_type"] == "near_52w_high_hold"]["ticker"]) == ["000006", "000007"]
+
+
+def test_active_tickers_excludes_halted_and_unlisted():
+    """거래정지(당일 거래량 0)·미상장(NaN)은 활성 유니버스에서 빠진다.
+
+    정지 종목은 가격이 동결돼 '신고가 근접 유지'를 공짜로 만족한다 — 2026-07-31
+    실측에서 8거래일 거래량 0인 종목이 그룹 1위였다. 거래할 수 없는 종목의
+    신호는 실행 불가능하므로 표시하지 않는다.
+    """
+    V = _panel(
+        {
+            "A": [1000.0] * 5,  # 정상 거래 → 포함
+            "B": [1000.0] * 4 + [0.0],  # 당일 거래량 0 (정지) → 제외
+            "C": [0.0] * 4 + [500.0],  # 정지 후 당일 재개 → 포함
+            "D": [np.nan] * 5,  # 미상장/데이터 없음 → 제외
+        }
+    )
+    act = set(active_tickers(V))
+    assert act == {"A", "C"}

@@ -693,9 +693,9 @@ def _study_row(sig: str, h: int, excess: np.ndarray, fwd_ret: np.ndarray) -> dic
 def build_signal_study():
     """신호 이벤트 스터디 — 전 기간(2016~) 신호 발생 재구성 + 전방 초과성과.
 
-    유동성 종목(시총≥100억, 스팩 제외)에 한해 13개 신호를 정의하고, 각 이벤트
-    이후 h∈{5,20,60} 거래일 초과수익(adj_close 기반)을 집계한다. baseline을
-    포함한 모든 신호가 이 유니버스를 공유한다.
+    유동성 종목(시총≥100억, 스팩 제외, 당일 거래 존재)에 한해 13개 신호를
+    정의하고, 각 이벤트 이후 h∈{5,20,60} 거래일 초과수익(adj_close 기반)을
+    집계한다. baseline을 포함한 모든 신호가 이 유니버스를 공유한다.
 
     벤치마크는 **유동성 유니버스 동일가중 횡단면 평균**이다. 시총가중 KOSPI를
     쓰면 (1) KOSDAQ 종목을 KOSPI 지수에 대고 재게 되고 (2) 지수를 소수 대형주가
@@ -716,11 +716,14 @@ def build_signal_study():
     최중량 빌더 — 실패해도 파이프라인 비중단(내부 try/except → None).
     """
     try:
-        px = qdata_api.load_krx_prices(columns=["adj_close", "close", "chg_pct", "mktcap"])
-        px = px[["date", "ticker", "adj_close", "chg_pct", "mktcap"]]  # close 미사용
+        px = qdata_api.load_krx_prices(
+            columns=["adj_close", "close", "chg_pct", "mktcap", "volume"]
+        )
+        px = px[["date", "ticker", "adj_close", "chg_pct", "mktcap", "volume"]]  # close 미사용
         P = px.pivot(index="date", columns="ticker", values="adj_close").sort_index()
         M = px.pivot(index="date", columns="ticker", values="mktcap").reindex_like(P)
         CH = px.pivot(index="date", columns="ticker", values="chg_pct").reindex_like(P)
+        V = px.pivot(index="date", columns="ticker", values="volume").reindex_like(P)
         del px
 
         frgn = _flows()
@@ -742,17 +745,22 @@ def build_signal_study():
         # 당일 근접 유지 후보의 절반 가까이가 스팩). 선정(module/spotlight)과
         # 통계가 같은 유니버스를 재야 실측치가 거짓말을 하지 않는다.
         sec = qdata_api.load_krx_sector()[["date", "ticker", "name"]]
-        sec["is_spac"] = sec["name"].astype(str).str.contains("스팩", na=False)
+        # float로 피벗해야 NaN 섞인 bool이 object dtype이 되며 내는 FutureWarning이 없다
+        sec["is_spac"] = sec["name"].astype(str).str.contains("스팩", na=False).astype("float64")
         S = (
             sec.pivot_table(index="date", columns="ticker", values="is_spac", aggfunc="last")
             .reindex(index=P.index, columns=P.columns)
             .ffill()
-            .fillna(False)
+            .fillna(0.0)
             .astype(bool)
         )
         del sec
-        liquid = (M >= MKTCAP_FLOOR) & ~S
-        del S
+        # 거래정지·무거래일 제외 — 그날 거래할 수 없었던 종목의 신호는 실행
+        # 불가능하고, 정지 종목의 동결 가격은 신고가류 신호와 전방수익률을 함께
+        # 오염시킨다 (2026-07-31 실측: 8거래일 거래량 0 종목이 유지 그룹 1위).
+        # module/spotlight.active_tickers의 당일 거래량 기준과 동일하다.
+        liquid = (M >= MKTCAP_FLOOR) & ~S & (V > 0)
+        del S, V
         del frgn_net_20d, F
 
         # 상태형 — 한 번 참이 되면 며칠 유지된다. crossing으로 첫날만 잡고
@@ -1024,12 +1032,20 @@ def build_spotlight():
         frgn = flows_sig[flows_sig["investor"] == "frgn"]
 
         start = (pd.Timestamp.today() - pd.Timedelta(days=800)).strftime("%Y-%m-%d")
-        px = qdata_api.load_krx_prices(start=start, columns=["adj_close"])
+        px = qdata_api.load_krx_prices(start=start, columns=["adj_close", "volume"])
         P = px.pivot(index="date", columns="ticker", values="adj_close").sort_index()
+        V = px.pivot(index="date", columns="ticker", values="volume").reindex_like(P)
         del px
 
         near = spotlight.near_high_state(P)
         del P
+        # 거래정지·무거래 제외 — build_signal_study의 당일 거래량 조건과 동일 기준
+        active = spotlight.active_tickers(V)
+        del V
+        n_halted = int((~frgn["ticker"].isin(active)).sum())
+        if n_halted:
+            print(f"[spotlight] 거래정지·무거래 {n_halted}종목 제외 (당일 거래량 0)")
+        frgn = frgn[frgn["ticker"].isin(active)]
         n_spac = int(frgn["name"].astype(str).str.contains("스팩", na=False).sum())
         print(f"[spotlight] 스팩 {n_spac}종목 유니버스 제외")
         df, dropped = spotlight.select_spotlight(frgn, near)
