@@ -5,6 +5,7 @@
 금액 단위는 원 그대로 반환 — 억 단위 환산은 클라이언트 책임.
 """
 
+import json
 import math
 import os
 import sys
@@ -16,8 +17,12 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../../../")))
+from datastore import holdings as holdings_store
 from datastore import meta as meta_store
 from datastore import storage
+from datastore import watchlist as watchlist_store
+from module import signal_stats
+from module import spotlight as spotlight_mod
 
 router = APIRouter(prefix="/insight", tags=["Insight"])
 
@@ -248,6 +253,79 @@ async def get_signals_study():
         "avg_fwd_ret",
     ]
     return _round2({"as_of": _as_of(df), "rows": df[cols].to_dict(orient="records")})
+
+
+@router.get("/spotlight")
+async def get_spotlight():
+    """오늘의 신호 종목 — 전시장 스캔 (spotlight.parquet의 얇은 리더).
+
+    그룹 순서는 서빙 시점 signal_study의 20일 기준선 대비 중앙값 내림차순 —
+    우위가 있는 신호가 먼저 보인다. parquet 부재 시 빈 그룹 (500 금지,
+    attention과 같은 계약). 보유·관심 마킹 실패는 마킹 없이 진행한다.
+    """
+    df = _read("spotlight.parquet")
+    if df is None or df.empty:
+        return {"as_of": None, "groups": []}
+
+    study = signal_stats.load_study()
+
+    holding_ids, watch_ids = set(), set()
+    try:
+        hd = holdings_store.list_items()
+        holding_ids = {int(x) for x in hd["meta_id"]} if not hd.empty else set()
+        wl = watchlist_store.list_items()
+        watch_ids = {int(x) for x in wl["meta_id"]} if not wl.empty else set()
+    except Exception:
+        pass
+
+    md = meta_store.meta_df()
+    kr = md[md["iso_code"] == "KR"]
+    tk2meta = {r.ticker: int(r.meta_id) for r in kr.itertuples()}
+
+    def _delta20(sig: str):
+        if study is None:
+            return None
+        stats = signal_stats.excess_vs_baseline(study, sig, 20)
+        return stats[1] if stats else None
+
+    groups = []
+    for sig in df["signal_type"].unique():
+        sub = df[df["signal_type"] == sig].sort_values("rank")
+        items = []
+        for r in sub.itertuples():
+            mid = tk2meta.get(r.ticker)
+            mine = "holding" if mid in holding_ids else "watchlist" if mid in watch_ids else None
+            items.append(
+                {
+                    "ticker": r.ticker,
+                    "name": r.name,
+                    "market": r.market,
+                    "close": r.close,
+                    "chg_pct": r.chg_pct,
+                    "streak": int(r.streak) if pd.notna(r.streak) else None,
+                    "intensity_20d": r.intensity_20d,
+                    "ret_20d": r.ret_20d,
+                    "hold_days": int(r.hold_days) if pd.notna(r.hold_days) else None,
+                    "dist_pct": r.dist_pct,
+                    "also_in": json.loads(r.also_in) if isinstance(r.also_in, str) else [],
+                    "meta_id": mid,
+                    "link": f"/stock/{mid}" if mid is not None else None,
+                    "mine": mine,
+                }
+            )
+        groups.append(
+            {
+                "signal_type": sig,
+                "title": spotlight_mod.GROUP_TITLES.get(sig, sig),
+                "evidence": signal_stats.evidence_phrase(sig, 20, df=study),
+                "_delta": _delta20(sig),
+                "items": items,
+            }
+        )
+    groups.sort(key=lambda g: (g["_delta"] is None, -(g["_delta"] or 0)))
+    for g in groups:
+        g.pop("_delta")
+    return _round2({"as_of": _as_of(df), "groups": groups})
 
 
 @router.get("/factors")
