@@ -14,6 +14,8 @@ krx_flows 전체 로드(수백 MB)는 로컬에서만 허용 — Lambda에서는
 - breadth_daily: 시장폭 (등락 종목수·52주 신고/신저·상하한·MA20 상회 비율).
 - flows_signals: 종목×투자자 최신 스냅샷 — 연속 순매수/도 일수, 20일 강도,
   수급-가격 다이버전스.
+- spotlight: 오늘의 신호 종목 — 전시장 스캔 그룹 3종(신고가 유지·외인 연속매수
+  10일+·매집형) × 상한 5. 웹 홈 레인·텔레그램 신호 섹션 공용.
 - sector_index: 시장×업종 일별 시총가중 지수 (2016~, 시작 100 체인).
 - sector_perf: 업종별 최신 성과 스냅샷 (1d/1w/1m/3m/YTD + 시총 비중).
 - kr_etf_meta: 현재 상장 KRX ETF 유니버스 → 앱 meta 확장용 (APP_DATA 루트에 저장).
@@ -43,6 +45,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 from datastore import fx, meta, portfolio, storage  # noqa: E402
 from module import regime  # noqa: E402
+from module import spotlight  # noqa: E402
 from module.backtest import Backtest  # noqa: E402
 from module.util import backtest_result  # noqa: E402
 from qdata import api as qdata_api  # noqa: E402
@@ -339,6 +342,7 @@ def build_flows_signals() -> pd.DataFrame:
         ]
     ].reset_index(drop=True)
     df["as_of"] = _as_of()
+    _cache["flows_signals"] = df  # build_spotlight가 재사용 (재계산 방지)
     return df
 
 
@@ -987,6 +991,42 @@ def build_factor_pct_ticker():
         return None
 
 
+def build_spotlight():
+    """오늘의 신호 종목 — 전시장 스캔 그룹 3종 (선정 로직: module/spotlight.py).
+
+    수급·가격 필드는 flows_signals 스냅샷(유동성 유니버스)을 쓰고, 52주 신고가
+    근접 상태만 최근 800일(달력) adj_close 패널로 별도 계산한다 — hold_days는
+    창 길이에서 포화되므로 표시는 "N일+"로 읽는다. 실측치(기준선 대비)는 넣지
+    않는다 — 그 뺄셈은 서빙 시점에 signal_stats가 signal_study와 조인해서 한다.
+    """
+    try:
+        flows_sig = _cache.get("flows_signals")
+        if flows_sig is None:
+            flows_sig = build_flows_signals()
+        frgn = flows_sig[flows_sig["investor"] == "frgn"]
+
+        start = (pd.Timestamp.today() - pd.Timedelta(days=800)).strftime("%Y-%m-%d")
+        px = qdata_api.load_krx_prices(start=start, columns=["adj_close"])
+        P = px.pivot(index="date", columns="ticker", values="adj_close").sort_index()
+        del px
+
+        near = spotlight.near_high_state(P)
+        del P
+        df, dropped = spotlight.select_spotlight(frgn, near)
+        for g, n in dropped.items():  # 조용한 절삭 금지
+            print(f"[spotlight] {g}: 상한 {spotlight.CAP_PER_GROUP} 적용, {n}종목 잘림")
+        if df.empty:
+            print("[spotlight] 후보 0 — 저장 생략 (전일 파일 유지)", file=sys.stderr)
+            return None
+        df["as_of"] = _as_of()
+        print(f"[spotlight] {len(df)} rows, as_of={df['as_of'].iloc[0]}")
+        return df
+    except Exception:
+        print("[warn] spotlight 실패 (비중단):", file=sys.stderr)
+        traceback.print_exc()
+        return None
+
+
 # ---------------------------------------------------------------- 실행
 
 
@@ -1005,6 +1045,7 @@ BUILDERS = [
     ("insight/factor_returns.parquet", build_factor_returns, {}),  # Track B: 팩터 렌즈
     ("insight/factor_current.parquet", build_factor_current, {}),  # (factor_returns 캐시 파생)
     ("insight/factor_pct_ticker.parquet", build_factor_pct_ticker, {}),  # 브리프 재료 + Lambda 부담 경감
+    ("insight/spotlight.parquet", build_spotlight, {}),  # 오늘의 신호 종목 (전시장 스캔)
     ("portfolio/live_nav.parquet", build_track_strategies, {}),  # 전략 실전 추적 (P7)
 ]
 
