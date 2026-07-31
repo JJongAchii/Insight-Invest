@@ -67,7 +67,9 @@ def _membership(flows_frgn: pd.DataFrame, near_high: pd.DataFrame) -> dict:
     """그룹별 후보 전체 (상한 적용 전, 그룹 내 정렬 완료)."""
     # 스팩 제외 — 공모가(청산가치) 부근에 구조적으로 고정돼 '신고가 근접 유지'를
     # 항상 만족하는 아티팩트다. KRX 스팩은 종목명에 반드시 '스팩'이 들어간다.
-    # signal_study 통계에는 스팩 일수가 포함돼 있으므로 실측치 인용은 보수적이다.
+    # 스팩 제외는 build_signal_study의 유니버스와 동일 기준이라 선정과 통계의
+    # 모집단이 일치한다 (시점별 이름 기준은 스터디 쪽, 여기는 최신 스냅샷 이름
+    # 기준 — 현재 시점 선정이므로 동치).
     f = flows_frgn[~flows_frgn["name"].astype(str).str.contains("스팩", na=False)]
     near = f.join(near_high, on="ticker", how="inner").sort_values(
         ["hold_days", "mktcap"], ascending=False

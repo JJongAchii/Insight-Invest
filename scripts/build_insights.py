@@ -693,8 +693,9 @@ def _study_row(sig: str, h: int, excess: np.ndarray, fwd_ret: np.ndarray) -> dic
 def build_signal_study():
     """신호 이벤트 스터디 — 전 기간(2016~) 신호 발생 재구성 + 전방 초과성과.
 
-    유동성 종목(시총≥100억)에 한해 13개 신호를 정의하고, 각 이벤트 이후
-    h∈{5,20,60} 거래일 초과수익(adj_close 기반)을 집계한다.
+    유동성 종목(시총≥100억, 스팩 제외)에 한해 13개 신호를 정의하고, 각 이벤트
+    이후 h∈{5,20,60} 거래일 초과수익(adj_close 기반)을 집계한다. baseline을
+    포함한 모든 신호가 이 유니버스를 공유한다.
 
     벤치마크는 **유동성 유니버스 동일가중 횡단면 평균**이다. 시총가중 KOSPI를
     쓰면 (1) KOSDAQ 종목을 KOSPI 지수에 대고 재게 되고 (2) 지수를 소수 대형주가
@@ -734,7 +735,24 @@ def build_signal_study():
         frgn_net_20d = F.rolling(20, min_periods=20).sum()
         intensity_20d = frgn_net_20d / M * 100
         streak = _signed_streak(F)
-        liquid = M >= MKTCAP_FLOOR
+
+        # 스팩 제외 — 시점별 이름 기준. 스팩은 합병 시 같은 티커로 사명만 바뀌므로
+        # '한 번이라도 스팩'이 아니라 '그 시점에 스팩'으로 걸러야 한다. 스팩은
+        # 공모가 부근 고정이라 신고가류 신호 모집단을 오염시킨다(2026-07-31 실측:
+        # 당일 근접 유지 후보의 절반 가까이가 스팩). 선정(module/spotlight)과
+        # 통계가 같은 유니버스를 재야 실측치가 거짓말을 하지 않는다.
+        sec = qdata_api.load_krx_sector()[["date", "ticker", "name"]]
+        sec["is_spac"] = sec["name"].astype(str).str.contains("스팩", na=False)
+        S = (
+            sec.pivot_table(index="date", columns="ticker", values="is_spac", aggfunc="last")
+            .reindex(index=P.index, columns=P.columns)
+            .ffill()
+            .fillna(False)
+            .astype(bool)
+        )
+        del sec
+        liquid = (M >= MKTCAP_FLOOR) & ~S
+        del S
         del frgn_net_20d, F
 
         # 상태형 — 한 번 참이 되면 며칠 유지된다. crossing으로 첫날만 잡고
@@ -1012,6 +1030,8 @@ def build_spotlight():
 
         near = spotlight.near_high_state(P)
         del P
+        n_spac = int(frgn["name"].astype(str).str.contains("스팩", na=False).sum())
+        print(f"[spotlight] 스팩 {n_spac}종목 유니버스 제외")
         df, dropped = spotlight.select_spotlight(frgn, near)
         for g, n in dropped.items():  # 조용한 절삭 금지
             print(f"[spotlight] {g}: 상한 {spotlight.CAP_PER_GROUP} 적용, {n}종목 잘림")
