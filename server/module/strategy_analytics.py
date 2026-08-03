@@ -8,6 +8,8 @@
 import numpy as np
 import pandas as pd
 
+from module.portfolio_risk import MIN_CRISIS_DAYS
+
 TRADING_DAYS = 252
 
 
@@ -129,8 +131,8 @@ def crisis_returns(nav: pd.Series, windows: dict) -> list:
             out.append({"key": key, "ret_pct": None, "note": "이력이 구간을 덮지 못함"})
             continue
         sub = nav.loc[w0:w1]
-        if len(sub) < 2:
-            out.append({"key": key, "ret_pct": None, "note": "구간 내 데이터 부족"})
+        if len(sub) < MIN_CRISIS_DAYS:
+            out.append({"key": key, "ret_pct": None, "note": "구간 내 거래일 부족"})
             continue
         out.append(
             {"key": key, "ret_pct": float((sub.iloc[-1] / sub.iloc[0] - 1) * 100), "note": None}

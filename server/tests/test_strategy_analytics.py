@@ -122,6 +122,9 @@ def test_crisis_returns_coverage_rule():
     nav2 = _nav(list(np.linspace(100, 120, 300)), start="2020-01-02")
     out2 = crisis_returns(nav2, {"covid_2020": ("2020-02-14", "2020-03-23")})
     assert out2[0]["ret_pct"] is not None
+    # 구간을 덮지만 거래일이 15일 미만이면 계산하지 않는다 (portfolio_risk와 동일 규칙)
+    out3 = crisis_returns(nav2, {"tiny": ("2020-02-14", "2020-02-18")})
+    assert out3[0]["ret_pct"] is None and out3[0]["note"]
 
 
 def test_phase_monthly_means_grouping():
