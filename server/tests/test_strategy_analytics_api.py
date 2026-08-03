@@ -364,6 +364,58 @@ def test_analytics_phases_null_when_regime_fails(tmp_path, monkeypatch):
     assert r["monthly"] is not None
 
 
+# ---------- 공용 로드 격리 (bm_nav/rebal I/O 실패 — 부재와 달리 예외) ----------
+
+
+def test_analytics_bm_load_failure_isolates_rolling_and_phases(full_fixture, monkeypatch):
+    """benchmark_nav가 (부재가 아니라) 예외를 던져도 500이 아니라 dict 응답 —
+    bm 의존 필드(rolling.bm_rows, phases[].bm_mean_ret_pct)만 null로 떨어진다."""
+    bt, *_ = full_fixture
+
+    def boom(port_id=None):
+        raise RuntimeError("S3 timeout")
+
+    monkeypatch.setattr(bt.portfolio, "benchmark_nav", boom)
+    r = asyncio.run(bt.get_strategy_analytics(1))
+
+    assert "empty" not in r
+    assert r["rolling"] is not None
+    assert len(r["rolling"]["rows"]) > 0  # 전략 자체 rolling은 살아있다
+    assert r["rolling"]["bm_rows"] is None
+    assert r["phases"] is not None
+    assert len(r["phases"]["rows"]) > 0
+    assert all(row["bm_mean_ret_pct"] is None for row in r["phases"]["rows"])
+    # bm과 무관한 섹션은 전부 살아있다
+    assert r["premise"] is not None
+    assert r["drawdowns"] is not None
+    assert r["monthly"] is not None
+    assert r["trading"] is not None
+
+
+def test_analytics_rebal_load_failure_nulls_n_rebals_and_trading(full_fixture, monkeypatch):
+    """rebalance()가 예외를 던지면 premise.n_rebals(0과 구분되는 None)와 trading만
+    null로 떨어지고, premise의 다른 필드·rebal과 무관한 섹션은 살아있다."""
+    bt, *_ = full_fixture
+
+    def boom(port_id=None):
+        raise RuntimeError("corrupted parquet")
+
+    monkeypatch.setattr(bt.portfolio, "rebalance", boom)
+    r = asyncio.run(bt.get_strategy_analytics(1))
+
+    assert "empty" not in r
+    assert r["premise"] is not None
+    assert r["premise"]["n_rebals"] is None  # 0(확인된 무리밸)과 구분
+    assert r["premise"]["algorithm"] == "momentum"  # 나머지 premise 필드는 살아있다
+    assert r["premise"]["bt_start"] is not None
+    assert r["trading"] is None
+    # rebal과 무관한 섹션은 전부 살아있다
+    assert r["rolling"] is not None
+    assert r["drawdowns"] is not None
+    assert r["phases"] is not None
+    assert r["monthly"] is not None
+
+
 # ---------- live 확장 ----------
 
 

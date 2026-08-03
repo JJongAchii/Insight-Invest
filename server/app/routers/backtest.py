@@ -357,7 +357,7 @@ async def get_strategy_live(port_id: int):
                 {
                     "trade_date": last_date.strftime("%Y-%m-%d"),
                     "ticker": r.ticker,
-                    "weight": round(float(r.weight), 6),
+                    "weight": _round(r.weight, 6),
                 }
                 for r in last.itertuples()
             ]
@@ -403,6 +403,8 @@ async def get_strategy_analytics(port_id: int):
 
     라우터는 로드·조인·반올림만 한다 — 판단(백분위·에피소드 경계·국면 그룹핑)은
     module.strategy_analytics/portfolio_risk가 하고, "좋다/나쁘다"는 붙이지 않는다.
+    crisis는 예외가 나도 빈 배열([])로 떨어진다 — 다른 섹션과 달리 null이 아니다
+    (Phase 2는 항상 배열로 소비할 수 있다).
     """
     reg = portfolio.records()
     row = reg[reg["port_id"] == port_id]
@@ -416,17 +418,30 @@ async def get_strategy_analytics(port_id: int):
         nav_df["value"].astype(float).to_numpy(), index=pd.to_datetime(nav_df["trade_date"])
     ).sort_index()
 
-    bm_df = portfolio.benchmark_nav(port_id=port_id)
+    # bm_nav·rebal은 여러 섹션이 공유하는 로드라 try 밖에 있으면 I/O 실패(부재가
+    # 아니라 S3 타임아웃·손상 parquet 등)가 응답 전체를 500으로 끌고 간다 — 각각
+    # 독립 try/except로 격리해 의존 섹션만 null로 떨어지게 한다.
     bm_nav: Optional[pd.Series] = None
-    if not bm_df.empty:
-        bm_nav = pd.Series(
-            bm_df["value"].astype(float).to_numpy(), index=pd.to_datetime(bm_df["trade_date"])
-        ).sort_index()
+    try:
+        bm_df = portfolio.benchmark_nav(port_id=port_id)
+        if not bm_df.empty:
+            bm_nav = pd.Series(
+                bm_df["value"].astype(float).to_numpy(), index=pd.to_datetime(bm_df["trade_date"])
+            ).sort_index()
+    except Exception as e:
+        logger.warning(f"analytics benchmark_nav 조회 실패: port_id={port_id}, error={e}")
 
-    rebal = portfolio.rebalance(port_id=port_id)
-    if not rebal.empty:
-        rebal = rebal.copy()
-        rebal["rebal_date"] = pd.to_datetime(rebal["rebal_date"])
+    rebal = pd.DataFrame()
+    rebal_failed = False
+    try:
+        rebal = portfolio.rebalance(port_id=port_id)
+        if not rebal.empty:
+            rebal = rebal.copy()
+            rebal["rebal_date"] = pd.to_datetime(rebal["rebal_date"])
+    except Exception as e:
+        logger.warning(f"analytics rebalance 조회 실패: port_id={port_id}, error={e}")
+        rebal = pd.DataFrame()
+        rebal_failed = True  # 빈 것과 실패를 구분 — n_rebals=0(확인된 무리밸)과 다르다
 
     try:
         cfg_raw = row["config"].iloc[0]
@@ -437,7 +452,10 @@ async def get_strategy_analytics(port_id: int):
     premise = None
     try:
         cost_bps = cfg.get("cost_bps")
-        n_rebals = int(rebal["rebal_date"].nunique()) if not rebal.empty else 0
+        if rebal_failed:
+            n_rebals = None  # 0(확인된 무리밸)과 구분 — 로드 실패라 알 수 없음
+        else:
+            n_rebals = int(rebal["rebal_date"].nunique()) if not rebal.empty else 0
         premise = {
             "algorithm": cfg.get("algorithm"),
             "rebal_freq": cfg.get("rebal_freq"),
@@ -560,21 +578,24 @@ async def get_strategy_analytics(port_id: int):
         logger.warning(f"analytics monthly 계산 실패: port_id={port_id}, error={e}")
 
     trading = None
-    try:
-        ts = strategy_analytics.turnover_stats(rebal)
-        cost_drag_10 = cost_drag_30 = None
-        if ts["rebals_per_year"] is not None and ts["avg_turnover"] is not None:
-            cost_drag_10 = ts["rebals_per_year"] * ts["avg_turnover"] * 10 / 1e4 * 100
-            cost_drag_30 = ts["rebals_per_year"] * ts["avg_turnover"] * 30 / 1e4 * 100
-        trading = {
-            "n_rebals": ts["n_rebals"],
-            "rebals_per_year": _round(ts["rebals_per_year"], 2),
-            "avg_turnover": _round(ts["avg_turnover"], 4),
-            "cost_drag_pct_10bps": _round(cost_drag_10, 3),
-            "cost_drag_pct_30bps": _round(cost_drag_30, 3),
-        }
-    except Exception as e:
-        logger.warning(f"analytics trading 계산 실패: port_id={port_id}, error={e}")
+    if rebal_failed:
+        logger.warning(f"analytics trading 생략: port_id={port_id}, rebal 로드 실패")
+    else:
+        try:
+            ts = strategy_analytics.turnover_stats(rebal)
+            cost_drag_10 = cost_drag_30 = None
+            if ts["rebals_per_year"] is not None and ts["avg_turnover"] is not None:
+                cost_drag_10 = ts["rebals_per_year"] * ts["avg_turnover"] * 10 / 1e4 * 100
+                cost_drag_30 = ts["rebals_per_year"] * ts["avg_turnover"] * 30 / 1e4 * 100
+            trading = {
+                "n_rebals": ts["n_rebals"],
+                "rebals_per_year": _round(ts["rebals_per_year"], 2),
+                "avg_turnover": _round(ts["avg_turnover"], 4),
+                "cost_drag_pct_10bps": _round(cost_drag_10, 3),
+                "cost_drag_pct_30bps": _round(cost_drag_30, 3),
+            }
+        except Exception as e:
+            logger.warning(f"analytics trading 계산 실패: port_id={port_id}, error={e}")
 
     return {
         "premise": premise,
