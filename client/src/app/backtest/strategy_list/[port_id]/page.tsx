@@ -4,6 +4,7 @@ import {
   useFetchBmByIdQuery,
   useFetchStNavByIdQuery,
   useFetchStRebalByIdQuery,
+  useFetchStrategyAnalyticsQuery,
   useFetchStrategyByIdQuery,
   useFetchStrategyLiveByIdQuery,
   useSetStrategyStatusMutation,
@@ -14,6 +15,15 @@ import MetricSummary from "./MetricSummary";
 import LineChart from "./LineChart";
 import LiveMetricsTable from "./LiveMetricsTable";
 import NextRebalCard from "./NextRebalCard";
+import LiveHeadline from "./LiveHeadline";
+import HoldingsNowCard from "./HoldingsNowCard";
+import ExpectationCard from "./ExpectationCard";
+import PremiseCard from "./analysis/PremiseCard";
+import RollingCard from "./analysis/RollingCard";
+import DrawdownCard from "./analysis/DrawdownCard";
+import PhaseCrisisCard from "./analysis/PhaseCrisisCard";
+import MonthlyStatsCard from "./analysis/MonthlyStatsCard";
+import TradingRealityCard from "./analysis/TradingRealityCard";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
@@ -89,6 +99,8 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
   const { data: strategyRebal } = useFetchStRebalByIdQuery(port_id);
   const { data: bmDetails } = useFetchBmByIdQuery(port_id);
   const { data: liveData } = useFetchStrategyLiveByIdQuery(port_id);
+  const { data: analytics, isLoading: analyticsLoading } =
+    useFetchStrategyAnalyticsQuery(port_id);
   const [setStatus, { isLoading: toggling }] = useSetStrategyStatusMutation();
 
   const bmNavData: NavPoint[] = useMemo(
@@ -133,6 +145,82 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
       : []),
   ];
 
+  // 분석 계층(6카드)은 하나의 analytics 응답을 공유한다 — 로딩·부재 상태도 함께 취급한다.
+  // saved 배치는 MetricSummary가 카드 사이에 끼어들어 그룹이 둘로 나뉘지만, 각 그룹은
+  // 같은 analyticsReady 판정을 그대로 재사용한다.
+  const analyticsReady = !analyticsLoading && !!analytics && !analytics.empty;
+  const analyticsNotes = analytics?.notes;
+
+  const renderAnalyticsGroup = (children: React.ReactNode): React.ReactNode => {
+    if (analyticsLoading) {
+      return (
+        <div className="card">
+          <LoadingState label="분석 지표를 불러오는 중..." />
+        </div>
+      );
+    }
+    if (!analyticsReady) return null;
+    return children;
+  };
+
+  const premiseCard = (
+    <PremiseCard premise={analytics?.premise ?? null} note={analyticsNotes?.["premise"]} />
+  );
+  const rollingCard = (
+    <RollingCard rolling={analytics?.rolling ?? null} note={analyticsNotes?.["rolling"]} />
+  );
+  const drawdownCard = (
+    <DrawdownCard drawdowns={analytics?.drawdowns ?? null} note={analyticsNotes?.["drawdowns"]} />
+  );
+  const phaseCrisisCard = (
+    <PhaseCrisisCard
+      phases={analytics?.phases ?? null}
+      crisis={analytics?.crisis ?? []}
+      phasesNote={analyticsNotes?.["phases"]}
+    />
+  );
+  const monthlyTradingRow = (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <MonthlyStatsCard monthly={analytics?.monthly ?? null} note={analyticsNotes?.["monthly"]} />
+      <TradingRealityCard trading={analytics?.trading ?? null} note={analyticsNotes?.["trading"]} />
+    </div>
+  );
+
+  const yearlyMonthlyReturns = (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="card">
+        <h4 className="text-base font-semibold text-ink mb-4">
+          Yearly Returns
+        </h4>
+        <PeriodBarChart
+          data={yearlyData}
+          series={barSeries}
+          height={350}
+          yFormatter={(v) => `${v.toFixed(2)}%`}
+        />
+      </div>
+      <div className="card">
+        <h4 className="text-base font-semibold text-ink mb-4">
+          Monthly Returns
+        </h4>
+        <PeriodBarChart
+          data={monthlyData}
+          series={barSeries}
+          height={350}
+          yFormatter={(v) => `${v.toFixed(2)}%`}
+        />
+      </div>
+    </div>
+  );
+
+  const metricSummary = (
+    <MetricSummary
+      strategyInfo={strategyInfo[0]}
+      rebalWeight={strategyRebal}
+      bmMetrics={bmDetails.metrics}
+    />
+  );
+
   return (
     <div className="flex flex-col gap-6 pb-16">
       <PageHeader
@@ -172,44 +260,58 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
         }
       />
 
-      <MetricSummary
-        strategyInfo={strategyInfo[0]}
-        rebalWeight={strategyRebal}
-        bmMetrics={bmDetails.metrics}
-      />
-      <NextRebalCard portId={port_id} isActive={isActive} />
-      <LineChart
-        strategyName={strategyName}
-        strategyNav={strategyNav}
-        bmNav={bmDetails.nav}
-        liveNav={liveData?.nav}
-        savedAt={liveData?.saved_at}
-      />
-      <LiveMetricsTable live={liveData} />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card">
-          <h4 className="text-base font-semibold text-ink mb-4">
-            Yearly Returns
-          </h4>
-          <PeriodBarChart
-            data={yearlyData}
-            series={barSeries}
-            height={350}
-            yFormatter={(v) => `${v.toFixed(2)}%`}
+      {isActive ? (
+        <>
+          <LiveHeadline live={liveData} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <HoldingsNowCard weights={liveData?.weights} />
+            <ExpectationCard expectation={liveData?.expectation} />
+          </div>
+          <NextRebalCard portId={port_id} isActive={isActive} />
+          <LineChart
+            strategyName={strategyName}
+            strategyNav={strategyNav}
+            bmNav={bmDetails.nav}
+            liveNav={liveData?.nav}
+            savedAt={liveData?.saved_at}
           />
-        </div>
-        <div className="card">
-          <h4 className="text-base font-semibold text-ink mb-4">
-            Monthly Returns
-          </h4>
-          <PeriodBarChart
-            data={monthlyData}
-            series={barSeries}
-            height={350}
-            yFormatter={(v) => `${v.toFixed(2)}%`}
+          <LiveMetricsTable live={liveData} />
+          {yearlyMonthlyReturns}
+
+          <h3 className="section-header border-t border-edge pt-6">백테스트 분석</h3>
+          {renderAnalyticsGroup(
+            <>
+              {premiseCard}
+              {rollingCard}
+              {drawdownCard}
+              {phaseCrisisCard}
+              {monthlyTradingRow}
+            </>
+          )}
+          {metricSummary}
+        </>
+      ) : (
+        <>
+          {renderAnalyticsGroup(premiseCard)}
+          {metricSummary}
+          {renderAnalyticsGroup(
+            <>
+              {rollingCard}
+              {drawdownCard}
+              {phaseCrisisCard}
+              {monthlyTradingRow}
+            </>
+          )}
+          <LineChart
+            strategyName={strategyName}
+            strategyNav={strategyNav}
+            bmNav={bmDetails.nav}
+            liveNav={liveData?.nav}
+            savedAt={liveData?.saved_at}
           />
-        </div>
-      </div>
+          {yearlyMonthlyReturns}
+        </>
+      )}
     </div>
   );
 };
