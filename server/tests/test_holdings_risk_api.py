@@ -172,7 +172,7 @@ def test_risk_all_kr_skips_fx(two_holdings, monkeypatch):
 
 
 def test_risk_fx_success_path_affects_vol(monkeypatch):
-    """환산이 실제로 vol에 반영되는지 검증 — FX 함수가 호출되고 결과에 반영됨."""
+    """교대 FX 계수로 환산 패널이 실제 vol 계산에 흐르는지 검증."""
     items = pd.DataFrame(
         {
             "meta_id": [1, 2],
@@ -194,7 +194,6 @@ def test_risk_fx_success_path_affects_vol(monkeypatch):
 
     idx = pd.bdate_range("2023-01-02", periods=300)
     # 실제 수익률 변동이 있는 가격 (로그수익률로 시뮬레이션)
-    np.random.seed(42)
     kr_returns = np.random.normal(0.0005, 0.01, 300)
     us_returns = np.random.normal(0.0003, 0.012, 300)
     kr_prices = 80 * np.exp(np.cumsum(kr_returns))
@@ -212,13 +211,13 @@ def test_risk_fx_success_path_affects_vol(monkeypatch):
         def data(self, meta_id=None, start_date=None, **kw):
             return prices
 
-    fx_call_count = {"count": 0}
-
-    def fake_to_krw(df, iso):
-        fx_call_count["count"] += 1
+    def volatile_to_krw(df, iso):
         out = df.copy()
-        # US 컬럼에 강한 변동성 추가 — FX 함수가 호출됨을 증명
-        factor = pd.Series(np.linspace(1300.0, 1500.0, len(out)), index=out.index)
+        # 교대 계수: 짝수일 1300, 홀수일 1500 — ±15% 일일 스윙 추가
+        factor = pd.Series(
+            [1300.0 if i % 2 == 0 else 1500.0 for i in range(len(out))],
+            index=out.index,
+        )
         for col in out.columns:
             if iso.get(col) == "US":
                 out[col] = out[col] * factor
@@ -231,17 +230,23 @@ def test_risk_fx_success_path_affects_vol(monkeypatch):
     monkeypatch.setattr(h, "Backtest", FakeBT)
     monkeypatch.setattr(h, "_recent_kr_volume", lambda tickers: pd.DataFrame())
 
-    # 시간가변 환율 적용 — to_krw가 호출되고 panel이 변환됨
-    monkeypatch.setattr(h.fx, "to_krw", fake_to_krw)
-    r = h.get_holdings_risk()
+    # 1) identity 환율 (무변화)
+    monkeypatch.setattr(h.fx, "to_krw", lambda df, iso: df)
+    r_identity = h.get_holdings_risk()
+    assert "empty" not in r_identity and "insufficient" not in r_identity
+    assert r_identity["basis"]["n_assets"] == 2
+    vol_identity = r_identity["ann_vol"]
 
-    # FX 변환이 실제로 적용됨 (to_krw 호출됨)
-    assert fx_call_count["count"] == 1
-    # US 보유가 있으므로 환산이 일어남 — basis.n_assets == 2 확인
-    assert "empty" not in r and "insufficient" not in r
-    assert r["basis"]["n_assets"] == 2
-    # 유효한 vol 수치 반환
-    assert isinstance(r["ann_vol"], float) and r["ann_vol"] is not None
+    # 2) 교대 계수로 ±15% FX 스윙 — 환산이 포트폴리오 변동성을 크게 증가
+    monkeypatch.setattr(h.fx, "to_krw", volatile_to_krw)
+    r_volatile = h.get_holdings_risk()
+    assert "empty" not in r_volatile and "insufficient" not in r_volatile
+    assert r_volatile["basis"]["n_assets"] == 2
+    vol_volatile = r_volatile["ann_vol"]
+
+    # 환산 패널이 실제로 계산에 흐름 — vol 발산 단언 (1.5배 이상)
+    assert vol_identity is not None and vol_volatile is not None
+    assert vol_volatile > vol_identity * 1.5
 
 
 def test_risk_no_history_drop_renormalizes(monkeypatch):
