@@ -10,6 +10,8 @@ interface MonthlyStatsCardProps {
   monthly: AnalyticsMonthly | null;
   /** 섹션이 강등된 사유 (서버가 별도 note를 주지 않으면 일반 문구로 대체). */
   note?: string | null;
+  /** BM 비교가 빠진 사유 (서버 notes["bm"]) — 있으면 카드 하단에 각주로 표시. */
+  bmNote?: string | null;
 }
 
 const fmtPct = (v: number | null, digits = 1): string => (v == null ? "—" : `${v.toFixed(digits)}%`);
@@ -26,13 +28,11 @@ const MonthRow: React.FC<{ month: string; ret_pct: number }> = ({ month, ret_pct
 
 /** 월별 승률·최고/최악 월 — 분포의 꼬리를 직접 보여준다.
  *  판단 라벨 없음: 승률·수치만 표시 (스펙 §3). */
-const MonthlyStatsCard: React.FC<MonthlyStatsCardProps> = ({ monthly, note }) => {
+const MonthlyStatsCard: React.FC<MonthlyStatsCardProps> = ({ monthly, note, bmNote }) => {
   if (!monthly) {
     return (
       <Card title="월별 통계">
-        <p className="text-sm text-ink-muted">
-          {note ?? "이력 부족으로 계산되지 않았습니다"}
-        </p>
+        <p className="text-sm text-ink-muted">{note ?? "계산되지 않았습니다"}</p>
       </Card>
     );
   }
@@ -48,7 +48,7 @@ const MonthlyStatsCard: React.FC<MonthlyStatsCardProps> = ({ monthly, note }) =>
         <div>
           <h4 className="text-sm font-medium text-ink mb-2">최고 월</h4>
           {monthly.best.length === 0 ? (
-            <p className="text-sm text-ink-muted">이력 부족으로 계산되지 않았습니다</p>
+            <p className="text-sm text-ink-muted">계산되지 않았습니다</p>
           ) : (
             <div className="flex flex-col gap-1.5">
               {monthly.best.map((m) => (
@@ -60,7 +60,7 @@ const MonthlyStatsCard: React.FC<MonthlyStatsCardProps> = ({ monthly, note }) =>
         <div>
           <h4 className="text-sm font-medium text-ink mb-2">최악 월</h4>
           {monthly.worst.length === 0 ? (
-            <p className="text-sm text-ink-muted">이력 부족으로 계산되지 않았습니다</p>
+            <p className="text-sm text-ink-muted">계산되지 않았습니다</p>
           ) : (
             <div className="flex flex-col gap-1.5">
               {monthly.worst.map((m) => (
@@ -70,6 +70,11 @@ const MonthlyStatsCard: React.FC<MonthlyStatsCardProps> = ({ monthly, note }) =>
           )}
         </div>
       </div>
+      {bmNote && (
+        <p className="text-xs mt-4" style={{ color: "var(--chart-4)" }}>
+          ⚠ {bmNote}
+        </p>
+      )}
     </Card>
   );
 };

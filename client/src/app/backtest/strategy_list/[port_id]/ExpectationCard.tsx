@@ -22,6 +22,20 @@ const percentileLabel = (p: number): string => {
   return `상위 ${topPct}% (백분위 ${rounded})`;
 };
 
+/** dd_percentile 전용 — "상위/하위"는 낙폭에서 방향이 헷갈린다("상위 X%"가 "가장 심한
+ *  X%"로 오독될 수 있음). dd_percentile은 높을수록 얕은 쪽(덜 심각)이므로 낙폭의 깊이를
+ *  직접 서술하는 "깊은 쪽/얕은 쪽"을 쓴다. 계산 방식은 percentileLabel과 동일(클램프·
+ *  괄호 안 원 백분위값 포함) — 방향 라벨만 낙폭 전용으로 바꾼다. */
+const ddPercentileLabel = (p: number): string => {
+  const rounded = Math.round(p);
+  if (p < 50) {
+    const deepPct = Math.max(1, rounded);
+    return `깊은 쪽 ${deepPct}% (백분위 ${rounded})`;
+  }
+  const shallowPct = Math.max(1, 100 - rounded);
+  return `얕은 쪽 ${shallowPct}% (백분위 ${rounded})`;
+};
+
 const PercentileStrip: React.FC<{ p: number }> = ({ p }) => {
   const clamped = Math.max(0, Math.min(100, p));
   return (
@@ -45,8 +59,10 @@ interface ExpectationCardProps {
   expectation?: LiveExpectation | null;
 }
 
-/** 저장 후 실전 수익·낙폭을 백테스트의 같은 길이 구간 분포 안에 위치시킨다.
- *  판단 라벨 없음: 위치 서술과 원 백분위값만 표시 (스펙 §3). */
+/** 저장 후 실전 수익은 백테스트의 같은 길이({n_days}일) 구간 수익 분포 안에 위치시키고,
+ *  낙폭은 백테스트 전 기간의 일별 낙폭(underwater) 분포 안에 위치시킨다 — 두 percentile은
+ *  기준 분포가 다르다("{n_days}일 구간"이 아니라 전 구간 일별 낙폭). 판단 라벨 없음:
+ *  위치 서술과 원 백분위값만 표시 (스펙 §3). */
 const ExpectationCard: React.FC<ExpectationCardProps> = ({ expectation }) => {
   if (!expectation) {
     return (
@@ -70,8 +86,8 @@ const ExpectationCard: React.FC<ExpectationCardProps> = ({ expectation }) => {
       </div>
       <div>
         <p className="text-sm text-ink">
-          현재 낙폭 {fmtPct(live_dd_pct)}는 백테스트의 모든 {n_days}일 구간
-          낙폭 분포 중 {percentileLabel(dd_percentile)}
+          현재 낙폭 {fmtPct(live_dd_pct)}는 백테스트 전 기간 일별 낙폭 분포에서{" "}
+          {ddPercentileLabel(dd_percentile)}
         </p>
         <PercentileStrip p={dd_percentile} />
       </div>

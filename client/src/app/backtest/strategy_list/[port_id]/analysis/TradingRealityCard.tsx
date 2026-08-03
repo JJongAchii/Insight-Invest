@@ -21,9 +21,7 @@ const TradingRealityCard: React.FC<TradingRealityCardProps> = ({ trading, note }
   if (!trading) {
     return (
       <Card title="거래 현실">
-        <p className="text-sm text-ink-muted">
-          {note ?? "이력 부족으로 계산되지 않았습니다"}
-        </p>
+        <p className="text-sm text-ink-muted">{note ?? "계산되지 않았습니다"}</p>
       </Card>
     );
   }

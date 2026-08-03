@@ -10,6 +10,8 @@ interface RollingCardProps {
   rolling: AnalyticsRolling | null;
   /** 섹션이 강등된 사유 (서버 notes["rolling"]). 없으면 일반 문구로 대체. */
   note?: string | null;
+  /** BM 비교가 빠진 사유 (서버 notes["bm"]) — 있으면 카드 하단에 각주로 표시. */
+  bmNote?: string | null;
 }
 
 type Row = { date: string; strategy: number | null; bm: number | null };
@@ -31,7 +33,7 @@ const mergeByDate = (
 
 /** 롤링 1년 수익률·샤프 — 기간 의존성 진단 재료. 전략 vs BM (있으면).
  *  판단 라벨 없음: 두 시계열과 창 길이만 표시 (스펙 §3). */
-const RollingCard: React.FC<RollingCardProps> = ({ rolling, note }) => {
+const RollingCard: React.FC<RollingCardProps> = ({ rolling, note, bmNote }) => {
   const hasBm = !!rolling?.bm_rows?.length;
 
   const { retData, sharpeData } = useMemo(() => {
@@ -50,9 +52,7 @@ const RollingCard: React.FC<RollingCardProps> = ({ rolling, note }) => {
   if (!rolling) {
     return (
       <Card title="롤링 성과">
-        <p className="text-sm text-ink-muted">
-          {note ?? "이력 부족으로 계산되지 않았습니다"}
-        </p>
+        <p className="text-sm text-ink-muted">{note ?? "계산되지 않았습니다"}</p>
       </Card>
     );
   }
@@ -89,6 +89,11 @@ const RollingCard: React.FC<RollingCardProps> = ({ rolling, note }) => {
           />
         </div>
       </div>
+      {bmNote && (
+        <p className="text-xs mt-4" style={{ color: "var(--chart-4)" }}>
+          ⚠ {bmNote}
+        </p>
+      )}
     </Card>
   );
 };

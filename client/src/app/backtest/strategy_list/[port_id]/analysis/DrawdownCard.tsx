@@ -21,9 +21,7 @@ const DrawdownCard: React.FC<DrawdownCardProps> = ({ drawdowns, note }) => {
   if (!drawdowns) {
     return (
       <Card title="낙폭">
-        <p className="text-sm text-ink-muted">
-          {note ?? "이력 부족으로 계산되지 않았습니다"}
-        </p>
+        <p className="text-sm text-ink-muted">{note ?? "계산되지 않았습니다"}</p>
       </Card>
     );
   }
@@ -41,7 +39,7 @@ const DrawdownCard: React.FC<DrawdownCardProps> = ({ drawdowns, note }) => {
       />
 
       {drawdowns.episodes.length === 0 ? (
-        <p className="text-sm text-ink-muted mt-4">이력 부족으로 계산되지 않았습니다</p>
+        <p className="text-sm text-ink-muted mt-4">계산되지 않았습니다</p>
       ) : (
         <div className="overflow-x-auto mt-4">
           <table className="w-full text-sm">

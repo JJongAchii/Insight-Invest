@@ -24,9 +24,7 @@ const PremiseCard: React.FC<PremiseCardProps> = ({ premise, note }) => {
   if (!premise) {
     return (
       <Card title="분석 전제">
-        <p className="text-sm text-ink-muted">
-          {note ?? "이력 부족으로 계산되지 않았습니다"}
-        </p>
+        <p className="text-sm text-ink-muted">{note ?? "계산되지 않았습니다"}</p>
       </Card>
     );
   }

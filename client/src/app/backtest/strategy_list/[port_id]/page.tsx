@@ -28,6 +28,8 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
 import LoadingState from "@/components/ui/LoadingState";
+import Card from "@/components/ui/Card";
+import ErrorState from "@/components/ui/ErrorState";
 import PeriodBarChart from "@/components/charts/PeriodBarChart";
 import { calculatePeriodReturns, NavPoint } from "@/components/charts/returns";
 
@@ -99,8 +101,12 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
   const { data: strategyRebal } = useFetchStRebalByIdQuery(port_id);
   const { data: bmDetails } = useFetchBmByIdQuery(port_id);
   const { data: liveData } = useFetchStrategyLiveByIdQuery(port_id);
-  const { data: analytics, isLoading: analyticsLoading } =
-    useFetchStrategyAnalyticsQuery(port_id);
+  const {
+    data: analytics,
+    isLoading: analyticsLoading,
+    isError: analyticsIsError,
+    refetch: refetchAnalytics,
+  } = useFetchStrategyAnalyticsQuery(port_id);
   const [setStatus, { isLoading: toggling }] = useSetStrategyStatusMutation();
 
   const bmNavData: NavPoint[] = useMemo(
@@ -145,11 +151,15 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
       : []),
   ];
 
-  // 분석 계층(6카드)은 하나의 analytics 응답을 공유한다 — 로딩·부재 상태도 함께 취급한다.
-  // saved 배치는 MetricSummary가 카드 사이에 끼어들어 그룹이 둘로 나뉘지만, 각 그룹은
-  // 같은 analyticsReady 판정을 그대로 재사용한다.
-  const analyticsReady = !analyticsLoading && !!analytics && !analytics.empty;
+  // 분석 계층(6카드)은 하나의 analytics 응답을 공유한다 — 로딩·에러·부재 상태도 함께
+  // 취급한다. saved 배치는 MetricSummary가 카드 사이에 끼어들어 그룹이 둘로 나뉘지만,
+  // 각 그룹은 같은 판정을 그대로 재사용한다. 에러·부재 시 null을 반환하면 "백테스트
+  // 분석" 구분 헤더만 빈 공간 위에 남으므로, 항상 카드(로딩/에러/부재/본문)를 반환한다.
+  const analyticsEmpty = !analyticsLoading && !analyticsIsError && (!analytics || analytics.empty);
+  const analyticsReady =
+    !analyticsLoading && !analyticsIsError && !!analytics && !analytics.empty;
   const analyticsNotes = analytics?.notes;
+  const bmNote = analyticsNotes?.["bm"];
 
   const renderAnalyticsGroup = (children: React.ReactNode): React.ReactNode => {
     if (analyticsLoading) {
@@ -157,6 +167,20 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
         <div className="card">
           <LoadingState label="분석 지표를 불러오는 중..." />
         </div>
+      );
+    }
+    if (analyticsIsError) {
+      return (
+        <Card title="백테스트 분석">
+          <ErrorState message="분석 지표를 불러오지 못했습니다" onRetry={refetchAnalytics} />
+        </Card>
+      );
+    }
+    if (analyticsEmpty) {
+      return (
+        <Card title="백테스트 분석">
+          <p className="text-sm text-ink-muted">분석할 데이터가 없습니다</p>
+        </Card>
       );
     }
     if (!analyticsReady) return null;
@@ -167,7 +191,11 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
     <PremiseCard premise={analytics?.premise ?? null} note={analyticsNotes?.["premise"]} />
   );
   const rollingCard = (
-    <RollingCard rolling={analytics?.rolling ?? null} note={analyticsNotes?.["rolling"]} />
+    <RollingCard
+      rolling={analytics?.rolling ?? null}
+      note={analyticsNotes?.["rolling"]}
+      bmNote={bmNote}
+    />
   );
   const drawdownCard = (
     <DrawdownCard drawdowns={analytics?.drawdowns ?? null} note={analyticsNotes?.["drawdowns"]} />
@@ -177,11 +205,16 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
       phases={analytics?.phases ?? null}
       crisis={analytics?.crisis ?? []}
       phasesNote={analyticsNotes?.["phases"]}
+      bmNote={bmNote}
     />
   );
   const monthlyTradingRow = (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <MonthlyStatsCard monthly={analytics?.monthly ?? null} note={analyticsNotes?.["monthly"]} />
+      <MonthlyStatsCard
+        monthly={analytics?.monthly ?? null}
+        note={analyticsNotes?.["monthly"]}
+        bmNote={bmNote}
+      />
       <TradingRealityCard trading={analytics?.trading ?? null} note={analyticsNotes?.["trading"]} />
     </div>
   );

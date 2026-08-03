@@ -30,9 +30,10 @@ const LiveHeadline: React.FC<LiveHeadlineProps> = ({ live }) => {
     );
   }
 
+  const base = nav[0].value;
   const last = nav[nav.length - 1].value;
   const peak = Math.max(...nav.map((p) => p.value));
-  const cumRetPct = (last / 1000 - 1) * 100;
+  const cumRetPct = base === 0 ? 0 : (last / base - 1) * 100;
   const ddPct = (last / peak - 1) * 100;
   // nav[0] is the saved_at anchor row, not an elapsed trading day — matches the
   // server's live_percentile n_days (= len(live_nav) - 1), so this card and
