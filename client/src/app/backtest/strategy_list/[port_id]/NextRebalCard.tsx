@@ -4,6 +4,7 @@ import React from "react";
 
 import { useFetchRebalSignalsQuery } from "@/state/api";
 import Card from "@/components/ui/Card";
+import ErrorState from "@/components/ui/ErrorState";
 
 const ACTION_LABEL: Record<string, string> = { enter: "진입", exit: "이탈", keep: "유지" };
 const ACTION_COLOR: Record<string, string> = {
@@ -15,13 +16,15 @@ const ACTION_COLOR: Record<string, string> = {
 /** 다음 리밸런싱 신호 — 배치가 리밸 전일 저녁 엔진과 동일 계산으로 생성.
  *  active인데 신호가 없으면 아직 주기 안이라는 뜻 — 안내 문구만. */
 const NextRebalCard: React.FC<{ portId: number; isActive: boolean }> = ({ portId, isActive }) => {
-  const { data } = useFetchRebalSignalsQuery(undefined, { skip: !isActive });
+  const { data, isError } = useFetchRebalSignalsQuery(undefined, { skip: !isActive });
   if (!isActive) return null;
   const sig = data?.signals.find((s) => s.port_id === portId);
 
   return (
     <Card title="다음 리밸런싱">
-      {!sig ? (
+      {isError ? (
+        <ErrorState message="신호를 불러오지 못했습니다" />
+      ) : !sig ? (
         <p className="text-sm text-ink-muted">
           다음 리밸런싱 주기 전일 저녁에 목표 비중이 생성됩니다.
         </p>

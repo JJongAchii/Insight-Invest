@@ -256,6 +256,8 @@ def save_benchmark_metrics(port_id: int, values: dict) -> None:
 
 def set_status(port_id: int, status: str) -> None:
     """운영 상태 토글 — saved|active. 알 수 없는 port_id는 KeyError."""
+    if status not in {"saved", "active"}:
+        raise ValueError(f"invalid status: {status}")
     ports = records()
     if not (ports["port_id"] == port_id).any():
         raise KeyError(f"unknown port_id: {port_id}")

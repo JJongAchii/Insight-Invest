@@ -66,11 +66,30 @@ def test_dual_mmt_ignores_params_like_engine():
 
 
 def test_eq_and_custom_weights():
-    price = _drift_panel(cols=3)
+    price = _drift_panel(cols=3)  # columns T0, T1, T2
     eq = next_period_weights(price, "eq", None)
     assert eq == {t: pytest.approx(1 / 3) for t in price.columns}
-    cw = next_period_weights(price, "custom", {"weights": {"SPY": 0.6, "IEF": 0.4}})
-    assert cw == {"SPY": 0.6, "IEF": 0.4}
+    cw = next_period_weights(price, "custom", {"weights": {"T0": 0.6, "NOT_IN_PANEL": 0.4}})
+    # FixedWeight.simulate와 동일 — 패널 밖 티커는 엔진이 절대 보유하지 않는다.
+    assert cw == {"T0": 0.6}
+
+
+def test_quarterly_rebal_needs_longer_panel():
+    """Critical #1: 400일 고정 워밍업은 분기 리밸의 12개월 룩백(13개 월말)을
+    못 채워 prev가 조용히 비고 전량 '진입'으로 오표시됐다. 주기별 창 확장
+    (build_insights.build_rebal_signals의 extra={"Q":120,"Y":420})으로 고쳤다 —
+    이 테스트는 그 산술이 실제로 필요함을 pure 계층에서 문서화한다(빌더 미호출).
+
+    ~275거래일(≈13개월) 패널은 분기 리밸 시점에 룩백을 못 채워 빈 프레임을
+    내고(예전 400일 워밍업의 실패 모드), ~420거래일(≈20개월) 패널은 채운다.
+    """
+    short_panel = _drift_panel(n=275)
+    empty = Momentum(top_n=2, lookback_months=12).simulate(price=short_panel, freq="Q")
+    assert empty.empty
+
+    long_panel = _drift_panel(n=420)
+    nonempty = Momentum(top_n=2, lookback_months=12).simulate(price=long_panel, freq="Q")
+    assert not nonempty.empty
 
 
 def test_classify_actions_enter_exit_keep():

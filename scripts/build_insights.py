@@ -666,7 +666,10 @@ def build_rebal_signals():
 
             meta_ids = portfolio.universe(int(p.port_id))
             bt = Backtest(strategy_name=p.port_name)
-            warmup = (pd.Timestamp.today() - pd.Timedelta(days=MOMENTUM_WARMUP_DAYS)).date()
+            # Q/Y 리밸은 패널 안에 주기 시작 리밸일이 들어와야 prev(엔진 재계산)가
+            # 나온다 — 12개월 룩백은 13개 월말을 요구하므로 주기만큼 창을 늘린다.
+            extra = {"M": 0, "Q": 120, "Y": 420}.get(freq, 0)
+            warmup = (pd.Timestamp.today() - pd.Timedelta(days=MOMENTUM_WARMUP_DAYS + extra)).date()
             price = bt.data(meta_id=meta_ids, start_date=warmup)
             if price.empty:
                 raise ValueError("가격 데이터 없음")
@@ -688,7 +691,9 @@ def build_rebal_signals():
                 raise ValueError("목표 비중 산출 실패")
             w = bt.rebalance(price=price, method=algorithm, freq=freq,
                              custom_weight=params.get("weights"), params=params)
-            prev = w.iloc[-1].dropna().to_dict() if w is not None and not w.empty else {}
+            if w is None or w.empty:
+                raise ValueError("prev 산출 실패 — 워밍업 창 부족 (전량 '진입' 오표시 방지)")
+            prev = w.iloc[-1].dropna().to_dict()
 
             rows = pd.DataFrame(rebal_signal.classify_actions(prev, target))
             rows.insert(0, "port_id", int(p.port_id))
@@ -707,7 +712,6 @@ def build_rebal_signals():
         print("[rebal_signals] 이번 밤 신호 없음 — 빈 파일 기록")
         return None
     df = pd.concat(frames, ignore_index=True)
-    df["as_of"] = df["as_of"]  # 문자열 유지
     if df["as_of"].nunique() > 1:
         # 막지 않는다 — 전략별 유니버스가 다르면 as_of가 정당하게 갈릴 수 있고,
         # API 응답은 표시용으로 첫 행 as_of만 쓴다 (app/routers/backtest.py).

@@ -50,7 +50,9 @@ def next_period_weights(price: pd.DataFrame, algorithm: str, params: dict | None
         s = float(top.sum())
         return {str(t): (float(v) / s if s > 0 else 0.0) for t, v in top.items()}
     if algorithm == "custom":
-        return {str(k): float(v) for k, v in (params.get("weights") or {}).items()}
+        return {
+            str(k): float(v) for k, v in (params.get("weights") or {}).items() if k in price.columns
+        }
     raise ValueError(f"unknown algorithm: {algorithm}")
 
 

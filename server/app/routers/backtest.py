@@ -4,7 +4,9 @@ import math
 import os
 import sys
 import uuid
+from datetime import datetime
 from typing import List, Optional
+from zoneinfo import ZoneInfo  # 상단 import
 
 import pandas as pd
 from fastapi import APIRouter, HTTPException
@@ -566,11 +568,11 @@ async def get_rebal_signals():
     df = portfolio.rebal_signals()
     if df.empty:
         return {"as_of": None, "signals": []}
-    from datetime import date as _date
+    today = datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat()  # Lambda UTC 보정
 
     signals = []
     for pid, sub in df.groupby("port_id"):
-        sub = sub.sort_values(["rank"], na_position="last")
+        sub = sub.sort_values(["rank", "ticker"], na_position="last")
         next_rebal = str(sub["next_rebal"].iloc[0])[:10]
         signals.append(
             {
@@ -578,7 +580,7 @@ async def get_rebal_signals():
                 "port_name": sub["port_name"].iloc[0],
                 "freq": sub["freq"].iloc[0],
                 "next_rebal": next_rebal,
-                "is_stale": _date.today().isoformat() > next_rebal,
+                "is_stale": today > next_rebal,
                 "items": [
                     {
                         "ticker": r.ticker,

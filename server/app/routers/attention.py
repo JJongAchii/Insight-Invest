@@ -8,7 +8,8 @@ severity(high/medium/low)로 묶어 정렬 반환한다. 각 소스는 독립 tr
 import logging
 import os
 import sys
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo  # 상단 import
 
 import pandas as pd
 from fastapi import APIRouter
@@ -258,7 +259,7 @@ def get_attention():
     try:
         sig = portfolio.rebal_signals()
         if not sig.empty:
-            today = date.today().isoformat()
+            today = datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat()  # Lambda UTC 보정
             for pid, sub in sig.groupby("port_id"):
                 next_rebal = str(sub["next_rebal"].iloc[0])[:10]
                 if next_rebal < today:
@@ -270,7 +271,7 @@ def get_attention():
                     {
                         "severity": "high",
                         "category": "strategy",
-                        "title": f"내일 리밸: {sub['port_name'].iloc[0]}",
+                        "title": f"리밸 {next_rebal}: {sub['port_name'].iloc[0]}",
                         "detail": f"진입 {n_enter} · 이탈 {n_exit} · 유지 {n_keep} — 목표 비중은 전략 상세에서",
                         "link": f"/backtest/strategy_list/{int(pid)}",
                     }

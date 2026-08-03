@@ -85,7 +85,8 @@ def test_rebal_signals_nonempty_contract(tmp_path, monkeypatch):
         }
     ).to_parquet(d / "rebal_signals.parquet", index=False)
 
-    from datetime import date as _date
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
 
     import app.routers.backtest as bt
 
@@ -100,8 +101,8 @@ def test_rebal_signals_nonempty_contract(tmp_path, monkeypatch):
     assert sig["freq"] == "M"
     assert sig["next_rebal"] == "2026-09-01"
 
-    # is_stale은 오늘 날짜 기준이므로 동적으로 계산
-    expected_stale = _date.today().isoformat() > "2026-09-01"
+    # is_stale은 KST 오늘 날짜 기준이므로 동적으로 계산 (Lambda UTC 보정과 동일 기준)
+    expected_stale = datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat() > "2026-09-01"
     assert sig["is_stale"] == expected_stale
 
     # items는 rank 순으로 정렬 (None이 마지막)
