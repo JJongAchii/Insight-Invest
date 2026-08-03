@@ -173,9 +173,11 @@ def test_analytics_full_response_keys(full_fixture):
         "crisis",
         "monthly",
         "trading",
+        "notes",
         "as_of",
     }
     assert r["as_of"] == idx.max().strftime("%Y-%m-%d")
+    assert r["notes"] == {}  # 정상 응답 — 강등된 섹션 없음
 
     p = r["premise"]
     assert p["algorithm"] == "momentum"
@@ -317,6 +319,7 @@ def test_analytics_rolling_null_when_short_history(tmp_path, monkeypatch):
     _patch_regime(monkeypatch, bt, _phase_series(idx))
     r = asyncio.run(bt.get_strategy_analytics(1))
     assert r["rolling"] is None
+    assert r["notes"]["rolling"] == f"이력 {len(idx)}일 — 252일 창 미달"
     # 다른 섹션은 여전히 채워진다 — 한 섹션 실패가 전체를 죽이지 않는다
     assert r["premise"] is not None
     assert r["drawdowns"] is not None
@@ -359,6 +362,7 @@ def test_analytics_phases_null_when_regime_fails(tmp_path, monkeypatch):
     monkeypatch.setattr(bt.regime, "phase_history", boom)
     r = asyncio.run(bt.get_strategy_analytics(1))
     assert r["phases"] is None
+    assert r["notes"]["phases"] == "계산 실패"
     # 500 없이 나머지 응답은 정상
     assert r["premise"] is not None
     assert r["monthly"] is not None
@@ -379,13 +383,16 @@ def test_analytics_bm_load_failure_isolates_rolling_and_phases(full_fixture, mon
     r = asyncio.run(bt.get_strategy_analytics(1))
 
     assert "empty" not in r
+    assert r["notes"]["bm"] == "벤치마크 로드 실패 — BM 비교 생략"
     assert r["rolling"] is not None
     assert len(r["rolling"]["rows"]) > 0  # 전략 자체 rolling은 살아있다
     assert r["rolling"]["bm_rows"] is None
     assert r["phases"] is not None
     assert len(r["phases"]["rows"]) > 0
     assert all(row["bm_mean_ret_pct"] is None for row in r["phases"]["rows"])
-    # bm과 무관한 섹션은 전부 살아있다
+    # bm과 무관한 섹션은 전부 살아있다 — rolling/phases 자체는 강등되지 않았다
+    assert "rolling" not in r["notes"]
+    assert "phases" not in r["notes"]
     assert r["premise"] is not None
     assert r["drawdowns"] is not None
     assert r["monthly"] is not None
@@ -409,6 +416,7 @@ def test_analytics_rebal_load_failure_nulls_n_rebals_and_trading(full_fixture, m
     assert r["premise"]["algorithm"] == "momentum"  # 나머지 premise 필드는 살아있다
     assert r["premise"]["bt_start"] is not None
     assert r["trading"] is None
+    assert r["notes"]["trading"] == "리밸 이력 로드 실패"
     # rebal과 무관한 섹션은 전부 살아있다
     assert r["rolling"] is not None
     assert r["drawdowns"] is not None

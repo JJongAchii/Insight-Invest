@@ -700,12 +700,12 @@ def build_track_strategies():
             part = nav.reset_index()
             part.columns = ["trade_date", "value"]
             part.insert(0, "port_id", int(p.port_id))
-            frames.append(part)
 
             fallback = weight.iloc[-1].dropna()
-            weight_frames.append(
-                _book_to_weights(book, price, int(p.port_id), nav.index.max(), fallback)
-            )
+            # nav-weights는 쌍으로 기록/스킵 — 한쪽만 남는 비대칭 금지
+            bw = _book_to_weights(book, price, int(p.port_id), nav.index.max(), fallback)
+            frames.append(part)
+            weight_frames.append(bw)
         except Exception as e:
             print(
                 f"[warn] track_strategies port_id={p.port_id}({p.port_name}) 실패: {e}",

@@ -405,6 +405,14 @@ async def get_strategy_analytics(port_id: int):
     module.strategy_analytics/portfolio_risk가 하고, "좋다/나쁘다"는 붙이지 않는다.
     crisis는 예외가 나도 빈 배열([])로 떨어진다 — 다른 섹션과 달리 null이 아니다
     (Phase 2는 항상 배열로 소비할 수 있다).
+
+    notes: dict[str, str] — 강등된 섹션만 키가 존재(정상 응답이면 {}). Phase 2가
+    "이력 부족이라 아직 없다"와 "계산이 깨졌다"를 구분할 수 있도록 사유를 문자열로
+    싣는다: rolling은 이력 부족("이력 {n}일 — 252일 창 미달") vs 예외("계산 실패"),
+    phases는 레짐 데이터 없음("레짐 데이터 없음") vs 예외("계산 실패"), trading은
+    리밸 이력 로드 실패("리밸 이력 로드 실패") vs 계산 예외("계산 실패"), bm은 로드
+    실패("벤치마크 로드 실패 — BM 비교 생략") — bm 항목은 rolling/phases 자체가
+    null이 아니어도(둘 다 살아있고) bm_rows/bm_mean_ret_pct만 null로 남을 때 붙는다.
     """
     reg = portfolio.records()
     row = reg[reg["port_id"] == port_id]
@@ -418,6 +426,8 @@ async def get_strategy_analytics(port_id: int):
         nav_df["value"].astype(float).to_numpy(), index=pd.to_datetime(nav_df["trade_date"])
     ).sort_index()
 
+    notes: dict[str, str] = {}  # 강등된 섹션만 키 존재 — 사유 문자열(§3 계약)
+
     # bm_nav·rebal은 여러 섹션이 공유하는 로드라 try 밖에 있으면 I/O 실패(부재가
     # 아니라 S3 타임아웃·손상 parquet 등)가 응답 전체를 500으로 끌고 간다 — 각각
     # 독립 try/except로 격리해 의존 섹션만 null로 떨어지게 한다.
@@ -430,6 +440,7 @@ async def get_strategy_analytics(port_id: int):
             ).sort_index()
     except Exception as e:
         logger.warning(f"analytics benchmark_nav 조회 실패: port_id={port_id}, error={e}")
+        notes["bm"] = "벤치마크 로드 실패 — BM 비교 생략"
 
     rebal = pd.DataFrame()
     rebal_failed = False
@@ -503,8 +514,11 @@ async def get_strategy_analytics(port_id: int):
                 "rows": rows,
                 "bm_rows": bm_rows,
             }
+        else:
+            notes["rolling"] = f"이력 {len(nav)}일 — 252일 창 미달"
     except Exception as e:
         logger.warning(f"analytics rolling 계산 실패: port_id={port_id}, error={e}")
+        notes["rolling"] = "계산 실패"
 
     drawdowns = None
     try:
@@ -551,8 +565,11 @@ async def get_strategy_analytics(port_id: int):
                     }
                 )
             phases = {"rows": rows}
+        else:
+            notes["phases"] = "레짐 데이터 없음"
     except Exception as e:
         logger.warning(f"analytics phases 계산 실패: port_id={port_id}, error={e}")
+        notes["phases"] = "계산 실패"
 
     crisis: List[dict] = []
     try:
@@ -580,6 +597,7 @@ async def get_strategy_analytics(port_id: int):
     trading = None
     if rebal_failed:
         logger.warning(f"analytics trading 생략: port_id={port_id}, rebal 로드 실패")
+        notes["trading"] = "리밸 이력 로드 실패"
     else:
         try:
             ts = strategy_analytics.turnover_stats(rebal)
@@ -596,6 +614,7 @@ async def get_strategy_analytics(port_id: int):
             }
         except Exception as e:
             logger.warning(f"analytics trading 계산 실패: port_id={port_id}, error={e}")
+            notes["trading"] = "계산 실패"
 
     return {
         "premise": premise,
@@ -605,6 +624,7 @@ async def get_strategy_analytics(port_id: int):
         "crisis": crisis,
         "monthly": monthly_section,
         "trading": trading,
+        "notes": notes,
         "as_of": nav.index.max().strftime("%Y-%m-%d"),
     }
 

@@ -20,7 +20,7 @@
 | C | 낙폭 해부 | 최악을 견딜 수 있나? | 수중곡선 + 에피소드 Top5 (깊이·저점일·**회복일수**) |
 | D | 국면·위기 성과 | 지금 같은 장에서 어땠나? | 레짐 4국면 × 월수익 (전략 vs BM, regime.phase_history 조인) + CRISIS_WINDOWS(portfolio_risk와 공유) 구간수익 |
 | E | 월 수익 통계 | 분포가 어떤가? | 월 승률(절대·BM 대비), 최고/최악 월 Top5 |
-| F | 거래 현실성 | 실전 비용이 얼마나 갉아먹나? | 연평균 리밸 횟수, 평균 턴오버(Σ\|Δw\|/2, rebalance 이력), 비용 드래그 근사(턴오버×bps — "근사" 명기) |
+| F | 거래 현실성 | 실전 비용이 얼마나 갉아먹나? | 연평균 리밸 횟수, 평균 턴오버(Σ\|Δw\| — 편도 합산, 전량 교체=2.0; 엔진 cost 규약과 동일), 비용 드래그 근사(턴오버×bps — "근사" 명기) |
 
 **운영 계층 (active 전략)** — "약속대로 굴러가는가" (기승인 설계 유지):
 
@@ -55,7 +55,8 @@
 - `rolling_stats(nav, bm_nav, window=252)` → 롤링 수익·샤프
 - `drawdown_episodes(nav, top_n=5)` → [{depth, peak, trough, recover, days_to_recover|None(미회복)}]
 - `monthly_stats(nav, bm_nav)` → 승률·최고/최악 월
-- `turnover_stats(rebal_long)` → 연평균 리밸·평균 턴오버·비용 드래그 근사
+- `turnover_stats(rebal_long)` → 연평균 리밸·평균 턴오버(Σ|Δw| — 편도 합산, 전량
+  교체=2.0; 엔진 cost 규약과 동일)·비용 드래그 근사
 - `phase_returns(nav, bm_nav, phases)` → 국면별 월평균 (레짐 조인은 라우터)
 - `live_percentile(bt_nav, live_nav)` → N일 수익의 롤링 분포 백분위 + DD 위치
 - `crisis_returns(nav, windows)` → portfolio_risk.CRISIS_WINDOWS 재사용
