@@ -78,6 +78,28 @@ def test_book_empty_falls_back_to_seed_weights_instead_of_silently_dropping():
     assert got["B"] == pytest.approx(0.4)
 
 
+def test_book_empty_fallback_with_cash_remainder_renormalizes_like_book():
+    """custom(FixedWeight 등, 현금 잔여를 허용하는) 전략의 폴백은 원시 비중(합<1)
+    그대로가 아니라 book과 같은 관례로 투자자산 내 재정규화돼야 한다 — 안 그러면
+    엔진 book이 이어받는 다음날부터 비율·합이 인위적으로 점프한다(round 2 리뷰).
+    """
+    _skip_if_import_failed()
+
+    idx = pd.bdate_range("2026-07-31", periods=1)
+    price = pd.DataFrame({"SPY": [100.0], "IEF": [90.0]}, index=idx)
+    empty_book = pd.DataFrame(columns=["ticker", "weights"])
+    empty_book.index.name = "Date"
+
+    fallback = pd.Series({"SPY": 0.5, "IEF": 0.2})  # 합 0.7 — 현금 30% 잔여
+    bw = build_insights._book_to_weights(empty_book, price, 1, idx[0], fallback)
+
+    assert not bw.empty
+    got = bw.set_index("ticker")["weight"]
+    assert got["SPY"] == pytest.approx(0.5 / 0.7, rel=1e-6)  # 0.714286
+    assert got["IEF"] == pytest.approx(0.2 / 0.7, rel=1e-6)  # 0.285714
+    assert bw["weight"].sum() == pytest.approx(1.0, rel=1e-6)
+
+
 def test_book_and_fallback_both_empty_warns_and_returns_empty_frame(capsys):
     """book도 fallback도 없으면 조용히 사라지지 않고 경고를 남긴 뒤 빈 프레임을 낸다."""
     _skip_if_import_failed()

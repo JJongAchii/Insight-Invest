@@ -561,12 +561,20 @@ def _book_to_weights(
     구간이 단 하루뿐이면(오늘 막 저장된 전략 — saved_at == nav_last) 위 iloc[:-1]이
     그 유일한 행마저 지워 book이 통째로 빈다 — 드리프트 기준행이 없어 가격 보정도
     불가능하다. 이때는 fallback_weights(리밸 스케줄의 마지막 행 — 저장 당일은
-    드리프트 전이라 목표 비중 == 보유 비중)를 nav_last 날짜 행으로 그대로 쓴다.
-    fallback도 없으면 조용히 사라지는 대신 경고를 남기고 빈 프레임을 반환한다.
+    드리프트 전이라 목표 비중 == 보유 비중)를 nav_last 날짜 행으로 쓰되, book과
+    같은 관례로 투자자산 내 재정규화한다 — custom(FixedWeight 등, 현금 잔여를
+    허용하는) 전략은 원시 목표 비중의 합이 1 미만일 수 있는데, 그대로 쓰면 다음날
+    부터는 엔진 book(항상 재정규화, 합 1.0)이 이어받아 비율·합이 인위적으로
+    점프한다. fallback도 없거나 합이 0 이하면 조용히 사라지는 대신 경고를 남기고
+    빈 프레임을 반환한다.
     """
     if book.empty:
+        seed = None
         if fallback_weights is not None and not fallback_weights.empty:
             seed = fallback_weights[fallback_weights != 0]
+            s = float(seed.sum())
+            seed = seed / s if s > 0 else None  # book 관례와 동일 — 투자자산 내 재정규화 (현금 잔여 무시)
+        if seed is not None and not seed.empty:
             tail_row = seed.rename("weights").rename_axis("ticker").reset_index()
             tail_row.insert(0, "Date", nav_last)
             book = tail_row.set_index("Date")
