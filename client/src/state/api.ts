@@ -221,6 +221,49 @@ export interface HoldingMutationResponse {
   n_positions: number;
 }
 
+// Types for the portfolio risk card (GET /holdings/risk)
+export interface RiskScenario {
+  key: string;
+  label: string;
+  ret_pct: number | null;
+  start: string | null;
+  end: string | null;
+  note: string | null;
+}
+
+export interface RiskWarning {
+  kind: string;
+  ticker: string | null;
+  detail: string;
+}
+
+export interface RiskCorr {
+  tickers: string[];
+  names: string[];
+  values: (number | null)[][];
+}
+
+export interface HoldingsRiskResponse {
+  empty?: boolean;
+  reason?: string;
+  insufficient?: boolean;
+  overlap_days?: number;
+  ann_vol?: number | null;
+  max_drawdown?: number | null;
+  mdd_from?: string;
+  mdd_to?: string;
+  avg_pair_corr?: number | null;
+  corr?: RiskCorr | null;
+  scenarios?: RiskScenario[];
+  warnings?: RiskWarning[];
+  basis?: {
+    n_assets: number;
+    weights_as_of: string;
+    overlap_days: number;
+    window: { start: string; end: string };
+  };
+}
+
 // Types for the "오늘 주목" attention lane
 export type AttentionSeverity = "high" | "medium" | "low";
 
@@ -926,6 +969,10 @@ export const api = createApi({
       query: () => "/holdings",
       providesTags: ["Holdings"],
     }),
+    fetchHoldingsRisk: builder.query<HoldingsRiskResponse, void>({
+      query: () => "/holdings/risk",
+      providesTags: ["Holdings"],
+    }),
     addHolding: builder.mutation<HoldingMutationResponse, AddHoldingPayload>({
       query: (body) => ({
         url: "/holdings",
@@ -1120,6 +1167,7 @@ export const {
   useRemoveFromWatchlistMutation,
   // Holdings hooks
   useFetchHoldingsQuery,
+  useFetchHoldingsRiskQuery,
   useAddHoldingMutation,
   useRemoveHoldingMutation,
   // Attention hook
