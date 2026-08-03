@@ -4,7 +4,9 @@ import math
 import os
 import sys
 import uuid
+from datetime import datetime
 from typing import List, Optional
+from zoneinfo import ZoneInfo  # 상단 import
 
 import pandas as pd
 from fastapi import APIRouter, HTTPException
@@ -12,8 +14,9 @@ from fastapi import APIRouter, HTTPException
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../../../")))
 import datastore
 from app import schemas
-from datastore import fx, index_prices, portfolio
+from datastore import fx, index_prices
 from datastore import meta as meta_store
+from datastore import portfolio
 from module import analytics
 from module.backtest import Backtest
 from module.util import backtest_result, result_metrics
@@ -42,6 +45,7 @@ METRIC_KEY_MAP = {
 ALGORITHMS = {"eq", "momentum", "dual_mmt", "custom"}
 REBAL_FREQS = {"M", "Q", "Y"}
 CURRENCIES = {"USD", "KRW"}
+VALID_STATUS = {"saved", "active"}
 
 # Lambda는 요청마다 다른 컨테이너일 수 있어 인메모리 결과 공유 불가 —
 # 백테스트 결과를 S3(tmp_results/{token}/)에 보관하고 저장 시 토큰으로 리로드한다.
@@ -75,14 +79,16 @@ def _persist_result(
     storage.write_parquet(nav_df, TMP_DIR, token, "nav.parquet")
     storage.write_parquet(metrics_row, TMP_DIR, token, "metrics.parquet")
     params_row = pd.DataFrame(
-        [{
-            "algorithm": config["algorithm"],
-            "rebal_freq": config["rebal_freq"],
-            "cost_bps": float(config["cost_bps"]),
-            "currency": config["currency"],
-            "benchmark": config["benchmark"],
-            "params": json.dumps(config.get("params") or {}),
-        }]
+        [
+            {
+                "algorithm": config["algorithm"],
+                "rebal_freq": config["rebal_freq"],
+                "cost_bps": float(config["cost_bps"]),
+                "currency": config["currency"],
+                "benchmark": config["benchmark"],
+                "params": json.dumps(config.get("params") or {}),
+            }
+        ]
     )
     storage.write_parquet(params_row, TMP_DIR, token, "params.parquet")
 
@@ -542,3 +548,50 @@ async def save_strategy(request: schemas.SaveStrategyRequest):
         raise HTTPException(status_code=500, detail=f"Failed to save strategy: {str(e)}")
 
     return {"message": "Strategy saved successfully"}
+
+
+@router.post("/strategy/{port_id}/status")
+async def post_strategy_status(port_id: int, request: schemas.StrategyStatusRequest):
+    """운영 시작/중지 토글."""
+    if request.status not in VALID_STATUS:
+        raise HTTPException(status_code=422, detail=f"status must be one of {VALID_STATUS}")
+    try:
+        portfolio.set_status(port_id, request.status)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"unknown port_id: {port_id}")
+    return {"port_id": port_id, "status": request.status}
+
+
+@router.get("/rebal-signals")
+async def get_rebal_signals():
+    """active 전략의 리밸 전일 신호 (parquet 리더). 부재 시 빈 배열 — 500 금지."""
+    df = portfolio.rebal_signals()
+    if df.empty:
+        return {"as_of": None, "signals": []}
+    today = datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat()  # Lambda UTC 보정
+
+    signals = []
+    for pid, sub in df.groupby("port_id"):
+        sub = sub.sort_values(["rank", "ticker"], na_position="last")
+        next_rebal = str(sub["next_rebal"].iloc[0])[:10]
+        signals.append(
+            {
+                "port_id": int(pid),
+                "port_name": sub["port_name"].iloc[0],
+                "freq": sub["freq"].iloc[0],
+                "next_rebal": next_rebal,
+                "is_stale": today > next_rebal,
+                "items": [
+                    {
+                        "ticker": r.ticker,
+                        "name": r.name,
+                        "target_weight": float(r.target_weight),
+                        "prev_weight": float(r.prev_weight),
+                        "action": r.action,
+                        "rank": int(r.rank) if pd.notna(r.rank) else None,
+                    }
+                    for r in sub.itertuples()
+                ],
+            }
+        )
+    return {"as_of": str(df["as_of"].iloc[0])[:10], "signals": signals}

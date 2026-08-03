@@ -832,6 +832,30 @@ export interface FactorExposureResponse {
   note?: string;
 }
 
+// Types for rebalancing signals (Task 5)
+export interface RebalSignalItem {
+  ticker: string;
+  name: string;
+  target_weight: number;
+  prev_weight: number;
+  action: "enter" | "exit" | "keep";
+  rank: number | null;
+}
+
+export interface RebalSignal {
+  port_id: number;
+  port_name: string;
+  freq: string;
+  next_rebal: string;
+  is_stale: boolean;
+  items: RebalSignalItem[];
+}
+
+export interface RebalSignalsResponse {
+  as_of: string | null;
+  signals: RebalSignal[];
+}
+
 export const api = createApi({
   reducerPath: "api",
   baseQuery: fetchBaseQuery({
@@ -1087,6 +1111,11 @@ export const api = createApi({
       }),
     }),
 
+    // Rebalancing signals (next rebalancing window)
+    fetchRebalSignals: builder.query<RebalSignalsResponse, void>({
+      query: () => "/backtest/rebal-signals",
+    }),
+
     // Mutation endpoints
     runBacktest: builder.mutation<BacktestRunResult, BacktestPayload>({
       query: (payload) => ({
@@ -1109,6 +1138,17 @@ export const api = createApi({
         body: payload,
       }),
       invalidatesTags: ["Strategy", "Portfolio"],
+    }),
+    setStrategyStatus: builder.mutation<
+      { port_id: number; status: string },
+      { portId: number; status: "saved" | "active" }
+    >({
+      query: ({ portId, status }) => ({
+        url: `/backtest/strategy/${portId}/status`,
+        method: "POST",
+        body: { status },
+      }),
+      invalidatesTags: ["Strategy"],
     }),
 
     // Optimization endpoints
@@ -1189,10 +1229,13 @@ export const {
   useFetchInsightSignalStudyQuery,
   useFetchInsightFactorsQuery,
   useFetchInsightFactorExposureQuery,
+  // Rebalancing signals hook
+  useFetchRebalSignalsQuery,
   // Mutation hooks
   useRunBacktestMutation,
   useRunBacktestFromWeightsMutation,
   useSaveStrategyMutation,
+  useSetStrategyStatusMutation,
   // Optimization hooks
   useCalculateEfficientFrontierMutation,
   useCalculateRiskParityMutation,

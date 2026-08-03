@@ -110,6 +110,7 @@ class Portfolio(BaseModel):
     ann_ret: float
     ann_vol: float
     sharpe: float
+    status: Optional[str] = "saved"
 
     class Config:
         from_attributes = True
@@ -180,6 +181,12 @@ class SaveStrategyRequest(BaseModel):
     strategy_name: str
     algorithm: Optional[str]
     meta_id: List[int]
+
+
+class StrategyStatusRequest(BaseModel):
+    """전략 운영 상태 토글 요청."""
+
+    status: str
 
 
 class PortIdInfo(BaseModel):
@@ -276,5 +283,3 @@ class RiskParityResponse(BaseModel):
     volatility: float
     sharpe_ratio: float
     risk_contributions: Dict[str, float]
-
-

@@ -6,11 +6,13 @@ import {
   useFetchStRebalByIdQuery,
   useFetchStrategyByIdQuery,
   useFetchStrategyLiveByIdQuery,
+  useSetStrategyStatusMutation,
 } from "@/state/api";
 import React, { useMemo } from "react";
 import MetricSummary from "./MetricSummary";
 import LineChart from "./LineChart";
 import LiveMetricsTable from "./LiveMetricsTable";
+import NextRebalCard from "./NextRebalCard";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
@@ -45,6 +47,7 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
   const { data: strategyRebal } = useFetchStRebalByIdQuery(port_id);
   const { data: bmDetails } = useFetchBmByIdQuery(port_id);
   const { data: liveData } = useFetchStrategyLiveByIdQuery(port_id);
+  const [setStatus, { isLoading: toggling }] = useSetStrategyStatusMutation();
 
   const bmNavData: NavPoint[] = useMemo(
     () => (bmDetails?.nav ? JSON.parse(bmDetails.nav) : []),
@@ -77,6 +80,8 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
   }
 
   const strategyName = strategyInfo[0].port_name;
+  const status = strategyInfo[0].status;
+  const isActive = status === "active";
   const barSeries = [
     { key: "strategy", name: strategyName, color: "var(--chart-1)" },
     { key: "benchmark", name: "Benchmark", color: "var(--chart-2)" },
@@ -85,16 +90,39 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
   return (
     <div className="flex flex-col gap-6 pb-16">
       <PageHeader
-        title="Strategy Report"
+        title={
+          <div className="flex items-center gap-3">
+            <span>Strategy Report</span>
+            {isActive && (
+              <span className="badge-neutral" style={{ color: "var(--gains)" }}>
+                ACTIVE
+              </span>
+            )}
+          </div>
+        }
         description="Detailed performance analysis and metrics"
         actions={
-          <Link
-            href="/backtest/strategy_list"
-            className="btn-secondary inline-flex items-center"
-          >
-            <ArrowLeft size={16} className="mr-2" />
-            Back to List
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() =>
+                setStatus({
+                  portId: port_id,
+                  status: isActive ? "saved" : "active",
+                })
+              }
+              disabled={toggling}
+              className="btn-secondary inline-flex items-center text-sm"
+            >
+              {isActive ? "운영 중지" : "운영 시작"}
+            </button>
+            <Link
+              href="/backtest/strategy_list"
+              className="btn-secondary inline-flex items-center"
+            >
+              <ArrowLeft size={16} className="mr-2" />
+              Back to List
+            </Link>
+          </div>
         }
       />
 
@@ -103,6 +131,7 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
         rebalWeight={strategyRebal}
         bmMetrics={bmDetails.metrics}
       />
+      <NextRebalCard portId={port_id} isActive={isActive} />
       <LineChart
         strategyName={strategyName}
         strategyNav={strategyNav}
