@@ -29,6 +29,9 @@ _EMPTY = {
     "benchmark_metrics.parquet": ["port_id", *METRIC_COLS, "updated_at"],
     # live_nav: 저장 시점 이후 실전 데이터로 굴린 NAV — build_insights의 track_strategies가 생성
     "live_nav.parquet": ["port_id", "trade_date", "value", "as_of"],
+    # live_weights: 저장 시점 이후 드리프트 보유 비중 — build_insights의 track_strategies가
+    # live_nav와 함께(같은 book) 생성 (P7)
+    "live_weights.parquet": ["port_id", "trade_date", "ticker", "weight", "as_of"],
     # rebal_signals: 리밸 전일 신호 — build_insights의 rebal_signals가 생성
     "rebal_signals.parquet": [
         "port_id",
@@ -103,6 +106,16 @@ def live_nav(port_id: int) -> pd.DataFrame:
     """실전 추적 NAV [trade_date, value, as_of] — 없으면 빈 프레임."""
     df = _read("live_nav.parquet", filters=[("port_id", "==", port_id)])
     return df[["trade_date", "value", "as_of"]].sort_values("trade_date").reset_index(drop=True)
+
+
+def live_weights(port_id: int) -> pd.DataFrame:
+    """실전 추적 드리프트 보유 비중 (P7 생성) — [trade_date, ticker, weight]."""
+    df = _read("live_weights.parquet", filters=[("port_id", "==", port_id)])
+    return (
+        df[["trade_date", "ticker", "weight"]]
+        .sort_values(["trade_date", "ticker"])
+        .reset_index(drop=True)
+    )
 
 
 def port_summary() -> pd.DataFrame:

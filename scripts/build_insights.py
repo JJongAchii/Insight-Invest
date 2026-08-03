@@ -25,6 +25,9 @@ krx_flows 전체 로드(수백 MB)는 로컬에서만 허용 — Lambda에서는
   동일가중 횡단면 평균이고, 조건 없는 baseline 행이 비교 기준으로 함께 들어간다.
 - track_strategies: 저장된 전략의 실전(저장 후) NAV 추적 (P7)
   → {APP_DATA}/portfolio/live_nav.parquet [port_id, trade_date, value, as_of].
+  같은 book(드리프트 보유 비중)을 함수 내부에서 직접
+  {APP_DATA}/portfolio/live_weights.parquet [port_id, trade_date, ticker, weight,
+  as_of]로도 기록한다.
 - rebal_signals: active 전략의 리밸 전일 신호 — 다음 거래일이 새 주기면 목표 비중
   → {APP_DATA}/portfolio/rebal_signals.parquet.
 
@@ -537,6 +540,41 @@ def build_valuation_daily():
 MOMENTUM_WARMUP_DAYS = 400  # 모멘텀 12개월 룩백 + 여유 (저장 시점 이전 워밍업 데이터)
 
 
+def _book_to_weights(
+    book: pd.DataFrame, price: pd.DataFrame, port_id: int, nav_last
+) -> pd.DataFrame:
+    """엔진 book(index Date, columns ticker/weights)을 [port_id, trade_date, ticker,
+    weight] long으로 정규화.
+
+    calculate_nav는 매 리밸 구간의 마지막 날을 다음 구간의 리밸 행과 중복되지
+    않도록 제외한다(iloc[:-1]) — 그런데 마지막 구간은 다음 구간이 없어 그 날
+    (=nav 마지막 날)이 통째로 빠진다. book 마지막 행에 같은 구간의 가격 드리프트를
+    적용해(엔진과 동일한 renormalize 공식: w_i × price_rel_i, 합 1로 재정규화)
+    그 하루를 채운다 — 그래야 live_weights의 마지막 날짜가 live_nav와 맞는다.
+    """
+    book_last = book.index.max()
+    if book_last < nav_last:
+        tail = book.loc[[book_last]].set_index("ticker")["weights"]
+        tickers = tail.index.intersection(price.columns)
+        rel = price.loc[nav_last, tickers] / price.loc[book_last, tickers]
+        drifted = (tail.reindex(tickers) * rel).dropna()
+        if drifted.sum() > 0:
+            drifted = drifted / drifted.sum()
+            tail_row = drifted.rename("weights").rename_axis("ticker").reset_index()
+            tail_row.insert(0, "Date", nav_last)
+            book = pd.concat([book, tail_row.set_index("Date")])
+
+    bw = book.reset_index()[["Date", "ticker", "weights"]]
+    bw.columns = ["trade_date", "ticker", "weight"]
+    bw.insert(0, "port_id", port_id)
+    return bw
+
+
+def _write_live_weights(df: pd.DataFrame) -> None:
+    print(f"[live_weights] {len(df)}행")
+    storage.write_parquet(df, "portfolio", "live_weights.parquet")
+
+
 def build_track_strategies():
     """저장된 전략 실전 추적 (P7) — 저장 시점(created_at)부터 오늘까지
     POST /backtest와 동일한 엔진으로 NAV를 다시 굴린다.
@@ -544,14 +582,22 @@ def build_track_strategies():
     행: [port_id, trade_date, value, as_of]. NAV는 saved_at 기준 1000 시작.
     포트폴리오 단위 실패는 경고 후 스킵 (예: US 개별주 아카이브가 끝난 종목은
     가격이 있는 데까지만 커브가 나온다 — 엔진이 자동 처리).
+
+    부산물: 같은 book(드리프트 보유 비중)을 portfolio/live_weights.parquet로
+    이 함수가 직접 기록한다 — 반환값(DataFrame)은 BUILDERS 파이프라인이
+    live_nav.parquet 쓰기에 이미 쓰고 있어(한 빌더 두 산출물), rebal_signals의
+    빈-케이스 직접 기록과 같은 방식으로 여기서 바로 저장한다.
     """
+    wcols = portfolio._EMPTY["live_weights.parquet"]
     ports = portfolio.records()
     if ports.empty:
         print("[skip] track_strategies (저장된 포트폴리오 없음)")
+        _write_live_weights(pd.DataFrame(columns=wcols))
         return None
 
     st = meta.strategy_df().set_index("strategy_id")["strategy"]
     frames = []
+    weight_frames = []
     for p in ports.itertuples():
         try:
             saved_at = pd.Timestamp(p.created_at)
@@ -610,7 +656,7 @@ def build_track_strategies():
             seed.index = pd.DatetimeIndex([saved_norm])
             weight = pd.concat([seed, weight.loc[weight.index > saved_norm]])
 
-            _, nav, _ = backtest_result(
+            book, nav, _ = backtest_result(
                 weight=weight, price=price, start_date=saved_at.date(), cost_bps=cost_bps
             )
             nav = nav.dropna()
@@ -621,6 +667,8 @@ def build_track_strategies():
             part.columns = ["trade_date", "value"]
             part.insert(0, "port_id", int(p.port_id))
             frames.append(part)
+
+            weight_frames.append(_book_to_weights(book, price, int(p.port_id), nav.index.max()))
         except Exception as e:
             print(
                 f"[warn] track_strategies port_id={p.port_id}({p.port_name}) 실패: {e}",
@@ -629,12 +677,23 @@ def build_track_strategies():
 
     if not frames:
         print("[skip] track_strategies (추적 가능한 포트폴리오 없음)")
+        _write_live_weights(pd.DataFrame(columns=wcols))
         return None
 
     df = pd.concat(frames, ignore_index=True)
     df["trade_date"] = pd.to_datetime(df["trade_date"])
     df = df.sort_values(["port_id", "trade_date"]).reset_index(drop=True)
     df["as_of"] = pd.Timestamp(df["trade_date"].max()).strftime("%Y-%m-%d")
+
+    wdf = (
+        pd.concat(weight_frames, ignore_index=True)
+        if weight_frames
+        else pd.DataFrame(columns=wcols[:-1])
+    )
+    wdf = wdf.sort_values(["port_id", "trade_date", "ticker"]).reset_index(drop=True)
+    wdf["as_of"] = df["as_of"].iloc[0]
+    _write_live_weights(wdf[wcols])
+
     return df
 
 
