@@ -25,10 +25,16 @@ KR_ETF_META_ID_MIN = 900_000  # kr_etf_meta.parquet의 meta_id 대역 — ETF �
 
 @lru_cache(maxsize=1)
 def _qdata_us_tickers() -> frozenset:
-    """qdata 레이크(prices.parquet)에 있는 US 티커 — 신선한 소스 우선 판단용."""
+    """qdata 레이크(prices.parquet)에 있는 US 티커 — 신선한 소스 우선 판단용.
+
+    coverage()로 얻으면 안 된다 — krx 전 패널·US 아카이브까지 레이크 전 테이블을
+    스캔해 Lambda 2048MB를 뚫는다 (2026-08-03 /backtest/strategy/bm OOM 실측:
+    피크 ~2.0GB vs 직접 읽기 ~0.1GB). 필요한 건 yfinance 티커 목록뿐이므로
+    그 테이블 하나만 읽는다. test_prices_fresh_set가 회귀를 막는다.
+    """
     try:
-        cov = qdata_api.coverage()
-        return frozenset(cov[cov["source"] == "yfinance"].index)
+        wide = qdata_api.load_prices(fields=("adj_close",))["adj_close"]
+        return frozenset(str(t) for t in wide.columns)
     except FileNotFoundError:
         return frozenset()
 
