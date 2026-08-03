@@ -25,6 +25,8 @@ krx_flows 전체 로드(수백 MB)는 로컬에서만 허용 — Lambda에서는
   동일가중 횡단면 평균이고, 조건 없는 baseline 행이 비교 기준으로 함께 들어간다.
 - track_strategies: 저장된 전략의 실전(저장 후) NAV 추적 (P7)
   → {APP_DATA}/portfolio/live_nav.parquet [port_id, trade_date, value, as_of].
+- rebal_signals: active 전략의 리밸 전일 신호 — 다음 거래일이 새 주기면 목표 비중
+  → {APP_DATA}/portfolio/rebal_signals.parquet.
 
 모든 테이블에 as_of(마지막 거래일 "YYYY-MM-DD") 컬럼 포함.
 
@@ -634,6 +636,88 @@ def build_track_strategies():
     return df
 
 
+def build_rebal_signals():
+    """active 전략의 리밸 전일 신호 — 다음 거래일이 새 주기면 목표 비중 산출.
+
+    prev(직전 목표)는 저장 parquet이 아니라 엔진 재계산(bt.rebalance 마지막 행)
+    에서 얻는다 — 저장본은 백테스트 시점 이후 갱신되지 않아 오래 운영된 전략에서
+    낡는다. active 0개면 빈 파일을 직접 써서 잔존 신호를 지운다 (비활성화 직후
+    어제 신호가 남는 것 방지 — main()의 write 경로는 빈 프레임을 다루지 못한다).
+    """
+    from module import rebal_signal
+
+    ports = portfolio.records()
+    active = ports[ports["status"] == "active"] if not ports.empty else ports
+    sig_cols = portfolio._EMPTY["rebal_signals.parquet"]
+    if active.empty:
+        storage.write_parquet(pd.DataFrame(columns=sig_cols), "portfolio", "rebal_signals.parquet")
+        print("[rebal_signals] active 전략 없음 — 빈 파일 기록")
+        return None
+
+    st = meta.strategy_df().set_index("strategy_id")["strategy"]
+    names = meta.meta_df()[["ticker", "name"]].drop_duplicates("ticker").set_index("ticker")["name"]
+    frames = []
+    for p in active.itertuples():
+        try:
+            cfg = json.loads(p.config) if isinstance(p.config, str) and p.config.strip() else {}
+            algorithm = cfg.get("algorithm") or st.get(p.strategy_id, "eq")
+            freq = cfg.get("rebal_freq") or "M"
+            params = cfg.get("params") or {}
+
+            meta_ids = portfolio.universe(int(p.port_id))
+            bt = Backtest(strategy_name=p.port_name)
+            warmup = (pd.Timestamp.today() - pd.Timedelta(days=MOMENTUM_WARMUP_DAYS)).date()
+            price = bt.data(meta_id=meta_ids, start_date=warmup)
+            if price.empty:
+                raise ValueError("가격 데이터 없음")
+            if cfg.get("currency") == "KRW":
+                mapping = meta.resolve(meta_ids=meta_ids)
+                price = fx.to_krw(price, dict(zip(mapping["ticker"], mapping["iso_code"])))
+            # bt.rebalance는 내부에서 price.loc[start:end].dropna()를 적용한다 —
+            # 여기서도 미리 dropna해 next_period_weights와 bt.rebalance가 같은
+            # 패널을 보게 한다 (혼합 캘린더 NaN으로 두 계산이 갈리는 것 방지).
+            price = price.dropna()
+
+            as_of = price.index.max()
+            nxt = rebal_signal.next_business_day(as_of)
+            if not rebal_signal.is_new_period(as_of, nxt, freq):
+                continue  # 이번 밤은 신호 없음
+
+            target = rebal_signal.next_period_weights(price, algorithm, params)
+            if not target:
+                raise ValueError("목표 비중 산출 실패")
+            w = bt.rebalance(price=price, method=algorithm, freq=freq,
+                             custom_weight=params.get("weights"), params=params)
+            prev = w.iloc[-1].dropna().to_dict() if w is not None and not w.empty else {}
+
+            rows = pd.DataFrame(rebal_signal.classify_actions(prev, target))
+            rows.insert(0, "port_id", int(p.port_id))
+            rows.insert(1, "port_name", p.port_name)
+            rows.insert(2, "freq", freq)
+            rows.insert(3, "as_of", as_of.strftime("%Y-%m-%d"))
+            rows.insert(4, "next_rebal", nxt.strftime("%Y-%m-%d"))
+            rows["name"] = rows["ticker"].map(names).fillna(rows["ticker"])
+            frames.append(rows[sig_cols])
+            print(f"[rebal_signals] {p.port_name}: {len(rows)}행 (next {nxt.date()})")
+        except Exception as e:
+            print(f"[warn] rebal_signals 스킵 ({p.port_name}): {e}", file=sys.stderr)
+
+    if not frames:
+        storage.write_parquet(pd.DataFrame(columns=sig_cols), "portfolio", "rebal_signals.parquet")
+        print("[rebal_signals] 이번 밤 신호 없음 — 빈 파일 기록")
+        return None
+    df = pd.concat(frames, ignore_index=True)
+    df["as_of"] = df["as_of"]  # 문자열 유지
+    if df["as_of"].nunique() > 1:
+        # 막지 않는다 — 전략별 유니버스가 다르면 as_of가 정당하게 갈릴 수 있고,
+        # API 응답은 표시용으로 첫 행 as_of만 쓴다 (app/routers/backtest.py).
+        print(
+            f"[warn] rebal_signals: 전략별 as_of 불일치 {sorted(df['as_of'].unique())}",
+            file=sys.stderr,
+        )
+    return df
+
+
 # ---------------------------------------------------------------- Track B: 신호 이벤트 스터디 / 팩터 렌즈
 
 
@@ -1083,6 +1167,7 @@ BUILDERS = [
     ("insight/factor_pct_ticker.parquet", build_factor_pct_ticker, {}),  # 브리프 재료 + Lambda 부담 경감
     ("insight/spotlight.parquet", build_spotlight, {}),  # 오늘의 신호 종목 (전시장 스캔)
     ("portfolio/live_nav.parquet", build_track_strategies, {}),  # 전략 실전 추적 (P7)
+    ("portfolio/rebal_signals.parquet", build_rebal_signals, {}),  # active 전략 리밸 전일 신호
 ]
 
 
