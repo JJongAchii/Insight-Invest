@@ -18,9 +18,14 @@ from pydantic import BaseModel
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../../../")))
 
-from datastore import fx, meta
+from qdata import api as qdata_api
+
+from datastore import fx
 from datastore import holdings as holdings_store
+from datastore import meta
 from datastore.prices import KR_ETF_META_ID_MIN, read_price_data
+from module import portfolio_risk
+from module.backtest import Backtest
 
 logger = logging.getLogger(__name__)
 
@@ -230,7 +235,9 @@ def get_holdings():
 
         mv_krw = mv_native * fxrate if (mv_native is not None and fxrate is not None) else None
         cost_krw = cost_native * fxrate if fxrate is not None else None
-        day_native = shares * price * (chg / 100.0) if (price is not None and chg is not None) else None
+        day_native = (
+            shares * price * (chg / 100.0) if (price is not None and chg is not None) else None
+        )
         day_krw = day_native * fxrate if (day_native is not None and fxrate is not None) else None
 
         # 요약 누적 — 평가 가능한(가격 있는) 포지션만 손익 총계에 반영
@@ -361,3 +368,172 @@ def add_holding(request: HoldingRequest):
 def remove_holding(meta_id: int):
     holdings_store.remove(meta_id)
     return {"n_positions": int(len(holdings_store.list_items()))}
+
+
+# ---------- 위험 요약 ----------
+
+RISK_HISTORY_START = "2019-06-03"  # covid_2020 창 + 워밍업 여유
+STALE_CAL_DAYS = 7  # 패널 마지막 날짜보다 이보다 오래 뒤처지면 동결 의심
+HALT_ROWS = (
+    5  # 최근 N행 거래량 합 0 → 거래정지 의심 (spotlight와 같은 취지, 여기는 최근 5일 합 기준)
+)
+
+
+def _recent_kr_volume(tickers: list) -> pd.DataFrame:
+    """최근 ~3주 KR 거래량 패널 (일자×티커). 실패 시 빈 프레임 — 경고만 포기."""
+    try:
+        start = (pd.Timestamp.today() - pd.Timedelta(days=21)).strftime("%Y-%m-%d")
+        px = qdata_api.load_krx_prices(start=start, tickers=tickers, columns=["volume"])
+        return px.pivot(index="date", columns="ticker", values="volume")
+    except Exception:
+        logger.debug("risk 거래량 조회 실패 — 정지 경고 생략", exc_info=True)
+        return pd.DataFrame()
+
+
+@router.get("/risk")
+def get_holdings_risk():
+    """보유 조합의 역사적 위험 요약 — 현재 비중 고정 가정 (module/portfolio_risk).
+
+    판단 라벨 없음 — 수치·전제·데이터 경고만. holdings 비면 empty, 공통 이력
+    부족이면 insufficient. 어느 경로든 500을 내지 않는다.
+    """
+    items = holdings_store.list_items()
+    if items.empty:
+        return {"empty": True}
+
+    md = meta.meta_df()[_META_COLS]
+    df = items.merge(md, on="meta_id", how="left")
+    price_map = build_price_map(df[["meta_id", "ticker", "iso_code"]])
+    usdkrw = _usdkrw_latest()
+
+    warnings: list = []
+    mv: dict = {}
+    tickers_iso: dict = {}
+    names: dict = {}
+    for r in df.itertuples():
+        ticker = _none_if_na(r.ticker)
+        price, _chg = price_map.get(int(r.meta_id), (None, None))
+        fxrate = usdkrw if r.iso_code == "US" else 1.0
+        if ticker is None or price is None or fxrate is None:
+            warnings.append(
+                {
+                    "kind": "no_price",
+                    "ticker": ticker,
+                    "detail": "가격 조회 실패 — 위험 계산에서 제외",
+                }
+            )
+            continue
+        mv[ticker] = mv.get(ticker, 0.0) + float(r.shares) * price * fxrate
+        tickers_iso[ticker] = r.iso_code
+        names[ticker] = _none_if_na(r.name) or ticker
+
+    total = sum(mv.values())
+    if not mv or total <= 0:
+        return {"empty": True, "reason": "평가 가능한 포지션 없음"}
+    weights = {t: v / total for t, v in mv.items()}
+
+    try:
+        prices = Backtest().data(
+            meta_id=[int(x) for x in df["meta_id"]], start_date=RISK_HISTORY_START
+        )
+    except Exception:
+        logger.warning("risk 가격 이력 로드 실패", exc_info=True)
+        return {"empty": True, "reason": "가격 이력 로드 실패"}
+    prices = prices[[c for c in prices.columns if c in weights]]
+    missing = sorted(set(weights) - set(prices.columns))
+    for t in missing:
+        warnings.append({"kind": "no_history", "ticker": t, "detail": "가격 이력 없음 — 제외"})
+        weights.pop(t)
+    if not weights:
+        return {"empty": True, "reason": "가격 이력 있는 포지션 없음"}
+    total_w = sum(weights.values())
+    weights = {t: w / total_w for t, w in weights.items()}
+
+    if any(iso == "US" for iso in tickers_iso.values()):
+        try:
+            prices = fx.to_krw(prices, tickers_iso)
+        except Exception:
+            # 환산 불가면 US를 빼고 진행 — 통화가 섞인 패널을 조용히 쓰지 않는다
+            logger.warning("risk 환율 변환 실패 — US 제외", exc_info=True)
+            for t in [t for t, iso in tickers_iso.items() if iso == "US"]:
+                if t in weights:
+                    warnings.append(
+                        {
+                            "kind": "no_fx",
+                            "ticker": t,
+                            "detail": "환율 조회 실패 — 위험 계산에서 제외",
+                        }
+                    )
+                    weights.pop(t)
+            prices = prices[[c for c in prices.columns if c in weights]]
+            if not weights:
+                return {"empty": True, "reason": "환율 조회 실패로 평가 가능한 포지션 없음"}
+            total_w = sum(weights.values())
+            weights = {t: w / total_w for t, w in weights.items()}
+
+    # 데이터 품질 경고 — 조용히 계산하지 않는다 (동결·정지는 위험 과소평가 방향)
+    panel_end = prices.index.max()
+    for t in prices.columns:
+        last = prices[t].last_valid_index()
+        if last is not None and (panel_end - last).days > STALE_CAL_DAYS:
+            warnings.append(
+                {
+                    "kind": "stale",
+                    "ticker": t,
+                    "detail": f"가격 이력이 {last.date()}에서 멈춤 — 이후 변동 미반영",
+                }
+            )
+    kr = [t for t, iso in tickers_iso.items() if iso == "KR" and t in prices.columns]
+    vol = _recent_kr_volume(kr)
+    for t in kr:
+        if t in vol.columns and len(vol) >= HALT_ROWS and float(vol[t].tail(HALT_ROWS).sum()) == 0:
+            warnings.append(
+                {
+                    "kind": "halted",
+                    "ticker": t,
+                    "detail": "최근 5일 거래량 0 — 동결 가격이 변동성·상관을 과소평가",
+                }
+            )
+
+    report = portfolio_risk.build_report(prices, weights)
+    if report.get("insufficient"):
+        return {
+            "insufficient": True,
+            "overlap_days": report["overlap_days"],
+            "warnings": warnings,
+        }
+    if report["overlap_days"] < 250:
+        warnings.append(
+            {
+                "kind": "short_history",
+                "ticker": None,
+                "detail": f"공통 가격 이력 {report['overlap_days']}일 — 최근 상장 종목이 분석 구간을 절단",
+            }
+        )
+
+    corr = report["corr"]
+    corr_payload = None
+    if corr is not None:
+        order = list(corr.columns)
+        corr_payload = {
+            "tickers": order,
+            "names": [names.get(t, t) for t in order],
+            "values": [[_r(corr.loc[a, b], 2) for b in order] for a in order],
+        }
+
+    return {
+        "ann_vol": _r(report["ann_vol"], 1),
+        "max_drawdown": _r(report["max_drawdown"], 1),
+        "mdd_from": report["mdd_from"],
+        "mdd_to": report["mdd_to"],
+        "avg_pair_corr": _r(report["avg_pair_corr"], 2),
+        "corr": corr_payload,
+        "scenarios": [{**s, "ret_pct": _r(s["ret_pct"], 1)} for s in report["scenarios"]],
+        "warnings": warnings,
+        "basis": {
+            "n_assets": len(weights),
+            "weights_as_of": date.today().isoformat(),
+            "overlap_days": report["overlap_days"],
+            "window": report["window"],
+        },
+    }
