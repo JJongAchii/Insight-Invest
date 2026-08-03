@@ -8,7 +8,6 @@
 from functools import lru_cache
 
 import pandas as pd
-
 from qdata import api as qdata_api
 
 PHASE_START = "1998-01"
@@ -79,15 +78,17 @@ def phase_history() -> pd.DataFrame:
     """월간 국면 히스토리 (1998-01~).
 
     컬럼: cli, cli_delta, cpi_yoy, cpi_yoy_delta, growth_up, inflation_up, phase.
-    인덱스: 월간 Period. CLI는 참조월 다음 달 중순 발표라 인덱스를 1개월 앞으로
-    시프트해 '알려진 시점' 기준으로 정렬한다 (look-ahead 방지).
+    인덱스: 월간 Period. CLI·CPI 모두 참조월 다음 달 중순 발표라 인덱스를
+    1개월 앞으로 시프트해 '알려진 시점' 기준으로 정렬한다 (look-ahead 방지).
+    2026-08 이전에는 CPI만 시차가 빠져 있어 국면이 실제 발표보다 2~6주 먼저
+    바뀌어 보였다 — test_regime_lag가 회귀를 막는다.
     """
     cli = _cli("USA").copy()
     cli.index = pd.PeriodIndex(cli.index, freq="M") + 1  # 발표 시차 1개월
     cli_delta = cli.diff(3)
 
     cpi = _cpi()
-    cpi = cpi.set_axis(pd.PeriodIndex(cpi.index, freq="M"))
+    cpi = cpi.set_axis(pd.PeriodIndex(cpi.index, freq="M") + 1)  # 발표 시차 1개월
     cpi_yoy = cpi.pct_change(12) * 100
     cpi_yoy_delta = cpi_yoy.diff(3)
 
@@ -102,9 +103,7 @@ def phase_history() -> pd.DataFrame:
     df = df.loc[pd.Period(PHASE_START, freq="M") :]
     df["growth_up"] = df["cli_delta"] > 0
     df["inflation_up"] = df["cpi_yoy_delta"] > 0
-    df["phase"] = [
-        _PHASES[(g, i)] for g, i in zip(df["growth_up"], df["inflation_up"])
-    ]
+    df["phase"] = [_PHASES[(g, i)] for g, i in zip(df["growth_up"], df["inflation_up"])]
     return df
 
 
