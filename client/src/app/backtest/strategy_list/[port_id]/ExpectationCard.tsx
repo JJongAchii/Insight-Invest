@@ -9,12 +9,17 @@ const fmtPct = (v: number, digits = 2): string =>
   `${v >= 0 ? "+" : ""}${v.toFixed(digits)}%`;
 
 /** p<50이면 "하위 p%", p>=50이면 "상위 (100-p)%" — 어느 쪽이든 원 백분위값을 괄호로
- *  병기해 숫자를 왜곡하지 않는다. 판단(좋다/나쁘다) 없이 분포 내 위치만 서술한다. */
+ *  병기해 숫자를 왜곡하지 않는다. 판단(좋다/나쁘다) 없이 분포 내 위치만 서술한다.
+ *  보수(100-p)는 반올림된 p에서 유도하고, 표시값은 0%가 나오지 않도록 최소 1%로
+ *  클램프한다(괄호 안 원 백분위값은 클램프하지 않는다). */
 const percentileLabel = (p: number): string => {
   const rounded = Math.round(p);
-  return p < 50
-    ? `하위 ${rounded}% (백분위 ${rounded})`
-    : `상위 ${Math.round(100 - p)}% (백분위 ${rounded})`;
+  if (p < 50) {
+    const bottomPct = Math.max(1, rounded);
+    return `하위 ${bottomPct}% (백분위 ${rounded})`;
+  }
+  const topPct = Math.max(1, 100 - rounded);
+  return `상위 ${topPct}% (백분위 ${rounded})`;
 };
 
 const PercentileStrip: React.FC<{ p: number }> = ({ p }) => {

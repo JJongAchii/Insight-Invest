@@ -34,6 +34,10 @@ const LiveHeadline: React.FC<LiveHeadlineProps> = ({ live }) => {
   const peak = Math.max(...nav.map((p) => p.value));
   const cumRetPct = (last / 1000 - 1) * 100;
   const ddPct = (last / peak - 1) * 100;
+  // nav[0] is the saved_at anchor row, not an elapsed trading day — matches the
+  // server's live_percentile n_days (= len(live_nav) - 1), so this card and
+  // ExpectationCard's "{n_days}거래일" agree.
+  const elapsedDays = Math.max(0, nav.length - 1);
   const annRet = live?.metrics_live?.ann_ret ?? null;
   const btAnnRet = live?.metrics_backtest?.ann_ret ?? null;
   const btMdd = live?.metrics_backtest?.mdd ?? null;
@@ -69,7 +73,7 @@ const LiveHeadline: React.FC<LiveHeadlineProps> = ({ live }) => {
         />
         <StatTile
           label="경과 거래일"
-          value={`${nav.length}일`}
+          value={`${elapsedDays}일`}
           sub={savedAtSub}
         />
       </div>

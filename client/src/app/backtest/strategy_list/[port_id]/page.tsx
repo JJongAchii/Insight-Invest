@@ -47,10 +47,13 @@ const buildReturnData = (
   const bmByPeriod = new Map(bmReturns.map((r) => [r.period, r.return]));
 
   const hasLive = !!liveNav && liveNav.length > 0;
+  // liveNav[0] is the saved_at anchor (~1000 base) — pass it as initialRef so the
+  // first (partial) period since save also gets a bar, not just subsequent ones.
   const liveReturns = hasLive
     ? calculatePeriodReturns(
         liveNav!.map((p) => ({ trade_date: p.date, value: p.value })),
-        period
+        period,
+        liveNav![0].value
       )
     : [];
   const liveByPeriod = new Map(liveReturns.map((r) => [r.period, r.return]));
