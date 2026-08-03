@@ -527,7 +527,7 @@ export interface AnalyticsTrading {
 
 export interface StrategyAnalyticsResponse {
   empty?: boolean;
-  premise?: AnalyticsPremise;
+  premise?: AnalyticsPremise | null;
   rolling?: AnalyticsRolling | null;
   drawdowns?: AnalyticsDrawdowns | null;
   phases?: { rows: AnalyticsPhaseRow[] } | null;
@@ -1012,7 +1012,7 @@ export const api = createApi({
     }),
     fetchStrategyAnalytics: builder.query<StrategyAnalyticsResponse, number>({
       query: (portId) => `/backtest/strategy/analytics/${portId}`,
-      providesTags: ["Strategy"],
+      providesTags: ["Portfolio"],
     }),
     fetchMacroInfo: builder.query({
       query: () => "/regime/info",
