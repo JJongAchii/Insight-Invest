@@ -254,10 +254,36 @@ def get_attention():
     except Exception:
         logger.warning("attention risk gauge 실패", exc_info=True)
 
+    # ── 리밸 전일 신호 (active 전략) ─────────────────────────────────
+    try:
+        sig = portfolio.rebal_signals()
+        if not sig.empty:
+            today = date.today().isoformat()
+            for pid, sub in sig.groupby("port_id"):
+                next_rebal = str(sub["next_rebal"].iloc[0])[:10]
+                if next_rebal < today:
+                    continue  # 지난 신호 — 리밸일이 지났으면 조용히 제외
+                n_enter = int((sub["action"] == "enter").sum())
+                n_exit = int((sub["action"] == "exit").sum())
+                n_keep = int((sub["action"] == "keep").sum())
+                items.append(
+                    {
+                        "severity": "high",
+                        "category": "strategy",
+                        "title": f"내일 리밸: {sub['port_name'].iloc[0]}",
+                        "detail": f"진입 {n_enter} · 이탈 {n_exit} · 유지 {n_keep} — 목표 비중은 전략 상세에서",
+                        "link": f"/backtest/strategy_list/{int(pid)}",
+                    }
+                )
+    except Exception:
+        logger.debug("attention rebal signals 실패", exc_info=True)
+
     # ── 전략 드로다운 (live_nav) ─────────────────────────────────────
     try:
         reg = portfolio.registry()
         for pr in reg.itertuples():
+            if getattr(pr, "status", "saved") != "active":
+                continue  # 운영 중인 전략만 경보 — 저장만 된 전략의 낙폭은 소음
             try:
                 ln = portfolio.live_nav(int(pr.port_id))
             except Exception:
