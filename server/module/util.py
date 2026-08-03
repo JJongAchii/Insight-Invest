@@ -81,6 +81,22 @@ def resample_data(price: pd.DataFrame, freq: str = "M", type: str = "head") -> p
     return res_pd
 
 
+def truncate_to_common_history(price: pd.DataFrame) -> pd.DataFrame:
+    """전 컬럼에 가격이 존재하는 마지막 날짜까지로 패널을 절단한다.
+
+    일부 자산의 시세가 중간에 끊기면(US 아카이브 동결 등) calculate_nav의
+    NaN-skip 합산(weighted_returns.sum(axis=1))이 그 자산 가치를 0으로 만들어,
+    NAV가 단절 시점에 동결 비중만큼 거짓 급락한다 (2026-08 실측: 동결 3/4
+    유니버스 -75.1%). 커브가 짧은 쪽에 맞춰 끝나는 것이 정직하다 — 호출부는
+    절단된 as_of를 그대로 노출해 stale함이 보이게 한다.
+    """
+    ends = [col.last_valid_index() for _, col in price.items()]
+    ends = [e for e in ends if e is not None]
+    if not ends:
+        return price.iloc[0:0]
+    return price.loc[: min(ends)]
+
+
 def calculate_nav(
     weight: pd.DataFrame,
     price: Optional[pd.DataFrame] = None,
@@ -167,13 +183,28 @@ def calculate_nav(
         if price_slice.empty:
             continue
 
+        # 보유 자산의 시세가 구간 중간에 끊기면(US 아카이브 동결 등) 커브를
+        # 거기서 끝낸다 — 아래 NaN-skip 합산(weighted_returns.sum)이 그 자산
+        # 가치를 0으로 만들어 NAV가 동결 비중만큼 거짓 급락하기 때문
+        # (2026-08 실측: 동결 3/4 유니버스 -75.1%). 미보유 자산의 단절은
+        # rebal_weights.index 슬라이스 밖이라 커브에 영향이 없다.
+        clipped = truncate_to_common_history(price_slice)
+        stop_early = len(clipped) < len(price_slice)
+        price_slice = clipped
+        if price_slice.empty:
+            break
+
         # Transaction cost: turnover over the union of old/new tickers
         if cost_bps:
             union = rebal_weights.index.union(drifted_weights.index)
             turnover = (
-                rebal_weights.reindex(union, fill_value=0.0)
-                - drifted_weights.reindex(union, fill_value=0.0)
-            ).abs().sum()
+                (
+                    rebal_weights.reindex(union, fill_value=0.0)
+                    - drifted_weights.reindex(union, fill_value=0.0)
+                )
+                .abs()
+                .sum()
+            )
             cost_fraction = turnover * cost_bps / 10_000
             if cost_fraction:
                 nav_value = nav_value * (1 - cost_fraction)
@@ -214,6 +245,9 @@ def calculate_nav(
         weights_stacked = weights_over_time.stack().reset_index()
         weights_stacked.columns = ["Date", "ticker", "weights"]
         book_list.append(weights_stacked)
+
+        if stop_early:
+            break  # 이후 구간은 보유 자산 시세 부재로 계산 불가 — 정직하게 종료
 
     # Combine all weights and NAV data
     book = pd.concat(book_list, ignore_index=True).set_index("Date")

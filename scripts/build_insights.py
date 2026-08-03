@@ -584,6 +584,8 @@ def build_track_strategies():
             if cfg.get("currency") == "KRW":
                 mapping = meta.resolve(meta_ids=meta_ids)
                 price = fx.to_krw(price, dict(zip(mapping["ticker"], mapping["iso_code"])))
+            # 보유 자산의 시세 단절 처리는 엔진(calculate_nav)이 구간 단위로 한다 —
+            # 패널 전체를 자르면 미보유 동결 자산 때문에 멀쩡한 커브까지 잘린다.
 
             weight = bt.rebalance(
                 price=price,
