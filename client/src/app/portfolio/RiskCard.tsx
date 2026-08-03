@@ -35,8 +35,8 @@ const CorrHeatmap: React.FC<{ corr: RiskCorr }> = ({ corr }) => (
       <thead>
         <tr>
           <th />
-          {corr.names.map((n) => (
-            <th key={n} className="px-1.5 py-1 font-normal text-ink-muted max-w-[72px] truncate">
+          {corr.names.map((n, j) => (
+            <th key={corr.tickers[j]} className="px-1.5 py-1 font-normal text-ink-muted max-w-[72px] truncate">
               {n}
             </th>
           ))}
@@ -44,7 +44,7 @@ const CorrHeatmap: React.FC<{ corr: RiskCorr }> = ({ corr }) => (
       </thead>
       <tbody>
         {corr.names.map((rowName, i) => (
-          <tr key={rowName}>
+          <tr key={corr.tickers[i]}>
             <td className="pr-2 py-1 text-ink-muted max-w-[96px] truncate">{rowName}</td>
             {corr.values[i].map((v, j) => (
               <td
@@ -102,7 +102,7 @@ const RiskCard: React.FC = () => {
         현재 비중 고정 가정 · {data.basis?.window.start} ~ {data.basis?.window.end}
       </p>
       <div className="flex flex-wrap gap-3">
-        <Tile label="연환산 변동성" value={fmtPct(data.ann_vol)} />
+        <Tile label="연환산 변동성" value={data.ann_vol == null ? "—" : `${data.ann_vol.toFixed(1)}%`} />
         <Tile
           label="최대 낙폭"
           value={fmtPct(data.max_drawdown)}

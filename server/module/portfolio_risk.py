@@ -36,6 +36,7 @@ def clean_panel(prices: pd.DataFrame) -> pd.DataFrame:
     starts = [s for s in starts if s is not None]
     if not starts:
         return prices.iloc[0:0]
+    # 공통 시작일에 정확히 NaN인 컬럼(캘린더 불일치)은 첫 수익률 하루가 0 기여로 빠진다 — 60일+ 창에서 무시 가능
     return prices.loc[max(starts) :].ffill()
 
 

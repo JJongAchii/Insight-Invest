@@ -374,15 +374,16 @@ def remove_holding(meta_id: int):
 
 RISK_HISTORY_START = "2019-06-03"  # covid_2020 창 + 워밍업 여유
 STALE_CAL_DAYS = 7  # 패널 마지막 날짜보다 이보다 오래 뒤처지면 동결 의심
-HALT_ROWS = 5  # 최근 N행 거래량 합 0 → 거래정지 의심 (spotlight와 같은 기준)
+HALT_ROWS = (
+    5  # 최근 N행 거래량 합 0 → 거래정지 의심 (spotlight와 같은 취지, 여기는 최근 5일 합 기준)
+)
 
 
 def _recent_kr_volume(tickers: list) -> pd.DataFrame:
     """최근 ~3주 KR 거래량 패널 (일자×티커). 실패 시 빈 프레임 — 경고만 포기."""
     try:
         start = (pd.Timestamp.today() - pd.Timedelta(days=21)).strftime("%Y-%m-%d")
-        px = qdata_api.load_krx_prices(start=start, columns=["volume"])
-        px = px[px["ticker"].isin(tickers)]
+        px = qdata_api.load_krx_prices(start=start, tickers=tickers, columns=["volume"])
         return px.pivot(index="date", columns="ticker", values="volume")
     except Exception:
         logger.debug("risk 거래량 조회 실패 — 정지 경고 생략", exc_info=True)
