@@ -453,6 +453,103 @@ export interface StrategyLiveResponse {
   nav: NavPoint[];
   metrics_live: Partial<MetricSet>;
   metrics_backtest: Partial<MetricSet>;
+  weights?: LiveWeightRow[] | null;
+  expectation?: LiveExpectation | null;
+}
+
+// Types for analytics operations (Phase 1)
+export interface AnalyticsPremise {
+  algorithm: string | null;
+  rebal_freq: string | null;
+  cost_bps: number | null;
+  currency: string | null;
+  universe_n: number;
+  saved_at: string | null;
+  bt_start: string;
+  bt_end: string;
+  bt_days: number;
+  n_rebals: number | null;
+  cost_warning: boolean;
+}
+
+export interface AnalyticsRollingRow {
+  date: string;
+  roll_ret: number;
+  roll_sharpe: number;
+}
+
+export interface AnalyticsRolling {
+  window: number;
+  rows: AnalyticsRollingRow[];
+  bm_rows: AnalyticsRollingRow[] | null;
+}
+
+export interface DrawdownEpisode {
+  depth_pct: number;
+  peak: string;
+  trough: string;
+  recover: string | null;
+  days_to_recover: number | null;
+}
+
+export interface AnalyticsDrawdowns {
+  underwater: { date: string; dd_pct: number }[];
+  episodes: DrawdownEpisode[];
+}
+
+export interface AnalyticsPhaseRow {
+  phase: string;
+  mean_ret_pct: number;
+  n_months: number;
+  bm_mean_ret_pct: number | null;
+}
+
+export interface AnalyticsCrisisRow {
+  key: string;
+  ret_pct: number | null;
+  note: string | null;
+}
+
+export interface AnalyticsMonthly {
+  win_rate: number | null;
+  win_rate_vs_bm: number | null;
+  best: { month: string; ret_pct: number }[];
+  worst: { month: string; ret_pct: number }[];
+}
+
+export interface AnalyticsTrading {
+  n_rebals: number;
+  rebals_per_year: number | null;
+  avg_turnover: number | null;
+  cost_drag_pct_10bps: number | null;
+  cost_drag_pct_30bps: number | null;
+}
+
+export interface StrategyAnalyticsResponse {
+  empty?: boolean;
+  premise?: AnalyticsPremise;
+  rolling?: AnalyticsRolling | null;
+  drawdowns?: AnalyticsDrawdowns | null;
+  phases?: { rows: AnalyticsPhaseRow[] } | null;
+  crisis?: AnalyticsCrisisRow[];
+  monthly?: AnalyticsMonthly | null;
+  trading?: AnalyticsTrading | null;
+  notes?: Record<string, string>;
+  as_of?: string | null;
+}
+
+export interface LiveExpectation {
+  n_days: number;
+  live_ret_pct: number;
+  ret_percentile: number;
+  live_dd_pct: number;
+  dd_percentile: number;
+}
+
+export interface LiveWeightRow {
+  trade_date: string;
+  ticker: string;
+  weight: number;
 }
 
 // Types for regime operations
@@ -913,6 +1010,10 @@ export const api = createApi({
       query: (port_id) => `backtest/strategy/live/${port_id}`,
       providesTags: ["Portfolio"],
     }),
+    fetchStrategyAnalytics: builder.query<StrategyAnalyticsResponse, number>({
+      query: (portId) => `/backtest/strategy/analytics/${portId}`,
+      providesTags: ["Strategy"],
+    }),
     fetchMacroInfo: builder.query({
       query: () => "/regime/info",
     }),
@@ -1189,6 +1290,7 @@ export const {
   useFetchStRebalByIdQuery,
   useFetchBmByIdQuery,
   useFetchStrategyLiveByIdQuery,
+  useFetchStrategyAnalyticsQuery,
   useFetchMacroInfoQuery,
   useFetchMacroDataQuery,
   useFetchRegimePhaseQuery,
