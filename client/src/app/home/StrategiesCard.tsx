@@ -21,6 +21,7 @@ interface StrategyRow {
   ann_ret: number;
   ann_vol: number;
   sharpe: number;
+  status?: string;
 }
 
 interface StrategyNavRow {
@@ -90,8 +91,15 @@ const StrategiesCard: React.FC = () => {
                     }
                   >
                     <td className="table-cell">
-                      <span className="font-medium text-ink">{s.port_name}</span>
-                      <span className="ml-1.5 text-xs text-ink-muted">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-ink">{s.port_name}</span>
+                        {s.status === "active" && (
+                          <span className="badge-neutral" style={{ color: "var(--gains)" }}>
+                            ACTIVE
+                          </span>
+                        )}
+                      </div>
+                      <span className="ml-0 text-xs text-ink-muted">
                         {s.strategy_name}
                       </span>
                     </td>

@@ -11,6 +11,7 @@ export interface Strategy {
   ann_ret: number;
   ann_vol: number;
   sharpe: number;
+  status?: string;
 }
 
 interface StrategyNav {
@@ -55,8 +56,15 @@ const Contents = ({
             onClick={() => handleGridClick(strategy.port_id)}
           >
             <div className="w-1/2 pr-4">
-              <div className="font-semibold text-ink mb-1">
-                {strategy.port_name}
+              <div className="flex items-center gap-2 mb-1">
+                <div className="font-semibold text-ink">
+                  {strategy.port_name}
+                </div>
+                {strategy.status === "active" && (
+                  <span className="badge-neutral" style={{ color: "var(--gains)" }}>
+                    ACTIVE
+                  </span>
+                )}
               </div>
               <div className="text-ink-muted text-xs mb-3">
                 {strategy.strategy_name}
