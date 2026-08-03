@@ -19,7 +19,8 @@ METRIC_COLS = ["ann_ret", "ann_vol", "sharpe", "mdd", "skew", "kurt", "var", "cv
 
 _EMPTY = {
     # config: 백테스트 실행 설정 JSON 문자열 (스키마 확장 — 구 행은 컬럼 부재 → None)
-    "portfolio.parquet": ["port_id", "port_name", "strategy_id", "created_at", "config"],
+    # status: 운영 상태 saved|active (스키마 확장 — 구 행은 컬럼 부재 → "saved")
+    "portfolio.parquet": ["port_id", "port_name", "strategy_id", "created_at", "config", "status"],
     "universe.parquet": ["port_id", "meta_id"],
     "nav.parquet": ["port_id", "trade_date", "value"],
     "rebalance.parquet": ["port_id", "rebal_date", "ticker", "weight"],
@@ -28,6 +29,20 @@ _EMPTY = {
     "benchmark_metrics.parquet": ["port_id", *METRIC_COLS, "updated_at"],
     # live_nav: 저장 시점 이후 실전 데이터로 굴린 NAV — build_insights의 track_strategies가 생성
     "live_nav.parquet": ["port_id", "trade_date", "value", "as_of"],
+    # rebal_signals: 리밸 전일 신호 — build_insights의 rebal_signals가 생성
+    "rebal_signals.parquet": [
+        "port_id",
+        "port_name",
+        "freq",
+        "as_of",
+        "next_rebal",
+        "ticker",
+        "name",
+        "target_weight",
+        "prev_weight",
+        "action",
+        "rank",
+    ],
 }
 
 
@@ -49,23 +64,32 @@ def _upsert(name: str, port_id: int, rows: pd.DataFrame) -> None:
 
 
 def registry() -> pd.DataFrame:
-    """[port_id, port_name, strategy_name] — tb_portfolio ⋈ tb_strategy."""
-    ports = _read("portfolio.parquet")
+    """[port_id, port_name, strategy_name, status] — tb_portfolio ⋈ tb_strategy."""
+    ports = records()  # 구 행은 status를 "saved"로 채운다.
     if ports.empty:
-        return pd.DataFrame(columns=["port_id", "port_name", "strategy_name"])
+        return pd.DataFrame(columns=["port_id", "port_name", "strategy_name", "status"])
     st = meta.strategy_df()[["strategy_id", "strategy_name"]]
-    return ports.merge(st, on="strategy_id", how="left")[["port_id", "port_name", "strategy_name"]]
+    return ports.merge(st, on="strategy_id", how="left")[
+        ["port_id", "port_name", "strategy_name", "status"]
+    ]
 
 
 def records() -> pd.DataFrame:
-    """portfolio.parquet 원본 행 전체 [port_id, port_name, strategy_id, created_at, config].
+    """portfolio.parquet 원본 행 전체 [port_id, port_name, strategy_id, created_at, config, status].
 
     config는 JSON 문자열 (P2 이전 행은 컬럼 부재 → None으로 채움).
+    status는 saved|active (구 행은 컬럼 부재 → "saved"로 채움).
     """
     df = _read("portfolio.parquet")
     if "config" not in df.columns:
         df = df.copy()
         df["config"] = None
+    if "status" not in df.columns:
+        df = df.copy()
+        df["status"] = "saved"
+    else:
+        df = df.copy()
+        df["status"] = df["status"].fillna("saved")
     return df
 
 
@@ -82,7 +106,7 @@ def live_nav(port_id: int) -> pd.DataFrame:
 
 
 def port_summary() -> pd.DataFrame:
-    """[port_id, port_name, strategy_name, ann_ret, ann_vol, sharpe]."""
+    """[port_id, port_name, strategy_name, status, ann_ret, ann_vol, sharpe]."""
     reg = registry()
     if reg.empty:
         return reg
@@ -132,9 +156,11 @@ def rebalance(port_id: int) -> pd.DataFrame:
         return pd.DataFrame(columns=["rebal_date", "port_id", "ticker", "name", "weight"])
     names = meta.meta_df()[["ticker", "name"]].drop_duplicates("ticker")
     out = df.merge(names, on="ticker", how="left")
-    return out[["rebal_date", "port_id", "ticker", "name", "weight"]].sort_values(
-        ["rebal_date", "ticker"]
-    ).reset_index(drop=True)
+    return (
+        out[["rebal_date", "port_id", "ticker", "name", "weight"]]
+        .sort_values(["rebal_date", "ticker"])
+        .reset_index(drop=True)
+    )
 
 
 def metrics(port_id: int) -> pd.DataFrame:
@@ -174,13 +200,15 @@ def create(port_name: str, algorithm: str, meta_ids: list[int], config: dict | N
     port_id = int(ports["port_id"].max()) + 1 if not ports.empty else 1
 
     new = pd.DataFrame(
-        [{
-            "port_id": port_id,
-            "port_name": port_name,
-            "strategy_id": strategy_id,
-            "created_at": datetime.utcnow(),
-            "config": json.dumps(config) if config is not None else None,
-        }]
+        [
+            {
+                "port_id": port_id,
+                "port_name": port_name,
+                "strategy_id": strategy_id,
+                "created_at": datetime.utcnow(),
+                "config": json.dumps(config) if config is not None else None,
+            }
+        ]
     )
     storage.write_parquet(pd.concat([ports, new], ignore_index=True), DIR, "portfolio.parquet")
 
@@ -224,6 +252,20 @@ def save_benchmark_nav(port_id: int, nav_series: pd.Series) -> None:
 
 def save_benchmark_metrics(port_id: int, values: dict) -> None:
     _save_metrics("benchmark_metrics.parquet", port_id, values)
+
+
+def set_status(port_id: int, status: str) -> None:
+    """운영 상태 토글 — saved|active. 알 수 없는 port_id는 KeyError."""
+    ports = records()
+    if not (ports["port_id"] == port_id).any():
+        raise KeyError(f"unknown port_id: {port_id}")
+    ports.loc[ports["port_id"] == port_id, "status"] = status
+    storage.write_parquet(ports, DIR, "portfolio.parquet")
+
+
+def rebal_signals() -> pd.DataFrame:
+    """리밸 전일 신호 (build_insights의 rebal_signals가 생성) — 부재 시 빈 프레임."""
+    return _read("rebal_signals.parquet")
 
 
 def delete(port_id: int) -> None:
