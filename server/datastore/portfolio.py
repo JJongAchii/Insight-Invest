@@ -30,7 +30,8 @@ _EMPTY = {
     # live_nav: 저장 시점 이후 실전 데이터로 굴린 NAV — build_insights의 track_strategies가 생성
     "live_nav.parquet": ["port_id", "trade_date", "value", "as_of"],
     # live_weights: 저장 시점 이후 드리프트 보유 비중 — build_insights의 track_strategies가
-    # live_nav와 함께(같은 book) 생성 (P7)
+    # live_nav와 함께(같은 book) 생성 (P7). weight는 투자 자산 내 비중 — 현금
+    # 비반영, 합≈1.0(현금 보유 여부와 무관)
     "live_weights.parquet": ["port_id", "trade_date", "ticker", "weight", "as_of"],
     # rebal_signals: 리밸 전일 신호 — build_insights의 rebal_signals가 생성
     "rebal_signals.parquet": [
@@ -109,7 +110,10 @@ def live_nav(port_id: int) -> pd.DataFrame:
 
 
 def live_weights(port_id: int) -> pd.DataFrame:
-    """실전 추적 드리프트 보유 비중 (P7 생성) — [trade_date, ticker, weight]."""
+    """실전 추적 드리프트 보유 비중 (P7 생성) — [trade_date, ticker, weight].
+
+    weight는 투자 자산 내 비중 — 현금 비반영, 합≈1.0(현금 보유 여부와 무관).
+    """
     df = _read("live_weights.parquet", filters=[("port_id", "==", port_id)])
     return (
         df[["trade_date", "ticker", "weight"]]

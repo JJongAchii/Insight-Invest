@@ -541,19 +541,42 @@ MOMENTUM_WARMUP_DAYS = 400  # 모멘텀 12개월 룩백 + 여유 (저장 시점 
 
 
 def _book_to_weights(
-    book: pd.DataFrame, price: pd.DataFrame, port_id: int, nav_last
+    book: pd.DataFrame,
+    price: pd.DataFrame,
+    port_id: int,
+    nav_last,
+    fallback_weights: "pd.Series | None" = None,
 ) -> pd.DataFrame:
     """엔진 book(index Date, columns ticker/weights)을 [port_id, trade_date, ticker,
-    weight] long으로 정규화.
+    weight] long으로 정규화. weight는 투자 자산 내 비중(book 자체 관례 —
+    현금 비반영, 합≈1.0, 현금 보유 여부와 무관)이다.
 
     calculate_nav는 매 리밸 구간의 마지막 날을 다음 구간의 리밸 행과 중복되지
     않도록 제외한다(iloc[:-1]) — 그런데 마지막 구간은 다음 구간이 없어 그 날
     (=nav 마지막 날)이 통째로 빠진다. book 마지막 행에 같은 구간의 가격 드리프트를
-    적용해(엔진과 동일한 renormalize 공식: w_i × price_rel_i, 합 1로 재정규화)
-    그 하루를 채운다 — 그래야 live_weights의 마지막 날짜가 live_nav와 맞는다.
+    적용해(book 자체의 투자자산-내 정규화 관례와 동치: w_i × price_rel_i, 합 1로
+    재정규화) 그 하루를 채운다 — 그래야 live_weights의 마지막 날짜가 live_nav와
+    맞는다.
+
+    구간이 단 하루뿐이면(오늘 막 저장된 전략 — saved_at == nav_last) 위 iloc[:-1]이
+    그 유일한 행마저 지워 book이 통째로 빈다 — 드리프트 기준행이 없어 가격 보정도
+    불가능하다. 이때는 fallback_weights(리밸 스케줄의 마지막 행 — 저장 당일은
+    드리프트 전이라 목표 비중 == 보유 비중)를 nav_last 날짜 행으로 그대로 쓴다.
+    fallback도 없으면 조용히 사라지는 대신 경고를 남기고 빈 프레임을 반환한다.
     """
-    book_last = book.index.max()
-    if book_last < nav_last:
+    if book.empty:
+        if fallback_weights is not None and not fallback_weights.empty:
+            seed = fallback_weights[fallback_weights != 0]
+            tail_row = seed.rename("weights").rename_axis("ticker").reset_index()
+            tail_row.insert(0, "Date", nav_last)
+            book = tail_row.set_index("Date")
+        else:
+            print(
+                f"[warn] live_weights port_id={port_id}: book·fallback 모두 없음 — 빈 행",
+                file=sys.stderr,
+            )
+    elif book.index.max() < nav_last:
+        book_last = book.index.max()
         tail = book.loc[[book_last]].set_index("ticker")["weights"]
         tickers = tail.index.intersection(price.columns)
         rel = price.loc[nav_last, tickers] / price.loc[book_last, tickers]
@@ -564,8 +587,11 @@ def _book_to_weights(
             tail_row.insert(0, "Date", nav_last)
             book = pd.concat([book, tail_row.set_index("Date")])
 
-    bw = book.reset_index()[["Date", "ticker", "weights"]]
-    bw.columns = ["trade_date", "ticker", "weight"]
+    if book.empty:
+        bw = pd.DataFrame(columns=["trade_date", "ticker", "weight"])
+    else:
+        bw = book.reset_index()[["Date", "ticker", "weights"]]
+        bw.columns = ["trade_date", "ticker", "weight"]
     bw.insert(0, "port_id", port_id)
     return bw
 
@@ -668,7 +694,10 @@ def build_track_strategies():
             part.insert(0, "port_id", int(p.port_id))
             frames.append(part)
 
-            weight_frames.append(_book_to_weights(book, price, int(p.port_id), nav.index.max()))
+            fallback = weight.iloc[-1].dropna()
+            weight_frames.append(
+                _book_to_weights(book, price, int(p.port_id), nav.index.max(), fallback)
+            )
         except Exception as e:
             print(
                 f"[warn] track_strategies port_id={p.port_id}({p.port_name}) 실패: {e}",
