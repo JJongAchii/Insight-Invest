@@ -17,7 +17,7 @@ from app import schemas
 from datastore import fx, index_prices
 from datastore import meta as meta_store
 from datastore import portfolio
-from module import analytics
+from module import analytics, portfolio_risk, regime, strategy_analytics
 from module.backtest import Backtest
 from module.util import backtest_result, result_metrics
 
@@ -58,6 +58,12 @@ def _finite(x) -> Optional[float]:
     except (TypeError, ValueError):
         return None
     return x if math.isfinite(x) else None
+
+
+def _round(x, ndigits: int = 2) -> Optional[float]:
+    """_finite 후 반올림 — None-safe."""
+    v = _finite(x)
+    return round(v, ndigits) if v is not None else None
 
 
 def _short_metrics(metric_series: pd.Series) -> dict:
@@ -339,6 +345,46 @@ async def get_strategy_live(port_id: int):
             for k in METRIC_KEY_MAP  # 저장본에는 sortino/calmar/omega가 없음 → None
         }
 
+    weights: Optional[List[dict]] = None
+    try:
+        lw = portfolio.live_weights(port_id)
+        if not lw.empty:
+            lw = lw.copy()
+            lw["trade_date"] = pd.to_datetime(lw["trade_date"])
+            last_date = lw["trade_date"].max()
+            last = lw[lw["trade_date"] == last_date]
+            weights = [
+                {
+                    "trade_date": last_date.strftime("%Y-%m-%d"),
+                    "ticker": r.ticker,
+                    "weight": round(float(r.weight), 6),
+                }
+                for r in last.itertuples()
+            ]
+    except Exception as e:
+        logger.warning(f"live_weights 조회 실패: port_id={port_id}, error={e}")
+
+    expectation: Optional[dict] = None
+    try:
+        if not live.empty:
+            bt_nav_df = portfolio.nav(port_id=port_id)
+            if not bt_nav_df.empty:
+                bt_nav = pd.Series(
+                    bt_nav_df["value"].astype(float).to_numpy(),
+                    index=pd.to_datetime(bt_nav_df["trade_date"]),
+                ).sort_index()
+                exp = strategy_analytics.live_percentile(bt_nav, s)
+                if exp is not None:
+                    expectation = {
+                        "n_days": exp["n_days"],
+                        "live_ret_pct": _round(exp["live_ret_pct"], 2),
+                        "ret_percentile": _round(exp["ret_percentile"], 2),
+                        "live_dd_pct": _round(exp["live_dd_pct"], 2),
+                        "dd_percentile": _round(exp["dd_percentile"], 2),
+                    }
+    except Exception as e:
+        logger.warning(f"live_percentile 계산 실패: port_id={port_id}, error={e}")
+
     return {
         "port_id": port_id,
         "saved_at": saved_at,
@@ -346,6 +392,199 @@ async def get_strategy_live(port_id: int):
         "nav": nav_points,
         "metrics_live": metrics_live,
         "metrics_backtest": metrics_backtest,
+        "weights": weights,
+        "expectation": expectation,
+    }
+
+
+@router.get("/strategy/analytics/{port_id}")
+async def get_strategy_analytics(port_id: int):
+    """전략 분석(P1) — 투입 판정 재료. 섹션 단위 degrade, 모르는 포트는 empty, 500 금지.
+
+    라우터는 로드·조인·반올림만 한다 — 판단(백분위·에피소드 경계·국면 그룹핑)은
+    module.strategy_analytics/portfolio_risk가 하고, "좋다/나쁘다"는 붙이지 않는다.
+    """
+    reg = portfolio.records()
+    row = reg[reg["port_id"] == port_id]
+    if row.empty:
+        return {"empty": True}
+
+    nav_df = portfolio.nav(port_id=port_id)
+    if nav_df.empty:
+        return {"empty": True}
+    nav = pd.Series(
+        nav_df["value"].astype(float).to_numpy(), index=pd.to_datetime(nav_df["trade_date"])
+    ).sort_index()
+
+    bm_df = portfolio.benchmark_nav(port_id=port_id)
+    bm_nav: Optional[pd.Series] = None
+    if not bm_df.empty:
+        bm_nav = pd.Series(
+            bm_df["value"].astype(float).to_numpy(), index=pd.to_datetime(bm_df["trade_date"])
+        ).sort_index()
+
+    rebal = portfolio.rebalance(port_id=port_id)
+    if not rebal.empty:
+        rebal = rebal.copy()
+        rebal["rebal_date"] = pd.to_datetime(rebal["rebal_date"])
+
+    try:
+        cfg_raw = row["config"].iloc[0]
+        cfg = json.loads(cfg_raw) if cfg_raw else {}
+    except (TypeError, ValueError):
+        cfg = {}
+
+    premise = None
+    try:
+        cost_bps = cfg.get("cost_bps")
+        n_rebals = int(rebal["rebal_date"].nunique()) if not rebal.empty else 0
+        premise = {
+            "algorithm": cfg.get("algorithm"),
+            "rebal_freq": cfg.get("rebal_freq"),
+            "cost_bps": _finite(cost_bps) if cost_bps is not None else None,
+            "currency": cfg.get("currency"),
+            "universe_n": len(portfolio.universe(port_id)),
+            "saved_at": pd.Timestamp(row["created_at"].iloc[0]).strftime("%Y-%m-%d"),
+            "bt_start": nav.index.min().strftime("%Y-%m-%d"),
+            "bt_end": nav.index.max().strftime("%Y-%m-%d"),
+            "bt_days": int(len(nav)),
+            "n_rebals": n_rebals,
+            "cost_warning": cost_bps is None or cost_bps == 0,
+        }
+    except Exception as e:
+        logger.warning(f"analytics premise 조립 실패: port_id={port_id}, error={e}")
+
+    rolling = None
+    try:
+        rs = strategy_analytics.rolling_stats(nav)
+        if not rs.empty:
+            weekly = rs.resample("W-FRI").last().dropna()
+            rows = [
+                {
+                    "date": d.strftime("%Y-%m-%d"),
+                    "roll_ret": _round(r.roll_ret, 2),
+                    "roll_sharpe": _round(r.roll_sharpe, 3),
+                }
+                for d, r in weekly.iterrows()
+            ]
+            bm_rows = None
+            if bm_nav is not None and len(bm_nav):
+                bm_rs = strategy_analytics.rolling_stats(bm_nav)
+                if not bm_rs.empty:
+                    bm_weekly = bm_rs.resample("W-FRI").last().dropna()
+                    bm_rows = [
+                        {
+                            "date": d.strftime("%Y-%m-%d"),
+                            "roll_ret": _round(r.roll_ret, 2),
+                            "roll_sharpe": _round(r.roll_sharpe, 3),
+                        }
+                        for d, r in bm_weekly.iterrows()
+                    ]
+            rolling = {
+                "window": strategy_analytics.TRADING_DAYS,
+                "rows": rows,
+                "bm_rows": bm_rows,
+            }
+    except Exception as e:
+        logger.warning(f"analytics rolling 계산 실패: port_id={port_id}, error={e}")
+
+    drawdowns = None
+    try:
+        dd = analytics.drawdown_series(nav) * 100
+        weekly_dd = dd.resample("W-FRI").last().dropna()
+        underwater = [
+            {"date": d.strftime("%Y-%m-%d"), "dd_pct": _round(v, 2)} for d, v in weekly_dd.items()
+        ]
+        episodes = [
+            {
+                "depth_pct": _round(e["depth_pct"], 2),
+                "peak": e["peak"].strftime("%Y-%m-%d") if e["peak"] is not None else None,
+                "trough": e["trough"].strftime("%Y-%m-%d") if e["trough"] is not None else None,
+                "recover": e["recover"].strftime("%Y-%m-%d") if e["recover"] is not None else None,
+                "days_to_recover": e["days_to_recover"],
+            }
+            for e in strategy_analytics.drawdown_episodes(nav)
+        ]
+        drawdowns = {"underwater": underwater, "episodes": episodes}
+    except Exception as e:
+        logger.warning(f"analytics drawdowns 계산 실패: port_id={port_id}, error={e}")
+
+    phases = None
+    try:
+        phase_series = regime.phase_history()["phase"]
+        monthly = strategy_analytics.monthly_returns(nav)
+        pm = strategy_analytics.phase_monthly_means(monthly, phase_series)
+        if not pm.empty:
+            bm_pm = None
+            if bm_nav is not None and len(bm_nav):
+                bm_monthly = strategy_analytics.monthly_returns(bm_nav)
+                bm_pm = strategy_analytics.phase_monthly_means(bm_monthly, phase_series)
+            rows = []
+            for phase, r in pm.iterrows():
+                bm_val = None
+                if bm_pm is not None and phase in bm_pm.index:
+                    bm_val = _round(bm_pm.loc[phase, "mean_ret_pct"], 2)
+                rows.append(
+                    {
+                        "phase": phase,
+                        "mean_ret_pct": _round(r["mean_ret_pct"], 2),
+                        "n_months": int(r["n_months"]),
+                        "bm_mean_ret_pct": bm_val,
+                    }
+                )
+            phases = {"rows": rows}
+    except Exception as e:
+        logger.warning(f"analytics phases 계산 실패: port_id={port_id}, error={e}")
+
+    crisis: List[dict] = []
+    try:
+        crisis = [
+            {"key": c["key"], "ret_pct": _round(c["ret_pct"], 2), "note": c["note"]}
+            for c in strategy_analytics.crisis_returns(nav, portfolio_risk.CRISIS_WINDOWS)
+        ]
+    except Exception as e:
+        logger.warning(f"analytics crisis 계산 실패: port_id={port_id}, error={e}")
+
+    monthly_section = None
+    try:
+        ms = strategy_analytics.monthly_stats(nav, bm_nav)
+        monthly_section = {
+            "win_rate": _round(ms["win_rate"], 2),
+            "win_rate_vs_bm": _round(ms["win_rate_vs_bm"], 2),
+            "best": [{"month": r["month"], "ret_pct": _round(r["ret_pct"], 2)} for r in ms["best"]],
+            "worst": [
+                {"month": r["month"], "ret_pct": _round(r["ret_pct"], 2)} for r in ms["worst"]
+            ],
+        }
+    except Exception as e:
+        logger.warning(f"analytics monthly 계산 실패: port_id={port_id}, error={e}")
+
+    trading = None
+    try:
+        ts = strategy_analytics.turnover_stats(rebal)
+        cost_drag_10 = cost_drag_30 = None
+        if ts["rebals_per_year"] is not None and ts["avg_turnover"] is not None:
+            cost_drag_10 = ts["rebals_per_year"] * ts["avg_turnover"] * 10 / 1e4 * 100
+            cost_drag_30 = ts["rebals_per_year"] * ts["avg_turnover"] * 30 / 1e4 * 100
+        trading = {
+            "n_rebals": ts["n_rebals"],
+            "rebals_per_year": _round(ts["rebals_per_year"], 2),
+            "avg_turnover": _round(ts["avg_turnover"], 4),
+            "cost_drag_pct_10bps": _round(cost_drag_10, 3),
+            "cost_drag_pct_30bps": _round(cost_drag_30, 3),
+        }
+    except Exception as e:
+        logger.warning(f"analytics trading 계산 실패: port_id={port_id}, error={e}")
+
+    return {
+        "premise": premise,
+        "rolling": rolling,
+        "drawdowns": drawdowns,
+        "phases": phases,
+        "crisis": crisis,
+        "monthly": monthly_section,
+        "trading": trading,
+        "as_of": nav.index.max().strftime("%Y-%m-%d"),
     }
 
 
