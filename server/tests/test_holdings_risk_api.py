@@ -88,3 +88,84 @@ def test_risk_excludes_priceless_position(two_holdings, monkeypatch):
     assert r["basis"]["n_assets"] == 1
     assert r["corr"] is None  # 단일 종목 — 상관 생략
     assert any(w["kind"] == "no_price" for w in r["warnings"])
+
+
+def test_risk_history_load_failure_returns_empty(two_holdings, monkeypatch):
+    """Backtest 실패는 500 없이 empty 반환."""
+
+    class FailingBT:
+        def data(self, meta_id=None, start_date=None, **kw):
+            raise RuntimeError("DB connection failed")
+
+    monkeypatch.setattr(h, "Backtest", FailingBT)
+    r = h.get_holdings_risk()
+    assert r == {"empty": True, "reason": "가격 이력 로드 실패"}
+
+
+def test_risk_fx_failure_drops_us_with_warning(monkeypatch):
+    """환율 조회 실패 시 US 제외 + no_fx 경고."""
+    items = pd.DataFrame(
+        {
+            "meta_id": [1, 2],
+            "shares": [10.0, 5.0],
+            "avg_cost": [90.0, 2000.0],
+            "currency": ["KRW", "USD"],
+        }
+    )
+    md = pd.DataFrame(
+        {
+            "meta_id": [1, 2],
+            "ticker": ["000001", "AAPL"],
+            "name": ["가나", "Apple"],
+            "iso_code": ["KR", "US"],
+            "security_type": ["stock", "stock"],
+            "sector": ["기타", "기타"],
+        }
+    )
+    monkeypatch.setattr(h.holdings_store, "list_items", lambda: items)
+    monkeypatch.setattr(h.meta, "meta_df", lambda: md)
+    monkeypatch.setattr(h, "build_price_map", lambda df: {1: (100.0, 0.0), 2: (150.0, 0.0)})
+    monkeypatch.setattr(h, "_usdkrw_latest", lambda: 1400.0)
+
+    idx = pd.bdate_range("2023-01-02", periods=300)
+    prices = pd.DataFrame(
+        {
+            "000001": np.linspace(80, 100, 300),
+            "AAPL": np.linspace(140, 150, 300),
+        },
+        index=idx,
+    )
+
+    class FakeBT:
+        def data(self, meta_id=None, start_date=None, **kw):
+            return prices
+
+    monkeypatch.setattr(h, "Backtest", FakeBT)
+
+    def failing_to_krw(df, iso_map):
+        raise KeyError("USDKRW unavailable")
+
+    monkeypatch.setattr(h.fx, "to_krw", failing_to_krw)
+    monkeypatch.setattr(h, "_recent_kr_volume", lambda tickers: pd.DataFrame())
+
+    r = h.get_holdings_risk()
+    assert "empty" not in r and "insufficient" not in r
+    assert r["basis"]["n_assets"] == 1  # US 제외
+    assert r["corr"] is None  # 단일 종목
+    assert any(w["kind"] == "no_fx" and w["ticker"] == "AAPL" for w in r["warnings"])
+
+
+def test_risk_all_kr_skips_fx(two_holdings, monkeypatch):
+    """모든 보유가 KR이면 to_krw를 호출하지 않음."""
+    call_count = {"to_krw": 0}
+
+    def tracking_to_krw(df, iso_map):
+        call_count["to_krw"] += 1
+        raise RuntimeError("to_krw should not be called")
+
+    monkeypatch.setattr(h.fx, "to_krw", tracking_to_krw)
+
+    r = h.get_holdings_risk()
+    assert "empty" not in r and "insufficient" not in r
+    assert r["basis"]["n_assets"] == 2
+    assert call_count["to_krw"] == 0  # 호출되지 않음

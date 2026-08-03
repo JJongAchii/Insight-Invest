@@ -431,7 +431,13 @@ def get_holdings_risk():
         return {"empty": True, "reason": "평가 가능한 포지션 없음"}
     weights = {t: v / total for t, v in mv.items()}
 
-    prices = Backtest().data(meta_id=[int(x) for x in df["meta_id"]], start_date=RISK_HISTORY_START)
+    try:
+        prices = Backtest().data(
+            meta_id=[int(x) for x in df["meta_id"]], start_date=RISK_HISTORY_START
+        )
+    except Exception:
+        logger.warning("risk 가격 이력 로드 실패", exc_info=True)
+        return {"empty": True, "reason": "가격 이력 로드 실패"}
     prices = prices[[c for c in prices.columns if c in weights]]
     missing = sorted(set(weights) - set(prices.columns))
     for t in missing:
@@ -441,7 +447,28 @@ def get_holdings_risk():
         return {"empty": True, "reason": "가격 이력 있는 포지션 없음"}
     total_w = sum(weights.values())
     weights = {t: w / total_w for t, w in weights.items()}
-    prices = fx.to_krw(prices, tickers_iso)
+
+    if any(iso == "US" for iso in tickers_iso.values()):
+        try:
+            prices = fx.to_krw(prices, tickers_iso)
+        except Exception:
+            # 환산 불가면 US를 빼고 진행 — 통화가 섞인 패널을 조용히 쓰지 않는다
+            logger.warning("risk 환율 변환 실패 — US 제외", exc_info=True)
+            for t in [t for t, iso in tickers_iso.items() if iso == "US"]:
+                if t in weights:
+                    warnings.append(
+                        {
+                            "kind": "no_fx",
+                            "ticker": t,
+                            "detail": "환율 조회 실패 — 위험 계산에서 제외",
+                        }
+                    )
+                    weights.pop(t)
+            prices = prices[[c for c in prices.columns if c in weights]]
+            if not weights:
+                return {"empty": True, "reason": "환율 조회 실패로 평가 가능한 포지션 없음"}
+            total_w = sum(weights.values())
+            weights = {t: w / total_w for t, w in weights.items()}
 
     # 데이터 품질 경고 — 조용히 계산하지 않는다 (동결·정지는 위험 과소평가 방향)
     panel_end = prices.index.max()
