@@ -7,6 +7,7 @@ import {
   useFetchStrategyByIdQuery,
   useFetchStrategyLiveByIdQuery,
   useSetStrategyStatusMutation,
+  NavPoint as LiveNavPoint,
 } from "@/state/api";
 import React, { useMemo } from "react";
 import MetricSummary from "./MetricSummary";
@@ -24,20 +25,58 @@ interface StrategyDetailProps {
   params: { port_id: number };
 }
 
+interface ReturnBarRow {
+  [series: string]: string | number | null;
+  label: string;
+  strategy: number | null;
+  benchmark: number | null;
+  /** null when no live series was supplied, or the period has no live data yet. */
+  live: number | null;
+}
+
+/** strategy/benchmark 기간 수익률에 저장 후 라이브 구간(liveNav)의 같은 기간 수익률을
+ *  "실전(저장 후)" 시리즈로 병기한다. 라이브 전용 신규 기간(백테스트 구간 밖)도 행으로 추가된다. */
 const buildReturnData = (
   strategyNav: NavPoint[],
   bmNav: NavPoint[],
-  period: "month" | "year"
-) => {
+  period: "month" | "year",
+  liveNav?: LiveNavPoint[]
+): ReturnBarRow[] => {
   const strategyReturns = calculatePeriodReturns(strategyNav, period);
   const bmReturns = calculatePeriodReturns(bmNav, period);
   const bmByPeriod = new Map(bmReturns.map((r) => [r.period, r.return]));
 
-  return strategyReturns.map((r) => ({
+  const hasLive = !!liveNav && liveNav.length > 0;
+  const liveReturns = hasLive
+    ? calculatePeriodReturns(
+        liveNav!.map((p) => ({ trade_date: p.date, value: p.value })),
+        period
+      )
+    : [];
+  const liveByPeriod = new Map(liveReturns.map((r) => [r.period, r.return]));
+
+  const rows: ReturnBarRow[] = strategyReturns.map((r) => ({
     label: r.period,
     strategy: r.return,
     benchmark: bmByPeriod.get(r.period) ?? 0,
+    live: hasLive ? liveByPeriod.get(r.period) ?? null : null,
   }));
+
+  if (hasLive) {
+    const covered = new Set(strategyReturns.map((r) => r.period));
+    for (const r of liveReturns) {
+      if (covered.has(r.period)) continue;
+      rows.push({
+        label: r.period,
+        strategy: null,
+        benchmark: bmByPeriod.get(r.period) ?? null,
+        live: r.return,
+      });
+    }
+    rows.sort((a, b) => a.label.localeCompare(b.label));
+  }
+
+  return rows;
 };
 
 const StrategyDetail = ({ params }: StrategyDetailProps) => {
@@ -55,12 +94,12 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
   );
 
   const monthlyData = useMemo(
-    () => buildReturnData(strategyNav ?? [], bmNavData, "month"),
-    [strategyNav, bmNavData]
+    () => buildReturnData(strategyNav ?? [], bmNavData, "month", liveData?.nav),
+    [strategyNav, bmNavData, liveData?.nav]
   );
   const yearlyData = useMemo(
-    () => buildReturnData(strategyNav ?? [], bmNavData, "year"),
-    [strategyNav, bmNavData]
+    () => buildReturnData(strategyNav ?? [], bmNavData, "year", liveData?.nav),
+    [strategyNav, bmNavData, liveData?.nav]
   );
 
   if (
@@ -82,9 +121,13 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
   const strategyName = strategyInfo[0].port_name;
   const status = strategyInfo[0].status;
   const isActive = status === "active";
+  const hasLiveNav = (liveData?.nav?.length ?? 0) > 0;
   const barSeries = [
     { key: "strategy", name: strategyName, color: "var(--chart-1)" },
     { key: "benchmark", name: "Benchmark", color: "var(--chart-2)" },
+    ...(hasLiveNav
+      ? [{ key: "live", name: "실전(저장 후)", color: "var(--chart-3)" }]
+      : []),
   ];
 
   return (
