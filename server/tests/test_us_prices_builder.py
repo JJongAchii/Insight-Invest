@@ -45,6 +45,9 @@ def _fake_mirror(monkeypatch, bi, px_long, div_long, meta_df):
         lambda start=None, end=None, tickers=None: div_long.copy(),
     )
     monkeypatch.setattr(bi.meta, "meta_df", lambda: meta_df)
+    # _as_of()는 krx_flows(640MB 실 레이크)를 로드하는 공용 헬퍼 — 이 빌더 테스트는
+    # US 가격 합성만 검증하면 되므로 고정값으로 대체해 레이크 의존·왕복 시간을 없앤다.
+    monkeypatch.setattr(bi, "_as_of", lambda: "2026-08-04")
 
 
 def test_builder_schema_and_meta_join(monkeypatch, bi, capsys):
@@ -117,3 +120,26 @@ def test_builder_returns_none_on_mirror_failure(monkeypatch, bi, capsys):
     monkeypatch.setattr(bi.qdata_api, "load_us_prices", boom)
     assert bi.build_us_prices() is None
     assert "기존 파일 유지" in capsys.readouterr().err
+
+
+def test_builder_all_excluded_returns_none_instead_of_crashing(monkeypatch, bi, capsys):
+    """전 종목이 연속성 가드에 걸리면 out이 비어 pd.concat이 ValueError로 죽는다 —
+    None + 경고로 안전하게 스킵해야 한다 (기존 파일 유지, 파이프라인 비중단)."""
+    dates = pd.bdate_range("2026-01-05", periods=3)
+    px = pd.DataFrame(
+        {
+            "date": dates,
+            "ticker": "BAD",
+            "close": [1.0, 1.0, 100.0],
+            "adj_close": [1.0, 1.0, 100.0],
+        }
+    )
+    meta_df = pd.DataFrame({"meta_id": [1], "ticker": ["BAD"], "iso_code": ["US"]})
+    _fake_mirror(
+        monkeypatch, bi, px, pd.DataFrame({"ticker": [], "ex_date": [], "cash_amount": []}), meta_df
+    )
+    out = bi.build_us_prices()
+    assert out is None
+    err = capsys.readouterr().err
+    assert "연속성 가드" in err
+    assert "0종목" in err

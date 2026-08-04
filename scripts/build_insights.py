@@ -167,6 +167,9 @@ def build_us_prices():
               file=sys.stderr)
     if lost_div:
         print(f"[warn] us_prices: 비거래일 배당락 소실 합계 ${lost_div:.2f}", file=sys.stderr)
+    if not out:
+        print("[warn] us_prices: 합성 결과 0종목 — 기존 파일 유지", file=sys.stderr)
+        return None
 
     df = pd.concat(out, ignore_index=True).merge(us, on="ticker", how="inner")
     missing = sorted(set(us["ticker"]) - set(df["ticker"]))
