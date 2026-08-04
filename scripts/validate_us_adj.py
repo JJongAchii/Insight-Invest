@@ -9,7 +9,11 @@
 
 --scan: 미러 US 전 종목 연속성 스캔 — 티커별 continuity_issues(공백·무분할 점프)로
   자동 제외 후보를 잡고, 리포트 전용 완화 티어(|일수익| 15~25%, 분할 계수 변동 없음)로
-  사람 검토 후보를 별도 표기한다. datastore.meta.meta_df() 를 쓰므로 APP_DATA
+  사람 검토 후보를 별도 표기한다. stdout 은 요약(티어 총수·사유 유형별 카운트·심각도
+  상위 30종목)만 — 전체 목록(6천+종목)은 --scan-out CSV(기본: 실행 디렉터리의
+  us_scan_report.csv, ticker·tier·reason_type·sort_key·detail)에 남는다. 심각도
+  정렬 키는 임계값 대비 초과 배수(공백/GAP_LIMIT_TDAYS, 점프율/JUMP_LIMIT)로 정규화해
+  두 사유 유형을 하나의 순위로 비교한다. datastore.meta.meta_df() 를 쓰므로 APP_DATA
   환경변수가 필요하다 (예: APP_DATA=s3://insight-invest-datalake/app). repo 루트에서
   실행: server/.venv-test/bin/python scripts/validate_us_adj.py --scan
   (미러 2.77GB를 연 청크로 읽어 수 분 소요될 수 있다)
@@ -28,6 +32,7 @@ import os
 import time
 import warnings
 
+import numpy as np
 import pandas as pd
 import yfinance as yf
 
@@ -194,8 +199,14 @@ def run_app_file_compare():
     _print_report("종목별 정합성 [--app-file]", rows, details)
 
 
-def scan_continuity():
+def scan_continuity(out_path: str):
     """미러 US 전 종목 연속성 스캔 — 자동 제외(가드) vs 사람 검토(완화 티어) 분류.
+
+    stdout 은 요약(티어 총수·사유 유형별 카운트·심각도 상위 30종목)만 낸다 — 전체
+    목록(6천+종목)은 out_path CSV(ticker·tier·reason_type·sort_key·detail)에 남는다.
+    sort_key 는 임계값 대비 초과 배수로 정규화한다(공백: 공백영업일수/GAP_LIMIT_TDAYS,
+    점프: 점프율/JUMP_LIMIT) — 두 사유가 단위가 달라, 하나의 순위로 묶으려면 임계값
+    대비 배수가 유일하게 비교 가능한 축이다.
 
     datastore.meta.meta_df() 는 APP_DATA 환경변수가 필요하다
     (예: APP_DATA=s3://insight-invest-datalake/app).
@@ -203,7 +214,13 @@ def scan_continuity():
     import sys
     sys.path.insert(0, "server")
     from datastore import meta
-    from module.us_prices import JUMP_LIMIT, TICKER_SEGMENTS, continuity_issues, stitch_segments
+    from module.us_prices import (
+        GAP_LIMIT_TDAYS,
+        JUMP_LIMIT,
+        TICKER_SEGMENTS,
+        continuity_issues,
+        stitch_segments,
+    )
 
     us = meta.meta_df().query("iso_code == 'US'")[["ticker"]].drop_duplicates()
     want = sorted(set(us["ticker"]) | {s for v in TICKER_SEGMENTS.values() for s, _, _ in v})
@@ -228,23 +245,70 @@ def scan_continuity():
     })
     px, _ = stitch_segments(px, empty_div, TICKER_SEGMENTS)
 
-    hard, soft = [], []
+    hard_rows, soft_rows = [], []
     for tk, g in px.groupby("ticker", sort=False):
         g = g.sort_values("date").set_index("date")
         issues = continuity_issues(g)
-        if issues:
-            hard.append((tk, issues[:3]))
         r = g["adj_close"].pct_change().abs()
         f_chg = (g["adj_close"] / g["close"]).pct_change().abs() > 0.005
+
+        if issues:
+            # continuity_issues 와 동일 정의로 공백일수·최대 점프율을 수치로 재계산
+            # (issues 는 사람이 읽을 문자열이라 정렬에 못 쓴다).
+            d = g.index.values.astype("datetime64[D]")
+            gap_days = None
+            if len(d) > 1:
+                gaps = np.busday_count(d[:-1], d[1:])
+                if gaps.max() > GAP_LIMIT_TDAYS:
+                    gap_days = int(gaps.max())
+            hard_jumps = r[(r > JUMP_LIMIT) & ~f_chg]
+            jump_pct = float(hard_jumps.max()) if len(hard_jumps) else None
+            gap_sev = gap_days / GAP_LIMIT_TDAYS if gap_days else 0.0
+            jump_sev = jump_pct / JUMP_LIMIT if jump_pct else 0.0
+            reason_type = "+".join(
+                name for name, val in (("공백", gap_days), ("점프", jump_pct)) if val
+            )
+            hard_rows.append({
+                "ticker": tk, "tier": "hard", "reason_type": reason_type,
+                "sort_key": round(max(gap_sev, jump_sev), 2),
+                "gap_days": gap_days, "jump_pct": jump_pct,
+                "detail": "; ".join(issues),
+            })
+
         watch = r[(r > 0.15) & (r <= JUMP_LIMIT) & ~f_chg]
         if len(watch):
-            soft.append((tk, [f"{d.date()} {v:.0%}" for d, v in watch.tail(3).items()]))
-    print(f"자동 제외(가드) {len(hard)}종목:")
-    for tk, iss in hard:
-        print(f"  {tk}: {'; '.join(iss)}")
-    print(f"\n사람 검토(15~25% 점프) {len(soft)}종목:")
-    for tk, days in soft:
-        print(f"  {tk}: {'; '.join(days)}")
+            soft_rows.append({
+                "ticker": tk, "tier": "soft", "reason_type": "점프",
+                "sort_key": round(float(watch.max()), 4),
+                "gap_days": None, "jump_pct": float(watch.max()),
+                "detail": "; ".join(f"{dt.date()} {v:.0%}" for dt, v in watch.items()),
+            })
+
+    all_rows = hard_rows + soft_rows
+    out = pd.DataFrame(
+        all_rows,
+        columns=["ticker", "tier", "reason_type", "sort_key", "gap_days", "jump_pct", "detail"],
+    )
+    out.to_csv(out_path, index=False)
+
+    n_gap = sum(1 for row in hard_rows if row["gap_days"] is not None)
+    n_jump = sum(1 for row in hard_rows if row["jump_pct"] is not None)
+    n_both = sum(
+        1 for row in hard_rows if row["gap_days"] is not None and row["jump_pct"] is not None
+    )
+    print(f"\n자동 제외(가드) {len(hard_rows)}종목 — 공백 {n_gap} · 점프 {n_jump} (중복 {n_both})")
+    print("  상위 30 (초과배수 내림차순):")
+    for row in sorted(hard_rows, key=lambda r: r["sort_key"], reverse=True)[:30]:
+        sample = row["detail"] if len(row["detail"]) <= 90 else row["detail"][:87] + "..."
+        print(f"    {row['ticker']:<7}{row['reason_type']:<7}{row['sort_key']:>6.1f}x  {sample}")
+
+    print(f"\n사람 검토(15~25% 점프) {len(soft_rows)}종목 (전부 점프)")
+    print("  상위 30 (점프율 내림차순):")
+    for row in sorted(soft_rows, key=lambda r: r["sort_key"], reverse=True)[:30]:
+        sample = row["detail"] if len(row["detail"]) <= 90 else row["detail"][:87] + "..."
+        print(f"    {row['ticker']:<7}{row['sort_key']:>6.0%}  {sample}")
+
+    print(f"\n전체 {len(all_rows)}행 → {out_path}")
 
 
 def main():
@@ -256,6 +320,10 @@ def main():
         help="미러 US 전 종목 연속성 스캔 (자동 제외/사람 검토 분류). APP_DATA 필요",
     )
     parser.add_argument(
+        "--scan-out", default="us_scan_report.csv", dest="scan_out",
+        help="--scan 전체 목록 CSV 저장 경로 (기본: 실행 디렉터리의 us_scan_report.csv)",
+    )
+    parser.add_argument(
         "--app-file", action="store_true", dest="app_file",
         help="massive 원본 대신 빌드된 앱 us_prices.parquet 로 ETF10+개별주14 재대조",
     )
@@ -264,7 +332,7 @@ def main():
         parser.error("--scan 과 --app-file 은 동시에 쓸 수 없다")
 
     if args.scan:
-        scan_continuity()
+        scan_continuity(args.scan_out)
     elif args.app_file:
         run_app_file_compare()
     else:
