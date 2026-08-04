@@ -107,6 +107,78 @@ def _name_map() -> dict:
 # ---------------------------------------------------------------- 빌더
 
 
+US_PRICE_FLOOR = "2008-01-02"  # 스펙 D4 — 배당 축 신뢰 구간 (ETF 분배금 2007 중반부터)
+
+
+def build_us_prices():
+    """US 가격 앱 추출 (P0) — massive 미러에서 meta US 티커의 총수익 계열 재생성.
+
+    스펙 docs/superpowers/specs/2026-08-04-us-price-source-unification-design.md §3.
+    미러 읽기 실패 시 None 반환 → 기존 us_prices.parquet 유지 (경고만 — 하류 빌더는
+    어제 데이터로 진행). 연속성 가드 제외·배당락 소실은 반드시 경고 로그로 남긴다.
+    """
+    from module import us_prices as uspx
+
+    try:
+        m = meta.meta_df()
+        us = m[m["iso_code"] == "US"][["meta_id", "ticker"]].drop_duplicates("ticker")
+        seg_src = {s for segs in uspx.TICKER_SEGMENTS.values() for s, _, _ in segs}
+        want = sorted(set(us["ticker"]) | seg_src)
+
+        frames = []
+        for y in range(int(US_PRICE_FLOOR[:4]), pd.Timestamp.today().year + 1):
+            chunk = qdata_api.load_us_prices(
+                start=max(f"{y}-01-01", US_PRICE_FLOOR), end=f"{y}-12-31",
+                tickers=want, columns=["close", "adj_close"],
+            )
+            if not chunk.empty:
+                frames.append(chunk)
+        px = pd.concat(frames, ignore_index=True)
+        px["date"] = pd.to_datetime(px["date"])
+        div = qdata_api.load_us_dividends(tickers=want)
+        div["ex_date"] = pd.to_datetime(div["ex_date"])
+        px, div = uspx.stitch_segments(px, div, uspx.TICKER_SEGMENTS)
+    except Exception:
+        print("[warn] us_prices: 미러 읽기 실패 — 기존 파일 유지", file=sys.stderr)
+        traceback.print_exc()
+        return None
+
+    stale_days = (pd.Timestamp.today().normalize() - px["date"].max()).days
+    if stale_days > 4:
+        print(f"[warn] us_prices: 미러 최종일 {px['date'].max().date()} ({stale_days}일 경과) — "
+              "리밸 신호는 is_new_period 가 자연 스킵", file=sys.stderr)
+
+    out, skipped, lost_div = [], [], 0.0
+    for tk, g in px.groupby("ticker", sort=False):
+        g = g.sort_values("date").set_index("date")
+        issues = uspx.continuity_issues(g)
+        if issues:
+            skipped.append(f"{tk}({'; '.join(issues[:2])})")
+            continue
+        dv = div[div["ticker"] == tk]
+        lost_div += float(dv.loc[~dv["ex_date"].isin(g.index), "cash_amount"].sum())
+        res = uspx.compose_total_return(g, dv)
+        res = res.reset_index().rename(columns={"date": "trade_date"})
+        res["ticker"] = tk
+        out.append(res)
+
+    if skipped:
+        print(f"[warn] us_prices: 연속성 가드 제외 {len(skipped)}종목 — {skipped[:20]}",
+              file=sys.stderr)
+    if lost_div:
+        print(f"[warn] us_prices: 비거래일 배당락 소실 합계 ${lost_div:.2f}", file=sys.stderr)
+
+    df = pd.concat(out, ignore_index=True).merge(us, on="ticker", how="inner")
+    missing = sorted(set(us["ticker"]) - set(df["ticker"]))
+    if missing:
+        print(f"[warn] us_prices: meta 등록 but 미수록 {len(missing)}종목 "
+              "(플로어 이전 상폐·미러 부재·가드 제외)", file=sys.stderr)
+    df = df[["meta_id", "trade_date", "ticker", "adj_close", "gross_return"]]
+    df = df.sort_values(["ticker", "trade_date"]).reset_index(drop=True)
+    df["as_of"] = _as_of()
+    return df
+
+
 def _monthly_returns() -> pd.DataFrame:
     """자산별 월간 수익률(%) — 월말 종가 기준, 인덱스는 월간 Period."""
     px = qdata_api.load_prices(ETF_TICKERS, fields=("adj_close",))["adj_close"]
@@ -1253,6 +1325,7 @@ def build_spotlight():
 
 
 BUILDERS = [
+    ("us_prices.parquet", build_us_prices, {"row_group_size": 100_000}),  # P0: US 가격 앱 추출
     ("insight/regime_asset_perf.parquet", build_regime_asset_perf, {}),
     ("insight/flows_summary.parquet", build_flows_summary, {}),
     ("insight/flows_top.parquet", build_flows_top, {}),
