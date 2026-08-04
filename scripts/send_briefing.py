@@ -28,7 +28,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "server"))
 
-from datastore import meta, portfolio, storage, watchlist  # noqa: E402
+from datastore import meta, portfolio, prices, storage, watchlist  # noqa: E402
 from module import signal_stats, spotlight  # noqa: E402
 from qdata import api as qdata_api  # noqa: E402
 
@@ -164,7 +164,7 @@ def _section_market() -> str | None:
 
     def _us():
         start = (pd.Timestamp.today() - pd.DateOffset(days=30)).strftime("%Y-%m-%d")
-        px = qdata_api.load_prices(["SPY", "QQQ"], start=start, fields=("adj_close",))["adj_close"]
+        px = prices.us_adj_close_wide(["SPY", "QQQ"], start_date=start)
         parts = []
         for t in ("SPY", "QQQ"):
             s = px[t].dropna()

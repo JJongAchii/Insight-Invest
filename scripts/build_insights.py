@@ -48,7 +48,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "server"))
 
-from datastore import fx, meta, portfolio, storage  # noqa: E402
+from datastore import fx, meta, portfolio, prices, storage  # noqa: E402
 from module import regime  # noqa: E402
 from module import spotlight  # noqa: E402
 from module.backtest import Backtest  # noqa: E402
@@ -116,7 +116,19 @@ def build_us_prices():
     스펙 docs/superpowers/specs/2026-08-04-us-price-source-unification-design.md §3.
     미러 읽기 실패 시 None 반환 → 기존 us_prices.parquet 유지 (경고만 — 하류 빌더는
     어제 데이터로 진행). 연속성 가드 제외·배당락 소실은 반드시 경고 로그로 남긴다.
+
+    전환 게이트: US_PRICES_CUTOVER=1 이 없으면 스킵(None) — 야간 배치가 git pull
+    직후 바로 실행되므로, 머지만으로 오늘 밤 프로덕션 파일이 바뀌지 않게 막는다.
+    가드 캘리브레이션·전수 스캔 검토·--app-file 대조를 사람이 통과시킨 뒤 EC2 환경에
+    플래그를 심어 활성화한다.
     """
+    if os.environ.get("US_PRICES_CUTOVER") != "1":
+        print(
+            "[skip] us_prices (전환 게이트 미통과 — EC2 에 US_PRICES_CUTOVER=1 설정 시 활성화)",
+            file=sys.stderr,
+        )
+        return None
+
     from module import us_prices as uspx
 
     try:
@@ -177,14 +189,17 @@ def build_us_prices():
         print(f"[warn] us_prices: meta 등록 but 미수록 {len(missing)}종목 "
               "(플로어 이전 상폐·미러 부재·가드 제외)", file=sys.stderr)
     df = df[["meta_id", "trade_date", "ticker", "adj_close", "gross_return"]]
-    df = df.sort_values(["ticker", "trade_date"]).reset_index(drop=True)
+    # 서빙 필터 키(meta_id) 정렬 — 로우그룹 프루닝 유지 (flows_by_ticker 관례와 동일).
+    # server/datastore/prices.py._us_prices 는 ("meta_id","in",...) 필터로 읽는다 —
+    # ticker 정렬로 쓰면 로우그룹당 meta_id 폭이 넓어져 프루닝이 무력화된다.
+    df = df.sort_values(["meta_id", "trade_date"]).reset_index(drop=True)
     df["as_of"] = _as_of()
     return df
 
 
 def _monthly_returns() -> pd.DataFrame:
     """자산별 월간 수익률(%) — 월말 종가 기준, 인덱스는 월간 Period."""
-    px = qdata_api.load_prices(ETF_TICKERS, fields=("adj_close",))["adj_close"]
+    px = prices.us_adj_close_wide(ETF_TICKERS)
     rets = px.resample("ME").last().pct_change() * 100
 
     idx = qdata_api.load_krx_index()

@@ -31,6 +31,13 @@ def bi():
     return build_insights
 
 
+@pytest.fixture(autouse=True)
+def _cutover_enabled(monkeypatch):
+    """전환 게이트 기본 활성화 — 이 파일의 테스트는 빌더 로직 자체를 검증하므로,
+    게이트 미통과 스킵은 test_builder_skips_without_cutover_flag에서만 별도로 확인한다."""
+    monkeypatch.setenv("US_PRICES_CUTOVER", "1")
+
+
 def _fake_mirror(monkeypatch, bi, px_long, div_long, meta_df):
     monkeypatch.setattr(
         bi.qdata_api,
@@ -48,6 +55,57 @@ def _fake_mirror(monkeypatch, bi, px_long, div_long, meta_df):
     # _as_of()는 krx_flows(640MB 실 레이크)를 로드하는 공용 헬퍼 — 이 빌더 테스트는
     # US 가격 합성만 검증하면 되므로 고정값으로 대체해 레이크 의존·왕복 시간을 없앤다.
     monkeypatch.setattr(bi, "_as_of", lambda: "2026-08-04")
+
+
+def test_builder_skips_without_cutover_flag(monkeypatch, bi, capsys):
+    """US_PRICES_CUTOVER=1 이 없으면 즉시 None + [skip] 로그 — 머지가 곧 전환이
+    되지 않도록 막는 게이트. 미러 접근 자체가 시도되지 않아야 한다."""
+    monkeypatch.delenv("US_PRICES_CUTOVER", raising=False)
+
+    def boom(**kwargs):
+        raise AssertionError("게이트 미통과 시 미러를 읽으면 안 된다")
+
+    monkeypatch.setattr(bi.qdata_api, "load_us_prices", boom)
+    assert bi.build_us_prices() is None
+    err = capsys.readouterr().err
+    assert "[skip]" in err
+    assert "US_PRICES_CUTOVER" in err
+
+
+def test_builder_sorts_by_meta_id_not_ticker(monkeypatch, bi, capsys):
+    """서빙(prices.py._us_prices)은 ("meta_id","in",...) 필터로 읽는다 — 출력은
+    ticker 알파벳 순이 아니라 meta_id 순이어야 로우그룹 프루닝이 산다(F1)."""
+    dates = pd.bdate_range("2026-01-05", periods=3)
+    # ticker 알파벳 순(AAA < ZZZ)과 meta_id 순(20 > 1)이 반대가 되도록 구성 —
+    # ticker 정렬이면 AAA가 먼저, meta_id 정렬이면 ZZZ(meta_id=1)가 먼저 와야 한다.
+    px = pd.concat(
+        [
+            pd.DataFrame(
+                {
+                    "date": dates,
+                    "ticker": "AAA",
+                    "close": [10.0, 10.1, 10.2],
+                    "adj_close": [10.0, 10.1, 10.2],
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "date": dates,
+                    "ticker": "ZZZ",
+                    "close": [20.0, 20.1, 20.2],
+                    "adj_close": [20.0, 20.1, 20.2],
+                }
+            ),
+        ]
+    )
+    meta_df = pd.DataFrame({"meta_id": [20, 1], "ticker": ["AAA", "ZZZ"], "iso_code": ["US", "US"]})
+    _fake_mirror(
+        monkeypatch, bi, px, pd.DataFrame({"ticker": [], "ex_date": [], "cash_amount": []}), meta_df
+    )
+    out = bi.build_us_prices()
+    assert out["meta_id"].tolist() == sorted(out["meta_id"].tolist())
+    assert out["meta_id"].iloc[0] == 1  # ZZZ(meta_id=1) 블록이 먼저
+    assert out["ticker"].iloc[0] == "ZZZ"
 
 
 def test_builder_schema_and_meta_join(monkeypatch, bi, capsys):

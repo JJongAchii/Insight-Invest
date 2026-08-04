@@ -205,6 +205,19 @@ TICKER_SEGMENTS = {  # 현행 티커: [(소스 티커, 시작, 끝)], None = 무
   잡는다는 것이 확인됨 — **가드 캘리브레이션과 개별주 수록 범위는 전환 게이트의 사람 결정
   사항**이다 (ETF 중심의 현 전략·벤치마크·레짐 경로는 무영향).
 - 서버 테스트 113개 그린. 배치 첫 실행 소요 시간·메모리는 게이트에서 실측해 여기 추기한다.
+- **최종 전체 리뷰 수정 (2026-08-04)**: `build_us_prices` 출력 정렬 키를
+  `["ticker", "trade_date"]` → `["meta_id", "trade_date"]` 로 확정 — 서빙(`_us_prices`)이
+  `("meta_id","in",...)` 필터로 읽는데 ticker 정렬로 쓰면 로우그룹 프루닝이 전멸해(D2가
+  금지한 실패 모드) 매 요청이 전파일을 스캔했다.
+- **전환 게이트 추가**: `build_us_prices` 진입부에 `US_PRICES_CUTOVER=1` env 체크를 넣어,
+  머지 자체가 곧 전환이 되지 않게 했다 — 야간 배치 EC2는 git pull 직후 실행하므로, 게이트가
+  없으면 가드 캘리브레이션·전수 스캔 검토·`--app-file` 대조를 사람이 통과시키기 전에 오늘 밤
+  프로덕션 파일이 교체된다. 플래그 미설정 시 None 반환(기존 파일 유지)이고, EC2 환경에
+  사람이 직접 설정해야 활성화된다.
+- **잔존 yfinance 소비자 전환 완료**: `regime_asset_perf`(build_insights.py `_monthly_returns`)와
+  텔레그램 브리핑(send_briefing.py `_section_market._us`)이 쓰던
+  `qdata_api.load_prices`(레이크 yfinance 테이블)를 `datastore.prices.us_adj_close_wide`
+  (앱 `us_prices.parquet`)로 전환 — D1(yfinance 완전 제거)과 모순되던 잔존 경로 제거.
 
 ## 9. 비목표
 
