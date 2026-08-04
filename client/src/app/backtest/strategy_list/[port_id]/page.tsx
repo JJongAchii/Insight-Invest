@@ -169,18 +169,20 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
         </div>
       );
     }
+    // 로딩 분기와 같은 무제목 카드 — active 모드의 "백테스트 분석" h3와 제목이
+    // 중복되지 않게 한다 (saved 모드에서 두 그룹이 각각 렌더될 때도 동일)
     if (analyticsIsError) {
       return (
-        <Card title="백테스트 분석">
+        <div className="card">
           <ErrorState message="분석 지표를 불러오지 못했습니다" onRetry={refetchAnalytics} />
-        </Card>
+        </div>
       );
     }
     if (analyticsEmpty) {
       return (
-        <Card title="백테스트 분석">
+        <div className="card">
           <p className="text-sm text-ink-muted">분석할 데이터가 없습니다</p>
-        </Card>
+        </div>
       );
     }
     if (!analyticsReady) return null;
