@@ -61,7 +61,9 @@ def _cpi() -> pd.Series:
 
 @lru_cache(maxsize=1)
 def _hyg_ief() -> pd.DataFrame:
-    return qdata_api.load_prices(["HYG", "IEF"], fields=("adj_close",))["adj_close"]
+    from datastore import prices
+
+    return prices.us_adj_close_wide(["HYG", "IEF"])
 
 
 @lru_cache(maxsize=1)

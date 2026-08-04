@@ -1,7 +1,7 @@
-"""벤치마크 지수/NAV 시계열 — qdata 레이크에서 조회.
+"""벤치마크 지수/NAV 시계열.
 
-- "SPY": qdata 수정종가
-- "KOSPI"/"KOSDAQ": qdata KRX 지수 종가
+- "SPY": 앱 us_prices.parquet 수정종가(총수익 계열, datastore.prices 경유)
+- "KOSPI"/"KOSDAQ": qdata 레이크 KRX 지수 종가
 - "60_40": SPY 60 / IEF 40 고정비중을 엔진(월간 리밸, 비용 0)으로 돌린 NAV
 """
 
@@ -10,6 +10,8 @@ from datetime import date
 
 import pandas as pd
 from qdata import api as qdata_api
+
+from datastore import prices
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +31,8 @@ def benchmark_nav(name: str, start_date=None, end_date=None) -> pd.Series:
     start, end = _fmt(start_date), _fmt(end_date)
 
     if name == "SPY":
-        wide = qdata_api.load_prices(["SPY"], start=start, end=end, fields=("adj_close",))
-        s = wide["adj_close"]["SPY"].dropna()
+        wide = prices.us_adj_close_wide(["SPY"], start_date=start, end_date=end)
+        s = wide["SPY"].dropna() if not wide.empty else pd.Series(dtype=float)
         s.name = name
         return s
 
@@ -47,9 +49,7 @@ def benchmark_nav(name: str, start_date=None, end_date=None) -> pd.Series:
         from module.strategy import FixedWeight
         from module.util import calculate_nav
 
-        price = qdata_api.load_prices(
-            ["SPY", "IEF"], start=start, end=end, fields=("adj_close",)
-        )["adj_close"].dropna()
+        price = prices.us_adj_close_wide(["SPY", "IEF"], start_date=start, end_date=end).dropna()
         weight = FixedWeight({"SPY": 0.6, "IEF": 0.4}).simulate(price=price, freq="M")
         _, nav = calculate_nav(weight=weight, price=price, cost_bps=0.0)
         s = nav["value"]
