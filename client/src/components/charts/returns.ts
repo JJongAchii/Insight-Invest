@@ -13,10 +13,14 @@ export interface PeriodReturn {
 /**
  * Compute period-over-period returns (%) from a NAV series.
  * Groups NAV by month/year end value; return = change vs previous period's end.
+ * With `initialRef` supplied, the first period is also computed (change vs that
+ * reference value) instead of being dropped for lack of a prior period — used by
+ * the live series, which is anchored at a known reference value (the saved_at NAV).
  */
 export const calculatePeriodReturns = (
   data: NavPoint[],
-  period: "month" | "year"
+  period: "month" | "year",
+  initialRef?: number
 ): PeriodReturn[] => {
   if (!data || data.length === 0) return [];
 
@@ -40,7 +44,7 @@ export const calculatePeriodReturns = (
   );
 
   const returnData: PeriodReturn[] = [];
-  let previousEndValue: number | null = null;
+  let previousEndValue: number | null = initialRef ?? null;
 
   for (const [key, { end }] of Object.entries(groupedData)) {
     if (previousEndValue !== null) {

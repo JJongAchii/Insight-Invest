@@ -85,14 +85,16 @@ const MetricSummary = ({
         />
       </div>
 
-      {/* Current Allocation - Horizontal Bars */}
+      {/* 백테스트 최종 배분 - Horizontal Bars */}
       <div>
         <div className="flex items-center justify-between mb-4">
           <h4 className="text-sm font-semibold text-ink-secondary">
-            Current Allocation
+            백테스트 최종 배분
           </h4>
           {lastDate && (
-            <span className="text-xs text-ink-muted">as of {lastDate}</span>
+            <span className="text-xs text-ink-muted">
+              as of {lastDate} — 백테스트 종료 시점의 목표 배분입니다
+            </span>
           )}
         </div>
 
