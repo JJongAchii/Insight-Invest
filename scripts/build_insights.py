@@ -135,7 +135,7 @@ def build_us_prices():
                 frames.append(chunk)
         px = pd.concat(frames, ignore_index=True)
         px["date"] = pd.to_datetime(px["date"])
-        div = qdata_api.load_us_dividends(tickers=want)
+        div = qdata_api.load_us_dividends(start=US_PRICE_FLOOR, tickers=want)
         div["ex_date"] = pd.to_datetime(div["ex_date"])
         px, div = uspx.stitch_segments(px, div, uspx.TICKER_SEGMENTS)
     except Exception:

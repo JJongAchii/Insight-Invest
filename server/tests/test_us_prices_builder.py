@@ -143,3 +143,51 @@ def test_builder_all_excluded_returns_none_instead_of_crashing(monkeypatch, bi, 
     err = capsys.readouterr().err
     assert "연속성 가드" in err
     assert "0종목" in err
+
+
+def test_dividend_load_floored_and_non_trading_ex_date_flagged(monkeypatch, bi, capsys):
+    """load_us_dividends 는 가격과 같은 US_PRICE_FLOOR 부터 불러야 한다 — 안 그러면
+    플로어 이전 정상 배당이 매일 밤 '비거래일 배당락 소실'로 오집계된다(리뷰 지적).
+    같은 픽스처로 진짜 비거래일(주말) ex_date 배당은 여전히 소실 경고 + 금액 집계가
+    나오는지도 함께 확인한다."""
+    # 금요일→월요일 사이 주말을 포함해 "거래일 인덱스 범위 안이지만 거래일이 아닌"
+    # ex_date를 만든다.
+    dates = pd.bdate_range("2026-01-02", periods=4)  # Fri, Mon, Tue, Wed
+    px = pd.DataFrame(
+        {
+            "date": dates,
+            "ticker": "SPY",
+            "close": [500.0, 501.0, 502.0, 503.0],
+            "adj_close": [500.0, 501.0, 502.0, 503.0],
+        }
+    )
+    weekend_ex_date = pd.Timestamp("2026-01-03")  # Saturday — dates 안에 없음
+    div = pd.DataFrame({"ticker": ["SPY"], "ex_date": [weekend_ex_date], "cash_amount": [1.5]})
+    meta_df = pd.DataFrame({"meta_id": [1], "ticker": ["SPY"], "iso_code": ["US"]})
+
+    calls = []
+
+    def fake_load_us_prices(start=None, end=None, tickers=None, columns=None):
+        return px[(px.date >= start) & (px.date <= end)].copy()
+
+    def fake_load_us_dividends(start=None, end=None, tickers=None):
+        calls.append({"start": start, "end": end, "tickers": tickers})
+        return div.copy()
+
+    monkeypatch.setattr(bi.qdata_api, "load_us_prices", fake_load_us_prices)
+    monkeypatch.setattr(bi.qdata_api, "load_us_dividends", fake_load_us_dividends)
+    monkeypatch.setattr(bi.meta, "meta_df", lambda: meta_df)
+    monkeypatch.setattr(bi, "_as_of", lambda: "2026-08-04")
+
+    out = bi.build_us_prices()
+
+    # (b) load_us_dividends가 가격과 같은 플로어로 호출됐는지
+    assert len(calls) == 1
+    assert calls[0]["start"] == bi.US_PRICE_FLOOR
+
+    # (a) 실제 비거래일 ex_date는 여전히 소실 경고 + 금액 집계로 잡혀야 한다
+    err = capsys.readouterr().err
+    assert "비거래일 배당락 소실" in err
+    assert "$1.50" in err
+
+    assert set(out.ticker) == {"SPY"}
