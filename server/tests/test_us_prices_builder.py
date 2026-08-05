@@ -153,7 +153,7 @@ def test_builder_schema_and_meta_join(monkeypatch, bi, capsys):
 
 
 def test_builder_guard_excludes_with_warning(monkeypatch, bi, capsys):
-    """40% 점프 티커는 제외 + 경고, 나머지는 살아남는다 — 조용한 소실 금지."""
+    """초대형 점프(9,900% — JUMP_LIMIT 초과) 티커는 제외 + 경고, 나머지는 생존."""
     dates = pd.bdate_range("2026-01-05", periods=3)
     px = pd.concat(
         [
@@ -316,3 +316,20 @@ def test_builder_proceeds_without_reference_loaders(monkeypatch, bi, capsys):
     out = bi.build_us_prices()
     assert set(out.ticker) == {"SPY"}
     assert "실체 경계 절단 생략" in capsys.readouterr().err
+
+
+def test_builder_old_qdata_without_loaders(monkeypatch, bi, capsys):
+    """구버전 qdata(로더 부재) → hasattr 분기로 절단 생략 + 경고, 빌드는 계속."""
+    dates = pd.bdate_range("2026-01-05", periods=3)
+    px = pd.DataFrame({"date": dates, "ticker": "SPY",
+                       "close": [500.0, 505.0, 500.0], "adj_close": [500.0, 505.0, 500.0]})
+    div = pd.DataFrame({"ticker": [], "ex_date": [], "cash_amount": []})
+    meta_df = pd.DataFrame({"meta_id": [1], "ticker": ["SPY"], "iso_code": ["US"]})
+    _fake_mirror(monkeypatch, bi, px, div, meta_df)
+    monkeypatch.setattr(bi.meta, "meta_df", lambda: meta_df)
+    monkeypatch.delattr(bi.qdata_api, "load_us_ticker_events", raising=False)
+    monkeypatch.delattr(bi.qdata_api, "load_us_ticker_details", raising=False)
+
+    out = bi.build_us_prices()
+    assert set(out.ticker) == {"SPY"}
+    assert "구버전" in capsys.readouterr().err

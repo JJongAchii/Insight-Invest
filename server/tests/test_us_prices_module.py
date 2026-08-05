@@ -5,6 +5,7 @@ import pytest
 
 from module.us_prices import (
     GAP_LIMIT_TDAYS,
+    ambiguous_srcs,
     apply_entity_windows,
     compose_total_return,
     continuity_issues,
@@ -216,3 +217,42 @@ def test_apply_entity_windows_none_is_noop():
     divs = pd.DataFrame({"ticker": [], "ex_date": [], "cash_amount": []})
     p, d = apply_entity_windows(prices, divs, None)
     assert p.equals(prices)
+
+
+def test_apply_entity_windows_preserves_ambiguous_reuse():
+    """자기 창 없는 final 이 남의 체인 소스로만 등장 — 미청구 행은 보존 (조용한 소실 금지)."""
+    prices = pd.concat([
+        _long("ABC", ["2005-06-01"], [50.0]),               # 구회사 (OLDCO 체인 구간)
+        _long("ABC", ["2020-01-02", "2020-01-03"], [7.0, 7.1]),  # 신생 회사 (창 없음)
+        _long("OLDCO", ["2010-01-04"], [55.0]),
+    ])
+    w = pd.DataFrame([
+        {"final": "OLDCO", "src": "ABC", "start": pd.Timestamp("2000-01-01"),
+         "end": pd.Timestamp("2009-12-31")},
+        {"final": "OLDCO", "src": "OLDCO", "start": pd.Timestamp("2010-01-01"), "end": None},
+    ])
+    finals = {"ABC", "OLDCO"}
+    amb = ambiguous_srcs(w, finals)
+    assert amb == {"ABC"}
+    empty = pd.DataFrame({"ticker": pd.Series(dtype="object"),
+                          "ex_date": pd.Series(dtype="datetime64[ns]"),
+                          "cash_amount": pd.Series(dtype="float64")})
+    p, _ = apply_entity_windows(prices, empty, w, keep_unclaimed=amb)
+    abc = p[p.ticker == "ABC"]
+    assert len(abc) == 2 and abc["date"].min() == pd.Timestamp("2020-01-02")  # 신생 회사 생존
+    oldco = p[p.ticker == "OLDCO"].sort_values("date")
+    assert len(oldco) == 2  # 구회사 ABC 행 + 자기 행 병합
+
+
+def test_apply_entity_windows_double_claim_raises_for_dividends():
+    """창 겹침으로 원본 배당 행이 두 번 청구되면 raise — 이중 계상 방지."""
+    prices = _long("AAA", ["2026-02-02"], [10.0])
+    divs = pd.DataFrame({"ticker": ["BBB"], "ex_date": [pd.Timestamp("2026-01-15")],
+                         "cash_amount": [1.0]})
+    w = pd.DataFrame([
+        {"final": "AAA", "src": "BBB", "start": pd.Timestamp("2026-01-01"),
+         "end": pd.Timestamp("2026-01-31")},
+        {"final": "CCC", "src": "BBB", "start": pd.Timestamp("2026-01-10"), "end": None},
+    ])
+    with pytest.raises(ValueError, match="청구"):
+        apply_entity_windows(prices, divs, w)

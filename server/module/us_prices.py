@@ -136,26 +136,51 @@ def entity_windows(
     return pd.DataFrame(rows, columns=["final", "src", "start", "end"])
 
 
-def apply_entity_windows(prices, dividends, windows):
+def ambiguous_srcs(windows, finals: set[str]) -> set[str]:
+    """자기 창 없이 남의 체인 소스로만 등장하는 final 티커 — 문자열 재사용 충돌 후보.
+
+    예: OLDCO 의 옛 티커 "ABC" 를 신생 회사가 재사용해 meta 에 등록됐는데 신생
+    회사의 창(상장일)이 벤더 커버리지 갭으로 없는 경우. 이 티커의 미청구 행을
+    지우면 신생 회사가 조용히 사라진다 — 보존 + 경고 대상으로 분리한다.
+    """
+    if windows is None or windows.empty:
+        return set()
+    return (set(windows["src"]) - set(windows["final"])) & finals
+
+
+def apply_entity_windows(prices, dividends, windows, keep_unclaimed: set[str] | None = None):
     """실체 창 적용 — 창 밖 행(다른 실체) 절단 + 이전 티커 행을 현행 티커로 병합.
 
     수동 stitch_segments 와 같은 의미지만 수천 티커에 벡터화로 적용된다.
-    (final, date) 중복이 생기면(창 겹침·소스 충돌) 조용히 넘기지 않고 raise.
+    - 원본 행이 두 창에 청구되면(창 겹침) 조용히 넘기지 않고 raise — 가격뿐 아니라
+      배당의 이중 계상도 여기서 잡힌다
+    - keep_unclaimed 티커(ambiguous_srcs)의 미청구 행은 자기 티커로 보존한다 —
+      조용한 소실 금지. 청구된 행(다른 final 의 체인 구간)은 그쪽으로 병합된다
     """
     if windows is None or windows.empty:
         return prices, dividends
+    keep_unclaimed = keep_unclaimed or set()
     involved = set(windows["src"]) | set(windows["final"])
     out = []
     for df, col in ((prices, "date"), (dividends, "ex_date")):
+        base = df.reset_index(drop=True)
         w = windows.rename(columns={"src": "ticker"})
-        hit = df.merge(w, on="ticker", how="inner")
+        hit = base.reset_index().merge(w, on="ticker", how="inner")
         keep = hit[col] >= hit["start"]
         keep &= hit["end"].isna() | (hit[col] <= hit["end"])
-        hit = hit[keep].drop(columns=["ticker", "start", "end"]).rename(
+        hit = hit[keep]
+        if hit["index"].duplicated().any():
+            bad = sorted(hit.loc[hit["index"].duplicated(), "final"].unique()[:5])
+            raise ValueError(f"실체 창 겹침 — 원본 행이 복수 창에 청구됨: {bad}")
+        claimed = set(hit["index"])
+        hit = hit.drop(columns=["index", "ticker", "start", "end"]).rename(
             columns={"final": "ticker"}
         )
-        rest = df[~df["ticker"].isin(involved)]
-        out.append(pd.concat([rest, hit[df.columns]], ignore_index=True))
+        rest = base[~base["ticker"].isin(involved)]
+        amb = base[
+            base["ticker"].isin(keep_unclaimed) & ~base.index.isin(claimed)
+        ]
+        out.append(pd.concat([rest, hit[df.columns], amb], ignore_index=True))
     prices, dividends = out
     dup = prices.duplicated(subset=["ticker", "date"])
     if dup.any():

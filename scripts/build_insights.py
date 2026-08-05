@@ -140,7 +140,9 @@ def build_us_prices():
         # 실체 경계 (스펙 D6) — 벤더 개명 체인·상장일로 티커 재사용 실체의 행을 절단.
         # 로더·데이터가 없으면(구버전 qdata·미러 미발행) 절단 없이 진행하되 경고한다.
         windows = None
-        if hasattr(qdata_api, "load_us_ticker_events"):
+        if hasattr(qdata_api, "load_us_ticker_events") and hasattr(
+            qdata_api, "load_us_ticker_details"
+        ):
             try:
                 ev = qdata_api.load_us_ticker_events(tickers=sorted(finals))
                 dts = qdata_api.load_us_ticker_details(tickers=sorted(finals))
@@ -172,7 +174,14 @@ def build_us_prices():
         px["date"] = pd.to_datetime(px["date"])
         div = qdata_api.load_us_dividends(start=US_PRICE_FLOOR, tickers=want)
         div["ex_date"] = pd.to_datetime(div["ex_date"])
-        px, div = uspx.apply_entity_windows(px, div, windows)
+        amb = uspx.ambiguous_srcs(windows, finals)
+        if amb:
+            print(
+                f"[warn] us_prices: 티커 재사용 충돌 의심 {len(amb)}종목 (자기 창 없이 "
+                f"타 체인 소스로 등장 — 미청구 행 보존): {sorted(amb)[:10]}",
+                file=sys.stderr,
+            )
+        px, div = uspx.apply_entity_windows(px, div, windows, keep_unclaimed=amb)
         px, div = uspx.stitch_segments(px, div, uspx.TICKER_SEGMENTS)
     except Exception:
         print("[warn] us_prices: 미러 읽기 실패 — 기존 파일 유지", file=sys.stderr)

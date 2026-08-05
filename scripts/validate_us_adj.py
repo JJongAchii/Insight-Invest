@@ -218,6 +218,7 @@ def scan_continuity(out_path: str):
         GAP_LIMIT_TDAYS,
         JUMP_LIMIT,
         TICKER_SEGMENTS,
+        ambiguous_srcs,
         apply_entity_windows,
         continuity_issues,
         entity_windows,
@@ -264,7 +265,10 @@ def scan_continuity(out_path: str):
         "cash_amount": pd.Series(dtype="float64"),
     })
     before = len(px)
-    px, _ = apply_entity_windows(px, empty_div.copy(), windows)
+    amb = ambiguous_srcs(windows, finals)
+    if amb:
+        print(f"[warn] 티커 재사용 충돌 의심 {len(amb)}종목 (미청구 행 보존): {sorted(amb)[:10]}")
+    px, _ = apply_entity_windows(px, empty_div.copy(), windows, keep_unclaimed=amb)
     cut = before - len(px)
     if windows is not None:
         print(f"실체 경계 절단: {cut:,}행 제거 (재사용 실체·상장 전 구간)")
