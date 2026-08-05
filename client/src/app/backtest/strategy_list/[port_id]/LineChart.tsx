@@ -11,10 +11,16 @@ interface NavData {
 }
 
 interface BmNavData {
-  trade_date: string;
+  /** pandas to_json 직렬화라 epoch ms(숫자)로 온다 — 전략 nav의 ISO 문자열과 다르다. */
+  trade_date: string | number;
   bm_name: string;
   value: number;
 }
+
+/** 날짜 키 정규화(YYYY-MM-DD) — bm(epoch ms)·전략(ISO)·live(date-only)가 서로 다른
+ *  포맷이라, 원형 그대로 Map 키로 쓰면 벤치마크가 영원히 매칭되지 않는다. */
+const toDay = (d: string | number): string =>
+  typeof d === "number" ? new Date(d).toISOString().slice(0, 10) : d.slice(0, 10);
 
 const LineChart = ({
   strategyName,
@@ -33,7 +39,7 @@ const LineChart = ({
   const { chartData, series, referenceLinesX, hasLive } = useMemo(() => {
     const bmNavData: BmNavData[] = bmNav ? JSON.parse(bmNav) : [];
     const bmByDate = new Map<string, number>(
-      bmNavData.map((nav) => [nav.trade_date, nav.value])
+      bmNavData.map((nav) => [toDay(nav.trade_date), nav.value])
     );
 
     type Row = {
@@ -45,10 +51,11 @@ const LineChart = ({
 
     const rowByDate = new Map<string, Row>();
     for (const nav of strategyNav ?? []) {
-      rowByDate.set(nav.trade_date, {
-        date: nav.trade_date,
+      const day = toDay(nav.trade_date);
+      rowByDate.set(day, {
+        date: day,
         strategy: nav.value,
-        benchmark: bmByDate.get(nav.trade_date) ?? null,
+        benchmark: bmByDate.get(day) ?? null,
         live: null,
       });
     }
@@ -64,21 +71,22 @@ const LineChart = ({
     if (hasLive) {
       const scale = storedLast / 1000;
       for (const p of live) {
-        const existing = rowByDate.get(p.date);
+        const day = toDay(p.date);
+        const existing = rowByDate.get(day);
         if (existing) {
           existing.live = p.value * scale;
         } else {
-          rowByDate.set(p.date, {
-            date: p.date,
+          rowByDate.set(day, {
+            date: day,
             strategy: null,
-            benchmark: bmByDate.get(p.date) ?? null,
+            benchmark: bmByDate.get(day) ?? null,
             live: p.value * scale,
           });
         }
       }
       // Anchor the live segment to the backtest endpoint for continuity.
       const lastStored = strategyNav[strategyNav.length - 1];
-      const boundary = rowByDate.get(lastStored.trade_date);
+      const boundary = rowByDate.get(toDay(lastStored.trade_date));
       if (boundary && boundary.live === null) boundary.live = storedLast;
     }
 
@@ -96,7 +104,7 @@ const LineChart = ({
 
     const referenceLinesX: TimeSeriesReferenceLineX[] | undefined =
       hasLive && savedAt
-        ? [{ x: savedAt, label: "저장", color: "var(--chart-4)" }]
+        ? [{ x: toDay(savedAt), label: "저장", color: "var(--chart-4)" }]
         : undefined;
 
     return { chartData, series, referenceLinesX, hasLive };

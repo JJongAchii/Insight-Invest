@@ -24,9 +24,41 @@ const formatValue = (value: unknown, format: "pct" | "num"): string => {
   return format === "pct" ? `${value.toFixed(2)}%` : value.toFixed(2);
 };
 
-/** 저장일 이후 실전(Live) 지표 vs 백테스트 지표 비교 테이블. */
-const LiveMetricsTable = ({ live }: { live?: StrategyLiveResponse }) => {
+/** 벤치마크 metrics(JSON 문자열, 서버 키명이 MetricSet과 다름)를 행 키로 매핑.
+ *  벤치마크는 백테스트 구간 기준이다 — 라이브 구간 BM은 서버 확장 후속(스펙 §8 ④). */
+const parseBmMetrics = (
+  raw?: string
+): { name: string; values: Partial<Record<keyof MetricSet, number>> } | null => {
+  if (!raw) return null;
+  try {
+    const first = (JSON.parse(raw) as Record<string, unknown>[])[0];
+    if (!first) return null;
+    const num = (v: unknown) => (typeof v === "number" ? v : undefined);
+    return {
+      name: typeof first.strategy === "string" ? first.strategy : "BM",
+      values: {
+        ann_ret: num(first.ann_returns),
+        ann_vol: num(first.ann_volatilities),
+        sharpe: num(first.sharpe_ratios),
+        sortino: num(first.sortino_ratios),
+        mdd: num(first.max_drawdowns),
+      },
+    };
+  } catch {
+    return null;
+  }
+};
+
+/** 저장일 이후 실전(Live) 지표 vs 백테스트·벤치마크 지표 비교 테이블. */
+const LiveMetricsTable = ({
+  live,
+  bmMetrics,
+}: {
+  live?: StrategyLiveResponse;
+  bmMetrics?: string;
+}) => {
   const nav = live?.nav ?? [];
+  const bm = parseBmMetrics(bmMetrics);
 
   return (
     <div className="card">
@@ -56,6 +88,9 @@ const LiveMetricsTable = ({ live }: { live?: StrategyLiveResponse }) => {
               <tr className="table-header">
                 <th className="py-2.5 px-4 text-left rounded-l-lg">Metric</th>
                 <th className="py-2.5 px-4 text-right">Backtest</th>
+                {bm && (
+                  <th className="py-2.5 px-4 text-right">{bm.name} (BT 구간)</th>
+                )}
                 <th className="py-2.5 px-4 text-right">Live (저장 후)</th>
                 <th className="py-2.5 px-4 text-right rounded-r-lg">Δ</th>
               </tr>
@@ -88,6 +123,13 @@ const LiveMetricsTable = ({ live }: { live?: StrategyLiveResponse }) => {
                         {formatValue(bt, row.format)}
                       </span>
                     </td>
+                    {bm && (
+                      <td className="table-cell text-right">
+                        <span className="num text-ink-muted">
+                          {formatValue(bm.values[row.key], row.format)}
+                        </span>
+                      </td>
+                    )}
                     <td className="table-cell text-right">
                       <span className="num text-ink">
                         {formatValue(lv, row.format)}

@@ -310,7 +310,7 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
             liveNav={liveData?.nav}
             savedAt={liveData?.saved_at}
           />
-          <LiveMetricsTable live={liveData} />
+          <LiveMetricsTable live={liveData} bmMetrics={bmDetails.metrics} />
           {yearlyMonthlyReturns}
 
           <h3 className="section-header border-t border-edge pt-6">백테스트 분석</h3>
