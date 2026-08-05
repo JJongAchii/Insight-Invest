@@ -221,6 +221,7 @@ def scan_continuity(out_path: str):
         ambiguous_srcs,
         apply_entity_windows,
         continuity_issues,
+        drop_conflicting_windows,
         entity_windows,
         stitch_segments,
     )
