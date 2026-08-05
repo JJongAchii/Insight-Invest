@@ -38,7 +38,11 @@ def _cutover_enabled(monkeypatch):
     monkeypatch.setenv("US_PRICES_CUTOVER", "1")
 
 
-def _fake_mirror(monkeypatch, bi, px_long, div_long, meta_df):
+def _no_reference(**kwargs):
+    raise FileNotFoundError("clean/us_ticker_events.parquet 없음 (테스트 기본값)")
+
+
+def _fake_mirror(monkeypatch, bi, px_long, div_long, meta_df, events=None, details=None):
     monkeypatch.setattr(
         bi.qdata_api,
         "load_us_prices",
@@ -50,6 +54,19 @@ def _fake_mirror(monkeypatch, bi, px_long, div_long, meta_df):
         bi.qdata_api,
         "load_us_dividends",
         lambda start=None, end=None, tickers=None: div_long.copy(),
+    )
+    # 실체 경계 로더 — 픽스처가 없으면 부재 경로(FileNotFoundError → 절단 생략)를 재현
+    monkeypatch.setattr(
+        bi.qdata_api,
+        "load_us_ticker_events",
+        (lambda tickers=None: events.copy()) if events is not None else _no_reference,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        bi.qdata_api,
+        "load_us_ticker_details",
+        (lambda tickers=None: details.copy()) if details is not None else _no_reference,
+        raising=False,
     )
     monkeypatch.setattr(bi.meta, "meta_df", lambda: meta_df)
     # _as_of()는 krx_flows(640MB 실 레이크)를 로드하는 공용 헬퍼 — 이 빌더 테스트는
@@ -249,3 +266,53 @@ def test_dividend_load_floored_and_non_trading_ex_date_flagged(monkeypatch, bi, 
     assert "$1.50" in err
 
     assert set(out.ticker) == {"SPY"}
+
+
+def test_builder_applies_entity_windows(monkeypatch, bi, capsys):
+    """실체 경계 절단 엔드투엔드 — 개명 체인으로 이전 티커 병합 + 상장 전 남의 행 절단."""
+    d1, d2, d3, d4 = pd.to_datetime(["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08"])
+    px = pd.concat(
+        [
+            pd.DataFrame({"date": [d1, d2], "ticker": "NEWT",
+                          "close": [1.0, 1.1], "adj_close": [1.0, 1.1]}),  # 남의 회사 (개명 전)
+            pd.DataFrame({"date": [d1, d2], "ticker": "OLDT",
+                          "close": [50.0, 51.0], "adj_close": [50.0, 51.0]}),
+            pd.DataFrame({"date": [d3, d4], "ticker": "NEWT",
+                          "close": [51.5, 52.0], "adj_close": [51.5, 52.0]}),  # 진짜 (개명 후)
+        ]
+    )
+    events = pd.DataFrame({
+        "ticker": ["NEWT", "NEWT"],
+        "event_type": ["ticker_change", "ticker_change"],
+        "event_date": [d1, d3],
+        "event_ticker": ["OLDT", "NEWT"],
+    })
+    details = pd.DataFrame({"ticker": ["NEWT"], "list_date": [d1]})
+    meta_df = pd.DataFrame({"meta_id": [7], "ticker": ["NEWT"], "iso_code": ["US"]})
+    div = pd.DataFrame({"ticker": [], "ex_date": [], "cash_amount": []})
+    _fake_mirror(monkeypatch, bi, px, div, meta_df, events=events, details=details)
+    monkeypatch.setattr(bi.meta, "meta_df", lambda: meta_df)
+
+    out = bi.build_us_prices()
+    newt = out[out.ticker == "NEWT"].sort_values("trade_date")
+    # OLDT 2행 + NEWT 2행 병합, 남의 회사(개명 전 NEWT) 2행 절단 → 4행 연속 시계열
+    assert len(newt) == 4
+    # 경계에서 가짜 점프가 없어야 한다 (병합 전이라면 50→1 급락·1→51 급등): 최대 ~2%
+    assert newt["gross_return"].abs().max() < 0.03
+    # TR 앵커: 최신값 = 원 adj_close 최신값
+    assert newt["adj_close"].iloc[-1] == pytest.approx(52.0)
+
+
+def test_builder_proceeds_without_reference_loaders(monkeypatch, bi, capsys):
+    """events/details 미러 부재 → 절단 생략 + 경고, 빌드는 계속 (하위호환)."""
+    dates = pd.bdate_range("2026-01-05", periods=3)
+    px = pd.DataFrame({"date": dates, "ticker": "SPY",
+                       "close": [500.0, 505.0, 500.0], "adj_close": [500.0, 505.0, 500.0]})
+    div = pd.DataFrame({"ticker": [], "ex_date": [], "cash_amount": []})
+    meta_df = pd.DataFrame({"meta_id": [1], "ticker": ["SPY"], "iso_code": ["US"]})
+    _fake_mirror(monkeypatch, bi, px, div, meta_df)  # events/details 기본값 = 부재
+    monkeypatch.setattr(bi.meta, "meta_df", lambda: meta_df)
+
+    out = bi.build_us_prices()
+    assert set(out.ticker) == {"SPY"}
+    assert "실체 경계 절단 생략" in capsys.readouterr().err

@@ -218,12 +218,32 @@ def scan_continuity(out_path: str):
         GAP_LIMIT_TDAYS,
         JUMP_LIMIT,
         TICKER_SEGMENTS,
+        apply_entity_windows,
         continuity_issues,
+        entity_windows,
         stitch_segments,
     )
 
     us = meta.meta_df().query("iso_code == 'US'")[["ticker"]].drop_duplicates()
-    want = sorted(set(us["ticker"]) | {s for v in TICKER_SEGMENTS.values() for s, _, _ in v})
+    finals = set(us["ticker"])
+
+    # 실체 경계 (스펙 D6) — 빌더와 동일하게 개명 체인·상장일로 절단한 뒤 가드를 잰다.
+    # 미러에 아직 없으면 절단 없이 스캔 (경고).
+    windows = None
+    try:
+        ev = pd.read_parquet(f"{MIRROR}/us_ticker_events.parquet")
+        dts = pd.read_parquet(f"{MIRROR}/us_ticker_details.parquet")
+        ev = ev[ev["asof"] == ev["asof"].max()]
+        dts = dts[dts["asof"] == dts["asof"].max()]
+        windows = entity_windows(ev, dts, finals)
+        print(f"실체 경계 창 {len(windows)}건 (개명 체인 {windows['final'].nunique()}종목 포함)")
+    except FileNotFoundError:
+        print("[warn] ticker events/details 미러 없음 — 실체 경계 절단 없이 스캔")
+
+    chain_src = set(windows["src"]) - finals if windows is not None and len(windows) else set()
+    want = sorted(
+        finals | chain_src | {s for v in TICKER_SEGMENTS.values() for s, _, _ in v}
+    )
     print(f"스캔 대상 {len(want)}종목, 연도별 청크 로드 중...")
     frames = []
     for y in range(2008, pd.Timestamp.today().year + 1):
@@ -243,6 +263,11 @@ def scan_continuity(out_path: str):
         "ex_date": pd.Series(dtype="datetime64[ns]"),
         "cash_amount": pd.Series(dtype="float64"),
     })
+    before = len(px)
+    px, _ = apply_entity_windows(px, empty_div.copy(), windows)
+    cut = before - len(px)
+    if windows is not None:
+        print(f"실체 경계 절단: {cut:,}행 제거 (재사용 실체·상장 전 구간)")
     px, _ = stitch_segments(px, empty_div, TICKER_SEGMENTS)
 
     hard_rows, soft_rows = [], []

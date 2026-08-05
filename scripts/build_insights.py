@@ -134,8 +134,31 @@ def build_us_prices():
     try:
         m = meta.meta_df()
         us = m[m["iso_code"] == "US"][["meta_id", "ticker"]].drop_duplicates("ticker")
+        finals = set(us["ticker"])
         seg_src = {s for segs in uspx.TICKER_SEGMENTS.values() for s, _, _ in segs}
-        want = sorted(set(us["ticker"]) | seg_src)
+
+        # 실체 경계 (스펙 D6) — 벤더 개명 체인·상장일로 티커 재사용 실체의 행을 절단.
+        # 로더·데이터가 없으면(구버전 qdata·미러 미발행) 절단 없이 진행하되 경고한다.
+        windows = None
+        if hasattr(qdata_api, "load_us_ticker_events"):
+            try:
+                ev = qdata_api.load_us_ticker_events(tickers=sorted(finals))
+                dts = qdata_api.load_us_ticker_details(tickers=sorted(finals))
+                windows = uspx.entity_windows(ev, dts, finals)
+            except FileNotFoundError:
+                print(
+                    "[warn] us_prices: ticker events/details 미러 없음 — 실체 경계 절단 생략",
+                    file=sys.stderr,
+                )
+        else:
+            print(
+                "[warn] us_prices: qdata 에 events/details 로더 없음 (구버전) — 실체 경계 절단 생략",
+                file=sys.stderr,
+            )
+        chain_src = (
+            set(windows["src"]) - finals if windows is not None and len(windows) else set()
+        )
+        want = sorted(finals | seg_src | chain_src)
 
         frames = []
         for y in range(int(US_PRICE_FLOOR[:4]), pd.Timestamp.today().year + 1):
@@ -149,6 +172,7 @@ def build_us_prices():
         px["date"] = pd.to_datetime(px["date"])
         div = qdata_api.load_us_dividends(start=US_PRICE_FLOOR, tickers=want)
         div["ex_date"] = pd.to_datetime(div["ex_date"])
+        px, div = uspx.apply_entity_windows(px, div, windows)
         px, div = uspx.stitch_segments(px, div, uspx.TICKER_SEGMENTS)
     except Exception:
         print("[warn] us_prices: 미러 읽기 실패 — 기존 파일 유지", file=sys.stderr)
@@ -160,13 +184,16 @@ def build_us_prices():
         print(f"[warn] us_prices: 미러 최종일 {px['date'].max().date()} ({stale_days}일 경과) — "
               "리밸 신호는 is_new_period 가 자연 스킵", file=sys.stderr)
 
-    out, skipped, lost_div = [], [], 0.0
+    out, skipped, soft_warned, lost_div = [], [], [], 0.0
     for tk, g in px.groupby("ticker", sort=False):
         g = g.sort_values("date").set_index("date")
         issues = uspx.continuity_issues(g)
         if issues:
             skipped.append(f"{tk}({'; '.join(issues[:2])})")
             continue
+        warns = uspx.continuity_warnings(g)
+        if warns:
+            soft_warned.append(f"{tk}({warns[0]})")
         dv = div[div["ticker"] == tk]
         lost_div += float(dv.loc[~dv["ex_date"].isin(g.index), "cash_amount"].sum())
         res = uspx.compose_total_return(g, dv)
@@ -177,6 +204,12 @@ def build_us_prices():
     if skipped:
         print(f"[warn] us_prices: 연속성 가드 제외 {len(skipped)}종목 — {skipped[:20]}",
               file=sys.stderr)
+    if soft_warned:
+        print(
+            f"[warn] us_prices: 경고 밴드(무분할 25~100% 점프) {len(soft_warned)}종목 — "
+            f"제외 아님, 표본: {soft_warned[:10]}",
+            file=sys.stderr,
+        )
     if lost_div:
         print(f"[warn] us_prices: 비거래일 배당락 소실 합계 ${lost_div:.2f}", file=sys.stderr)
     if not out:

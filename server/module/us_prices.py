@@ -16,7 +16,10 @@ TICKER_SEGMENTS: dict[str, list[tuple[str, str | None, str | None]]] = {
 }
 
 GAP_LIMIT_TDAYS = 10  # 관측 간 영업일 공백 상한 — 초과는 티커 재배정·수집 구멍 신호
-JUMP_LIMIT = 0.25     # 분할 계수 변동 없는 날의 일수익 상한 — 초과는 계보 오염 신호
+JUMP_LIMIT = 1.00     # 분할 계수 변동 없는 날의 일수익 제외 상한 — 실체 경계 절단(D6) 후의
+                      # 최후 트립와이어. 개별주의 정상 급등(실적·임상 25~100%)은 제외하지
+                      # 않는다 — 오염형 점프는 실측상 수백~수천%다 (META +1,395%)
+JUMP_WARN = 0.25      # 경고 밴드 하한 — 25~100% 는 제외하지 않고 로그로만 남긴다
 
 
 def _cut(df: pd.DataFrame, col: str, src: str, start: str | None, end: str | None) -> pd.DataFrame:
@@ -66,8 +69,15 @@ def compose_total_return(px: pd.DataFrame, div: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame({"adj_close": tr, "gross_return": r})
 
 
+def _no_factor_jumps(px: pd.DataFrame) -> pd.Series:
+    """분할 계수 변동이 없는 날의 |일수익| 시리즈 (계수 변동일 제외)."""
+    r = px["adj_close"].pct_change().abs()
+    f_changed = (px["adj_close"] / px["close"]).pct_change().abs() > 0.005
+    return r[~f_changed]
+
+
 def continuity_issues(px: pd.DataFrame) -> list[str]:
-    """티커 계보 오염 감지 — 공백(영업일)·무분할 점프. 빈 리스트 = 통과."""
+    """티커 계보 오염 감지 (제외 사유) — 공백(영업일)·무분할 초대형 점프. 빈 리스트 = 통과."""
     issues: list[str] = []
     d = px.index.values.astype("datetime64[D]")
     if len(d) > 1:
@@ -77,8 +87,78 @@ def continuity_issues(px: pd.DataFrame) -> list[str]:
             issues.append(
                 f"공백 {int(gaps.max())}영업일 ({px.index[i].date()}→{px.index[i+1].date()})"
             )
-    r = px["adj_close"].pct_change().abs()
-    f_changed = (px["adj_close"] / px["close"]).pct_change().abs() > 0.005
-    for dt, v in r[(r > JUMP_LIMIT) & ~f_changed].items():
+    r = _no_factor_jumps(px)
+    for dt, v in r[r > JUMP_LIMIT].items():
         issues.append(f"{dt.date()} |일수익| {v:.0%} (분할 계수 변동 없음)")
     return issues
+
+
+def continuity_warnings(px: pd.DataFrame) -> list[str]:
+    """경고 밴드 (제외하지 않음) — 무분할 25~100% 점프. 정상 급등일 가능성이 높다."""
+    r = _no_factor_jumps(px)
+    return [
+        f"{dt.date()} |일수익| {v:.0%}" for dt, v in r[(r > JUMP_WARN) & (r <= JUMP_LIMIT)].items()
+    ]
+
+
+def entity_windows(
+    events: pd.DataFrame, details: pd.DataFrame, finals: set[str], manual=None
+) -> pd.DataFrame:
+    """벤더 실체 경계 창 [final, src, start, end] — 개명 체인·상장일 기반 (D6).
+
+    - 개명 체인(ticker_change 이벤트 ≥2)은 (src=event_ticker, start=event_date,
+      end=다음 이벤트 전일) — T=SBC+T·META=FB+META 를 자동 재구성하고, 경계 밖
+      행(다른 실체의 티커 재사용: Metamaterial 의 "META")은 창에 안 들어와 잘린다
+    - 단일 이벤트는 개명 체인이 아니다 (동일 티커 리브랜드 실측: QQQ 2018) —
+      상장일(list_date) 플로어만 적용해 상장 전 행(재사용 실체: COIN 2021 이전)을 자른다
+    - manual(TICKER_SEGMENTS) 대상 final 은 창을 만들지 않는다 — ETF 개명은 벤더
+      커버리지가 불완전해(QQQQ 부재 실측) 수동이 우선한다
+    """
+    manual = TICKER_SEGMENTS if manual is None else manual
+    rows: list[dict] = []
+    ev = events[events["event_type"] == "ticker_change"].dropna(subset=["event_date"])
+    for t, g in ev.groupby("ticker"):
+        if t not in finals or t in manual:
+            continue
+        g = g.sort_values("event_date")
+        if len(g) < 2:
+            continue
+        starts = pd.to_datetime(g["event_date"]).tolist()
+        srcs = g["event_ticker"].tolist()
+        for i, (src, st) in enumerate(zip(srcs, starts)):
+            end = starts[i + 1] - pd.Timedelta(days=1) if i + 1 < len(starts) else None
+            rows.append({"final": t, "src": src, "start": st, "end": end})
+    chained = {r["final"] for r in rows}
+    if len(details):
+        for t, ld in zip(details["ticker"], details["list_date"]):
+            if t in finals and t not in manual and t not in chained and pd.notna(ld):
+                rows.append({"final": t, "src": t, "start": pd.Timestamp(ld), "end": None})
+    return pd.DataFrame(rows, columns=["final", "src", "start", "end"])
+
+
+def apply_entity_windows(prices, dividends, windows):
+    """실체 창 적용 — 창 밖 행(다른 실체) 절단 + 이전 티커 행을 현행 티커로 병합.
+
+    수동 stitch_segments 와 같은 의미지만 수천 티커에 벡터화로 적용된다.
+    (final, date) 중복이 생기면(창 겹침·소스 충돌) 조용히 넘기지 않고 raise.
+    """
+    if windows is None or windows.empty:
+        return prices, dividends
+    involved = set(windows["src"]) | set(windows["final"])
+    out = []
+    for df, col in ((prices, "date"), (dividends, "ex_date")):
+        w = windows.rename(columns={"src": "ticker"})
+        hit = df.merge(w, on="ticker", how="inner")
+        keep = hit[col] >= hit["start"]
+        keep &= hit["end"].isna() | (hit[col] <= hit["end"])
+        hit = hit[keep].drop(columns=["ticker", "start", "end"]).rename(
+            columns={"final": "ticker"}
+        )
+        rest = df[~df["ticker"].isin(involved)]
+        out.append(pd.concat([rest, hit[df.columns]], ignore_index=True))
+    prices, dividends = out
+    dup = prices.duplicated(subset=["ticker", "date"])
+    if dup.any():
+        bad = sorted(prices.loc[dup, "ticker"].unique()[:5])
+        raise ValueError(f"실체 창 겹침 — (ticker,date) 중복: {bad}")
+    return prices, dividends

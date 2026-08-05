@@ -4,7 +4,13 @@ import pandas as pd
 import pytest
 
 from module.us_prices import (
-    GAP_LIMIT_TDAYS, compose_total_return, continuity_issues, stitch_segments,
+    GAP_LIMIT_TDAYS,
+    apply_entity_windows,
+    compose_total_return,
+    continuity_issues,
+    continuity_warnings,
+    entity_windows,
+    stitch_segments,
 )
 
 
@@ -104,10 +110,21 @@ def test_continuity_gap_flagged():
     assert len(issues) == 1 and "공백" in issues[0]
 
 
-def test_continuity_jump_without_factor_change_flagged():
-    px = _px(pd.bdate_range("2026-01-05", periods=3), [100.0, 140.0, 141.0], [100.0, 140.0, 141.0])
-    issues = continuity_issues(px)
-    assert len(issues) == 1 and "40%" in issues[0]
+def test_continuity_jump_bands_split_warn_and_exclude():
+    """무분할 40% 점프는 경고 밴드(제외 아님), 150% 는 제외 — 개별주 정상 급등 보존."""
+    warn_px = _px(
+        pd.bdate_range("2026-01-05", periods=3), [100.0, 140.0, 141.0], [100.0, 140.0, 141.0]
+    )
+    assert continuity_issues(warn_px) == []
+    warns = continuity_warnings(warn_px)
+    assert len(warns) == 1 and "40%" in warns[0]
+
+    hard_px = _px(
+        pd.bdate_range("2026-01-05", periods=3), [100.0, 250.0, 251.0], [100.0, 250.0, 251.0]
+    )
+    issues = continuity_issues(hard_px)
+    assert len(issues) == 1 and "150%" in issues[0]
+    assert continuity_warnings(hard_px) == []
 
 
 def test_continuity_split_day_not_flagged():
@@ -119,3 +136,83 @@ def test_continuity_split_day_not_flagged():
 def test_continuity_clean_passes():
     px = _px(pd.bdate_range("2026-01-05", periods=30), [100.0] * 30, [100.0] * 30)
     assert continuity_issues(px) == []
+
+
+def _events(rows):
+    return pd.DataFrame(rows, columns=["ticker", "event_type", "event_date", "event_ticker"])
+
+
+def _details(rows):
+    return pd.DataFrame(rows, columns=["ticker", "list_date"])
+
+
+def test_entity_windows_rename_chain():
+    """META 실측 케이스: FB(2012)→META(2022) 체인 → 창 2개, 경계 밖 행은 창에 없음."""
+    ev = _events([
+        ("META", "ticker_change", "2012-05-18", "FB"),
+        ("META", "ticker_change", "2022-06-09", "META"),
+    ])
+    w = entity_windows(ev, _details([]), finals={"META"}, manual={})
+    assert len(w) == 2
+    fb = w[w["src"] == "FB"].iloc[0]
+    assert fb["final"] == "META" and fb["start"] == pd.Timestamp("2012-05-18")
+    assert fb["end"] == pd.Timestamp("2022-06-08")
+    meta = w[w["src"] == "META"].iloc[0]
+    assert meta["start"] == pd.Timestamp("2022-06-09") and pd.isna(meta["end"])
+
+
+def test_entity_windows_single_event_falls_back_to_list_date():
+    """단일 이벤트(QQQ 2018 리브랜드 실측)는 체인이 아니다 — 상장일 플로어만."""
+    ev = _events([("QQQ", "ticker_change", "2018-06-04", "QQQ")])
+    dt = _details([("QQQ", pd.Timestamp("1999-03-10"))])
+    w = entity_windows(ev, dt, finals={"QQQ"}, manual={})
+    assert len(w) == 1
+    assert w.iloc[0]["src"] == "QQQ" and w.iloc[0]["start"] == pd.Timestamp("1999-03-10")
+
+
+def test_entity_windows_manual_takes_precedence():
+    ev = _events([("QQQ", "ticker_change", "2018-06-04", "QQQ")])
+    dt = _details([("QQQ", pd.Timestamp("1999-03-10"))])
+    w = entity_windows(ev, dt, finals={"QQQ"}, manual={"QQQ": []})
+    assert w.empty  # 수동 세그먼트 대상은 벤더 창을 만들지 않는다
+
+
+def test_apply_entity_windows_cuts_alien_and_merges_prior_ticker():
+    """META 축소판: 상장 전 남의 회사 행 절단 + FB 행이 META 로 병합."""
+    prices = pd.concat([
+        _long("META", ["2021-07-01", "2022-06-08"], [1.5, 1.4]),      # Metamaterial (남의 회사)
+        _long("FB", ["2022-06-07", "2022-06-08"], [183.0, 184.0]),
+        _long("META", ["2022-06-09", "2022-06-10"], [184.5, 185.0]),  # 진짜 META
+        _long("SPY", ["2022-06-09"], [400.0]),
+    ])
+    divs = pd.DataFrame({"ticker": ["FB"], "ex_date": [pd.Timestamp("2022-06-07")],
+                         "cash_amount": [0.5]})
+    w = pd.DataFrame([
+        {"final": "META", "src": "FB", "start": pd.Timestamp("2012-05-18"),
+         "end": pd.Timestamp("2022-06-08")},
+        {"final": "META", "src": "META", "start": pd.Timestamp("2022-06-09"), "end": None},
+    ])
+    p, d = apply_entity_windows(prices, divs, w)
+    meta = p[p.ticker == "META"].sort_values("date")
+    assert len(meta) == 4  # FB 2행 + META 2행 — Metamaterial 2행은 절단
+    assert meta["date"].min() == pd.Timestamp("2022-06-07")
+    assert "FB" not in set(p.ticker)
+    assert len(p[p.ticker == "SPY"]) == 1  # 무관 티커 보존
+    assert d[d.ticker == "META"]["cash_amount"].tolist() == [0.5]  # 배당도 병합
+
+
+def test_apply_entity_windows_overlap_raises():
+    prices = _long("AAA", ["2026-01-05"], [10.0])
+    w = pd.DataFrame([
+        {"final": "AAA", "src": "AAA", "start": pd.Timestamp("2026-01-01"), "end": None},
+        {"final": "AAA", "src": "AAA", "start": pd.Timestamp("2026-01-02"), "end": None},
+    ])
+    with pytest.raises(ValueError, match="겹침"):
+        apply_entity_windows(prices, prices.rename(columns={"date": "ex_date"}), w)
+
+
+def test_apply_entity_windows_none_is_noop():
+    prices = _long("AAA", ["2026-01-05"], [10.0])
+    divs = pd.DataFrame({"ticker": [], "ex_date": [], "cash_amount": []})
+    p, d = apply_entity_windows(prices, divs, None)
+    assert p.equals(prices)
