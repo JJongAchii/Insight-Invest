@@ -28,7 +28,6 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
 import LoadingState from "@/components/ui/LoadingState";
-import Card from "@/components/ui/Card";
 import ErrorState from "@/components/ui/ErrorState";
 import PeriodBarChart from "@/components/charts/PeriodBarChart";
 import { calculatePeriodReturns, NavPoint } from "@/components/charts/returns";
