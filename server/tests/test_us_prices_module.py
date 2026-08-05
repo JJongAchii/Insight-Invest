@@ -6,6 +6,7 @@ import pytest
 from module.us_prices import (
     GAP_LIMIT_TDAYS,
     ambiguous_srcs,
+    drop_conflicting_windows,
     apply_entity_windows,
     compose_total_return,
     continuity_issues,
@@ -256,3 +257,28 @@ def test_apply_entity_windows_double_claim_raises_for_dividends():
     ])
     with pytest.raises(ValueError, match="청구"):
         apply_entity_windows(prices, divs, w)
+
+
+def test_drop_conflicting_windows_share_class_chains():
+    """UA/UAA 실측 패턴: 두 final 의 체인이 같은 소스의 겹치는 구간을 청구 →
+    둘 다 창 폐기(무절단 폴백) + 충돌 목록 반환. 무관 final 창은 보존."""
+    w = pd.DataFrame([
+        {"final": "UAA", "src": "UA", "start": pd.Timestamp("2005-11-18"),
+         "end": pd.Timestamp("2016-12-06")},
+        {"final": "UA", "src": "UA", "start": pd.Timestamp("2016-12-01"), "end": None},  # 겹침
+        {"final": "META", "src": "FB", "start": pd.Timestamp("2012-05-18"),
+         "end": pd.Timestamp("2022-06-08")},
+    ])
+    out, conflicted = drop_conflicting_windows(w)
+    assert conflicted == {"UA", "UAA"}
+    assert set(out["final"]) == {"META"}
+
+
+def test_drop_conflicting_windows_no_overlap_kept():
+    w = pd.DataFrame([
+        {"final": "UAA", "src": "UA", "start": pd.Timestamp("2005-11-18"),
+         "end": pd.Timestamp("2016-12-06")},
+        {"final": "UA", "src": "UA", "start": pd.Timestamp("2016-12-07"), "end": None},
+    ])
+    out, conflicted = drop_conflicting_windows(w)
+    assert conflicted == set() and len(out) == 2

@@ -136,6 +136,33 @@ def entity_windows(
     return pd.DataFrame(rows, columns=["final", "src", "start", "end"])
 
 
+def drop_conflicting_windows(windows) -> tuple[pd.DataFrame, set[str]]:
+    """같은 소스 티커의 겹치는 구간을 복수 final 이 청구하면 — 그 final 들의 창을
+    통째로 폐기하고 충돌 목록을 반환한다 (무절단 폴백, 트립와이어 가드가 방어).
+
+    실측: 주식 클래스 분화 티커(UA/UAA·LILA/LILAK·CENT/CENTA 등)는 벤더 개명
+    체인이 같은 소스(예: "UA")의 겹치는 기간을 서로 청구한다 — 어느 쪽이 맞는지
+    가격 데이터만으로 판정할 수 없으므로 자동 절단을 포기하는 것이 정직하다.
+    """
+    if windows is None or windows.empty:
+        return windows, set()
+    conflicted: set[str] = set()
+    inf = pd.Timestamp.max
+    for _, g in windows.groupby("src"):
+        if len(g) < 2:
+            continue
+        g = g.sort_values("start")
+        ends = g["end"].fillna(inf).tolist()
+        starts = g["start"].tolist()
+        fins = g["final"].tolist()
+        for i in range(len(g) - 1):
+            if ends[i] >= starts[i + 1]:  # 구간 겹침
+                conflicted.update({fins[i], fins[i + 1]})
+    if conflicted:
+        windows = windows[~windows["final"].isin(conflicted)].reset_index(drop=True)
+    return windows, conflicted
+
+
 def ambiguous_srcs(windows, finals: set[str]) -> set[str]:
     """자기 창 없이 남의 체인 소스로만 등장하는 final 티커 — 문자열 재사용 충돌 후보.
 

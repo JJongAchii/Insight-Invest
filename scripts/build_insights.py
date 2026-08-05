@@ -147,6 +147,13 @@ def build_us_prices():
                 ev = qdata_api.load_us_ticker_events(tickers=sorted(finals))
                 dts = qdata_api.load_us_ticker_details(tickers=sorted(finals))
                 windows = uspx.entity_windows(ev, dts, finals)
+                windows, conflicted = uspx.drop_conflicting_windows(windows)
+                if conflicted:
+                    print(
+                        f"[warn] us_prices: 실체 창 충돌 {len(conflicted)}종목 (클래스 분화 "
+                        f"체인 겹침 — 무절단 폴백): {sorted(conflicted)[:10]}",
+                        file=sys.stderr,
+                    )
             except FileNotFoundError:
                 print(
                     "[warn] us_prices: ticker events/details 미러 없음 — 실체 경계 절단 생략",

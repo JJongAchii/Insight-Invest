@@ -237,6 +237,10 @@ def scan_continuity(out_path: str):
         ev = ev[ev["asof"] == ev["asof"].max()]
         dts = dts[dts["asof"] == dts["asof"].max()]
         windows = entity_windows(ev, dts, finals)
+        windows, conflicted = drop_conflicting_windows(windows)
+        if conflicted:
+            print(f"[warn] 실체 창 충돌 {len(conflicted)}종목 (클래스 분화 — 무절단 폴백): "
+                  f"{sorted(conflicted)[:10]}")
         print(f"실체 경계 창 {len(windows)}건 (개명 체인 {windows['final'].nunique()}종목 포함)")
     except FileNotFoundError:
         print("[warn] ticker events/details 미러 없음 — 실체 경계 절단 없이 스캔")
