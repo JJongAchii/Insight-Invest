@@ -225,3 +225,17 @@ TICKER_SEGMENTS = {  # 현행 티커: [(소스 티커, 시작, 끝)], None = 무
 - qdata 스키마·수집 코드 변경 없음 (cron 시각 보정만 별도 선행 확인)
 - 12,400 전 종목 앱 반입 없음 — meta 등록 티커만 (전 종목 스크리닝은 후속)
 - 티커 재배정 자동 방어 없음 (§6 한계 명시)
+
+## 9. 게이트 진행 기록 (2026-08-05)
+
+- §5 타이밍 계약 **충족**: US 수집이 야간 배치와 같은 EC2 파이프라인(EventBridge
+  평일 19:00 부팅 → 수집 → clean 발행 → build_insights → 종료)에 편입돼, 수집이
+  build_insights 앞에서 같은 실행에 돈다 (quant-data `scripts/server/run_pipeline.sh`).
+- 단, 첫 편입 실행(08-04 밤)에서 quant-data 쪽 사고 2건 발견·수정 (`b9b9145`,
+  상세: quant-data `docs/reports/2026-08-05-us-intraday-partial-bar.md`):
+  ① 장중 부분 봉 raw 박제(재수집·미러 교체로 복구), ② 미러 us_prices 가 무조정
+  9컬럼으로 강등 발행(adj_close 소실 — splits 자동 빌드로 수정, 08-05 밤 재빌드로
+  복원 예상). **미러 스키마 복원을 확인하기 전에는 US_PRICES_CUTOVER 를 켜지
+  않는다.**
+- 남은 게이트: ① 미러 정상화 확인(08-06 아침), ② 가드 캘리브레이션·개별주 수록
+  범위 결정(자동 제외 3,600 — 사람), ③ --app-file 대조 + 첫 빌드 실측 → 플래그 on.
