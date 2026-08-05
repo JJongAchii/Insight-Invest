@@ -28,6 +28,8 @@ const LineChart = ({
   bmNav,
   liveNav,
   savedAt,
+  bmLiveNav,
+  bmLabel,
 }: {
   strategyName: string;
   strategyNav: NavData[];
@@ -35,6 +37,10 @@ const LineChart = ({
   /** Live (post-save) NAV, ~1000-based at savedAt. */
   liveNav?: NavPoint[];
   savedAt?: string | null;
+  /** 저장 후 벤치마크 NAV (첫 관측=1000) — 백테스트 BM 끝값에 이어 그린다. */
+  bmLiveNav?: NavPoint[];
+  /** 벤치마크 실체 표시명 (예: "Benchmark (SPY)"). */
+  bmLabel?: string;
 }) => {
   const { chartData, series, referenceLinesX, hasLive } = useMemo(() => {
     const bmNavData: BmNavData[] = bmNav ? JSON.parse(bmNav) : [];
@@ -90,13 +96,31 @@ const LineChart = ({
       if (boundary && boundary.live === null) boundary.live = storedLast;
     }
 
+    // 저장 후 벤치마크 연장 — 라이브 라인과 같은 규약: 백테스트 BM 의 마지막
+    // 값을 앵커로 1000-기준 시계열을 이어 붙인다.
+    const bmLive = bmLiveNav ?? [];
+    if (bmLive.length > 0 && bmNavData.length > 0) {
+      const bmLast = bmNavData[bmNavData.length - 1].value;
+      const bmScale = bmLast / 1000;
+      for (const p of bmLive) {
+        const day = toDay(p.date);
+        const existing = rowByDate.get(day);
+        const v = p.value * bmScale;
+        if (existing) {
+          existing.benchmark = v;
+        } else {
+          rowByDate.set(day, { date: day, strategy: null, benchmark: v, live: null });
+        }
+      }
+    }
+
     const chartData = [...rowByDate.values()].sort((a, b) =>
       a.date.localeCompare(b.date)
     );
 
     const series = [
       { key: "strategy", name: strategyName, color: "var(--chart-1)" },
-      { key: "benchmark", name: "Benchmark", color: "var(--text-muted)" },
+      { key: "benchmark", name: bmLabel ?? "Benchmark", color: "var(--text-muted)" },
       ...(hasLive
         ? [{ key: "live", name: "Live (저장 후)", color: "var(--chart-4)" }]
         : []),
@@ -108,7 +132,7 @@ const LineChart = ({
         : undefined;
 
     return { chartData, series, referenceLinesX, hasLive };
-  }, [strategyName, strategyNav, bmNav, liveNav, savedAt]);
+  }, [strategyName, strategyNav, bmNav, liveNav, savedAt, bmLiveNav, bmLabel]);
 
   return (
     <div className="card">

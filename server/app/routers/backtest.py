@@ -385,6 +385,22 @@ async def get_strategy_live(port_id: int):
     except Exception as e:
         logger.warning(f"live_percentile 계산 실패: port_id={port_id}, error={e}")
 
+    # 저장 후 구간의 벤치마크(SPY) — 라이브 nav 와 같은 규약(첫 관측 = 1000)으로
+    # 리베이스해 내려준다. 클라이언트가 라이브 라인과 동일하게 이어 그리고, 같은
+    # 구간 지표를 나란히 비교할 수 있게 한다 (스펙 §8 ④ BM 라이브 연장).
+    bm_live: Optional[dict] = None
+    try:
+        if not live.empty:
+            bmn = index_prices.benchmark_nav("SPY", s.index.min().date(), None)
+            bmn = bmn[bmn.index >= s.index.min()].dropna()
+            if len(bmn) >= 2:
+                rebased = bmn / float(bmn.iloc[0]) * 1000.0
+                bm_live = {"name": "SPY", "nav": _serialize_series(rebased)}
+                if len(rebased) >= 10:
+                    bm_live["metrics"] = _short_metrics(result_metrics(rebased))
+    except Exception as e:
+        logger.warning(f"bm_live 연장 실패: port_id={port_id}, error={e}")
+
     return {
         "port_id": port_id,
         "saved_at": saved_at,
@@ -394,6 +410,7 @@ async def get_strategy_live(port_id: int):
         "metrics_backtest": metrics_backtest,
         "weights": weights,
         "expectation": expectation,
+        "bm_live": bm_live,
     }
 
 

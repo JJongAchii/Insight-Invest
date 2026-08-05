@@ -113,6 +113,15 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
     [bmDetails]
   );
 
+  // 벤치마크 실체 표시명 — bm nav 행의 bm_name("BM(SPY)")에서 추출해
+  // 차트 범례가 "Benchmark (SPY)"처럼 무엇과 비교 중인지 보이게 한다.
+  const bmLabel = useMemo(() => {
+    const raw = (bmNavData[0] as { bm_name?: string } | undefined)?.bm_name;
+    if (!raw) return undefined;
+    const m = raw.match(/^BM\((.+)\)$/);
+    return `Benchmark (${m ? m[1] : raw})`;
+  }, [bmNavData]);
+
   const monthlyData = useMemo(
     () => buildReturnData(strategyNav ?? [], bmNavData, "month", liveData?.nav),
     [strategyNav, bmNavData, liveData?.nav]
@@ -308,6 +317,8 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
             bmNav={bmDetails.nav}
             liveNav={liveData?.nav}
             savedAt={liveData?.saved_at}
+            bmLiveNav={liveData?.bm_live?.nav}
+            bmLabel={bmLabel}
           />
           <LiveMetricsTable live={liveData} bmMetrics={bmDetails.metrics} />
           {yearlyMonthlyReturns}
@@ -342,6 +353,8 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
             bmNav={bmDetails.nav}
             liveNav={liveData?.nav}
             savedAt={liveData?.saved_at}
+            bmLiveNav={liveData?.bm_live?.nav}
+            bmLabel={bmLabel}
           />
           {yearlyMonthlyReturns}
         </>

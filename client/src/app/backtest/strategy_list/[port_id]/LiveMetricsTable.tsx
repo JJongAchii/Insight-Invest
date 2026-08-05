@@ -37,11 +37,12 @@ const parseBmMetrics = (
     return {
       name: typeof first.strategy === "string" ? first.strategy : "BM",
       values: {
+        // 서버 경로별 키가 다르다: 실시간 계산(ann_volatilities…) vs 저장본(ann_vol…)
         ann_ret: num(first.ann_returns),
-        ann_vol: num(first.ann_volatilities),
-        sharpe: num(first.sharpe_ratios),
+        ann_vol: num(first.ann_volatilities) ?? num(first.ann_vol),
+        sharpe: num(first.sharpe_ratios) ?? num(first.sharpe),
         sortino: num(first.sortino_ratios),
-        mdd: num(first.max_drawdowns),
+        mdd: num(first.max_drawdowns) ?? num(first.mdd),
       },
     };
   } catch {
@@ -59,6 +60,8 @@ const LiveMetricsTable = ({
 }) => {
   const nav = live?.nav ?? [];
   const bm = parseBmMetrics(bmMetrics);
+  const bmLive = live?.bm_live?.metrics ?? null;
+  const bmLiveName = live?.bm_live?.name;
 
   return (
     <div className="card">
@@ -92,6 +95,11 @@ const LiveMetricsTable = ({
                   <th className="py-2.5 px-4 text-right">{bm.name} (BT 구간)</th>
                 )}
                 <th className="py-2.5 px-4 text-right">Live (저장 후)</th>
+                {bmLive && (
+                  <th className="py-2.5 px-4 text-right">
+                    {bmLiveName ?? "BM"} (저장 후)
+                  </th>
+                )}
                 <th className="py-2.5 px-4 text-right rounded-r-lg">Δ</th>
               </tr>
             </thead>
@@ -135,6 +143,13 @@ const LiveMetricsTable = ({
                         {formatValue(lv, row.format)}
                       </span>
                     </td>
+                    {bmLive && (
+                      <td className="table-cell text-right">
+                        <span className="num text-ink-muted">
+                          {formatValue(bmLive[row.key], row.format)}
+                        </span>
+                      </td>
+                    )}
                     <td className="table-cell text-right">
                       <span className={deltaClass}>
                         {delta === null

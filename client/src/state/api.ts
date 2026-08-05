@@ -455,6 +455,8 @@ export interface StrategyLiveResponse {
   metrics_backtest: Partial<MetricSet>;
   weights?: LiveWeightRow[] | null;
   expectation?: LiveExpectation | null;
+  /** 저장 후 구간 벤치마크(SPY) — 라이브 nav 와 같은 규약(첫 관측=1000). 실패 시 null. */
+  bm_live?: { name: string; nav: NavPoint[]; metrics?: Partial<MetricSet> } | null;
 }
 
 // Types for analytics operations (Phase 1)

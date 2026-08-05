@@ -543,3 +543,48 @@ def test_live_expectation_null_when_live_history_too_short(tmp_path, monkeypatch
 
     r = asyncio.run(bt.get_strategy_live(1))
     assert r["expectation"] is None
+
+
+def test_live_bm_extension_rebased_to_1000(tmp_path, monkeypatch):
+    """저장 후 벤치마크 연장 — 라이브 nav 와 같은 규약(첫 관측=1000)으로 리베이스."""
+    _seed_portfolio(tmp_path, monkeypatch, port_id=1, config=None)
+    idx = pd.bdate_range("2024-01-02", periods=5)
+    _seed_nav(tmp_path, 1, idx)
+    live_idx = pd.bdate_range("2026-07-01", periods=15)
+    _seed_live_nav(tmp_path, 1, live_idx, [1000.0 + i for i in range(15)])
+
+    import app.routers.backtest as bt
+
+    bm_prices = pd.Series(
+        [500.0 + 2 * i for i in range(15)], index=live_idx, name="SPY"
+    )
+    monkeypatch.setattr(
+        bt.index_prices, "benchmark_nav", lambda name, start, end: bm_prices
+    )
+
+    r = asyncio.run(bt.get_strategy_live(1))
+    assert r["bm_live"] is not None
+    assert r["bm_live"]["name"] == "SPY"
+    nav = r["bm_live"]["nav"]
+    assert nav[0]["value"] == pytest.approx(1000.0)
+    assert nav[-1]["value"] == pytest.approx(1000.0 * (500 + 2 * 14) / 500.0)
+    assert "metrics" in r["bm_live"]  # 15관측 ≥ 10 → 지표 포함
+
+
+def test_live_bm_extension_null_on_failure(tmp_path, monkeypatch):
+    """벤치마크 연장 실패는 bm_live=None 강등 — 응답 전체는 200 유지 (500 금지)."""
+    _seed_portfolio(tmp_path, monkeypatch, port_id=1, config=None)
+    idx = pd.bdate_range("2024-01-02", periods=5)
+    _seed_nav(tmp_path, 1, idx)
+    live_idx = pd.bdate_range("2026-07-01", periods=15)
+    _seed_live_nav(tmp_path, 1, live_idx, [1000.0 + i for i in range(15)])
+
+    import app.routers.backtest as bt
+
+    def boom(name, start, end):
+        raise OSError("price source down")
+
+    monkeypatch.setattr(bt.index_prices, "benchmark_nav", boom)
+    r = asyncio.run(bt.get_strategy_live(1))
+    assert r["bm_live"] is None
+    assert len(r["nav"]) == 15  # 나머지 응답은 정상
