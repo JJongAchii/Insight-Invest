@@ -959,9 +959,13 @@ export interface RebalSignalsResponse {
 export interface IntradayStockRow {
   ticker: string;
   name: string;
-  close: number;
-  chg_pct: number;
-  value?: number;
+  /** null when the server's non-finite guard (`_r()`) drops a bad value. */
+  close: number | null;
+  /** null when the server's non-finite guard (`_r()`) drops a bad value. */
+  chg_pct: number | null;
+  /** Present (possibly null) on top_value/top_movers rows; absent on my.* rows. */
+  value?: number | null;
+  /** Present only on my.* rows. */
   meta_id?: number;
 }
 
