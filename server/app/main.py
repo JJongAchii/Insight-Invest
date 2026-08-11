@@ -20,6 +20,7 @@ from .routers import (
     backtest,
     holdings,
     insight,
+    intraday,
     meta,
     news,
     optimization,
@@ -69,6 +70,7 @@ app.include_router(watchlist.router)
 app.include_router(holdings.router)
 app.include_router(attention.router)
 app.include_router(price.stock_router)
+app.include_router(intraday.router)
 
 
 @app.get("/")
