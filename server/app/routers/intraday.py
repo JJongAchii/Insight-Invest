@@ -95,6 +95,17 @@ def _build():
 
     as_of = str(latest["as_of"].iloc[0])
     trade_date = str(latest["trade_date"].iloc[0])
+
+    # 두 파일 쓰기는 원자적이지 않다 — PUT 사이 크래시는 latest=오늘/
+    # timeline=어제를 남길 수 있다(최악은 15:35 마지막 폴). 정합 없는 타임라인은
+    # 통째로 버린다.
+    timeline = timeline[timeline["trade_date"] == trade_date]
+    if timeline.empty:
+        return {"active": False}
+    # EventBridge는 at-least-once고 수동 재호출도 있다 — 같은 (as_of, kind, key)
+    # 중복 행이 섹터 리스트·스파크라인에 중복 React key로 새어나가지 않도록 제거.
+    timeline = timeline.drop_duplicates(subset=["as_of", "kind", "key"], keep="last")
+
     now = datetime.now(ki.KST)
     if not ki.snapshot_active(trade_date, as_of, now):
         return {"active": False}
@@ -106,9 +117,9 @@ def _build():
     for key, g in timeline[timeline["kind"] == "index"].groupby("key"):
         g = g.sort_values("as_of")
         indices.append({
-            "key": key, "level": float(g["level"].iloc[-1]),
-            "chg_pct": None if pd.isna(g["chg_pct"].iloc[-1]) else float(g["chg_pct"].iloc[-1]),
-            "sparkline": [{"t": hhmm(r.as_of), "level": float(r.level)}
+            "key": key, "level": _r(g["level"].iloc[-1]),
+            "chg_pct": _r(g["chg_pct"].iloc[-1]),
+            "sparkline": [{"t": hhmm(r.as_of), "level": _r(r.level)}
                           for r in g.itertuples()],
         })
 
@@ -121,9 +132,9 @@ def _build():
     last_poll = sec[sec["as_of"] == sec["as_of"].max()]
     for r in last_poll.sort_values("value_krw", ascending=False).itertuples():
         flow = sec[sec["key"] == r.key].sort_values("as_of")
-        sectors.append({"name": r.key, "chg_pct": float(r.chg_pct),
+        sectors.append({"name": r.key, "chg_pct": _r(r.chg_pct),
                         "value_krw": float(r.value_krw), "n": int(r.n),
-                        "flow": [{"t": hhmm(f.as_of), "chg_pct": float(f.chg_pct)}
+                        "flow": [{"t": hhmm(f.as_of), "chg_pct": _r(f.chg_pct)}
                                  for f in flow.itertuples()]})
 
     up, down = ki.top_movers(latest)

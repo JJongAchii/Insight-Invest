@@ -10,6 +10,7 @@ import logging
 import os
 from datetime import datetime
 
+import numpy as np
 import pandas as pd
 
 from datastore import storage
@@ -45,15 +46,30 @@ def _sector_map() -> pd.DataFrame:
     return latest[["ticker", "sector", "name"]].drop_duplicates("ticker")
 
 
-def _prev_index_closes() -> dict[str, float]:
+def _prev_index_closes(trade_date: str) -> dict[str, float]:
+    """미러(krx_index_prices)의 최신 행이 전영업일 종가가 아니면 그 지수는
+    통째로 뺀다. 야간 파이프라인이 실패해도 미러는 그냥 며칠 전 값을 들고
+    있으므로, 프레시니스를 안 보면 폴러가 그 값을 '오늘 등락률'인 양 조용히
+    거짓말한다 — 이 설계에서 유일하게 강등이 아니라 거짓말하는 실패 경로였다
+    (2026-08 스모크에서 7/28 스테일 미러로 +6%/+20% 왜곡 실측). 빠진 키는
+    index_rows()가 chg_pct=NaN으로 넘기고, 서빙이 그걸 null로 강등한다."""
     lake = os.environ["QDATA_LAKE"]
     df = pd.read_parquet(f"{lake}/clean/krx_index_prices.parquet",
                          columns=["date", "index_code", "close"],
                          filters=[("index_code", "in", list(INDICES.values()))])
     code_to_key = {v: k for k, v in INDICES.items()}
+    prev_bday = str(np.busday_offset(trade_date, -1, roll="backward"))
     out = {}
     for code, g in df.groupby("index_code"):
-        out[code_to_key[code]] = float(g.sort_values("date")["close"].iloc[-1])
+        g = g.sort_values("date")
+        max_date = pd.Timestamp(g["date"].iloc[-1]).strftime("%Y-%m-%d")
+        key = code_to_key.get(code, code)
+        if max_date != prev_bday:
+            logger.warning(
+                f"{key} 지수 미러 스테일 — 최신 {max_date}, 기대 전영업일 "
+                f"{prev_bday}({trade_date} 기준) — chg_pct 생략")
+            continue
+        out[key] = float(g["close"].iloc[-1])
     return out
 
 
@@ -71,7 +87,7 @@ def handler(event, context):
     latest = ki.with_sector(latest, _sector_map())
 
     rows = pd.concat([
-        ki.index_rows(levels, _prev_index_closes(), as_of, trade_date),
+        ki.index_rows(levels, _prev_index_closes(trade_date), as_of, trade_date),
         ki.breadth_row(latest, as_of, trade_date),
         ki.sector_rows(latest, as_of, trade_date),
     ], ignore_index=True)

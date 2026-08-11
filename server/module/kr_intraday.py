@@ -69,11 +69,19 @@ def breadth_row(latest: pd.DataFrame, as_of: str, trade_date: str) -> pd.DataFra
 
 
 def sector_rows(latest_with_sector: pd.DataFrame, as_of: str, trade_date: str) -> pd.DataFrame:
+    """등락률 NaN 종목은 집계에서 제외한다(np.average는 NaN을 skip하지 않고
+    전파한다 — 종목 하나만 결측이어도 섹터 전체가 NaN이 되고, 그게 타임라인에
+    박히면 서빙 JSONResponse(allow_nan=False)가 라우터 try/except 밖에서 500을
+    낸다). value_krw/n은 결측 종목도 포함한 전체 그룹 기준을 유지한다."""
     rows = []
     for sector, g in latest_with_sector.groupby("sector"):
-        w = g["cap"].clip(lower=0)
-        chg = float(np.average(g["chg_pct"], weights=w)) if w.sum() > 0 \
-            else float(g["chg_pct"].mean())
+        gv = g.dropna(subset=["chg_pct"])
+        if gv.empty:
+            chg = float("nan")
+        else:
+            w = gv["cap"].clip(lower=0)
+            chg = float(np.average(gv["chg_pct"], weights=w)) if w.sum() > 0 \
+                else float(gv["chg_pct"].mean())
         rows.append({"as_of": as_of, "trade_date": trade_date, "kind": "sector",
                      "key": sector, "chg_pct": chg,
                      "value_krw": float(g["value"].sum()), "n": len(g)})

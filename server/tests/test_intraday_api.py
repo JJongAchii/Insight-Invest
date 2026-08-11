@@ -92,6 +92,58 @@ def test_missing_chg_pct_serializes_as_null_not_nan(app_data):
     assert row["chg_pct"] is None
 
 
+def test_sector_nan_chg_pct_serializes_as_null_not_500(app_data):
+    """섹터 등락률에 NaN이 섞이면(Finding 1) — 모듈 계층에서 dropna로 막아도
+    타임라인에 이미 NaN이 박힌 과거 폴이 남아있을 수 있으니 서빙 계층도
+    독립적으로 방어해야 한다. NaN이 stdlib json에 그대로 찍히면
+    JSONResponse(allow_nan=False)가 라우터 try/except 밖에서 500을 낸다."""
+    _write_snapshot()
+    tl = storage.read_parquet("kr_intraday_timeline.parquet")
+    mask = (tl["kind"] == "sector") & (tl["key"] == "전기전자")
+    assert mask.any()
+    tl.loc[mask, "chg_pct"] = float("nan")
+    storage.write_parquet(tl, "kr_intraday_timeline.parquet")
+
+    r = client.get("/intraday/market")
+    assert r.status_code == 200
+    assert "NaN" not in r.text
+    body = r.json()
+    sec = next(s for s in body["sectors"] if s["name"] == "전기전자")
+    assert sec["chg_pct"] is None
+    assert sec["flow"][0]["chg_pct"] is None
+
+
+def test_timeline_trade_date_mismatch_inactive(app_data):
+    """두 파일 쓰기는 원자적이지 않다 — PUT 사이 크래시는 latest=오늘/
+    timeline=어제를 남길 수 있다(Finding 3). 정합 없는 조합은 active:false로
+    강등해야지, 어제 타임라인을 오늘 것처럼 서빙하면 안 된다."""
+    _write_snapshot()
+    tl = storage.read_parquet("kr_intraday_timeline.parquet")
+    stale_date = (_now_kst() - timedelta(days=1)).strftime("%Y-%m-%d")
+    tl["trade_date"] = stale_date
+    storage.write_parquet(tl, "kr_intraday_timeline.parquet")
+
+    r = client.get("/intraday/market")
+    assert r.status_code == 200
+    assert r.json() == {"active": False}
+
+
+def test_duplicate_as_of_rows_deduped(app_data):
+    """EventBridge는 at-least-once고 수동 재호출도 있다 — 중복 폴이 타임라인에
+    중복 행을 남기면(Finding 4) 섹터 리스트·스파크라인에 중복 React key가
+    새어나간다. (as_of, kind, key) 기준으로 dedup해야 한다."""
+    _write_snapshot()
+    tl = storage.read_parquet("kr_intraday_timeline.parquet")
+    dup = pd.concat([tl, tl], ignore_index=True)  # 같은 폴이 중복 기록된 상황 재현
+    storage.write_parquet(dup, "kr_intraday_timeline.parquet")
+
+    body = client.get("/intraday/market").json()
+    names = [s["name"] for s in body["sectors"]]
+    assert len(names) == len(set(names))
+    kospi = next(i for i in body["indices"] if i["key"] == "KOSPI")
+    assert len(kospi["sparkline"]) == 1
+
+
 def test_stale_snapshot_inactive(app_data):
     old = _now_kst() - timedelta(days=7)
     _write_snapshot(as_of=old.strftime("%Y-%m-%d %H:%M"),

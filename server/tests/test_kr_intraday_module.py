@@ -70,6 +70,31 @@ def test_sector_rows_cap_weighted(latest):
     assert rows.loc["기타", "n"] == 1
 
 
+def test_sector_rows_skips_nan_chg(latest):
+    """np.average는 NaN을 skip하지 않고 전파한다 — 종목 하나만 결측이어도
+    섹터 전체가 NaN이 되면 서빙에서 500으로 번진다(Finding 1). 결측 종목은
+    가중평균에서 빼고, n·value_krw는 전체 그룹 기준을 유지해야 한다."""
+    smap = pd.DataFrame({"ticker": ["005930", "000660"],
+                         "sector": ["전기전자", "전기전자"], "name": ["삼성전자", "하이닉스"]})
+    d = ki.with_sector(latest, smap)
+    d.loc[d["ticker"] == "005930", "chg_pct"] = float("nan")
+    rows = ki.sector_rows(d, "2026-08-11 11:35", "2026-08-11").set_index("key")
+    # 005930(NaN) 제외 → 000660(-5.0)만 반영
+    assert rows.loc["전기전자", "chg_pct"] == pytest.approx(-5.0)
+    assert rows.loc["전기전자", "n"] == 2                       # n은 전체 그룹 기준
+    assert rows.loc["전기전자", "value_krw"] == pytest.approx(9e9)  # value_krw도 전체 그룹 기준
+
+
+def test_sector_rows_all_nan_group_emits_nan(latest):
+    """그룹 전체가 NaN이면(dropna 후 빈 그룹) chg_pct는 NaN — 0으로 위장하지 않는다."""
+    smap = pd.DataFrame({"ticker": ["005930"], "sector": ["전기전자"], "name": ["삼성전자"]})
+    d = ki.with_sector(latest, smap)
+    d.loc[d["ticker"] == "005930", "chg_pct"] = float("nan")
+    rows = ki.sector_rows(d, "2026-08-11 11:35", "2026-08-11").set_index("key")
+    assert pd.isna(rows.loc["전기전자", "chg_pct"])
+    assert rows.loc["전기전자", "n"] == 1
+
+
 def test_merge_timeline_resets_on_new_day():
     old = pd.DataFrame({"as_of": ["2026-08-10 15:35"], "trade_date": ["2026-08-10"],
                         "kind": ["breadth"], "key": ["ALL"]})
