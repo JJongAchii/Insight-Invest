@@ -1,6 +1,10 @@
 import React from "react";
 import { IntradayMarketResponse } from "@/state/api";
 import IntradayIndexStrip from "./IntradayIndexStrip";
+import SectorHeatmapLive from "./SectorHeatmapLive";
+import SectorFlowChart from "./SectorFlowChart";
+import RankTables from "./RankTables";
+import MyIntraday from "./MyIntraday";
 
 /** 장중 탭 본문. 상단 배지에 지연·기준시각을 명시한다 (스펙 D4). */
 const IntradayTab = ({ data }: { data: IntradayMarketResponse }) => (
@@ -18,6 +22,16 @@ const IntradayTab = ({ data }: { data: IntradayMarketResponse }) => (
       <span>지연 시세 · {data.as_of?.slice(-5)} 기준 (~20분 지연)</span>
     </div>
     <IntradayIndexStrip data={data} />
+    {data.sectors && data.sectors.length > 0 && (
+      <>
+        <SectorHeatmapLive sectors={data.sectors} />
+        <SectorFlowChart sectors={data.sectors} />
+      </>
+    )}
+    {data.top_value && data.top_movers && (
+      <RankTables topValue={data.top_value} up={data.top_movers.up} down={data.top_movers.down} />
+    )}
+    {data.my && <MyIntraday my={data.my} />}
   </div>
 );
 
