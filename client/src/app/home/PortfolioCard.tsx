@@ -5,13 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { IoBriefcase } from "react-icons/io5";
 
-import { useFetchHoldingsQuery } from "@/state/api";
+import { useFetchHoldingsQuery, useFetchIntradayMarketQuery } from "@/state/api";
 import Card from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
 import { fmtJo } from "@/app/insight/format";
 import {
   fmtFracPct,
+  fmtPctVal,
   fmtSignedJo,
   signClassNum,
 } from "@/app/portfolio/format";
@@ -20,6 +21,10 @@ import {
 const PortfolioCard: React.FC = () => {
   const router = useRouter();
   const { data, isLoading } = useFetchHoldingsQuery();
+  const { data: intraday } = useFetchIntradayMarketQuery(undefined, {
+    pollingInterval: 5 * 60 * 1000,
+    skipPollingIfUnfocused: true,
+  });
 
   const positions = data?.positions ?? [];
   const summary = data?.summary;
@@ -28,6 +33,18 @@ const PortfolioCard: React.FC = () => {
     const list = data?.positions ?? [];
     return [...list].sort((a, b) => b.weight - a.weight).slice(0, 3);
   }, [data]);
+
+  // KR 장중 등락률 오버라이드 — meta_id → chg_pct (스펙 D4, active일 때만).
+  const liveChg = useMemo(() => {
+    if (!intraday?.active) return undefined;
+    const out = new Map<number, number>();
+    for (const row of intraday.my?.holdings ?? []) {
+      if (row.meta_id != null && row.chg_pct != null) {
+        out.set(row.meta_id, row.chg_pct);
+      }
+    }
+    return out;
+  }, [intraday]);
 
   return (
     <Card
@@ -89,26 +106,33 @@ const PortfolioCard: React.FC = () => {
           <div>
             <p className="metric-label mb-2">상위 비중 종목</p>
             <div className="space-y-1">
-              {top3.map((p) => (
-                <button
-                  key={p.meta_id}
-                  onClick={() => router.push(`/stock/${p.meta_id}`)}
-                  className="w-full flex items-center justify-between gap-2 px-2.5 py-2
-                             rounded-lg hover:bg-raised transition-colors text-left"
-                >
-                  <span className="min-w-0">
-                    <span className="text-sm font-medium text-ink truncate">
-                      {p.name ?? p.ticker}
+              {top3.map((p) => {
+                const live = p.iso_code === "KR" ? liveChg?.get(p.meta_id) : undefined;
+                return (
+                  <button
+                    key={p.meta_id}
+                    onClick={() => router.push(`/stock/${p.meta_id}`)}
+                    className="w-full flex items-center justify-between gap-2 px-2.5 py-2
+                               rounded-lg hover:bg-raised transition-colors text-left"
+                  >
+                    <span className="min-w-0">
+                      <span className="text-sm font-medium text-ink truncate">
+                        {p.name ?? p.ticker}
+                      </span>
+                      <span className="ml-1.5 text-xs text-ink-muted num">
+                        {(p.weight * 100).toFixed(1)}%
+                      </span>
                     </span>
-                    <span className="ml-1.5 text-xs text-ink-muted num">
-                      {(p.weight * 100).toFixed(1)}%
+                    <span
+                      className={`text-sm shrink-0 ${
+                        live != null ? signClassNum(live) : signClassNum(p.unrealized_pnl_pct)
+                      }`}
+                    >
+                      {live != null ? `🔴 ${fmtPctVal(live)}` : fmtFracPct(p.unrealized_pnl_pct)}
                     </span>
-                  </span>
-                  <span className={`text-sm shrink-0 ${signClassNum(p.unrealized_pnl_pct)}`}>
-                    {fmtFracPct(p.unrealized_pnl_pct)}
-                  </span>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>

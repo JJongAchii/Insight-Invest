@@ -28,6 +28,11 @@ interface WatchlistTableProps {
   items: WatchlistItem[];
   /** Show the "Added" date column (default true). */
   showAdded?: boolean;
+  /**
+   * KR 장중 등락률 오버라이드 — meta_id → intraday chg_pct. 값이 있는 KR 행에
+   * 한해 Chg 셀을 🔴 접두 장중 값으로 교체한다 (홈 대시보드 전용, 스펙 D4).
+   */
+  liveChg?: Map<number, number>;
 }
 
 /**
@@ -37,6 +42,7 @@ interface WatchlistTableProps {
 const WatchlistTable: React.FC<WatchlistTableProps> = ({
   items,
   showAdded = true,
+  liveChg,
 }) => {
   const router = useRouter();
   const [removeFromWatchlist] = useRemoveFromWatchlistMutation();
@@ -63,6 +69,7 @@ const WatchlistTable: React.FC<WatchlistTableProps> = ({
         <tbody>
           {items.map((item) => {
             const isKr = item.iso_code === "KR";
+            const live = isKr ? liveChg?.get(item.meta_id) : undefined;
             return (
               <tr
                 key={item.meta_id}
@@ -83,8 +90,8 @@ const WatchlistTable: React.FC<WatchlistTableProps> = ({
                   </span>
                 </td>
                 <td className="table-cell text-right">
-                  <span className={signClass(item.chg_pct)}>
-                    {fmtPct(item.chg_pct)}
+                  <span className={signClass(live ?? item.chg_pct)}>
+                    {live != null ? `🔴 ${fmtPct(live)}` : fmtPct(item.chg_pct)}
                   </span>
                 </td>
                 <td className="table-cell text-right">

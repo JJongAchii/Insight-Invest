@@ -1,10 +1,10 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import Link from "next/link";
 import { Star } from "lucide-react";
 
-import { useFetchWatchlistQuery } from "@/state/api";
+import { useFetchIntradayMarketQuery, useFetchWatchlistQuery } from "@/state/api";
 import Card from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
@@ -13,7 +13,23 @@ import WatchlistTable from "@/components/watchlist/WatchlistTable";
 /** Dashboard watchlist card — shared table, non-collapsible. */
 const WatchlistCard: React.FC = () => {
   const { data, isLoading } = useFetchWatchlistQuery();
+  const { data: intraday } = useFetchIntradayMarketQuery(undefined, {
+    pollingInterval: 5 * 60 * 1000,
+    skipPollingIfUnfocused: true,
+  });
   const items = data?.items ?? [];
+
+  // KR 장중 등락률 오버라이드 — meta_id → chg_pct (스펙 D4, active일 때만).
+  const liveChg = useMemo(() => {
+    if (!intraday?.active) return undefined;
+    const out = new Map<number, number>();
+    for (const row of intraday.my?.watchlist ?? []) {
+      if (row.meta_id != null && row.chg_pct != null) {
+        out.set(row.meta_id, row.chg_pct);
+      }
+    }
+    return out;
+  }, [intraday]);
 
   return (
     <Card
@@ -45,7 +61,7 @@ const WatchlistCard: React.FC = () => {
           }
         />
       ) : (
-        <WatchlistTable items={items} showAdded={false} />
+        <WatchlistTable items={items} showAdded={false} liveChg={liveChg} />
       )}
     </Card>
   );
