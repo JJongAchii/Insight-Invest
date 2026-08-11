@@ -123,13 +123,20 @@ const PortfolioCard: React.FC = () => {
                         {(p.weight * 100).toFixed(1)}%
                       </span>
                     </span>
-                    <span
-                      className={`text-sm shrink-0 ${
-                        live != null ? signClassNum(live) : signClassNum(p.unrealized_pnl_pct)
-                      }`}
-                    >
-                      {live != null ? `🔴 ${fmtPctVal(live)}` : fmtFracPct(p.unrealized_pnl_pct)}
-                    </span>
+                    {live != null ? (
+                      <span className="flex items-center gap-1.5 shrink-0">
+                        <span className={`text-xs ${signClassNum(live)}`}>
+                          🔴 {fmtPctVal(live)}
+                        </span>
+                        <span className={`text-sm ${signClassNum(p.unrealized_pnl_pct)}`}>
+                          {fmtFracPct(p.unrealized_pnl_pct)}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className={`text-sm shrink-0 ${signClassNum(p.unrealized_pnl_pct)}`}>
+                        {fmtFracPct(p.unrealized_pnl_pct)}
+                      </span>
+                    )}
                   </button>
                 );
               })}
