@@ -955,6 +955,42 @@ export interface RebalSignalsResponse {
   signals: RebalSignal[];
 }
 
+// Types for KR intraday market operations (Task 4)
+export interface IntradayStockRow {
+  ticker: string;
+  name: string;
+  close: number;
+  chg_pct: number;
+  value?: number;
+  meta_id?: number;
+}
+
+export interface IntradaySectorRow {
+  name: string;
+  chg_pct: number;
+  value_krw: number;
+  n: number;
+  flow: { t: string; chg_pct: number }[];
+}
+
+export interface IntradayMarketResponse {
+  active: boolean;
+  is_open?: boolean;
+  as_of?: string;
+  trade_date?: string;
+  indices?: {
+    key: string;
+    level: number;
+    chg_pct: number | null;
+    sparkline: { t: string; level: number }[];
+  }[];
+  breadth?: { advancers: number; decliners: number; unchanged: number };
+  sectors?: IntradaySectorRow[];
+  top_value?: IntradayStockRow[];
+  top_movers?: { up: IntradayStockRow[]; down: IntradayStockRow[] };
+  my?: { watchlist: IntradayStockRow[]; holdings: IntradayStockRow[] };
+}
+
 export const api = createApi({
   reducerPath: "api",
   baseQuery: fetchBaseQuery({
@@ -1179,6 +1215,9 @@ export const api = createApi({
     fetchInsightIndex: builder.query<InsightIndexResponse, { days?: number }>({
       query: ({ days = 365 }) => `/insight/index?days=${days}`,
     }),
+    fetchIntradayMarket: builder.query<IntradayMarketResponse, void>({
+      query: () => "intraday/market",
+    }),
     fetchInsightSectorHeatmap: builder.query<InsightSectorHeatmapResponse, void>(
       {
         query: () => "/insight/sector/heatmap",
@@ -1327,6 +1366,7 @@ export const {
   useFetchInsightBreadthQuery,
   useFetchInsightSignalsQuery,
   useFetchInsightIndexQuery,
+  useFetchIntradayMarketQuery,
   useFetchInsightSectorHeatmapQuery,
   useFetchInsightSectorRotationQuery,
   useFetchInsightValuationQuery,
