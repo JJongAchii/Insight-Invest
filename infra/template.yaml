@@ -21,6 +21,14 @@ Parameters:
   DataBucket:
     Type: String
     Default: insight-invest-datalake
+  KrxId:
+    Type: String
+    NoEcho: true
+    Description: KRX 정보데이터시스템 로그인 ID (폴러 전용)
+  KrxPw:
+    Type: String
+    NoEcho: true
+    Description: KRX 정보데이터시스템 로그인 PW (폴러 전용)
 
 Resources:
   ApiRole:
@@ -91,6 +99,71 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: "*"
       InvokedViaFunctionUrl: true  # URL 경유 호출만 허용 (직접 invoke 차단)
+
+  PollerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: intraday-data
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow  # 미러(업종·전일 지수) 읽기
+                Action: [s3:GetObject, s3:ListBucket]
+                Resource:
+                  - !Sub arn:aws:s3:::${DataBucket}
+                  - !Sub arn:aws:s3:::${DataBucket}/qdata/*
+                  - !Sub arn:aws:s3:::${DataBucket}/app/*
+              - Effect: Allow  # 장중 스냅샷 2파일만 쓰기 (스펙 불변식 1)
+                Action: [s3:PutObject]
+                Resource:
+                  - !Sub arn:aws:s3:::${DataBucket}/app/kr_intraday_latest.parquet
+                  - !Sub arn:aws:s3:::${DataBucket}/app/kr_intraday_timeline.parquet
+
+  IntradayPollerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: insight-invest-intraday-poller
+      PackageType: Image
+      Code: { ImageUri: !Ref ImageUri }
+      ImageConfig: { Command: ["app.intraday_poller.handler"] }
+      Role: !GetAtt PollerRole.Arn
+      Architectures: [x86_64]
+      MemorySize: 1024
+      Timeout: 120
+      Environment:
+        Variables:
+          QDATA_LAKE: !Sub s3://${DataBucket}/qdata
+          APP_DATA: !Sub s3://${DataBucket}/app
+          KRX_ID: !Ref KrxId
+          KRX_PW: !Ref KrxPw
+
+  # 09:05~15:35 KST 30분 간격 (UTC 00:05~06:35) — 15:35 폴이 마감치 캡처
+  IntradayPollerSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: insight-invest-intraday-poll
+      ScheduleExpression: cron(5,35 0-6 ? * MON-FRI *)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt IntradayPollerFunction.Arn
+          Id: intraday-poller
+
+  IntradayPollerInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref IntradayPollerFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt IntradayPollerSchedule.Arn
 
 Outputs:
   FunctionUrl:

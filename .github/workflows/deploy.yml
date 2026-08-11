@@ -51,6 +51,7 @@ jobs:
             --template-file infra/template.yaml \
             --capabilities CAPABILITY_IAM \
             --parameter-overrides ImageUri=$IMAGE_URI ApiToken=${{ secrets.API_TOKEN }} \
+              KrxId=${{ secrets.KRX_ID }} KrxPw=${{ secrets.KRX_PW }} \
             --no-fail-on-empty-changeset
 
       - name: Smoke test
