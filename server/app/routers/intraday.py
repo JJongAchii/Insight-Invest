@@ -1,7 +1,9 @@
 """장중 마켓 현황 서빙 (스펙 2026-08-11 D3). 실패·스테일은 {"active": false} — 500 금지."""
 
 import logging
+import math
 from datetime import datetime
+from typing import Optional
 
 import pandas as pd
 from fastapi import APIRouter
@@ -18,8 +20,28 @@ router = APIRouter(prefix="/intraday", tags=["intraday"])
 _STOCK_COLS = ["ticker", "name", "close", "chg_pct", "value"]
 
 
+def _r(x, nd: int = 2) -> Optional[float]:
+    """유한한 float만 round, 그 외 None (holdings.py `_r()` 관례).
+
+    df.to_dict("records")만으로는 두 가지가 새어나간다: (1) numpy 스칼라가
+    JSON 인코더 밖(get_market의 try/except 밖)에서 500을 낼 수 있고,
+    (2) NaN이 stdlib json에 리터럴 NaN으로 찍혀(RFC 8259 위반) 클라이언트
+    JSON.parse가 깨진다. 여기서 native float 또는 None으로 강제한다."""
+    try:
+        x = float(x)
+    except (TypeError, ValueError):
+        return None
+    return round(x, nd) if math.isfinite(x) else None
+
+
 def _stock_rows(df: pd.DataFrame) -> list[dict]:
-    return df[_STOCK_COLS].to_dict("records")
+    rows = []
+    for r in df[_STOCK_COLS].itertuples(index=False):
+        rows.append({
+            "ticker": str(r.ticker), "name": str(r.name),
+            "close": _r(r.close), "chg_pct": _r(r.chg_pct), "value": _r(r.value),
+        })
+    return rows
 
 
 def _my_rows(latest: pd.DataFrame, items: pd.DataFrame) -> list[dict]:
@@ -30,7 +52,27 @@ def _my_rows(latest: pd.DataFrame, items: pd.DataFrame) -> list[dict]:
     joined = items.merge(m, on="meta_id").merge(
         latest[["ticker", "close", "chg_pct", "value"]], on="ticker")
     joined = joined.sort_values("chg_pct", ascending=False)
-    return joined[["meta_id", "ticker", "name", "close", "chg_pct"]].to_dict("records")
+    rows = []
+    for r in joined.itertuples(index=False):
+        rows.append({
+            "meta_id": int(r.meta_id), "ticker": str(r.ticker), "name": str(r.name),
+            "close": _r(r.close), "chg_pct": _r(r.chg_pct),
+        })
+    return rows
+
+
+def _my_block(latest: pd.DataFrame) -> dict:
+    """watchlist/holdings/meta 조인 실패는 my 섹션만 격리 강등한다 — 지수·업종·
+    랭킹까지 같이 죽이지 않는다 (스펙 D3 섹션 강등). 바깥 try/except는
+    이 함수 자체가 예외를 흘렸을 때를 위한 최후 방어선으로 남긴다."""
+    try:
+        return {
+            "watchlist": _my_rows(latest, watchlist_store.list_items()),
+            "holdings": _my_rows(latest, holdings_store.list_items()),
+        }
+    except Exception as e:  # noqa: BLE001 — my 섹션 격리, 나머지는 살려둔다
+        logger.warning(f"intraday my 섹션 조립 실패 — my만 격리 강등: {e}")
+        return {"watchlist": [], "holdings": []}
 
 
 @router.get("/market")
@@ -91,6 +133,5 @@ def _build():
         "indices": indices, "breadth": breadth, "sectors": sectors,
         "top_value": _stock_rows(ki.top_value(latest)),
         "top_movers": {"up": _stock_rows(up), "down": _stock_rows(down)},
-        "my": {"watchlist": _my_rows(latest, watchlist_store.list_items()),
-               "holdings": _my_rows(latest, holdings_store.list_items())},
+        "my": _my_block(latest),
     }
