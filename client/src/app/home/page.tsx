@@ -8,7 +8,7 @@ import MarketTiles from "./MarketTiles";
 import WatchlistCard from "./WatchlistCard";
 import StrategiesCard from "./StrategiesCard";
 import FlowsTopCard from "./FlowsTopCard";
-import NewsCompactList from "./NewsCompactList";
+import NewsBriefingCard from "./NewsBriefingCard";
 import AttentionLane from "./AttentionLane";
 import SpotlightLane from "./SpotlightLane";
 import PortfolioCard from "./PortfolioCard";
@@ -80,7 +80,7 @@ const Home = () => {
       {/* Row 5: Foreign net-buy top 5 + latest news */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <FlowsTopCard />
-        <NewsCompactList />
+        <NewsBriefingCard />
       </div>
     </div>
   );

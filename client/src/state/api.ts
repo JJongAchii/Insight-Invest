@@ -9,7 +9,7 @@ export type NewsCategory =
   | "energy"   // Oil, gas, energy markets
   | "tech";    // Tech industry news
 
-export type NewsRegion = "us" | "asia" | "europe" | "global" | "all";
+export type NewsRegion = "us" | "asia" | "europe" | "global" | "all" | "kr";
 
 export interface NewsArticle {
   id: string;
@@ -36,6 +36,24 @@ export interface NewsQueryParams {
   region?: NewsRegion;
   limit?: number;
   search_query?: string;
+}
+
+export interface NewsBriefingItem {
+  title: string;
+  url: string;
+  source: string;
+  published_at: string | null;
+  cluster_count: number;
+  sources: string[];
+  why?: string;
+}
+
+export interface NewsBriefingResponse {
+  active: boolean;
+  as_of?: string;
+  edition?: "morning" | "evening";
+  curated?: boolean;
+  sections?: { general: NewsBriefingItem[]; economy: NewsBriefingItem[] };
 }
 
 
@@ -1180,6 +1198,10 @@ export const api = createApi({
       }),
       providesTags: ["News"],
     }),
+    fetchNewsBriefing: builder.query<NewsBriefingResponse, void>({
+      query: () => "/news/briefing",
+      providesTags: ["News"],
+    }),
 
     // KR insight endpoints (수급·시장폭·신호)
     fetchInsightFlowsTop: builder.query<
@@ -1363,6 +1385,7 @@ export const {
   useFetchSpotlightQuery,
   // News hooks
   useFetchNewsQuery,
+  useFetchNewsBriefingQuery,
   // KR insight hooks
   useFetchInsightFlowsTopQuery,
   useFetchInsightFlowsMarketQuery,
