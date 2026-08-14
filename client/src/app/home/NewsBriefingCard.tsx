@@ -10,6 +10,7 @@ import {
 } from "@/state/api";
 import Card from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
+import ErrorState from "@/components/ui/ErrorState";
 import LoadingState from "@/components/ui/LoadingState";
 
 // 언론사 칩 색 (theme-aware tint — NewsCompactList 관례 계승, 국내 언론사판)
@@ -93,11 +94,12 @@ const BriefingRow: React.FC<{ item: NewsBriefingItem }> = ({ item }) => {
 
 /** 라이브 최신 헤드라인 (기존 /news 라우트, KR) — 접었을 땐 fetch 안 함 */
 const LiveHeadlines: React.FC<{ open: boolean }> = ({ open }) => {
-  const { data, isLoading } = useFetchNewsQuery(
+  const { data, isLoading, error, refetch } = useFetchNewsQuery(
     { category: "topnews", region: "kr", limit: 5 },
     { skip: !open },
   );
   if (!open) return null;
+  if (error) return <ErrorState message="Failed to load news" onRetry={refetch} />;
   if (isLoading || !data) return <LoadingState label="헤드라인을 불러오는 중..." />;
   const articles = data.articles.slice(0, 5);
   if (articles.length === 0) return <EmptyState title="헤드라인 없음" />;
@@ -138,6 +140,7 @@ const NewsBriefingCard: React.FC = () => {
   const sections = data?.active ? data.sections : undefined;
   const active = Boolean(sections);
   const rows = sections ? sections[tab] : [];
+  const liveOpen = showLive || !active;
 
   return (
     <Card title="오늘의 중요 뉴스">
@@ -182,17 +185,20 @@ const NewsBriefingCard: React.FC = () => {
               아직 오늘의 브리핑이 없습니다 — 최신 헤드라인을 확인하세요.
             </p>
           )}
-          <button
-            onClick={() => setShowLive((v) => !v)}
-            className="flex items-center gap-1 text-xs text-ink-muted hover:text-ink transition-colors pt-1"
-          >
-            <IoChevronDown
-              className={`w-3.5 h-3.5 transition-transform ${showLive ? "rotate-180" : ""}`}
-              aria-hidden
-            />
-            최신 헤드라인
-          </button>
-          <LiveHeadlines open={showLive || !active} />
+          {active && (
+            <button
+              onClick={() => setShowLive((v) => !v)}
+              aria-expanded={liveOpen}
+              className="flex items-center gap-1 text-xs text-ink-muted hover:text-ink transition-colors pt-1"
+            >
+              <IoChevronDown
+                className={`w-3.5 h-3.5 transition-transform ${liveOpen ? "rotate-180" : ""}`}
+                aria-hidden
+              />
+              최신 헤드라인
+            </button>
+          )}
+          <LiveHeadlines open={liveOpen} />
         </div>
       )}
     </Card>
