@@ -133,7 +133,11 @@ const LiveHeadlines: React.FC<{ open: boolean }> = ({ open }) => {
 
 /** 홈 카드: 큐레이션된 오늘의 중요 뉴스 + 접이식 라이브 헤드라인. */
 const NewsBriefingCard: React.FC = () => {
-  const { data, isLoading } = useFetchNewsBriefingQuery();
+  // 주중 08~19시 매시 폴러가 발행을 갱신하므로, 열려 있는 홈도 10분마다 따라간다
+  const { data, isLoading } = useFetchNewsBriefingQuery(undefined, {
+    pollingInterval: 10 * 60 * 1000,
+    skipPollingIfUnfocused: true,
+  });
   const [tab, setTab] = useState<"general" | "economy">("general");
   const [showLive, setShowLive] = useState(false);
 

@@ -1,4 +1,4 @@
-"""build_news.py 스크립트 테스트 — 폴백 발행·fake LLM 큐레이션·재시도."""
+"""build_news 스크립트 + news_publish 공용 로직 테스트 — 폴백 발행·fake LLM·재시도."""
 
 import importlib.util
 import json
@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from datastore import storage
+from module import news_publish
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "build_news.py"
 spec = importlib.util.spec_from_file_location("build_news", SCRIPT)
@@ -71,7 +72,7 @@ class FakeClient:
 
 
 def test_no_key_falls_back(app_data, monkeypatch):
-    monkeypatch.setattr(bn, "_fetch_feeds", lambda: _items())
+    monkeypatch.setattr(news_publish, "fetch_feeds", lambda: _items())
     assert bn.main() == 0
     data = storage.read_json("news_briefing.json")
     assert data["curated"] is False
@@ -91,7 +92,7 @@ def test_fake_llm_curates(app_data):
         "general": [{"id": i, "why": f"이유 {i}"} for i in gen],
         "economy": [{"id": i, "why": f"이유 {i}"} for i in eco],
     })
-    sel, curated = bn._curate(cand, _client=FakeClient([good]))
+    sel, curated = news_publish.curate(cand, _client=FakeClient([good]))
     assert curated is True
     assert len(sel["general"]) == 5
 
@@ -109,7 +110,7 @@ def test_bad_then_good_retries_once(app_data):
         "economy": [{"id": i, "why": "이유"} for i in eco],
     })
     fake = FakeClient([bad, good])
-    sel, curated = bn._curate(cand, _client=fake)
+    sel, curated = news_publish.curate(cand, _client=fake)
     assert curated is True and fake.calls == 2
 
 
@@ -120,11 +121,11 @@ def test_bad_twice_falls_back(app_data):
     cand = nb.rank_candidates(nb.merge_stories(items), datetime.now(timezone.utc))
     bad = json.dumps({"general": [{"id": 9999, "why": "x"}], "economy": []})
     fake = FakeClient([bad, bad])
-    sel, curated = bn._curate(cand, _client=fake)
+    sel, curated = news_publish.curate(cand, _client=fake)
     assert curated is False and fake.calls == 2
 
 
 def test_empty_feeds_skip_publish(app_data, monkeypatch):
-    monkeypatch.setattr(bn, "_fetch_feeds", lambda: [])
+    monkeypatch.setattr(news_publish, "fetch_feeds", lambda: [])
     assert bn.main() == 0
     assert not (app_data / "news_briefing.json").exists()

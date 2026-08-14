@@ -52,6 +52,7 @@ jobs:
             --capabilities CAPABILITY_IAM \
             --parameter-overrides ImageUri=$IMAGE_URI ApiToken=${{ secrets.API_TOKEN }} \
               KrxId=${{ secrets.KRX_ID }} KrxPw=${{ secrets.KRX_PW }} \
+              AnthropicApiKey=${{ secrets.ANTHROPIC_API_KEY }} \
             --no-fail-on-empty-changeset
 
       - name: Smoke test

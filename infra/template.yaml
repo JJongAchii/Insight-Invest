@@ -29,6 +29,11 @@ Parameters:
     Type: String
     NoEcho: true
     Description: KRX 정보데이터시스템 로그인 PW (폴러 전용)
+  AnthropicApiKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: 뉴스 큐레이션용 Anthropic API 키 (뉴스 폴러 전용 — 없으면 규칙 폴백)
 
 Resources:
   ApiRole:
@@ -164,6 +169,81 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt IntradayPollerSchedule.Arn
+
+  NewsPollerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: news-publish
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow  # 뉴스 브리핑 1파일만 쓰기 (스펙 §9-1 — 읽기 불필요)
+                Action: [s3:PutObject]
+                Resource:
+                  - !Sub arn:aws:s3:::${DataBucket}/app/news_briefing.json
+
+  NewsPollerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: insight-invest-news-poller
+      PackageType: Image
+      Code: { ImageUri: !Ref ImageUri }
+      ImageConfig: { Command: ["app.news_poller.handler"] }
+      Role: !GetAtt NewsPollerRole.Arn
+      Architectures: [x86_64]
+      MemorySize: 1024
+      Timeout: 120
+      Environment:
+        Variables:
+          APP_DATA: !Sub s3://${DataBucket}/app
+          ANTHROPIC_API_KEY: !Ref AnthropicApiKey
+
+  # 주중 09~19시 KST 매시 정각 (UTC 00~10시) — 08시는 UTC 자정을 넘어 별도 룰
+  NewsPollerScheduleDay:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: insight-invest-news-poll-day
+      ScheduleExpression: cron(0 0-10 ? * MON-FRI *)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt NewsPollerFunction.Arn
+          Id: news-poller-day
+
+  # 주중 08시 KST = 전날 23시 UTC (월 08시 = 일 23시 UTC → SUN-THU)
+  NewsPollerScheduleDawn:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: insight-invest-news-poll-dawn
+      ScheduleExpression: cron(0 23 ? * SUN-THU *)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt NewsPollerFunction.Arn
+          Id: news-poller-dawn
+
+  NewsPollerDayInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref NewsPollerFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt NewsPollerScheduleDay.Arn
+
+  NewsPollerDawnInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref NewsPollerFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt NewsPollerScheduleDawn.Arn
 
 Outputs:
   FunctionUrl:

@@ -205,3 +205,26 @@ console.anthropic.com에서 API 키 발급 후 **SSM SecureString으로 등록**
 - 남은 확인: ① 오늘 19:00 EC2 사이클의 자동 발행(첫 무인 실행) + 텔레그램 📰 톱3
   ② 내일 09:00 아침판 ③ 주말(토·일) 무발행 시 카드가 금요일 저녁판 유지(72h) 후
   월요일 아침판 교체되는지 ④ 홈 카드 실화면 확인(브라우저).
+
+## 15. 시간별 폴러 확장 (2026-08-14 사용자 요청 — "주중 08시부터 1시간마다")
+
+하루 2회 배치(§2)를 유지한 채, **주중 08~19시 KST 매시 정각** 발행하는 뉴스 폴러
+Lambda를 추가한다 (장중 폴러와 동일 패턴 — 같은 이미지, `app.news_poller.handler`
+CMD 오버라이드, 전용 role).
+
+- **공용 로직 추출**: fetch·큐레이션·발행 오케스트레이션을
+  `server/module/news_publish.py`로 이동 — `scripts/build_news.py`(EC2, 키는
+  BRIEFING_ENV_FILE)와 `app/news_poller.py`(Lambda, 키는 env)가 공유한다.
+  EC2 09·19시 발행은 폴러 장애 시 이중화 + 텔레그램 톱3 직전 갱신 보장으로 유지.
+- **스케줄 2룰** (08시가 UTC 자정을 넘어 룰이 갈라진다):
+  `news-poll-day` cron(0 0-10 ? * MON-FRI) = KST 09~19시,
+  `news-poll-dawn` cron(0 23 ? * SUN-THU) = KST 08시.
+- **IAM**: NewsPollerRole은 `app/news_briefing.json` 1파일 PutObject만 (읽기 없음).
+  장중 PollerRole·IAM은 여전히 무변경 (§9-2 유지).
+- **키 전달**: GitHub secret `ANTHROPIC_API_KEY` → CFN NoEcho 파라미터
+  `AnthropicApiKey` → Lambda env. SSM(`/qdata/ANTHROPIC_API_KEY`)은 EC2 경로 전용.
+  키 부재 시 규칙 폴백(§9-4) — 배포 순서 제약 없음.
+- **클라**: 홈 카드에 10분 폴링(`skipPollingIfUnfocused`) 추가 — 열려 있는 홈이
+  시간별 발행을 따라간다.
+- **비용**: 주중 12회/일 Haiku ≈ 월 3천 원 안팎 (기존 §4 추정치 대체).
+- 주말은 발행 없음 — 금요일 마지막 발행분이 72h 규칙(§6)으로 월요일 08시까지 유지.
