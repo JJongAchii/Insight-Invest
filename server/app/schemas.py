@@ -28,6 +28,7 @@ class NewsRegion(str, Enum):
     EUROPE = "europe"
     GLOBAL = "global"
     ALL = "all"
+    KR = "kr"
 
 
 class NewsArticle(BaseModel):

@@ -22,6 +22,7 @@ class NewsRegion(str, Enum):
     EUROPE = "europe"
     GLOBAL = "global"
     ALL = "all"
+    KR = "kr"
 
 
 # Allowed news sources (whitelist - source names from RSS)
@@ -59,6 +60,7 @@ REGION_QUERIES = {
     NewsRegion.EUROPE: "Europe economy EU eurozone",
     NewsRegion.GLOBAL: "global economy world",
     NewsRegion.ALL: "",
+    NewsRegion.KR: "한국 경제 시장",
 }
 
 # Domain to source name mapping
@@ -79,4 +81,20 @@ DOMAIN_TO_SOURCE = {
     "en.yna.co.kr": "Yonhap News",
     "cnn.com": "CNN",
     "npr.org": "NPR",
+    # 국내 언론사 (KR 라이브 헤드라인용)
+    "yna.co.kr": "연합뉴스",
+    "hankyung.com": "한국경제",
+    "mk.co.kr": "매일경제",
+    "chosun.com": "조선일보",
+    "joongang.co.kr": "중앙일보",
+    "donga.com": "동아일보",
+    "hani.co.kr": "한겨레",
+    "khan.co.kr": "경향신문",
+    "kbs.co.kr": "KBS",
+    "imbc.com": "MBC",
+    "sbs.co.kr": "SBS",
+    "ytn.co.kr": "YTN",
+    "mt.co.kr": "머니투데이",
+    "sedaily.com": "서울경제",
+    "einfomax.co.kr": "연합인포맥스",
 }

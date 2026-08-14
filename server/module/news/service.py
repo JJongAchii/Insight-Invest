@@ -71,6 +71,7 @@ class NewsService:
         NewsRegion.EUROPE: ("en", "GB"),  # UK for Europe English news
         NewsRegion.GLOBAL: ("en", "US"),
         NewsRegion.ALL: ("en", "US"),
+        NewsRegion.KR: ("ko", "KR"),
     }
 
     def __init__(self) -> None:

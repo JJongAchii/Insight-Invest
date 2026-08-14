@@ -4,6 +4,7 @@
 단일 사용자 앱이라 동시성 제어가 필요 없다 — DB를 두지 않는 근거.
 """
 
+import json
 import os
 from pathlib import Path
 
@@ -45,3 +46,27 @@ def exists(*parts: str) -> bool:
 
         return s3fs.S3FileSystem().exists(target)
     return Path(target).exists()
+
+
+def read_json(*parts: str) -> dict:
+    target = path(*parts)
+    if target.startswith("s3://"):
+        import s3fs
+
+        with s3fs.S3FileSystem().open(target, "r") as f:
+            return json.load(f)
+    return json.loads(Path(target).read_text())
+
+
+def write_json(obj: dict, *parts: str) -> str:
+    target = path(*parts)
+    body = json.dumps(obj, ensure_ascii=False)
+    if target.startswith("s3://"):
+        import s3fs
+
+        with s3fs.S3FileSystem().open(target, "w") as f:
+            f.write(body)
+    else:
+        Path(target).parent.mkdir(parents=True, exist_ok=True)
+        Path(target).write_text(body)
+    return target
