@@ -3,13 +3,14 @@
 import logging
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException, Query
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../../..")))
 from app import schemas
+from datastore import storage
 from module.news.service import NewsService
 
 logger = logging.getLogger(__name__)
@@ -143,3 +144,21 @@ async def clear_cache() -> Dict[str, str]:
     _cache = {}
     logger.info(f"Cache cleared: {cache_size} entries removed")
     return {"message": f"Cache cleared: {cache_size} entries removed"}
+
+
+STALE_HOURS = 72  # 금 19시 발행분이 월 09시(62h)까지 주말 내내 유지되도록
+
+
+@router.get("/briefing")
+async def get_news_briefing() -> dict:
+    """오늘의 중요 뉴스 (EC2 배치 발행분) — 실패·스테일은 {"active": False} 200 강등."""
+    try:
+        data = storage.read_json("news_briefing.json")
+        as_of = datetime.fromisoformat(data["as_of"])
+        now = datetime.now(as_of.tzinfo or timezone.utc)
+        if now - as_of > timedelta(hours=STALE_HOURS):
+            return {"active": False}
+        return {"active": True, **data}
+    except Exception as e:
+        logger.warning(f"news briefing 강등: {e}")
+        return {"active": False}
