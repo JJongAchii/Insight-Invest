@@ -18,7 +18,7 @@
 - API 키는 코드·레포에 넣지 않는다 (스펙 §9-7)
 - 모델 `claude-haiku-4-5-20251001`, `max_tokens=1500`, `temperature=0.2` (스펙 §4)
 - 상수: 후보 60건, 섹션당 5건, Jaccard 0.6, 신선도 감쇠 24h, 서빙 스테일 72h
-- 서버 테스트: `cd server && /Users/achii/opt/anaconda3/envs/insight-invest-3-11/bin/python -m pytest tests/<파일> -v` — **출력을 파이프로 넘기지 않는다** (exit code 가림)
+- 서버 테스트: `cd server && venv/bin/python -m pytest tests/<파일> -v` — **출력을 파이프로 넘기지 않는다** (exit code 가림)
 - 클라 검증: `cd client && npm run lint && npx tsc --noEmit`
 - 커밋 메시지 말미: `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`
 
@@ -214,7 +214,7 @@ def test_build_payload_edition_and_why():
 
 - [ ] **Step 2: 실패 확인**
 
-Run: `cd server && /Users/achii/opt/anaconda3/envs/insight-invest-3-11/bin/python -m pytest tests/test_news_briefing_module.py -v`
+Run: `cd server && venv/bin/python -m pytest tests/test_news_briefing_module.py -v`
 Expected: FAIL — `No module named 'module.news_briefing'`
 
 - [ ] **Step 3: 구현** — `server/module/news_briefing.py`
@@ -443,7 +443,7 @@ def build_payload(selection: dict, candidates: list[dict], curated: bool,
 
 - [ ] **Step 4: 통과 확인**
 
-Run: `cd server && /Users/achii/opt/anaconda3/envs/insight-invest-3-11/bin/python -m pytest tests/test_news_briefing_module.py -v`
+Run: `cd server && venv/bin/python -m pytest tests/test_news_briefing_module.py -v`
 Expected: 12 PASS
 
 - [ ] **Step 5: 커밋** — `feat(server): 뉴스 브리핑 순수 로직 — 클러스터 파싱·병합·랭킹·검증`
@@ -505,7 +505,7 @@ def test_kr_region_schema():
 
 - [ ] **Step 2: 실패 확인**
 
-Run: `cd server && /Users/achii/opt/anaconda3/envs/insight-invest-3-11/bin/python -m pytest tests/test_news_json_storage.py -v`
+Run: `cd server && venv/bin/python -m pytest tests/test_news_json_storage.py -v`
 Expected: FAIL — `read_json` 없음 / `KR` 없음
 
 - [ ] **Step 3: 구현**
@@ -564,7 +564,7 @@ def write_json(obj: dict, *parts: str) -> str:
 
 - [ ] **Step 4: 통과 확인**
 
-Run: `cd server && /Users/achii/opt/anaconda3/envs/insight-invest-3-11/bin/python -m pytest tests/test_news_json_storage.py -v`
+Run: `cd server && venv/bin/python -m pytest tests/test_news_json_storage.py -v`
 Expected: 3 PASS
 
 - [ ] **Step 5: 커밋** — `feat(server): storage JSON 헬퍼 + 뉴스 KR 리전`
@@ -659,7 +659,7 @@ def test_briefing_corrupt_file_no_500(app_data):
 
 - [ ] **Step 2: 실패 확인**
 
-Run: `cd server && /Users/achii/opt/anaconda3/envs/insight-invest-3-11/bin/python -m pytest tests/test_news_briefing_api.py -v`
+Run: `cd server && venv/bin/python -m pytest tests/test_news_briefing_api.py -v`
 Expected: FAIL — 404 (라우트 없음)
 
 - [ ] **Step 3: 구현** — `routers/news.py`
@@ -689,7 +689,7 @@ async def get_news_briefing() -> dict:
 
 - [ ] **Step 4: 통과 확인 + 전체 스위트**
 
-Run: `cd server && /Users/achii/opt/anaconda3/envs/insight-invest-3-11/bin/python -m pytest tests/ -v`
+Run: `cd server && venv/bin/python -m pytest tests/ -v`
 Expected: 신규 5 PASS 포함 전체 PASS
 
 - [ ] **Step 5: 커밋** — `feat(server): GET /news/briefing — 72h 신선도, 강등 서빙`
@@ -829,7 +829,7 @@ def test_empty_feeds_skip_publish(app_data, monkeypatch):
 
 - [ ] **Step 2: 실패 확인**
 
-Run: `cd server && /Users/achii/opt/anaconda3/envs/insight-invest-3-11/bin/python -m pytest tests/test_build_news_script.py -v`
+Run: `cd server && venv/bin/python -m pytest tests/test_build_news_script.py -v`
 Expected: FAIL — 스크립트 없음
 
 - [ ] **Step 3: 구현** — `scripts/build_news.py`
@@ -948,7 +948,7 @@ anthropic>=0.40          # news briefing 큐레이션 (EC2 배치 — scripts/bu
 
 - [ ] **Step 4: 통과 확인**
 
-Run: `cd server && /Users/achii/opt/anaconda3/envs/insight-invest-3-11/bin/python -m pytest tests/test_build_news_script.py -v`
+Run: `cd server && venv/bin/python -m pytest tests/test_build_news_script.py -v`
 Expected: 5 PASS (anthropic 미설치 환경에서도 통과해야 함 — no-key/fake-client 경로만 탄다)
 
 - [ ] **Step 5: 커밋** — `feat(scripts): build_news 발행 스크립트 + anthropic 의존성`
@@ -986,7 +986,7 @@ def _section_news() -> str | None:
 
 - [ ] **Step 2: 전체 스위트 확인**
 
-Run: `cd server && /Users/achii/opt/anaconda3/envs/insight-invest-3-11/bin/python -m pytest tests/ -v`
+Run: `cd server && venv/bin/python -m pytest tests/ -v`
 Expected: 전체 PASS (send_briefing 전용 테스트는 없음 — compose는 EC2 실행으로 검증)
 
 - [ ] **Step 3: 커밋** — `feat(scripts): 텔레그램 브리핑에 오늘의 뉴스 톱3`
