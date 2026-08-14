@@ -40,9 +40,12 @@ def _parse_pubdate(s: str | None) -> datetime | None:
     if not s:
         return None
     try:
-        return parsedate_to_datetime(s)
+        dt = parsedate_to_datetime(s)
     except (TypeError, ValueError):
         return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 def parse_feed(xml: str, feed: str) -> list[dict]:

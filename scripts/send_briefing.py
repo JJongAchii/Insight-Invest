@@ -424,7 +424,12 @@ def _section_strategies() -> str | None:
 
 def _section_news() -> str | None:
     """오늘의 뉴스 톱3 — build_news가 직전에 발행한 news_briefing.json 재사용."""
+    from datetime import datetime, timedelta, timezone
+
     data = storage.read_json("news_briefing.json")
+    as_of = datetime.fromisoformat(data["as_of"])
+    if datetime.now(as_of.tzinfo or timezone.utc) - as_of > timedelta(hours=72):
+        return None  # 라우터의 72h 신선도와 대칭 — 낡은 발행분을 '오늘의 뉴스'로 내보내지 않는다
     rows = (data.get("sections") or {}).get("general") or []
     lines = [f"· {_esc(r['title'])}" for r in rows[:3] if r.get("title")]
     if not lines:

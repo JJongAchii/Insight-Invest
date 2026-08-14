@@ -84,7 +84,7 @@ class GoogleNewsClient:
             List of parsed news items
         """
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
                 response = await client.get(url)
                 response.raise_for_status()
                 xml_content = response.text

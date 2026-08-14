@@ -145,9 +145,14 @@ fetch·LLM 호출·S3 쓰기만 하는 얇은 스크립트다(스크립트는 `s
 
 ## 10. 사용자 준비물 (유일한 수동 단계)
 
-console.anthropic.com에서 API 키 발급 후, EC2의 `~/quant-data/.env`(정확한 경로는
-`run_pipeline.sh`의 `ENVF`)에 `ANTHROPIC_API_KEY=sk-ant-…` 한 줄 추가.
-키가 없으면 폴백(규칙 랭킹)으로 동작하므로 배포 순서에 제약은 없다.
+console.anthropic.com에서 API 키 발급 후 **SSM SecureString으로 등록**한다:
+
+    aws ssm put-parameter --name /qdata/ANTHROPIC_API_KEY --type SecureString --value 'sk-ant-…'
+
+파이프라인이 매 실행 `.env`를 SSM에서 재생성하므로(`run_pipeline.sh` `: > "$ENVF"`),
+`.env`에 직접 넣은 키는 다음 실행 때 지워진다 — 반드시 SSM에 넣어야 한다
+(2026-08-14 최종 리뷰에서 발견, KEY 루프에 ANTHROPIC_API_KEY 추가됨).
+키가 없으면 폴백(규칙 랭킹, `curated: false`)으로 동작하므로 배포 순서 제약은 없다.
 
 ## 11. 변경 파일 목록
 

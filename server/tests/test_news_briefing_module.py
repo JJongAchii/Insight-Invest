@@ -59,6 +59,14 @@ def test_parse_single_item_cluster_is_one():
     assert d["sources"] == ["매일경제"]
 
 
+def test_parse_pubdate_naive_gets_utc():
+    xml = GENERAL_XML.replace("Fri, 14 Aug 2026 03:00:00 GMT", "Fri, 14 Aug 2026 03:00:00 -0000")
+    items = nb.parse_feed(xml, "general")
+    # -0000은 naive로 파싱될 수 있다 — 랭킹(aware now와의 뺄셈)이 죽지 않아야 한다
+    ranked = nb.rank_candidates(items, NOW)
+    assert ranked and ranked[0]["published_at"] is not None
+
+
 def test_merge_by_cluster_membership():
     # economy의 BBB 기사는 general AAA의 클러스터에 속함 → 병합, general 우선
     merged = nb.merge_stories(_parsed())

@@ -62,9 +62,13 @@ def _curate(candidates: list, _client=None) -> tuple:
         if not key:
             print("[warn] ANTHROPIC_API_KEY 없음 — 규칙 폴백")
             return nb.fallback_selection(candidates), False
-        import anthropic
+        try:
+            import anthropic
 
-        _client = anthropic.Anthropic(api_key=key)
+            _client = anthropic.Anthropic(api_key=key)
+        except Exception as e:
+            print(f"[warn] anthropic 클라이언트 생성 실패 — 규칙 폴백: {e}")
+            return nb.fallback_selection(candidates), False
     prompt = nb.curation_prompt(candidates)
     for attempt in (1, 2):
         try:
