@@ -43,6 +43,9 @@ def _sort_key(item: dict):
 def get_attention():
     items: list[dict] = []
     as_of = None
+    # 같은 실측표를 각 항목에서 재로드하지 않는다. 신호 자체의 이름보다 기준선
+    # 대비 사후 분포를 먼저 보여 주기 위한 공용 근거다.
+    study = signal_stats.load_study()
 
     # 내 종목 집합 (관심 ∪ 보유)
     try:
@@ -95,15 +98,23 @@ def get_attention():
                         category="signal", ticker=r.ticker, name=name, meta_id=mid, link=link
                     )
                     if r.divergence == "bull":
+                        evidence = signal_stats.evidence_phrase(
+                            "bull_divergence", 20, df=study
+                        )
                         items.append(
                             {
                                 **base,
-                                "severity": "high",
-                                "title": "매집 신호",
+                                "severity": "medium" if evidence else "low",
+                                "title": "주가 하락·외인 순매수 동반",
                                 "detail": (
-                                    f"주가↓·외인 매집, 20일 강도 {intensity:.1f}%"
-                                    if intensity is not None
-                                    else "주가↓·외인 매집"
+                                    f"20일 강도 {intensity:.1f}% · {evidence}"
+                                    if intensity is not None and evidence
+                                    else evidence
+                                    or (
+                                        f"20일 순매수/시총 {intensity:.1f}%"
+                                        if intensity is not None
+                                        else "성과 근거 미산출"
+                                    )
                                 ),
                             }
                         )
@@ -138,8 +149,7 @@ def get_attention():
     # 급등(+5%) 뒤 20일은 기준선 대비 -2.4%p, 급락(-5%) 뒤는 -1.2%p로 급등이
     # 오히려 2배 나빴다. 사실과 실측치만 두고 판단은 사용자에게 맡긴다.
     try:
-        study = signal_stats.load_study()  # 루프 밖에서 한 번만 (부재 시 None)
-        for mid, (price, chg) in price_map.items():
+        for mid, (_price, chg) in price_map.items():
             if chg is None or abs(chg) < 5:
                 continue
             if chg >= 10:
@@ -189,7 +199,7 @@ def get_attention():
                         **base,
                         "severity": "high",
                         "title": f"보유 손실 {pnl_pct * 100:.1f}%",
-                        "detail": "손절 라인 점검 필요",
+                        "detail": "평단 대비 변화 — 투자 근거·허용 손실·목표 비중 확인",
                     }
                 )
             elif pnl_pct >= 0.30:
@@ -197,8 +207,8 @@ def get_attention():
                     {
                         **base,
                         "severity": "low",
-                        "title": f"보유 수익 +{pnl_pct * 100:.1f}% (익절 검토)",
-                        "detail": "목표 수익 도달 — 부분 익절 검토",
+                        "title": f"보유 수익 +{pnl_pct * 100:.1f}%",
+                        "detail": "평단 대비 변화 — 목표 비중·투자 근거 유지 여부 확인",
                     }
                 )
     except Exception:
@@ -215,7 +225,7 @@ def get_attention():
                 {
                     "severity": "high",
                     "category": "macro",
-                    "title": f"레짐 {phase} — 주식비중 점검",
+                    "title": f"레짐 {phase} — 방어적 국면",
                     "detail": f"성장 {ph.get('growth_dir')}·물가 {ph.get('inflation_dir')}",
                     "link": "/regime",
                 }

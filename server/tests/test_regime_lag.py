@@ -6,7 +6,6 @@ CPI가 참조월 그대로 붙으면 국면이 실제 발표보다 2~6주 먼저
 """
 
 import pandas as pd
-
 from module import regime
 
 
@@ -33,3 +32,26 @@ def test_phase_uses_lagged_cli_and_cpi(monkeypatch):
     assert bool(df.loc[last_ref + 1, "inflation_up"])
     # 참조월 자체의 행은 급등을 아직 모른다 (그 시점엔 미발표)
     assert not bool(df.loc[last_ref, "inflation_up"])
+
+
+def test_risk_gauge_exposes_component_dates_and_uses_slowest(monkeypatch):
+    daily = pd.bdate_range("2026-07-01", periods=130)
+    monthly = pd.date_range("2024-01-31", periods=24, freq="ME")
+    fred = {
+        "T10Y2Y": pd.Series(range(len(daily)), index=daily, dtype="float64"),
+        "BAMLH0A0HYM2": pd.Series([3.0], index=[daily[-1]]),
+        "VIXCLS": pd.Series(range(len(daily)), index=daily, dtype="float64"),
+        "UNRATE": pd.Series(range(len(monthly)), index=monthly, dtype="float64"),
+    }
+    hyg_ief = pd.DataFrame(
+        {"HYG": range(100, 100 + len(daily)), "IEF": range(90, 90 + len(daily))},
+        index=daily,
+        dtype="float64",
+    )
+    monkeypatch.setattr(regime, "_fred", lambda key: fred[key])
+    monkeypatch.setattr(regime, "_hyg_ief", lambda: hyg_ief)
+
+    out = regime.risk_gauge()
+
+    assert all(component["as_of"] for component in out["components"])
+    assert out["as_of"] == monthly[-1].strftime("%Y-%m-%d")

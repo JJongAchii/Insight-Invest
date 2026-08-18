@@ -24,6 +24,7 @@ from .routers import (
     meta,
     news,
     optimization,
+    overview,
     price,
     regime,
     watchlist,
@@ -69,6 +70,7 @@ app.include_router(optimization.router)
 app.include_router(watchlist.router)
 app.include_router(holdings.router)
 app.include_router(attention.router)
+app.include_router(overview.router)
 app.include_router(price.stock_router)
 app.include_router(intraday.router)
 

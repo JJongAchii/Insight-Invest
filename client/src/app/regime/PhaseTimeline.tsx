@@ -86,7 +86,7 @@ const PhaseTimeline: React.FC = () => {
       ) : (
         <>
           <p className="text-xs text-ink-muted mb-3">
-            CLI · CPI YoY — 배경 음영은 각 시점의 레짐 국면
+            CLI · CPI YoY — 배경 음영은 각 시점의 레짐 국면. {data.methodology?.release_lag}
           </p>
           <TimeSeriesChart
             data={chartData}
@@ -98,6 +98,11 @@ const PhaseTimeline: React.FC = () => {
             showBrush
             referenceAreas={phaseAreas}
           />
+          {data.methodology?.warning && (
+            <p className="text-[11px] text-ink-muted mt-3">
+              빈티지 주의: {data.methodology.warning}
+            </p>
+          )}
         </>
       )}
     </Card>

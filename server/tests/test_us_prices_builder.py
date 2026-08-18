@@ -197,6 +197,32 @@ def test_builder_returns_none_on_mirror_failure(monkeypatch, bi, capsys):
     assert "기존 파일 유지" in capsys.readouterr().err
 
 
+def test_builder_fails_closed_when_required_freshness_is_exceeded(
+    monkeypatch, bi, capsys
+):
+    dates = pd.bdate_range("2026-01-05", periods=3)
+    px = pd.DataFrame(
+        {
+            "date": dates,
+            "ticker": "SPY",
+            "close": [500.0, 501.0, 502.0],
+            "adj_close": [500.0, 501.0, 502.0],
+        }
+    )
+    meta_df = pd.DataFrame({"meta_id": [1], "ticker": ["SPY"], "iso_code": ["US"]})
+    _fake_mirror(
+        monkeypatch,
+        bi,
+        px,
+        pd.DataFrame({"ticker": [], "ex_date": [], "cash_amount": []}),
+        meta_df,
+    )
+    monkeypatch.setenv("US_PRICES_MAX_AGE_DAYS", "4")
+
+    assert bi.build_us_prices() is None
+    assert "필수 신선도 4일 초과" in capsys.readouterr().err
+
+
 def test_builder_all_excluded_returns_none_instead_of_crashing(monkeypatch, bi, capsys):
     """전 종목이 연속성 가드에 걸리면 out이 비어 pd.concat이 ValueError로 죽는다 —
     None + 경고로 안전하게 스킵해야 한다 (기존 파일 유지, 파이프라인 비중단)."""

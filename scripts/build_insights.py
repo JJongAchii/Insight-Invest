@@ -35,8 +35,11 @@ krx_flows 전체 로드(수백 MB)는 로컬에서만 허용 — Lambda에서는
 
 사용:
     APP_DATA=... QDATA_LAKE=... python scripts/build_insights.py
+    ... python scripts/build_insights.py --only us_prices --require us_prices
+    ... python scripts/build_insights.py --exclude us_prices
 """
 
+import argparse
 import json
 import os
 import sys
@@ -49,8 +52,7 @@ import pandas as pd
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "server"))
 
 from datastore import fx, meta, portfolio, prices, storage  # noqa: E402
-from module import regime  # noqa: E402
-from module import spotlight  # noqa: E402
+from module import regime, spotlight  # noqa: E402
 from module.backtest import Backtest  # noqa: E402
 from module.util import backtest_result  # noqa: E402
 from qdata import api as qdata_api  # noqa: E402
@@ -199,6 +201,13 @@ def build_us_prices():
     if stale_days > 4:
         print(f"[warn] us_prices: 미러 최종일 {px['date'].max().date()} ({stale_days}일 경과) — "
               "리밸 신호는 is_new_period 가 자연 스킵", file=sys.stderr)
+    max_age = os.environ.get("US_PRICES_MAX_AGE_DAYS")
+    if max_age is not None and stale_days > int(max_age):
+        print(
+            f"[error] us_prices: 필수 신선도 {max_age}일 초과 — 기존 앱 파일 유지",
+            file=sys.stderr,
+        )
+        return None
 
     out, skipped, soft_warned, lost_div = [], [], [], 0.0
     for tk, g in px.groupby("ticker", sort=False):
@@ -242,7 +251,9 @@ def build_us_prices():
     # server/datastore/prices.py._us_prices 는 ("meta_id","in",...) 필터로 읽는다 —
     # ticker 정렬로 쓰면 로우그룹당 meta_id 폭이 넓어져 프루닝이 무력화된다.
     df = df.sort_values(["meta_id", "trade_date"]).reset_index(drop=True)
-    df["as_of"] = _as_of()
+    # 이 파일의 관측시점은 US 패널 자체의 최종 완결 세션이다. KR 수급 최종일을
+    # 재사용하면 미국 가격이 멈춰도 신선해 보이는 잘못된 상태표시가 된다.
+    df["as_of"] = pd.Timestamp(df["trade_date"].max()).strftime("%Y-%m-%d")
     return df
 
 
@@ -1413,22 +1424,126 @@ BUILDERS = [
 ]
 
 
-def main():
+def _builder_name(relpath: str) -> str:
+    return relpath.rsplit("/", 1)[-1].removesuffix(".parquet")
+
+
+def _read_status() -> pd.DataFrame:
+    columns = ["dataset", "status", "as_of", "built_at", "row_count", "message"]
+    try:
+        df = storage.read_parquet("data_status.parquet")
+        return df.reindex(columns=columns)
+    except (FileNotFoundError, OSError):
+        return pd.DataFrame(columns=columns)
+
+
+def _write_status(updates: list[dict]) -> None:
+    """빌더 결과의 작은 운영 상태표를 원자적으로 갱신한다.
+
+    큰 산출물에서 매 API 요청마다 MAX(date)를 읽지 않도록 배치가 as_of/행 수를
+    sidecar로 발행한다. 일부 빌더만 실행해도 다른 행은 보존한다.
+    """
+    if not updates:
+        return
+    old = _read_status()
+    changed = {row["dataset"] for row in updates}
+    if not old.empty:
+        old = old[~old["dataset"].isin(changed)]
+    out = pd.concat([old, pd.DataFrame(updates)], ignore_index=True)
+    out = out.sort_values("dataset").reset_index(drop=True)
+    storage.write_parquet(out, "data_status.parquet")
+
+
+def _parse_args(argv=None):
+    choices = [_builder_name(path) for path, _, _ in BUILDERS]
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--only", action="append", choices=choices, default=[],
+        help="지정 빌더만 실행 (여러 번 지정 가능)",
+    )
+    parser.add_argument(
+        "--exclude", action="append", choices=choices, default=[],
+        help="지정 빌더 제외 (여러 번 지정 가능)",
+    )
+    parser.add_argument(
+        "--require", action="append", choices=choices, default=[],
+        help="None/예외를 허용하지 않을 필수 빌더 (여러 번 지정 가능)",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
+    args = _parse_args(argv)
+    only = set(args.only)
+    excluded = set(args.exclude)
+    required = set(args.require)
+    if only and excluded:
+        raise SystemExit("--only와 --exclude는 함께 사용할 수 없습니다")
+    selected = [
+        item for item in BUILDERS
+        if (not only or _builder_name(item[0]) in only)
+        and _builder_name(item[0]) not in excluded
+    ]
+    not_selected_required = required - {_builder_name(x[0]) for x in selected}
+    if not_selected_required:
+        raise SystemExit(f"필수 빌더가 실행 대상이 아님: {sorted(not_selected_required)}")
+
     failed = []
-    for relpath, builder, write_kwargs in BUILDERS:
-        name = relpath.rsplit("/", 1)[-1].removesuffix(".parquet")
+    status_updates = []
+    built_at = pd.Timestamp.now(tz="Asia/Seoul").isoformat()
+    for relpath, builder, write_kwargs in selected:
+        name = _builder_name(relpath)
         try:
             df = builder()
             if df is None:  # 소스 미수집 등으로 빌더가 스스로 스킵
+                status_updates.append(
+                    {
+                        "dataset": name,
+                        "status": "error" if name in required else "preserved",
+                        "as_of": None,
+                        "built_at": built_at,
+                        "row_count": None,
+                        "message": "빌더가 데이터를 만들지 못해 이전 파일을 보존함",
+                    }
+                )
+                if name in required:
+                    failed.append(name)
                 continue
             target = storage.write_parquet(df, *relpath.split("/"), **write_kwargs)
-            print(f"{name} → {target} ({len(df)} rows, as_of={df['as_of'].iloc[0]})")
-        except Exception:
+            as_of = str(df["as_of"].iloc[0]) if "as_of" in df.columns and not df.empty else None
+            print(f"{name} → {target} ({len(df)} rows, as_of={as_of})")
+            status_updates.append(
+                {
+                    "dataset": name,
+                    "status": "ok",
+                    "as_of": as_of,
+                    "built_at": built_at,
+                    "row_count": int(len(df)),
+                    "message": None,
+                }
+            )
+        except Exception as exc:
             failed.append(name)
+            status_updates.append(
+                {
+                    "dataset": name,
+                    "status": "error",
+                    "as_of": None,
+                    "built_at": built_at,
+                    "row_count": None,
+                    "message": f"{type(exc).__name__}: {exc}",
+                }
+            )
             print(f"{name} FAILED:", file=sys.stderr)
             traceback.print_exc()
+    try:
+        _write_status(status_updates)
+    except Exception:
+        failed.append("data_status")
+        print("data_status FAILED:", file=sys.stderr)
+        traceback.print_exc()
     if failed:
-        print(f"실패한 빌더: {failed}", file=sys.stderr)
+        print(f"실패한 빌더: {sorted(set(failed))}", file=sys.stderr)
         sys.exit(1)
 
 

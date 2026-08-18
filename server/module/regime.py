@@ -145,6 +145,7 @@ def risk_gauge() -> dict:
             "value": level,
             "percentile": _percentile(curve, level),
             "score": 100 - _percentile(curve, level),
+            "as_of": curve.index.max().strftime("%Y-%m-%d"),
         }
     )
 
@@ -163,6 +164,7 @@ def risk_gauge() -> dict:
             "value": hy_value,
             "percentile": _percentile(rel, rel_latest),
             "score": 100 - _percentile(rel, rel_latest),
+            "as_of": rel.index.max().strftime("%Y-%m-%d"),
         }
     )
 
@@ -175,6 +177,7 @@ def risk_gauge() -> dict:
             "value": vix_latest,
             "percentile": _percentile(vix, vix_latest),
             "score": _percentile(vix, vix_latest),
+            "as_of": vix.index.max().strftime("%Y-%m-%d"),
         }
     )
 
@@ -189,13 +192,16 @@ def risk_gauge() -> dict:
             "value": gap_latest,
             "percentile": _percentile(gap, gap_latest),
             "score": _percentile(gap, gap_latest),
+            "as_of": gap.index.max().strftime("%Y-%m-%d"),
         }
     )
 
     for c in components:
         c["weight"] = 0.25
     score = sum(c["score"] * c["weight"] for c in components)
-    as_of = max(curve.index.max(), px.index.max(), vix.index.max()).strftime("%Y-%m-%d")
+    # 전체 점수는 가장 느린 구성요소까지만 완전히 관측된 것으로 표시한다. 최신
+    # 일간 지표의 날짜(max)를 쓰면 월간 실업률이 오래됐다는 사실이 가려진다.
+    as_of = min(pd.Timestamp(c["as_of"]) for c in components).strftime("%Y-%m-%d")
     return {"score": score, "as_of": as_of, "components": components}
 
 

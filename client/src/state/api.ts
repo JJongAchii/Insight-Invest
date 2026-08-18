@@ -148,6 +148,25 @@ export interface StockDetailResponse {
   holding: StockHolding | null;
 }
 
+export interface StockFundamentalFact {
+  key: "revenue" | "net_income" | "assets" | "equity" | "operating_cash_flow";
+  value: number;
+  yoy_pct: number | null;
+  period: string;
+  filed: string;
+  unit: string;
+  tag: string;
+}
+
+export interface StockFundamentalsResponse {
+  available: boolean;
+  ticker?: string;
+  cik?: number;
+  as_of?: string;
+  facts?: StockFundamentalFact[];
+  note: string;
+}
+
 export interface WatchlistItem {
   meta_id: number;
   ticker: string;
@@ -192,6 +211,10 @@ export interface HoldingPosition {
   market_value_krw: number;
   /** Fraction of total portfolio value (0..1). */
   weight: number;
+  /** Optional target within invested assets, fraction (0..1). */
+  target_weight: number | null;
+  /** Actual minus target, percentage points. */
+  drift_pp: number | null;
 }
 
 export interface HoldingsSectorAlloc {
@@ -220,6 +243,8 @@ export interface HoldingsSummary {
   top_weight: number;
   /** Herfindahl index Σ(weight²), 0..1. */
   hhi: number;
+  /** Sum of configured target weights; null when no targets are set. */
+  target_total: number | null;
 }
 
 export interface HoldingsResponse {
@@ -233,6 +258,7 @@ export interface AddHoldingPayload {
   avg_cost: number;
   currency?: string;
   note?: string;
+  target_weight?: number | null;
 }
 
 export interface HoldingMutationResponse {
@@ -280,6 +306,40 @@ export interface HoldingsRiskResponse {
     overlap_days: number;
     window: { start: string; end: string };
   };
+}
+
+// Types for the home decision overview (GET /overview)
+export type OverviewTone = "risk_on" | "risk_off" | "mixed";
+export type EvidenceTone = "positive" | "negative" | "neutral";
+export type DataHealthLevel = "ok" | "warn" | "error" | "unknown";
+
+export interface OverviewEvidence {
+  key: string;
+  tone: EvidenceTone;
+  title: string;
+  detail: string;
+  as_of: string | null;
+  link: string;
+  changed: boolean;
+}
+
+export interface DataHealthItem {
+  dataset: string;
+  label: string;
+  level: DataHealthLevel;
+  as_of: string | null;
+  age_days: number | null;
+  detail: string;
+}
+
+export interface OverviewResponse {
+  generated_at: string;
+  tone: OverviewTone;
+  tone_label: string;
+  evidence: OverviewEvidence[];
+  conflicts: string[];
+  data_status: DataHealthItem[];
+  method: string;
 }
 
 // Types for the "오늘 주목" attention lane
@@ -602,6 +662,11 @@ export interface RegimePhaseHistoryPoint {
 export interface RegimePhaseResponse {
   current: RegimePhaseCurrent;
   history: RegimePhaseHistoryPoint[];
+  methodology?: {
+    release_lag: string;
+    vintage: "latest";
+    warning: string;
+  };
 }
 
 export interface RegimeGaugeComponent {
@@ -610,6 +675,8 @@ export interface RegimeGaugeComponent {
   percentile: number;
   score: number;
   weight: number;
+  /** Latest observation used by this component. */
+  as_of: string;
 }
 
 export interface RegimeGaugeResponse {
@@ -1126,6 +1193,9 @@ export const api = createApi({
       // in_watchlist / holding must refresh when either mutates
       providesTags: ["Watchlist", "Holdings"],
     }),
+    fetchStockFundamentals: builder.query<StockFundamentalsResponse, number>({
+      query: (metaId) => `/stock/${metaId}/fundamentals`,
+    }),
     fetchWatchlist: builder.query<WatchlistResponse, void>({
       query: () => "/watchlist",
       providesTags: ["Watchlist"],
@@ -1156,6 +1226,11 @@ export const api = createApi({
     }),
     fetchHoldingsRisk: builder.query<HoldingsRiskResponse, void>({
       query: () => "/holdings/risk",
+      providesTags: ["Holdings"],
+    }),
+
+    fetchOverview: builder.query<OverviewResponse, void>({
+      query: () => "/overview",
       providesTags: ["Holdings"],
     }),
     addHolding: builder.mutation<HoldingMutationResponse, AddHoldingPayload>({
@@ -1371,12 +1446,14 @@ export const {
   useFetchCompareDataQuery,
   // Stock detail / watchlist hooks
   useFetchStockDetailQuery,
+  useFetchStockFundamentalsQuery,
   useFetchWatchlistQuery,
   useAddToWatchlistMutation,
   useRemoveFromWatchlistMutation,
   // Holdings hooks
   useFetchHoldingsQuery,
   useFetchHoldingsRiskQuery,
+  useFetchOverviewQuery,
   useAddHoldingMutation,
   useRemoveHoldingMutation,
   // Attention hook

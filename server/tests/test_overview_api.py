@@ -1,0 +1,83 @@
+"""홈 판단 요약은 방향 충돌과 데이터 신선도를 숨기지 않는다."""
+
+import pandas as pd
+from app.routers import overview
+
+
+def _phase_history():
+    return pd.DataFrame(
+        {
+            "phase": ["Goldilocks", "Goldilocks"],
+            "growth_up": [True, True],
+            "inflation_up": [False, False],
+        },
+        index=pd.PeriodIndex(["2026-06", "2026-07"], freq="M"),
+    )
+
+
+def test_overview_calls_out_cross_signal_conflict(monkeypatch):
+    monkeypatch.setattr(overview.regime_mod, "phase_history", _phase_history)
+    monkeypatch.setattr(
+        overview.regime_mod,
+        "risk_gauge",
+        lambda: {"score": 20.0, "as_of": "2026-08-15", "components": []},
+    )
+
+    breadth = pd.DataFrame(
+        {
+            "date": list(pd.bdate_range("2026-08-10", periods=6)) * 2,
+            "market": ["KOSPI"] * 6 + ["KOSDAQ"] * 6,
+            "pct_above_ma20": [48, 46, 44, 42, 40, 38] * 2,
+        }
+    )
+    flows = pd.DataFrame(
+        {
+            "date": pd.bdate_range("2026-08-10", periods=5),
+            "market": "ALL",
+            "investor": "frgn",
+            "net_value": [1e10] * 5,
+        }
+    )
+
+    def read_parquet(*parts, **kwargs):
+        if parts[-1] == "breadth_daily.parquet":
+            return breadth.copy()
+        if parts[-1] == "flows_summary.parquet":
+            return flows.copy()
+        if parts[-1] == "data_status.parquet":
+            raise FileNotFoundError
+        raise AssertionError(parts)
+
+    monkeypatch.setattr(overview.storage, "read_parquet", read_parquet)
+
+    out = overview.get_overview()
+
+    assert out["tone"] == "mixed"
+    assert any("위험 게이지" in text for text in out["conflicts"])
+    assert any("외국인" in text for text in out["conflicts"])
+    assert {item["key"] for item in out["evidence"]} == {
+        "phase",
+        "gauge",
+        "breadth",
+        "flow",
+    }
+
+
+def test_data_status_marks_failed_required_build(monkeypatch):
+    sidecar = pd.DataFrame(
+        {
+            "dataset": ["us_prices"],
+            "status": ["error"],
+            "as_of": [None],
+            "built_at": ["2026-08-18T09:00:00+09:00"],
+            "row_count": [None],
+            "message": ["missing dividends"],
+        }
+    )
+    monkeypatch.setattr(overview.storage, "read_parquet", lambda *args, **kwargs: sidecar)
+
+    rows = overview._data_status()
+
+    us = next(row for row in rows if row["dataset"] == "us_prices")
+    assert us["level"] == "error"
+    assert us["detail"] == "최근 빌드 실패"

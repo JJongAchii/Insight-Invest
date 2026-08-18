@@ -9,6 +9,7 @@ Provides endpoints for:
 """
 
 import logging
+import math
 from datetime import date, timedelta
 from typing import Dict, List, Optional
 
@@ -166,6 +167,103 @@ _EMPTY_EXTRAS: Dict = {
     "div": None,
     "flows_recent": None,
 }
+
+
+_US_FUNDAMENTAL_TAGS = {
+    "revenue": (
+        "RevenueFromContractWithCustomerExcludingAssessedTax",
+        "Revenues",
+    ),
+    "net_income": ("NetIncomeLoss",),
+    "assets": ("Assets",),
+    "equity": (
+        "StockholdersEquity",
+        "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+    ),
+    "operating_cash_flow": ("NetCashProvidedByUsedInOperatingActivities",),
+}
+_US_DURATION_FACTS = {"revenue", "net_income", "operating_cash_flow"}
+
+
+def _latest_annual_fact(df: pd.DataFrame, key: str) -> Optional[dict]:
+    """현재 시점에 공개된 최신 연간 SEC 사실과 직전 연도 증감을 고른다.
+
+    SEC는 같은 기간을 정정 제출할 수 있으므로 ddate별 최신 filed를 남긴다. 태그
+    변천(Revenues ↔ RevenueFromContract...)은 최신 회계기간을 우선하고 같은 날이면
+    위의 우선순위를 쓴다.
+    """
+    tags = _US_FUNDAMENTAL_TAGS[key]
+    part = df[df["tag"].isin(tags)].copy()
+    if key in _US_DURATION_FACTS:
+        part = part[part["qtrs"] == 4]
+    else:
+        part = part[part["qtrs"] == 0]
+    part = part[(part["uom"] == "USD") & part["ddate"].notna() & part["filed"].notna()]
+    if part.empty:
+        return None
+    priority = {tag: idx for idx, tag in enumerate(tags)}
+    part["_priority"] = part["tag"].map(priority).fillna(len(tags))
+    part = part.sort_values(["ddate", "filed", "_priority"])
+    # 정정 제출은 최신 filed, 같은 기간의 태그 중에는 정의한 우선순위가 앞선 것.
+    by_period = (
+        part.sort_values(["ddate", "filed", "_priority"], ascending=[True, True, False])
+        .groupby("ddate", as_index=False)
+        .tail(1)
+        .sort_values("ddate")
+    )
+    current = by_period.iloc[-1]
+    previous = by_period.iloc[-2] if len(by_period) >= 2 else None
+    value = float(current["value"])
+    yoy = None
+    if previous is not None and float(previous["value"]) != 0:
+        yoy = (value / float(previous["value"]) - 1.0) * 100.0
+    return {
+        "key": key,
+        "value": value,
+        "yoy_pct": yoy if yoy is None or math.isfinite(yoy) else None,
+        "period": pd.Timestamp(current["ddate"]).strftime("%Y-%m-%d"),
+        "filed": pd.Timestamp(current["filed"]).strftime("%Y-%m-%d"),
+        "unit": str(current["uom"]),
+        "tag": str(current["tag"]),
+    }
+
+
+def _us_fundamentals(ticker: str) -> dict:
+    """Massive 티커→CIK 다리와 SEC as-filed 사실로 현재 핵심 재무를 구성한다."""
+    from qdata import api as qdata_api
+
+    today = date.today().isoformat()
+    refs = qdata_api.load_us_tickers(asof=today)
+    hit = refs[(refs["ticker"] == ticker) & refs["cik"].notna()]
+    if hit.empty:
+        return {"available": False, "note": "Massive 티커 참조에서 CIK를 찾지 못했습니다."}
+    # 동일 티커가 한 빈티지에 중복이면 active 우선. 티커는 영구키가 아니므로 asof를
+    # 명시하지 않은 현재 매핑을 임의로 과거에 적용하지 않는다.
+    if "active" in hit.columns:
+        hit = hit.sort_values("active")
+    cik = int(hit.iloc[-1]["cik"])
+    facts = qdata_api.load_sec_fundamental(
+        start=(date.today() - timedelta(days=365 * 5)).isoformat(),
+        end=today,
+        ciks=[cik],
+        tags=sorted({tag for tags in _US_FUNDAMENTAL_TAGS.values() for tag in tags}),
+    )
+    if facts.empty:
+        return {"available": False, "cik": cik, "note": "공개된 SEC 연간 재무 사실이 없습니다."}
+    annual = facts[facts["form"].astype(str).str.startswith("10-K")]
+    if "fp" in annual.columns:
+        annual = annual[annual["fp"].fillna("FY") == "FY"]
+    rows = [fact for key in _US_FUNDAMENTAL_TAGS if (fact := _latest_annual_fact(annual, key))]
+    if not rows:
+        return {"available": False, "cik": cik, "note": "비교 가능한 연간 USD 사실이 없습니다."}
+    return {
+        "available": True,
+        "ticker": ticker,
+        "cik": cik,
+        "as_of": max(row["filed"] for row in rows),
+        "facts": rows,
+        "note": "SEC 제출 원문 기준이며, filed 날짜 이후에만 알 수 있었던 값입니다.",
+    }
 
 
 @router.get("/sparklines")
@@ -534,6 +632,31 @@ def get_price_summary(meta_id: int):
 # ---------- /stock — 종목 상세 페이지 복합 엔드포인트 ----------
 
 stock_router = APIRouter(prefix="/stock", tags=["Stock"])
+
+
+@stock_router.get("/{meta_id}/fundamentals")
+def get_stock_fundamentals(meta_id: int):
+    """US 보통주의 현재 시점 SEC 연간 핵심 재무. KR/ETF는 기존 요약을 사용한다."""
+    meta_df = datastore.meta_df()
+    hit = meta_df[meta_df["meta_id"] == meta_id]
+    if hit.empty:
+        raise HTTPException(status_code=404, detail=f"Stock with meta_id {meta_id} not found")
+    row = hit.iloc[0]
+    if row["iso_code"] != "US":
+        return {"available": False, "note": "KR 종목은 KRX PER·PBR·배당수익률을 제공합니다."}
+    if str(row.get("security_type", "")).upper() == "ETF":
+        return {"available": False, "note": "ETF에는 기업 재무제표를 적용하지 않습니다."}
+    try:
+        return _us_fundamentals(str(row["ticker"]))
+    except (FileNotFoundError, KeyError):
+        logger.debug("US fundamental 데이터 부재: %s", row["ticker"], exc_info=True)
+        return {
+            "available": False,
+            "note": "SEC 또는 Massive 참조 데이터가 아직 발행되지 않았습니다.",
+        }
+    except Exception:
+        logger.warning("US fundamental 조회 실패: %s", row["ticker"], exc_info=True)
+        return {"available": False, "note": "재무 데이터를 불러오지 못했습니다."}
 
 
 @stock_router.get("/{meta_id}")

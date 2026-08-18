@@ -39,6 +39,7 @@ class HoldingRequest(BaseModel):
     shares: float
     avg_cost: float
     currency: Optional[str] = None
+    target_weight: Optional[float] = None
     note: Optional[str] = ""
 
 
@@ -192,6 +193,7 @@ def _empty_summary() -> dict:
         "market_alloc": [],
         "top_weight": None,
         "hhi": None,
+        "target_total": None,
     }
 
 
@@ -232,6 +234,8 @@ def get_holdings():
         cost_native = avg_cost * shares
         pnl_native = (price - avg_cost) * shares if price is not None else None
         pnl_pct = (price / avg_cost - 1.0) if (price is not None and avg_cost) else None
+        stored_target = getattr(r, "target_weight", None)
+        target_weight = float(stored_target) if pd.notna(stored_target) else None
 
         mv_krw = mv_native * fxrate if (mv_native is not None and fxrate is not None) else None
         cost_krw = cost_native * fxrate if fxrate is not None else None
@@ -271,6 +275,7 @@ def get_holdings():
                 "unrealized_pnl_native": pnl_native,
                 "unrealized_pnl_pct": pnl_pct,
                 "market_value_krw": mv_krw,
+                "target_weight": target_weight,
                 "_mv_krw": mv_krw,
             }
         )
@@ -280,6 +285,7 @@ def get_holdings():
     for p in raw:
         mv = p.pop("_mv_krw")
         weight = mv / total_value_krw if (mv is not None and total_value_krw > 0) else None
+        target_weight = p["target_weight"]
         positions.append(
             {
                 "meta_id": p["meta_id"],
@@ -299,6 +305,13 @@ def get_holdings():
                 "unrealized_pnl_pct": _r(p["unrealized_pnl_pct"], 4),
                 "market_value_krw": _r(p["market_value_krw"], 2),
                 "weight": _r(weight, 4),
+                "target_weight": _r(target_weight, 4),
+                "drift_pp": _r(
+                    (weight - target_weight) * 100
+                    if weight is not None and target_weight is not None
+                    else None,
+                    2,
+                ),
             }
         )
 
@@ -309,6 +322,7 @@ def get_holdings():
 
     hhi = sum(w * w for w in weights) if weights else None
     top_weight = max(weights) if weights else None
+    targets = [p["target_weight"] for p in positions if p["target_weight"] is not None]
 
     def _alloc(agg: dict) -> list:
         rows = [
@@ -338,6 +352,7 @@ def get_holdings():
         "market_alloc": _market_alloc(market_agg),
         "top_weight": _r(top_weight, 4),
         "hhi": _r(hhi, 4),
+        "target_total": _r(sum(targets), 4) if targets else None,
     }
     return {"positions": positions, "summary": summary}
 
@@ -348,6 +363,8 @@ def add_holding(request: HoldingRequest):
     row = md[md["meta_id"] == request.meta_id]
     if row.empty:
         raise HTTPException(status_code=404, detail=f"meta_id {request.meta_id} not found")
+    if request.target_weight is not None and not 0 <= request.target_weight <= 1:
+        raise HTTPException(status_code=400, detail="target_weight must be between 0 and 1")
 
     currency = request.currency
     if not currency:
@@ -360,6 +377,7 @@ def add_holding(request: HoldingRequest):
         avg_cost=request.avg_cost,
         currency=currency,
         note=request.note or "",
+        target_weight=request.target_weight,
     )
     return {"n_positions": int(len(holdings_store.list_items()))}
 

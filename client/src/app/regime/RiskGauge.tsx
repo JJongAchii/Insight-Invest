@@ -21,7 +21,7 @@ const scoreColor = (score: number) =>
   score < 35 ? "var(--gains)" : score <= 65 ? "var(--chart-4)" : "var(--losses)";
 
 const scoreLabel = (score: number) =>
-  score < 35 ? "Risk-On" : score <= 65 ? "Neutral" : "Risk-Off";
+  score < 35 ? "Risk-On" : score <= 65 ? "중립" : "Risk-Off";
 
 const ARC_R = 80;
 const ARC_CX = 100;
@@ -143,11 +143,16 @@ const RiskGauge: React.FC<{ className?: string }> = ({ className = "" }) => {
               const helpKey = componentHelpKey(c.name);
               return (
                 <div key={c.name} className="flex items-center gap-3">
-                  <span className="flex items-center gap-1 w-28 shrink-0">
-                    <span className="text-xs text-ink-secondary truncate">
-                      {c.name}
+                  <span className="w-32 shrink-0 min-w-0">
+                    <span className="flex items-center gap-1">
+                      <span className="text-xs text-ink-secondary truncate">
+                        {c.name}
+                      </span>
+                      {helpKey && <InfoTip helpKey={helpKey} />}
                     </span>
-                    {helpKey && <InfoTip helpKey={helpKey} />}
+                    <span className="block text-[10px] text-ink-muted num mt-0.5">
+                      {c.as_of}
+                    </span>
                   </span>
                   <span className="num text-xs text-ink w-14 shrink-0 text-right">
                     {c.value.toFixed(2)}

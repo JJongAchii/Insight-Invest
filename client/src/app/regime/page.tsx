@@ -23,7 +23,7 @@ const Regime = () => {
     <div className="flex flex-col gap-6 pb-16">
       <PageHeader
         title="Market Regime"
-        description="Growth/inflation phase, risk-off gauge, and US·KR macro indicators"
+        description="성장·물가 국면과 위험회피 압력 — 지표별 관측일을 함께 확인하세요"
       />
 
       {/* Top row: phase quadrant + risk gauge */}

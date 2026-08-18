@@ -11,6 +11,7 @@ import ValuationSection from "./ValuationSection";
 import SignalsSection from "./SignalsSection";
 import BreadthHistory from "./BreadthHistory";
 import IntradayTab from "./intraday/IntradayTab";
+import MarketReadout from "./MarketReadout";
 
 type Tab = "live" | "settled";
 
@@ -39,6 +40,8 @@ const InsightPage = () => {
         title="KR Market Insight"
         description="수급·시장폭·신호 — KRX 전 종목 데이터 기반"
       />
+
+      <MarketReadout />
 
       {active && (
         <div className="flex gap-1 border-b border-edge">

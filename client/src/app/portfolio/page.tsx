@@ -119,6 +119,13 @@ const PortfolioPage = () => {
             />
           </div>
 
+          {summary.target_total != null && Math.abs(summary.target_total - 1) > 0.005 && (
+            <div className="rounded-xl border border-edge px-4 py-3 text-sm text-ink-secondary">
+              설정된 목표 비중 합계가 {(summary.target_total * 100).toFixed(1)}%입니다.
+              투자자산 기준 100%가 되도록 확인하세요.
+            </div>
+          )}
+
           {/* Holdings table */}
           <Card title="보유 종목">
             <PortfolioTable

@@ -12,6 +12,7 @@ import NewsBriefingCard from "./NewsBriefingCard";
 import AttentionLane from "./AttentionLane";
 import SpotlightLane from "./SpotlightLane";
 import PortfolioCard from "./PortfolioCard";
+import DecisionBrief from "./DecisionBrief";
 
 const Home = () => {
   const isDarkMode = useAppSelector((state) => state.global.isDarkMode);
@@ -49,6 +50,9 @@ const Home = () => {
         title="나의 대시보드"
         description="시장 현황과 내 포트폴리오를 한눈에"
       />
+
+      {/* Current tone → evidence → conflicts → portfolio implications */}
+      <DecisionBrief />
 
       {/* Row 0: 오늘 주목 attention lane (top) */}
       <AttentionLane />

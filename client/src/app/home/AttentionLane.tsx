@@ -50,7 +50,7 @@ const AttentionCard: React.FC<{ item: AttentionItem }> = ({ item }) => (
 
 /** "오늘 주목" — attention items sorted high→low. Hidden on error. */
 const AttentionLane: React.FC = () => {
-  const { data, isLoading, error } = useFetchAttentionQuery();
+  const { data, isLoading, error, refetch } = useFetchAttentionQuery();
 
   const items = useMemo(() => {
     const list = data?.items ?? [];
@@ -59,8 +59,16 @@ const AttentionLane: React.FC = () => {
     );
   }, [data]);
 
-  // Errors are silent — the lane simply disappears.
-  if (error) return null;
+  if (error) {
+    return (
+      <div className="rounded-xl border border-edge px-4 py-3 flex items-center justify-between gap-3">
+        <p className="text-sm text-ink-muted">오늘 주목 데이터를 불러오지 못했습니다.</p>
+        <button onClick={refetch} className="text-xs font-semibold text-primary-400 hover:underline">
+          다시 시도
+        </button>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

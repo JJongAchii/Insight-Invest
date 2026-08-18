@@ -164,8 +164,9 @@ qdata 의 티커 이벤트 축(ADR-0007 D11, `load_us_ticker_events`/`details`)�
    date 필터는 row group 을 자른다)
 3. D5 스티칭·연속성 가드 → D3 합성 → 앱 `us_prices.parquet` 재생성
 4. **meta 등록 티커가 미러에 없으면 경고 로그 + 해당 티커 제외** (조용한 소실
-   금지). 미러 접근 실패 시 기존 파일 유지 + 경고 — 하류 빌더는 어제 데이터로
-   진행 (500 금지의 배치판)
+   금지). 미러 접근 실패 시 기존 파일은 유지하지만, `--require us_prices` 실행은
+   비정상 종료해 수집 회차를 실패로 기록한다. 오래된 파일로 API 500을 막는 것과
+   운영 실패를 숨기지 않는 것은 별개 계약이다.
 
 기존 빌더(P1~P7: 신호·스포트라이트·트래킹·리밸신호)는 무변경 — 전부
 `read_price_data` 를 통해 새 파일을 읽게 된다.
@@ -186,6 +187,22 @@ qdata 의 티커 이벤트 축(ADR-0007 D11, `load_us_ticker_events`/`details`)�
 **강등**: 배치 시점에 미러 최종일이 기대보다 낡으면 — 앱 parquet 는 그대로
 재생성(있는 데까지), 경고 로그. 리밸 신호는 `is_new_period(as_of, ...)` 검사가
 자연히 스킵하므로 사후 신호가 나가지 않는다 (낡은 신호보다 무신호가 낫다).
+
+### 2026-08-18 운영 보강
+
+- EventBridge는 평일에만 EC2를 기동하는데 actions/reference 갱신이 일요일 조건에
+  묶여 있어 실제로는 한 번도 실행되지 않았다. 주간 수집일을 월요일로 옮겼다.
+- S3 raw hydrate 직후 `qdata us rebuild --only splits --only dividends`를 실행한다.
+  네트워크 수집이 실패하거나 새 서버에 clean 파일이 없어도 작은 참조축은 raw에서
+  매 회차 자가복구한다.
+- 미국 앱 가격을 `--only us_prices --require us_prices`로 먼저 산출하고, 실패 시
+  파이프라인 `OK=0`으로 기록한다. 나머지 인사이트는 `--exclude us_prices`로 이어서
+  산출한다.
+- 운영 실행은 `US_PRICES_MAX_AGE_DAYS=4`를 설정한다. 미국 연휴를 포함한 주말은
+  허용하되 이를 넘긴 패널은 빌드 성공으로 인정하지 않는다.
+- 각 빌더는 `app/data_status.parquet`에 status/as_of/build time/row count를 기록하며,
+  홈 화면은 이를 근거로 지연·실패를 표시한다.
+- `us_prices.as_of`는 KR 수급일이 아니라 실제 미국 가격 패널의 최종 거래일이다.
 
 ## 6. 엣지
 

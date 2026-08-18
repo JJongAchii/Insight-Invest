@@ -40,6 +40,7 @@ const HoldingModal: React.FC<HoldingModalProps> = ({
   const [selected, setSelected] = useState<TickerOption | null>(null);
   const [shares, setShares] = useState("");
   const [avgCost, setAvgCost] = useState("");
+  const [targetPct, setTargetPct] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const options = useMemo<TickerOption[]>(() => {
@@ -62,10 +63,14 @@ const HoldingModal: React.FC<HoldingModalProps> = ({
       });
       setShares(String(editing.shares));
       setAvgCost(String(editing.avg_cost));
+      setTargetPct(
+        editing.target_weight == null ? "" : String(editing.target_weight * 100)
+      );
     } else {
       setSelected(null);
       setShares("");
       setAvgCost("");
+      setTargetPct("");
     }
     setError(null);
   }, [open, editing]);
@@ -85,6 +90,7 @@ const HoldingModal: React.FC<HoldingModalProps> = ({
 
   const sharesNum = Number(shares);
   const avgCostNum = Number(avgCost);
+  const targetPctNum = targetPct.trim() === "" ? null : Number(targetPct);
 
   const handleSubmit = async () => {
     if (!selected) {
@@ -99,12 +105,20 @@ const HoldingModal: React.FC<HoldingModalProps> = ({
       setError("평단을 올바르게 입력하세요");
       return;
     }
+    if (
+      targetPctNum !== null &&
+      (!Number.isFinite(targetPctNum) || targetPctNum < 0 || targetPctNum > 100)
+    ) {
+      setError("목표 비중은 0~100%로 입력하세요");
+      return;
+    }
     try {
       await addHolding({
         meta_id: selected.value,
         shares: sharesNum,
         avg_cost: avgCostNum,
         currency,
+        target_weight: targetPctNum === null ? null : targetPctNum / 100,
       }).unwrap();
       onClose();
     } catch {
@@ -197,6 +211,27 @@ const HoldingModal: React.FC<HoldingModalProps> = ({
                 aria-label="평균 매입단가"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="input-label">목표 비중 (%) · 선택</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step="0.1"
+              value={targetPct}
+              onChange={(e) => {
+                setTargetPct(e.target.value);
+                setError(null);
+              }}
+              placeholder="투자자산 내 목표 비중"
+              className="input num"
+              aria-label="목표 비중"
+            />
+            <p className="text-[11px] text-ink-muted mt-1">
+              현금은 포함하지 않습니다. 입력한 종목만 실제 비중과 괴리를 계산합니다.
+            </p>
           </div>
 
           {error && <p className="text-danger text-xs">{error}</p>}

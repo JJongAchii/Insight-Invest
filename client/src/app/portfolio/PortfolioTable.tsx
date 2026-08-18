@@ -182,6 +182,30 @@ const PortfolioTable: React.FC<PortfolioTableProps> = ({
         },
       },
       {
+        id: "target",
+        accessorKey: "drift_pp",
+        header: "목표/괴리",
+        cell: ({ row }) => {
+          const p = row.original;
+          if (p.target_weight == null || p.drift_pp == null) {
+            return <span className="text-xs text-ink-muted">미설정</span>;
+          }
+          return (
+            <div className="flex flex-col items-end">
+              <span className="num text-sm text-ink-secondary">
+                {(p.target_weight * 100).toFixed(1)}%
+              </span>
+              <span
+                className="num text-xs"
+                style={{ color: Math.abs(p.drift_pp) >= 5 ? "var(--chart-4)" : undefined }}
+              >
+                괴리 {p.drift_pp >= 0 ? "+" : ""}{p.drift_pp.toFixed(1)}%p
+              </span>
+            </div>
+          );
+        },
+      },
+      {
         id: "actions",
         header: "",
         enableSorting: false,
@@ -233,6 +257,7 @@ const PortfolioTable: React.FC<PortfolioTableProps> = ({
     "market_value",
     "pnl",
     "weight",
+    "target",
     "actions",
   ]);
 

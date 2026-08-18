@@ -94,7 +94,17 @@ async def get_phase():
         }
         for idx, row in hist.iterrows()
     ]
-    return _round2({"current": regime_mod.current_phase(), "history": history})
+    return _round2(
+        {
+            "current": regime_mod.current_phase(),
+            "history": history,
+            "methodology": {
+                "release_lag": "CLI와 CPI 모두 참조월 다음 달부터 반영",
+                "vintage": "latest",
+                "warning": "역사 국면은 최신 빈티지 재구성이며 당시 실시간 판정의 복원값이 아님",
+            },
+        }
+    )
 
 
 @router.get("/gauge")

@@ -8,28 +8,28 @@
 ## 아키텍처 (2026-07 재구조)
 
 **"무거운 일은 배치로, 서빙은 요청 시에만"** — 상시 가동 자원이 0개다.
-배치 EC2는 하루 40분만 켜져 있고 스스로 꺼진다.
+배치 EC2는 각 수집 회차에만 켜지고 완료 후 스스로 꺼진다.
 
 ```
-[배치 — 평일 19:00 KST, 하루 ~40분]        [서빙 — 요청 시에만]
+[배치 — 평일 09:00·19:00 KST]              [서빙 — 요청 시에만]
 
 EventBridge Scheduler                      S3  insight-invest-datalake/
- qdata-collector-start                         ├─ qdata/      clean 미러 (KR 전종목·US ETF·FRED)
-   cron(0 19 ? * MON-FRI) Asia/Seoul           ├─ qdata-raw/  raw 증분 + 파이프라인 로그
+ qdata-collector-start (Scheduler 2개)          ├─ qdata/      clean 미러 (KR·US·매크로)
+   cron(0 9 ...) + cron(0 19 ...) MON-FRI      ├─ qdata-raw/  raw 증분 + 파이프라인 로그
       │ ec2:startInstances                     └─ app/        meta·인사이트·포트폴리오 parquet
       ▼                                             ▲│ 읽기/저장 (pyarrow 푸시다운)
 EC2  qdata-collector (t4g.large, ARM)              ││
  systemd qdata-pipeline.service (부팅 시)     Lambda  insight-invest-api
    1. SSM SecureString → .env                        (컨테이너, 요청 시에만 실행)
    2. quant-data·Insight-Invest git pull              ▲ Function URL + X-API-Key
-   3. qdata krx/etf/macro/yf/FRED 갱신                │
+   3. qdata KRX·Massive US·macro/FRED 갱신             │
    4. clean 재빌드 → S3 발행 ──────────────────────────┘
-   5. build_insights.py (파생 인사이트 15종)
+   5. build_insights.py (US 앱 가격 + 파생 인사이트)
    6. send_briefing.py (텔레그램 시황 보고)     Vercel  Next.js 클라이언트
  ExecStopPost: 로그 S3 업로드 + shutdown
 
  qdata-collector-failsafe-stop
-   cron(40 20 ? * MON-FRI) — 파이프라인이 죽어도 인스턴스가 방치되지 않게 하는 보험
+   10:40·20:40 KST — 파이프라인이 죽어도 인스턴스가 방치되지 않게 하는 보험
 ```
 
 디버깅용으로 EC2에 `touch /data/NOAUTO` 해두면 부팅해도 파이프라인·종료를 건너뛴다.
@@ -53,8 +53,7 @@ Insight-Invest 쪽 변경은 pull 이후 서브프로세스로 새로 호출되�
 | 데이터 | 소스 | 갱신 |
 |--------|------|------|
 | KR 전 종목 (KOSPI+KOSDAQ, 상폐 포함, 2016~) | qdata KRX 패널 | 매일 (배치 EC2 → S3 sync) |
-| US ETF (SPY·TLT 등 레이크 등록 종목) | qdata yfinance | 매일 |
-| US 개별주 6,677종목 (1993~2025-12) | `app/us_prices.parquet` 아카이브 | 정지 (구 ETL 이력 보존분) |
+| US 종목·ETF (앱 meta 등록분, 2008~) | qdata Massive 전종목 가격 + 분할·배당 | 매일 09:00·19:00 KST 배치 → `app/us_prices.parquet` |
 | FRED 매크로 (레짐 대시보드) | qdata FRED + RDS 시절 아카이브 병합 | 매일 |
 | 종목 메타 9,325건 / 포트폴리오 | `app/meta.parquet` / `app/portfolio/` | 앱에서 저장 시 |
 | 뉴스 | Google News RSS 실시간 | 요청 시 |
@@ -108,7 +107,7 @@ server/
 ├── datastore/             # 데이터 계층 (구 RDS·Iceberg 대체)
 │   ├── storage.py         #   APP_DATA(s3://|로컬) parquet 읽기/쓰기
 │   ├── meta.py            #   종목 메타·전략·매크로 정의 (캐시)
-│   ├── prices.py          #   가격 조회 — qdata(KR/ETF) + US 아카이브 라우팅
+│   ├── prices.py          #   가격 조회 — qdata(KR/ETF) + Massive 기반 US 앱 패널
 │   ├── portfolio.py       #   포트폴리오 CRUD (parquet upsert)
 │   ├── watchlist.py       #   관심종목 / holdings.py 보유종목
 │   └── fx.py              #   환율

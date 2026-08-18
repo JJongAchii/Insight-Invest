@@ -9,6 +9,7 @@ import {
   useFetchInsightFlowsTickerQuery,
   useFetchPriceHistoryQuery,
   useFetchStockDetailQuery,
+  useFetchStockFundamentalsQuery,
 } from "@/state/api";
 import Card from "@/components/ui/Card";
 import StatTile from "@/components/ui/StatTile";
@@ -21,6 +22,7 @@ import HoldingButton from "@/components/HoldingButton";
 import FactorBars from "@/components/charts/FactorBars";
 import { fmtEok, fmtJo, Segmented } from "../../insight/format";
 import StockPriceFlowsChart from "./StockPriceFlowsChart";
+import FundamentalsCard from "./FundamentalsCard";
 
 type Period = "3m" | "6m" | "1y" | "3y" | "all";
 type FlowMode = "frgn" | "inst" | "both";
@@ -125,6 +127,11 @@ const StockDetailPage = () => {
   const { data: factorData } = useFetchInsightFactorExposureQuery(factorArg, {
     skip: !isKr || isEtf || !Number.isFinite(metaId) || metaId <= 0,
   });
+
+  const { data: fundamentalData, isLoading: fundamentalLoading } =
+    useFetchStockFundamentalsQuery(metaId, {
+      skip: isKr || isEtf || !Number.isFinite(metaId) || metaId <= 0,
+    });
 
   if (!Number.isFinite(metaId) || metaId <= 0) {
     return (
@@ -288,6 +295,15 @@ const StockDetailPage = () => {
           deltaType={metrics.mdd != null && metrics.mdd < 0 ? "loss" : "neutral"}
         />
       </div>
+
+      {!isKr && !isEtf && (
+        <FundamentalsCard
+          facts={fundamentalData?.facts}
+          asOf={fundamentalData?.as_of}
+          note={fundamentalData?.note}
+          isLoading={fundamentalLoading}
+        />
+      )}
 
       {/* Price + flows chart */}
       <Card
