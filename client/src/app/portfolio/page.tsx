@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
-import { IoBriefcase } from "react-icons/io5";
 import { Plus } from "lucide-react";
 
 import {
   HoldingPosition,
   useFetchHoldingsQuery,
+  useFetchPortfolioLedgerQuery,
   useRemoveHoldingMutation,
 } from "@/state/api";
 import PageHeader from "@/components/ui/PageHeader";
@@ -14,7 +14,6 @@ import Card from "@/components/ui/Card";
 import StatTile from "@/components/ui/StatTile";
 import LoadingState from "@/components/ui/LoadingState";
 import ErrorState from "@/components/ui/ErrorState";
-import EmptyState from "@/components/ui/EmptyState";
 import { fmtJo } from "@/app/insight/format";
 import {
   fmtFracPct,
@@ -27,10 +26,13 @@ import AllocationCard from "./AllocationCard";
 import RiskCard from "./RiskCard";
 import FactorExposureCard from "./FactorExposureCard";
 import HoldingModal from "./HoldingModal";
+import LedgerPanel from "./LedgerPanel";
+import PortfolioOnboarding from "./PortfolioOnboarding";
 
 const PortfolioPage = () => {
   const { data, isLoading, error, refetch } = useFetchHoldingsQuery();
   const [removeHolding] = useRemoveHoldingMutation();
+  const { data: ledger } = useFetchPortfolioLedgerQuery();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<HoldingPosition | null>(null);
@@ -53,13 +55,13 @@ const PortfolioPage = () => {
   return (
     <div className="flex flex-col gap-6 pb-16">
       <PageHeader
-        title="My Portfolio"
-        description="실제 보유 포지션·손익·노출"
+        title="나의 포트폴리오"
+        description="보유 포지션·거래 원장·현금·손익·통화 노출"
         actions={
-          <button onClick={openAdd} className="btn-primary inline-flex items-center gap-1.5">
+          (ledger?.summary.events_count ?? 0) === 0 ? <button onClick={openAdd} className="btn-primary inline-flex items-center gap-1.5">
             <Plus size={16} aria-hidden />
-            종목 추가
-          </button>
+            개시 종목 추가
+          </button> : undefined
         }
       />
 
@@ -75,20 +77,7 @@ const PortfolioPage = () => {
           <LoadingState label="포트폴리오를 불러오는 중..." />
         </div>
       ) : positions.length === 0 || !summary ? (
-        <div className="card">
-          <EmptyState
-            icon={<IoBriefcase className="w-7 h-7" aria-hidden />}
-            title="보유 종목을 추가하세요"
-            hint={
-              <button
-                onClick={openAdd}
-                className="text-primary-400 hover:underline"
-              >
-                첫 종목 추가하기 →
-              </button>
-            }
-          />
-        </div>
+        <PortfolioOnboarding onManual={openAdd} />
       ) : (
         <>
           {/* Summary tiles */}
@@ -132,6 +121,7 @@ const PortfolioPage = () => {
               positions={positions}
               onEdit={openEdit}
               onRemove={handleRemove}
+              ledgerStarted={(ledger?.summary.events_count ?? 0) > 0}
             />
           </Card>
 
@@ -146,10 +136,13 @@ const PortfolioPage = () => {
         </>
       )}
 
+      <LedgerPanel />
+
       <HoldingModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         editing={editing}
+        ledgerStarted={(ledger?.summary.events_count ?? 0) > 0}
       />
     </div>
   );

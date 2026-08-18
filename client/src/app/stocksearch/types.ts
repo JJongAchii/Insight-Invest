@@ -27,9 +27,8 @@ export interface FilterState {
   search: string;
 }
 
-// Market cap thresholds (in USD)
-export const CAP_THRESHOLDS = {
-  large: 10_000_000_000, // > $10B
-  mid: 2_000_000_000, // $2B - $10B
-  small: 0, // < $2B
+// 원천 통화를 유지한다. KR 시가총액(KRW)에 USD 임계치를 적용하지 않는다.
+export const CAP_THRESHOLDS: Record<"KR" | "US", { large: number; mid: number }> = {
+  US: { large: 10_000_000_000, mid: 2_000_000_000 },
+  KR: { large: 10_000_000_000_000, mid: 1_000_000_000_000 },
 };

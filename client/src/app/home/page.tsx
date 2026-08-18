@@ -13,6 +13,7 @@ import AttentionLane from "./AttentionLane";
 import SpotlightLane from "./SpotlightLane";
 import PortfolioCard from "./PortfolioCard";
 import DecisionBrief from "./DecisionBrief";
+import SinceLastVisit from "./SinceLastVisit";
 
 const Home = () => {
   const isDarkMode = useAppSelector((state) => state.global.isDarkMode);
@@ -51,16 +52,30 @@ const Home = () => {
         description="시장 현황과 내 포트폴리오를 한눈에"
       />
 
-      {/* Current tone → evidence → conflicts → portfolio implications */}
+      <SinceLastVisit />
+      <AttentionLane />
       <DecisionBrief />
 
-      {/* Row 0: 오늘 주목 attention lane (top) */}
-      <AttentionLane />
+      {/* 판단 직후 내 자산 영향을 확인한다. */}
+      <PortfolioCard />
 
-      {/* Row 0.5: 오늘의 신호 종목 — 전시장 스캔 (내 종목 밖 발굴) */}
-      <SpotlightLane />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <WatchlistCard />
+        <MarketTiles />
+      </div>
 
-      {/* Row 1: Ticker Tape */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <FlowsTopCard />
+        <NewsBriefingCard />
+      </div>
+
+      <details className="rounded-2xl border border-edge bg-surface p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-ink">
+          시장 전체에서 새 후보 탐색
+        </summary>
+        <div className="mt-4"><SpotlightLane /></div>
+      </details>
+
       <div className="rounded-xl border border-edge overflow-hidden">
         <TradingViewWidget
           key={`tape-${colorTheme}`}
@@ -69,23 +84,12 @@ const Home = () => {
         />
       </div>
 
-      {/* Row 2: Index snapshots + regime/gauge chips */}
-      <MarketTiles />
-
-      {/* Row 3: My Portfolio (prominent, full width) */}
-      <PortfolioCard />
-
-      {/* Row 4: Watchlist + strategies */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <WatchlistCard />
-        <StrategiesCard />
-      </div>
-
-      {/* Row 5: Foreign net-buy top 5 + latest news */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <FlowsTopCard />
-        <NewsBriefingCard />
-      </div>
+      <details className="rounded-2xl border border-edge bg-surface p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-ink">
+          Research Lab 저장 전략
+        </summary>
+        <div className="mt-4"><StrategiesCard /></div>
+      </details>
     </div>
   );
 };

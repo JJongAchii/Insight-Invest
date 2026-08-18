@@ -44,9 +44,14 @@ const StrategyList = () => {
   return (
     <div className="flex flex-col gap-6 pb-16">
       <PageHeader
-        title="Strategy Library"
-        description="Explore and manage your saved backtest strategies"
+        title="Research Lab · 전략 보관함"
+        description="백테스트 성과뿐 아니라 실행 전제·기간·검증 상태를 함께 확인합니다"
       />
+
+      <div className="rounded-xl border border-warning/30 bg-warning/5 px-4 py-3 text-xs leading-5 text-ink-secondary">
+        이 목록의 수익률·변동성·샤프는 모두 연구 구간 수치이며 미검증 상태입니다.
+        표본 외 검증과 데이터 누출 감사를 통과하기 전에는 실전 전략으로 간주하지 않습니다.
+      </div>
 
       <div className="card">
         <Searchbar

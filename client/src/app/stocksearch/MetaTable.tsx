@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ColumnDef,
   RowSelectionState,
+  PaginationState,
   SortingState,
   Updater,
   flexRender,
@@ -17,6 +18,7 @@ import {
 import { useFetchSparklinesQuery } from "@/state/api";
 import { MetaRow, FilterState, CAP_THRESHOLDS } from "./types";
 import SparklineChart from "@/components/charts/SparklineChart";
+import { formatMarketCap } from "@/lib/market";
 
 interface MetaTableProps {
   data: MetaRow[];
@@ -29,14 +31,6 @@ interface MetaTableProps {
 }
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
-
-const formatMarketCap = (value: number | null): string => {
-  if (typeof value !== "number" || Number.isNaN(value)) return "—";
-  if (value >= 1e12) return `$${(value / 1e12).toFixed(1)}T`;
-  if (value >= 1e9) return `$${(value / 1e9).toFixed(1)}B`;
-  if (value >= 1e6) return `$${(value / 1e6).toFixed(1)}M`;
-  return `$${value.toLocaleString()}`;
-};
 
 /** AND across whitespace-separated terms; a term matches ticker/name/sector/market. */
 const matchesQuickFilter = (row: MetaRow, query: string): boolean => {
@@ -64,6 +58,13 @@ const MetaTable: React.FC<MetaTableProps> = ({
   initialQuickFilter,
 }) => {
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 25,
+  });
+  const [sparklineCache, setSparklineCache] = useState<
+    Record<string, number[]>
+  >({});
   const [quickFilterInput, setQuickFilterInput] = useState(
     initialQuickFilter ?? ""
   );
@@ -90,27 +91,21 @@ const MetaTable: React.FC<MetaTableProps> = ({
       ) {
         return false;
       }
-      if (filters.cap !== "all" && row.marketcap) {
+      if (filters.cap !== "all") {
+        if (!row.marketcap) return false;
         const cap = row.marketcap;
-        if (filters.cap === "large" && cap < CAP_THRESHOLDS.large) return false;
+        const thresholds = CAP_THRESHOLDS[row.iso_code === "KR" ? "KR" : "US"];
+        if (filters.cap === "large" && cap < thresholds.large) return false;
         if (
           filters.cap === "mid" &&
-          (cap >= CAP_THRESHOLDS.large || cap < CAP_THRESHOLDS.mid)
+          (cap >= thresholds.large || cap < thresholds.mid)
         )
           return false;
-        if (filters.cap === "small" && cap >= CAP_THRESHOLDS.mid) return false;
+        if (filters.cap === "small" && cap >= thresholds.mid) return false;
       }
       return true;
     });
   }, [data, filters]);
-
-  // Fetch sparklines for the visible (filtered) stocks.
-  const metaIds = useMemo(() => {
-    return filteredData.map((row) => row.meta_id).join(",");
-  }, [filteredData]);
-  const { data: sparklineData } = useFetchSparklinesQuery(metaIds, {
-    skip: !metaIds,
-  });
 
   const columns = useMemo<ColumnDef<MetaRow>[]>(
     () => [
@@ -142,48 +137,48 @@ const MetaTable: React.FC<MetaTableProps> = ({
       },
       {
         accessorKey: "ticker",
-        header: "Ticker",
+        header: "티커",
         cell: ({ getValue }) => (
           <span className="num font-medium">{getValue<string>()}</span>
         ),
       },
       {
         accessorKey: "name",
-        header: "Name",
+        header: "종목명",
         cell: ({ getValue }) => getValue<string>() || "—",
       },
       {
         accessorKey: "sector",
-        header: "Sector",
+        header: "섹터",
         cell: ({ getValue }) => getValue<string | null>() || "—",
       },
       {
         accessorKey: "iso_code",
-        header: "Market",
+        header: "시장",
       },
       {
         accessorKey: "marketcap",
-        header: "Cap",
+        header: "시가총액",
         sortUndefined: "last",
-        cell: ({ getValue }) => (
+        cell: ({ getValue, row }) => (
           <span className="num">
-            {formatMarketCap(getValue<number | null>())}
+            {formatMarketCap(getValue<number | null>(), row.original.iso_code)}
           </span>
         ),
       },
       {
         id: "sparkline",
-        header: "30D Trend",
+        header: "30일 추이",
         enableSorting: false,
         cell: ({ row }) => {
           const sparkline =
-            sparklineData?.sparklines?.[String(row.original.meta_id)] || [];
+            sparklineCache[String(row.original.meta_id)] || [];
           return <SparklineChart data={sparkline} />;
         },
       },
       {
         accessorKey: "security_type",
-        header: "Type",
+        header: "유형",
         cell: ({ getValue }) => {
           const type = getValue<string>() ?? "";
           if (type.toLowerCase() === "etf") {
@@ -204,7 +199,7 @@ const MetaTable: React.FC<MetaTableProps> = ({
         },
       },
     ],
-    [sparklineData]
+    [sparklineCache]
   );
 
   // Bridge the parent's number[] selection to TanStack's RowSelectionState.
@@ -227,19 +222,40 @@ const MetaTable: React.FC<MetaTableProps> = ({
     data: filteredData,
     columns,
     getRowId: (row) => String(row.meta_id),
-    state: { sorting, globalFilter, rowSelection },
+    state: { sorting, globalFilter, rowSelection, pagination },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onRowSelectionChange: handleRowSelectionChange,
+    onPaginationChange: setPagination,
     globalFilterFn: (row, _columnId, filterValue) =>
       matchesQuickFilter(row.original, String(filterValue ?? "")),
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    initialState: { pagination: { pageSize: 25 } },
     enableRowSelection: true,
   });
+
+  // 표 전체(최대 1만여 종목)가 아니라 정렬·필터 후 현재 페이지의 ID만 요청한다.
+  const visibleMetaIds = table
+    .getRowModel()
+    .rows.map((row) => row.original.meta_id)
+    .join(",");
+  const { data: visibleSparklineData } = useFetchSparklinesQuery(visibleMetaIds, {
+    skip: !visibleMetaIds,
+  });
+
+  useEffect(() => {
+    if (!visibleSparklineData?.sparklines) return;
+    setSparklineCache((current) => ({
+      ...current,
+      ...visibleSparklineData.sparklines,
+    }));
+  }, [visibleSparklineData]);
+
+  useEffect(() => {
+    setPagination((current) => ({ ...current, pageIndex: 0 }));
+  }, [filters, globalFilter]);
 
   const { pageIndex, pageSize } = table.getState().pagination;
   const totalRows = table.getFilteredRowModel().rows.length;
@@ -250,20 +266,20 @@ const MetaTable: React.FC<MetaTableProps> = ({
     <div className="card">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
         <div>
-          <h3 className="text-base font-semibold text-ink">Stock Metadata</h3>
+          <h3 className="text-base font-semibold text-ink">종목 목록</h3>
           <p className="text-sm text-ink-muted mt-0.5">
-            {totalRows.toLocaleString()} securities
+            {totalRows.toLocaleString()}개 종목
             {totalRows !== data.length &&
-              ` (filtered from ${data.length.toLocaleString()})`}
+              ` (전체 ${data.length.toLocaleString()}개에서 필터)`}
           </p>
         </div>
         <input
           type="search"
           value={quickFilterInput}
           onChange={(e) => setQuickFilterInput(e.target.value)}
-          placeholder="Search ticker, name, sector..."
+          placeholder="티커·종목명·섹터 검색"
           className="input w-64"
-          aria-label="Quick filter"
+          aria-label="종목 빠른 검색"
         />
       </div>
 
@@ -303,7 +319,7 @@ const MetaTable: React.FC<MetaTableProps> = ({
                   colSpan={columns.length}
                   className="py-12 text-center text-ink-muted"
                 >
-                  No securities match the current filters
+                  현재 조건에 맞는 종목이 없습니다
                 </td>
               </tr>
             ) : (
@@ -312,6 +328,15 @@ const MetaTable: React.FC<MetaTableProps> = ({
                   key={row.id}
                   className="table-row cursor-pointer"
                   onClick={() => onRowClick(row.original)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onRowClick(row.original);
+                    }
+                  }}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`${row.original.name || row.original.ticker} 상세 보기`}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id} className="table-cell whitespace-nowrap">
@@ -331,13 +356,13 @@ const MetaTable: React.FC<MetaTableProps> = ({
       {/* Pagination footer */}
       <div className="flex flex-wrap items-center justify-between gap-3 pt-4">
         <div className="flex items-center gap-2 text-sm text-ink-secondary">
-          <span>Rows per page</span>
+          <span>페이지당 행</span>
           <select
             value={pageSize}
             onChange={(e) => table.setPageSize(Number(e.target.value))}
             className="px-2 py-1 text-sm border border-edge rounded-lg bg-surface
                        focus:outline-none focus:border-primary-400"
-            aria-label="Rows per page"
+            aria-label="페이지당 행 수"
           >
             {PAGE_SIZE_OPTIONS.map((size) => (
               <option key={size} value={size}>
@@ -348,7 +373,7 @@ const MetaTable: React.FC<MetaTableProps> = ({
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm text-ink-muted num">
-            {firstRow.toLocaleString()}–{lastRow.toLocaleString()} of{" "}
+            {firstRow.toLocaleString()}–{lastRow.toLocaleString()} /{" "}
             {totalRows.toLocaleString()}
           </span>
           <button
@@ -356,7 +381,7 @@ const MetaTable: React.FC<MetaTableProps> = ({
             disabled={!table.getCanPreviousPage()}
             className="px-3 py-1.5 text-sm rounded-lg bg-raised border border-edge
                        hover:bg-overlay disabled:opacity-40 disabled:cursor-not-allowed"
-            aria-label="Previous page"
+            aria-label="이전 페이지"
           >
             ←
           </button>
@@ -365,7 +390,7 @@ const MetaTable: React.FC<MetaTableProps> = ({
             disabled={!table.getCanNextPage()}
             className="px-3 py-1.5 text-sm rounded-lg bg-raised border border-edge
                        hover:bg-overlay disabled:opacity-40 disabled:cursor-not-allowed"
-            aria-label="Next page"
+            aria-label="다음 페이지"
           >
             →
           </button>

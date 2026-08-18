@@ -17,6 +17,12 @@ import { MetaRow } from "./types";
 import InfoTip from "@/components/ui/InfoTip";
 import WatchlistStar from "@/components/ui/WatchlistStar";
 import { fmtEok, fmtJo } from "../insight/format";
+import {
+  formatChartDate,
+  formatDate,
+  formatMarketCap,
+  formatPrice,
+} from "@/lib/market";
 
 interface StockDetailPanelProps {
   stock: MetaRow | null;
@@ -38,22 +44,6 @@ const formatPercent = (value: number | null): string => {
   if (value === null) return "—";
   const sign = value >= 0 ? "+" : "";
   return `${sign}${(value * 100).toFixed(1)}%`;
-};
-
-const formatPrice = (value: number | null): string => {
-  if (value === null) return "—";
-  return `$${value.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-};
-
-const formatMarketCap = (value: number | null): string => {
-  if (value === null) return "—";
-  if (value >= 1e12) return `$${(value / 1e12).toFixed(1)}T`;
-  if (value >= 1e9) return `$${(value / 1e9).toFixed(1)}B`;
-  if (value >= 1e6) return `$${(value / 1e6).toFixed(1)}M`;
-  return `$${value.toLocaleString()}`;
 };
 
 const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
@@ -109,7 +99,10 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
   const flows = summaryData?.flows_recent ?? null;
 
   return (
-    <div className="fixed inset-y-0 right-0 w-[400px] bg-surface shadow-2xl z-50 flex flex-col">
+    <aside
+      aria-label={`${stock.name || stock.ticker} 상세 정보`}
+      className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[400px] flex-col bg-surface shadow-2xl"
+    >
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-edge">
         <div className="flex items-center gap-1">
@@ -134,6 +127,7 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
           <button
             onClick={onClose}
             className="p-2 hover:bg-raised rounded-lg transition-colors"
+            aria-label="상세 패널 닫기"
           >
             <svg
               className="w-5 h-5 text-ink-muted"
@@ -158,20 +152,22 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
         <div className="grid grid-cols-2 gap-3">
           <MetricCard
             label="시가총액"
-            value={isKr ? fmtJo(mktcap) : formatMarketCap(mktcap)}
+            value={isKr ? fmtJo(mktcap) : formatMarketCap(mktcap, stock.iso_code)}
           />
           <MetricCard
-            label="거래대금"
-            value={
-              summaryData?.value != null ? fmtJo(summaryData.value) : "—"
-            }
+            label={isKr ? "거래대금" : "최근 가격"}
+            value={isKr
+              ? summaryData?.value != null
+                ? fmtJo(summaryData.value)
+                : "—"
+              : formatPrice(summaryData?.latest_price, stock.iso_code)}
           />
         </div>
 
         {/* Price Chart */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-ink-secondary">Price Chart</h3>
+            <h3 className="text-sm font-medium text-ink-secondary">가격 차트</h3>
             <div className="flex gap-1">
               {PERIOD_OPTIONS.map((opt) => (
                 <button
@@ -192,7 +188,7 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
           <div className="h-48 bg-raised rounded-lg p-2">
             {isLoading ? (
               <div className="h-full flex items-center justify-center text-ink-muted">
-                Loading...
+                가격을 불러오는 중...
               </div>
             ) : chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -202,10 +198,7 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
                     tick={{ fontSize: 10, fill: "var(--text-muted)" }}
                     axisLine={{ stroke: "var(--border)" }}
                     tickLine={{ stroke: "var(--border)" }}
-                    tickFormatter={(val) => {
-                      const d = new Date(val);
-                      return `${d.getMonth() + 1}/${d.getDate()}`;
-                    }}
+                    tickFormatter={formatChartDate}
                     interval="preserveStartEnd"
                   />
                   <YAxis
@@ -214,7 +207,9 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
                     axisLine={{ stroke: "var(--border)" }}
                     tickLine={{ stroke: "var(--border)" }}
                     width={50}
-                    tickFormatter={(val) => `$${val.toFixed(0)}`}
+                    tickFormatter={(val) =>
+                      isKr ? `${Math.round(val).toLocaleString("ko-KR")}` : `$${val.toFixed(0)}`
+                    }
                   />
                   <Tooltip
                     contentStyle={{
@@ -224,8 +219,8 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
                       color: "var(--text-primary)",
                     }}
                     labelStyle={{ color: "var(--text-secondary)" }}
-                    formatter={(value: number) => [formatPrice(value), "Price"]}
-                    labelFormatter={(label) => new Date(label).toLocaleDateString()}
+                    formatter={(value: number) => [formatPrice(value, stock.iso_code), "가격"]}
+                    labelFormatter={(label) => formatDate(String(label))}
                   />
                   <Line
                     type="monotone"
@@ -238,7 +233,7 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
               </ResponsiveContainer>
             ) : (
               <div className="h-full flex items-center justify-center text-ink-muted">
-                No price data available
+                표시할 가격 데이터가 없습니다
               </div>
             )}
           </div>
@@ -247,34 +242,34 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
         {/* Key Metrics */}
         <div>
           <h3 className="text-sm font-medium text-ink-secondary mb-3">
-            Performance Metrics
+            성과 지표
           </h3>
           <div className="grid grid-cols-3 gap-3">
             <MetricCard
               label="YTD"
               value={formatPercent(metrics?.ytd_return ?? null)}
-              isPositive={metrics?.ytd_return ? metrics.ytd_return >= 0 : null}
+              isPositive={metrics?.ytd_return != null ? metrics.ytd_return >= 0 : null}
             />
             <MetricCard
-              label="1Y Return"
+              label="1년 수익률"
               value={formatPercent(metrics?.return_1y ?? null)}
-              isPositive={metrics?.return_1y ? metrics.return_1y >= 0 : null}
+              isPositive={metrics?.return_1y != null ? metrics.return_1y >= 0 : null}
             />
             <MetricCard
-              label="3M Return"
+              label="3개월 수익률"
               value={formatPercent(metrics?.return_3m ?? null)}
-              isPositive={metrics?.return_3m ? metrics.return_3m >= 0 : null}
+              isPositive={metrics?.return_3m != null ? metrics.return_3m >= 0 : null}
             />
             <MetricCard
-              label="Volatility"
+              label="변동성"
               value={formatPercent(metrics?.volatility ?? null)}
             />
             <MetricCard
-              label="Sharpe"
+              label="샤프"
               value={metrics?.sharpe?.toFixed(2) ?? "—"}
             />
             <MetricCard
-              label="Max DD"
+              label="최대 낙폭"
               value={formatPercent(metrics?.mdd ?? null)}
               isPositive={false}
             />
@@ -282,9 +277,9 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
         </div>
 
         {/* Valuation */}
-        <div>
+        {(summaryData?.per != null || summaryData?.pbr != null || summaryData?.div != null) && <div>
           <h3 className="text-sm font-medium text-ink-secondary mb-3">
-            Valuation
+            밸류에이션
           </h3>
           <div className="grid grid-cols-3 gap-3">
             <MetricCard
@@ -304,7 +299,7 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
               }
             />
           </div>
-        </div>
+        </div>}
 
         {/* Recent investor flows (KR only) */}
         {flows && (
@@ -349,18 +344,21 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
         {/* Stock Info */}
         <div>
           <h3 className="text-sm font-medium text-ink-secondary mb-3">
-            Stock Information
+            종목 정보
           </h3>
           <div className="space-y-2 text-sm">
-            <InfoRow label="Sector" value={stock.sector || "—"} />
-            <InfoRow label="Market" value={stock.iso_code} />
-            <InfoRow label="Type" value={stock.security_type} />
-            <InfoRow label="Market Cap" value={formatMarketCap(stock.marketcap)} />
+            <InfoRow label="섹터" value={stock.sector || "—"} />
+            <InfoRow label="시장" value={stock.iso_code} />
+            <InfoRow label="유형" value={stock.security_type} />
+            <InfoRow label="시가총액" value={formatMarketCap(stock.marketcap, stock.iso_code)} />
             {summaryData?.latest_price && (
               <InfoRow
-                label="Latest Price"
-                value={formatPrice(summaryData.latest_price)}
+                label="최근 가격"
+                value={formatPrice(summaryData.latest_price, stock.iso_code)}
               />
+            )}
+            {summaryData?.latest_date && (
+              <InfoRow label="가격 기준일" value={formatDate(summaryData.latest_date)} />
             )}
           </div>
         </div>
@@ -373,10 +371,10 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
           className="w-full py-2 px-4 bg-primary-500 text-white font-medium rounded-lg
                      hover:bg-primary-600 transition-colors"
         >
-          Add to Compare
+          비교 목록에 추가
         </button>
       </div>
-    </div>
+    </aside>
   );
 };
 

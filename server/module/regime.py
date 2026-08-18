@@ -6,6 +6,8 @@
 """
 
 from functools import lru_cache
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from qdata import api as qdata_api
@@ -143,6 +145,10 @@ def risk_gauge() -> dict:
         {
             "name": "Yield curve (10Y-2Y)",
             "value": level,
+            "value_label": "10Y-2Y 금리차",
+            "unit": "%p",
+            "signal": "금리차의 역사적 백분위 (낮을수록 위험 점수 상승)",
+            "signal_value": level,
             "percentile": _percentile(curve, level),
             "score": 100 - _percentile(curve, level),
             "as_of": curve.index.max().strftime("%Y-%m-%d"),
@@ -155,16 +161,23 @@ def risk_gauge() -> dict:
     rel = rel.dropna()
     rel_latest = float(rel.iloc[-1])
     try:
-        hy_value = float(_fred("BAMLH0A0HYM2").dropna().iloc[-1])  # 표시용 OAS 레벨
+        oas = _fred("BAMLH0A0HYM2").dropna()
+        hy_value = float(oas.iloc[-1])  # 표시용 OAS 레벨
+        hy_as_of = oas.index.max().strftime("%Y-%m-%d")
     except (KeyError, IndexError, FileNotFoundError):
         hy_value = rel_latest
+        hy_as_of = rel.index.max().strftime("%Y-%m-%d")
     components.append(
         {
-            "name": "HY spread (HYG-IEF)",
+            "name": "High yield credit",
             "value": hy_value,
+            "value_label": "미국 HY OAS 관측값",
+            "unit": "%p",
+            "signal": "HYG-IEF 126거래일 상대수익 (낮을수록 위험 점수 상승)",
+            "signal_value": rel_latest,
             "percentile": _percentile(rel, rel_latest),
             "score": 100 - _percentile(rel, rel_latest),
-            "as_of": rel.index.max().strftime("%Y-%m-%d"),
+            "as_of": min(pd.Timestamp(hy_as_of), rel.index.max()).strftime("%Y-%m-%d"),
         }
     )
 
@@ -175,6 +188,10 @@ def risk_gauge() -> dict:
         {
             "name": "VIX",
             "value": vix_latest,
+            "value_label": "VIX 지수",
+            "unit": "pt",
+            "signal": "VIX 역사적 백분위 (높을수록 위험 점수 상승)",
+            "signal_value": vix_latest,
             "percentile": _percentile(vix, vix_latest),
             "score": _percentile(vix, vix_latest),
             "as_of": vix.index.max().strftime("%Y-%m-%d"),
@@ -190,6 +207,10 @@ def risk_gauge() -> dict:
         {
             "name": "Unemployment momentum",
             "value": gap_latest,
+            "value_label": "12개월 저점 대비 실업률 상승폭",
+            "unit": "%p",
+            "signal": "상승폭의 역사적 백분위 (높을수록 위험 점수 상승)",
+            "signal_value": gap_latest,
             "percentile": _percentile(gap, gap_latest),
             "score": _percentile(gap, gap_latest),
             "as_of": gap.index.max().strftime("%Y-%m-%d"),
@@ -202,7 +223,13 @@ def risk_gauge() -> dict:
     # 전체 점수는 가장 느린 구성요소까지만 완전히 관측된 것으로 표시한다. 최신
     # 일간 지표의 날짜(max)를 쓰면 월간 실업률이 오래됐다는 사실이 가려진다.
     as_of = min(pd.Timestamp(c["as_of"]) for c in components).strftime("%Y-%m-%d")
-    return {"score": score, "as_of": as_of, "components": components}
+    return {
+        "score": score,
+        "as_of": as_of,
+        "complete_as_of": as_of,
+        "calculated_at": datetime.now(ZoneInfo("Asia/Seoul")).isoformat(),
+        "components": components,
+    }
 
 
 # ── 한국 매크로 ──────────────────────────────────────────────────────────────

@@ -46,6 +46,13 @@ export interface NewsBriefingItem {
   cluster_count: number;
   sources: string[];
   why?: string;
+  related_assets?: {
+    meta_id: number;
+    ticker: string;
+    name: string;
+    relation: "보유" | "관심";
+  }[];
+  related_topics?: string[];
 }
 
 export interface NewsBriefingResponse {
@@ -54,6 +61,8 @@ export interface NewsBriefingResponse {
   edition?: "morning" | "evening";
   curated?: boolean;
   sections?: { general: NewsBriefingItem[]; economy: NewsBriefingItem[] };
+  relevance_method?: string;
+  relevance_warning?: string;
 }
 
 
@@ -175,6 +184,10 @@ export interface WatchlistItem {
   security_type: string | null;
   added_at: string | null;
   note: string | null;
+  thesis: string | null;
+  catalyst: string | null;
+  invalidation: string | null;
+  review_date: string | null;
   latest_price: number | null;
   chg_pct: number | null;
   frgn_net_20d: number | null;
@@ -187,6 +200,15 @@ export interface WatchlistResponse {
 
 export interface WatchlistMutationResponse {
   count: number;
+}
+
+export interface UpdateWatchlistPayload {
+  meta_id: number;
+  note?: string;
+  thesis?: string;
+  catalyst?: string;
+  invalidation?: string;
+  review_date?: string | null;
 }
 
 // Types for holdings (real positions) operations
@@ -215,6 +237,9 @@ export interface HoldingPosition {
   target_weight: number | null;
   /** Actual minus target, percentage points. */
   drift_pp: number | null;
+  thesis: string;
+  invalidation: string;
+  review_date: string | null;
 }
 
 export interface HoldingsSectorAlloc {
@@ -252,6 +277,64 @@ export interface HoldingsResponse {
   summary: HoldingsSummary;
 }
 
+export type LedgerEventType = "BUY" | "SELL" | "DEPOSIT" | "WITHDRAW" | "DIVIDEND" | "FEE" | "FX";
+
+export interface LedgerEvent {
+  event_id: string;
+  occurred_at: string;
+  created_at: string;
+  event_type: LedgerEventType;
+  meta_id: number | null;
+  ticker: string | null;
+  name: string | null;
+  shares: number | null;
+  price: number | null;
+  currency: "KRW" | "USD";
+  amount: number | null;
+  fees: number;
+  counter_currency: "KRW" | "USD" | null;
+  counter_amount: number | null;
+  realized_pnl_native: number | null;
+  note: string;
+}
+
+export interface LedgerSummary {
+  events_count: number;
+  started_at: string | null;
+  cash_balances: Record<string, number>;
+  cash_value_krw: number | null;
+  realized_pnl: Record<string, number>;
+  opening_positions: number;
+  twr: number | null;
+  twr_as_of: string | null;
+  twr_periods: number;
+  twr_note: string;
+  cost_basis: string;
+}
+
+export interface PortfolioLedgerResponse {
+  events: LedgerEvent[];
+  summary: LedgerSummary;
+}
+
+export interface AddLedgerEventPayload {
+  idempotency_key: string;
+  event_type: LedgerEventType;
+  occurred_at: string;
+  meta_id?: number;
+  shares?: number;
+  price?: number;
+  currency: "KRW" | "USD";
+  amount?: number;
+  fees?: number;
+  counter_currency?: "KRW" | "USD";
+  counter_amount?: number;
+  note?: string;
+  thesis?: string;
+  invalidation?: string;
+  review_date?: string;
+}
+
 export interface AddHoldingPayload {
   meta_id: number;
   shares: number;
@@ -259,6 +342,18 @@ export interface AddHoldingPayload {
   currency?: string;
   note?: string;
   target_weight?: number | null;
+  thesis?: string;
+  invalidation?: string;
+  review_date?: string | null;
+}
+
+export interface UpdateHoldingMetadataPayload {
+  meta_id: number;
+  note?: string;
+  target_weight?: number | null;
+  thesis: string;
+  invalidation: string;
+  review_date?: string | null;
 }
 
 export interface HoldingMutationResponse {
@@ -329,17 +424,68 @@ export interface DataHealthItem {
   level: DataHealthLevel;
   as_of: string | null;
   age_days: number | null;
+  market_sessions_old: number | null;
   detail: string;
+  built_at: string | null;
+  row_count: number | null;
+  message: string | null;
+  build_version: string | null;
+  expected_lag_sessions: number;
+}
+
+export interface OverviewHorizon {
+  key: "intraday" | "tactical" | "structural";
+  label: string;
+  window: string;
+  tone: EvidenceTone;
+  summary: string;
+  evidence: OverviewEvidence[];
 }
 
 export interface OverviewResponse {
   generated_at: string;
   tone: OverviewTone;
   tone_label: string;
+  horizons: OverviewHorizon[];
   evidence: OverviewEvidence[];
   conflicts: string[];
   data_status: DataHealthItem[];
   method: string;
+}
+
+export type DecisionHorizon = "intraday" | "tactical" | "structural";
+
+export interface JournalEntry {
+  entry_id: string;
+  created_at: string;
+  observation: string;
+  interpretation: string;
+  decision: string;
+  horizon: DecisionHorizon;
+  confidence: number;
+  counter_evidence: string;
+  invalidation: string;
+  review_date: string;
+  evidence_snapshot: Partial<OverviewResponse>;
+  reviewed_at: string | null;
+  outcome: string | null;
+  lesson: string | null;
+}
+
+export interface JournalResponse {
+  items: JournalEntry[];
+  count: number;
+}
+
+export interface CreateJournalPayload {
+  observation: string;
+  interpretation: string;
+  decision: string;
+  horizon: DecisionHorizon;
+  confidence: number;
+  counter_evidence?: string;
+  invalidation?: string;
+  review_date: string;
 }
 
 // Types for the "오늘 주목" attention lane
@@ -408,6 +554,24 @@ export interface NormalizedPricePoint {
 export interface CompareResponse {
   stocks: CompareStock[];
   normalized_prices: NormalizedPricePoint[];
+}
+
+export interface PriceCoverageAsset {
+  meta_id: number;
+  ticker: string | null;
+  iso_code: string | null;
+  start: string | null;
+  end: string | null;
+  rows: number;
+}
+
+export interface PriceCoverageResponse {
+  assets: PriceCoverageAsset[];
+  effective_start: string | null;
+  effective_end: string | null;
+  complete: boolean;
+  price_field: "adj_close";
+  note: string;
 }
 
 // Types for backtest operations (API v2)
@@ -672,6 +836,10 @@ export interface RegimePhaseResponse {
 export interface RegimeGaugeComponent {
   name: string;
   value: number;
+  value_label?: string;
+  unit?: string;
+  signal?: string;
+  signal_value?: number;
   percentile: number;
   score: number;
   weight: number;
@@ -683,6 +851,8 @@ export interface RegimeGaugeResponse {
   /** 0-100, higher = risk-off */
   score: number;
   as_of: string;
+  complete_as_of?: string;
+  calculated_at?: string;
   components: RegimeGaugeComponent[];
 }
 
@@ -1098,6 +1268,8 @@ export const api = createApi({
     "Watchlist",
     "Holdings",
     "Attention",
+    "Journal",
+    "PortfolioLedger",
   ],
   endpoints: (builder) => ({
     // Query endpoints
@@ -1113,6 +1285,9 @@ export const api = createApi({
     fetchStrategies: builder.query({
       query: () => "/backtest/strategy",
       providesTags: ["Strategy"],
+    }),
+    fetchPriceCoverage: builder.query<PriceCoverageResponse, number[]>({
+      query: (metaIds) => `/price/coverage?meta_ids=${metaIds.join(",")}`,
     }),
     fetchStrategyMonthlyNav: builder.query({
       query: () => "/backtest/strategy/monthlynav",
@@ -1218,6 +1393,17 @@ export const api = createApi({
       }),
       invalidatesTags: ["Watchlist"],
     }),
+    updateWatchlist: builder.mutation<
+      WatchlistMutationResponse,
+      UpdateWatchlistPayload
+    >({
+      query: ({ meta_id, ...body }) => ({
+        url: `/watchlist/${meta_id}`,
+        method: "PUT",
+        body,
+      }),
+      invalidatesTags: ["Watchlist", "Attention"],
+    }),
 
     // Holdings (real positions) endpoints
     fetchHoldings: builder.query<HoldingsResponse, void>({
@@ -1228,15 +1414,59 @@ export const api = createApi({
       query: () => "/holdings/risk",
       providesTags: ["Holdings"],
     }),
+    fetchPortfolioLedger: builder.query<PortfolioLedgerResponse, void>({
+      query: () => "/portfolio-ledger",
+      providesTags: ["PortfolioLedger"],
+    }),
+    addPortfolioLedgerEvent: builder.mutation<
+      { event_id: string; created: boolean; summary: LedgerSummary },
+      AddLedgerEventPayload
+    >({
+      query: (body) => ({ url: "/portfolio-ledger", method: "POST", body }),
+      invalidatesTags: ["PortfolioLedger", "Holdings", "Attention"],
+    }),
 
     fetchOverview: builder.query<OverviewResponse, void>({
       query: () => "/overview",
       providesTags: ["Holdings"],
     }),
+    fetchJournal: builder.query<JournalResponse, void>({
+      query: () => "/journal",
+      providesTags: ["Journal"],
+    }),
+    createJournal: builder.mutation<
+      { entry_id: string; count: number },
+      CreateJournalPayload
+    >({
+      query: (body) => ({ url: "/journal", method: "POST", body }),
+      invalidatesTags: ["Journal"],
+    }),
+    reviewJournal: builder.mutation<
+      { review_id: string },
+      { entry_id: string; outcome: string; lesson?: string }
+    >({
+      query: ({ entry_id, ...body }) => ({
+        url: `/journal/${entry_id}/reviews`,
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: ["Journal"],
+    }),
     addHolding: builder.mutation<HoldingMutationResponse, AddHoldingPayload>({
       query: (body) => ({
         url: "/holdings",
         method: "POST",
+        body,
+      }),
+      invalidatesTags: ["Holdings", "Attention"],
+    }),
+    updateHoldingMetadata: builder.mutation<
+      HoldingMutationResponse,
+      UpdateHoldingMetadataPayload
+    >({
+      query: ({ meta_id, ...body }) => ({
+        url: `/holdings/${meta_id}/metadata`,
+        method: "PUT",
         body,
       }),
       invalidatesTags: ["Holdings", "Attention"],
@@ -1426,6 +1656,7 @@ export const {
   useFetchTickersQuery,
   useFetchAlgorithmsQuery,
   useFetchStrategiesQuery,
+  useFetchPriceCoverageQuery,
   useFetchStrategyMonthlyNavQuery,
   useFetchStrategyByIdQuery,
   useFetchStNavByIdQuery,
@@ -1450,11 +1681,18 @@ export const {
   useFetchWatchlistQuery,
   useAddToWatchlistMutation,
   useRemoveFromWatchlistMutation,
+  useUpdateWatchlistMutation,
   // Holdings hooks
   useFetchHoldingsQuery,
   useFetchHoldingsRiskQuery,
+  useFetchPortfolioLedgerQuery,
+  useAddPortfolioLedgerEventMutation,
   useFetchOverviewQuery,
+  useFetchJournalQuery,
+  useCreateJournalMutation,
+  useReviewJournalMutation,
   useAddHoldingMutation,
+  useUpdateHoldingMetadataMutation,
   useRemoveHoldingMutation,
   // Attention hook
   useFetchAttentionQuery,

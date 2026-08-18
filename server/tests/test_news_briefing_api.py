@@ -69,3 +69,26 @@ def test_briefing_corrupt_file_no_500(app_data):
     r = client.get("/news/briefing")
     assert r.status_code == 200
     assert r.json() == {"active": False}
+
+
+def test_briefing_marks_explicit_personal_asset_mentions(app_data, monkeypatch):
+    import pandas as pd
+    from app.routers import news
+
+    monkeypatch.setattr(news.holdings_store, "list_items", lambda: pd.DataFrame({"meta_id": [1]}))
+    monkeypatch.setattr(news.watchlist_store, "list_items", lambda: pd.DataFrame(columns=["meta_id"]))
+    monkeypatch.setattr(
+        news.meta_store,
+        "meta_df",
+        lambda: pd.DataFrame({"meta_id": [1], "ticker": ["005930"], "name": ["삼성전자"]}),
+    )
+    payload = _payload()
+    payload["sections"]["general"][0]["title"] = "삼성전자 HBM 투자 확대"
+    storage.write_json(payload, "news_briefing.json")
+
+    body = client.get("/news/briefing").json()
+
+    item = body["sections"]["general"][0]
+    assert item["related_assets"][0]["relation"] == "보유"
+    assert "반도체·AI" in item["related_topics"]
+    assert "가격 방향 예측" in body["relevance_warning"]

@@ -87,6 +87,18 @@ const BriefingRow: React.FC<{ item: NewsBriefingItem }> = ({ item }) => {
         {item.why && (
           <p className="text-xs text-ink-muted pl-1 line-clamp-2">{item.why}</p>
         )}
+        {((item.related_assets?.length ?? 0) > 0 || (item.related_topics?.length ?? 0) > 0) && (
+          <div className="flex flex-wrap gap-1 pl-1 pt-1">
+            {item.related_assets?.map((asset) => (
+              <span key={asset.meta_id} className="badge-neutral">
+                {asset.relation} · {asset.name || asset.ticker}
+              </span>
+            ))}
+            {item.related_topics?.map((topic) => (
+              <span key={topic} className="badge-neutral">{topic}</span>
+            ))}
+          </div>
+        )}
       </a>
     </li>
   );
@@ -183,6 +195,9 @@ const NewsBriefingCard: React.FC = () => {
                   ))}
                 </ul>
               )}
+              <p className="text-xs text-ink-muted">
+                {data?.relevance_warning ?? "관련성 표시는 인과관계나 가격 방향 예측이 아닙니다."}
+              </p>
             </>
           ) : (
             <p className="text-xs text-ink-muted px-1">

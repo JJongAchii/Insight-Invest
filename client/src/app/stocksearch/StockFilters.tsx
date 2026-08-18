@@ -10,22 +10,22 @@ interface StockFiltersProps {
 }
 
 const MARKET_OPTIONS: { value: MarketFilter; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "US", label: "US" },
-  { value: "KR", label: "KR" },
+  { value: "all", label: "전체" },
+  { value: "US", label: "미국" },
+  { value: "KR", label: "한국" },
 ];
 
 const TYPE_OPTIONS: { value: TypeFilter; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "stock", label: "Stock" },
+  { value: "all", label: "전체" },
+  { value: "stock", label: "주식" },
   { value: "etf", label: "ETF" },
 ];
 
 const CAP_OPTIONS: { value: CapFilter; label: string }[] = [
-  { value: "all", label: "All Cap" },
-  { value: "large", label: "Large Cap" },
-  { value: "mid", label: "Mid Cap" },
-  { value: "small", label: "Small Cap" },
+  { value: "all", label: "전체 규모" },
+  { value: "large", label: "대형" },
+  { value: "mid", label: "중형" },
+  { value: "small", label: "소형" },
 ];
 
 const StockFilters: React.FC<StockFiltersProps> = ({
@@ -62,6 +62,7 @@ const StockFilters: React.FC<StockFiltersProps> = ({
                 ? "bg-overlay text-ink shadow-sm"
                 : "text-ink-secondary hover:text-ink"
             }`}
+            aria-pressed={filters.market === option.value}
           >
             {option.label}
           </button>
@@ -79,6 +80,7 @@ const StockFilters: React.FC<StockFiltersProps> = ({
                 ? "bg-overlay text-ink shadow-sm"
                 : "text-ink-secondary hover:text-ink"
             }`}
+            aria-pressed={filters.type === option.value}
           >
             {option.label}
           </button>
@@ -92,13 +94,18 @@ const StockFilters: React.FC<StockFiltersProps> = ({
         className="px-3 py-2 text-sm border border-edge rounded-lg bg-surface
                    focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
       >
-        <option value="">All Sectors</option>
+        <option value="">전체 섹터</option>
         {sectors.map((sector) => (
           <option key={sector} value={sector}>
             {sector}
           </option>
         ))}
       </select>
+      {filters.cap !== "all" && (
+        <p className="basis-full text-xs text-ink-muted">
+          대형/중형 기준: 미국 $10B/$2B · 한국 10조원/1조원 (원천 통화 기준)
+        </p>
+      )}
 
       {/* Market Cap Dropdown */}
       <select

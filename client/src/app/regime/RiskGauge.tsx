@@ -10,8 +10,8 @@ import ErrorState from "@/components/ui/ErrorState";
 /** Server component name → INDICATOR_HELP key. */
 const componentHelpKey = (name: string): string | undefined => {
   const n = name.toLowerCase();
+  if (n.includes("high yield") || n.includes("credit") || n.includes("hy")) return "gauge.hy";
   if (n.includes("yield")) return "gauge.yield_curve";
-  if (n.includes("hy")) return "gauge.hy";
   if (n.includes("vix")) return "gauge.vix";
   if (n.includes("unemploy")) return "gauge.unemployment";
   return undefined;
@@ -21,14 +21,14 @@ const scoreColor = (score: number) =>
   score < 35 ? "var(--gains)" : score <= 65 ? "var(--chart-4)" : "var(--losses)";
 
 const scoreLabel = (score: number) =>
-  score < 35 ? "Risk-On" : score <= 65 ? "중립" : "Risk-Off";
+  score < 35 ? "낮음" : score <= 65 ? "중립" : "높음";
 
 const ARC_R = 80;
 const ARC_CX = 100;
 const ARC_CY = 100;
 const ARC_LEN = Math.PI * ARC_R;
 
-/** Semicircle SVG gauge: 0 (left) → 100 (right), higher = risk-off. */
+/** Semicircle SVG gauge: 0 (left) → 100 (right), higher = market risk. */
 const GaugeArc: React.FC<{ score: number }> = ({ score }) => {
   const clamped = Math.max(0, Math.min(100, score));
   const color = scoreColor(clamped);
@@ -99,16 +99,16 @@ const RiskGauge: React.FC<{ className?: string }> = ({ className = "" }) => {
     <Card
       title={
         <span className="inline-flex items-center gap-1.5">
-          Risk-Off Gauge
+          시장 위험도
           <InfoTip helpKey="regime.gauge" />
         </span>
       }
       className={className}
     >
       {error ? (
-        <ErrorState message="Failed to load risk gauge" onRetry={refetch} />
+        <ErrorState message="시장 위험도를 불러오지 못했습니다" onRetry={refetch} />
       ) : isLoading || !data ? (
-        <LoadingState label="Loading risk gauge..." />
+        <LoadingState label="시장 위험도를 계산하는 중..." />
       ) : (
         <div className="flex flex-col gap-4">
           <div className="relative">
@@ -132,7 +132,7 @@ const RiskGauge: React.FC<{ className?: string }> = ({ className = "" }) => {
             >
               {scoreLabel(data.score)}
             </span>
-            <span className="text-xs text-ink-muted num">{data.as_of}</span>
+            <span className="text-xs text-ink-muted num">완전 관측 기준 {data.complete_as_of ?? data.as_of}</span>
           </div>
 
           {/* Component breakdown */}
@@ -142,11 +142,12 @@ const RiskGauge: React.FC<{ className?: string }> = ({ className = "" }) => {
               const width = Math.max(0, Math.min(100, c.score));
               const helpKey = componentHelpKey(c.name);
               return (
-                <div key={c.name} className="flex items-center gap-3">
+                <React.Fragment key={c.name}>
+                <div className="flex items-center gap-3">
                   <span className="w-32 shrink-0 min-w-0">
                     <span className="flex items-center gap-1">
                       <span className="text-xs text-ink-secondary truncate">
-                        {c.name}
+                      {c.value_label ?? c.name}
                       </span>
                       {helpKey && <InfoTip helpKey={helpKey} />}
                     </span>
@@ -155,7 +156,7 @@ const RiskGauge: React.FC<{ className?: string }> = ({ className = "" }) => {
                     </span>
                   </span>
                   <span className="num text-xs text-ink w-14 shrink-0 text-right">
-                    {c.value.toFixed(2)}
+                    {c.value.toFixed(2)}{c.unit ? ` ${c.unit}` : ""}
                   </span>
                   <div className="flex-1 h-1.5 rounded-full bg-raised overflow-hidden">
                     <div
@@ -174,9 +175,21 @@ const RiskGauge: React.FC<{ className?: string }> = ({ className = "" }) => {
                     {Math.round(c.score)}
                   </span>
                 </div>
+                {c.signal && (
+                  <p className="ml-[8.75rem] -mt-1 text-xs text-ink-muted">
+                    점수 신호: {c.signal}
+                    {c.signal_value != null ? ` · ${c.signal_value.toFixed(2)}` : ""}
+                  </p>
+                )}
+                </React.Fragment>
               );
             })}
           </div>
+          {data.calculated_at && (
+            <p className="text-xs text-ink-muted">
+              계산 시각 {new Date(data.calculated_at).toLocaleString("ko-KR")} · 점수가 높을수록 위험 압력이 큽니다.
+            </p>
+          )}
         </div>
       )}
     </Card>

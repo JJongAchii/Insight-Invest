@@ -53,7 +53,7 @@ def test_overview_calls_out_cross_signal_conflict(monkeypatch):
     out = overview.get_overview()
 
     assert out["tone"] == "mixed"
-    assert any("위험 게이지" in text for text in out["conflicts"])
+    assert any("시장 위험도" in text for text in out["conflicts"])
     assert any("외국인" in text for text in out["conflicts"])
     assert {item["key"] for item in out["evidence"]} == {
         "phase",
@@ -61,6 +61,31 @@ def test_overview_calls_out_cross_signal_conflict(monkeypatch):
         "breadth",
         "flow",
     }
+    assert [item["key"] for item in out["horizons"]] == [
+        "intraday",
+        "tactical",
+        "structural",
+    ]
+    assert out["tone_label"] == "시간축별 혼조"
+
+
+def test_valuation_uses_expensive_side_percentile_wording(monkeypatch):
+    valuation = pd.DataFrame(
+        {
+            "date": [pd.Timestamp("2026-08-15")],
+            "market": ["KOSPI"],
+            "pct_rank_per": [90.0],
+            "pct_rank_pbr": [98.0],
+        }
+    )
+    monkeypatch.setattr(overview.storage, "read_parquet", lambda *args, **kwargs: valuation)
+
+    item, pos, neg = overview._valuation_evidence()
+
+    assert item is not None
+    assert "역사적 상위 6.0%" in item["title"]
+    assert pos == 0
+    assert neg == 1
 
 
 def test_data_status_marks_failed_required_build(monkeypatch):

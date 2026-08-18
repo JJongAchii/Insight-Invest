@@ -112,6 +112,13 @@ class Portfolio(BaseModel):
     ann_vol: float
     sharpe: float
     status: Optional[str] = "saved"
+    created_at: Optional[datetime] = None
+    bt_start: Optional[str] = None
+    bt_end: Optional[str] = None
+    benchmark: Optional[str] = None
+    currency: Optional[str] = None
+    cost_bps: Optional[float] = None
+    audit_status: Optional[str] = "unverified"
 
     class Config:
         from_attributes = True

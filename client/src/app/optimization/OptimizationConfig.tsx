@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useFetchTickersQuery, OptimizationPayload } from "@/state/api";
 import Select, { SingleValue, MultiValue } from "react-select";
 import { tokenSelectStyles } from "@/components/ui/selectStyles";
@@ -49,9 +49,9 @@ const OptimizationConfig: React.FC<OptimizationConfigProps> = ({
   const [selectedIsoCode, setSelectedIsoCode] = useState<SelectOption | null>(null);
   const [selectedTickers, setSelectedTickers] = useState<SelectOption[]>([]);
   const [lookbackPeriod, setLookbackPeriod] = useState(252);
-  const [riskFreeRate, setRiskFreeRate] = useState(0.02);
+  const [riskFreeRate, setRiskFreeRate] = useState(0);
   const [minWeight, setMinWeight] = useState(0);
-  const [maxWeight, setMaxWeight] = useState(1);
+  const [maxWeight, setMaxWeight] = useState(0.25);
   const [errors, setErrors] = useState<ValidationErrors>({});
 
   const isoCodeOptions = useMemo(
@@ -80,6 +80,12 @@ const OptimizationConfig: React.FC<OptimizationConfigProps> = ({
     [tickerData, selectedIsoCode]
   );
 
+  useEffect(() => {
+    if (selectedTickers.length > 0) {
+      setMaxWeight(Math.max(0.25, 1 / selectedTickers.length));
+    }
+  }, [selectedTickers.length]);
+
   const validateForm = (): boolean => {
     const newErrors: ValidationErrors = {};
 
@@ -93,6 +99,10 @@ const OptimizationConfig: React.FC<OptimizationConfigProps> = ({
 
     if (minWeight >= maxWeight) {
       newErrors.weights = "Min weight must be less than max weight";
+    } else if (selectedTickers.length > 0 && minWeight * selectedTickers.length > 1) {
+      newErrors.weights = "최소 비중의 합이 100%를 초과해 해가 존재하지 않습니다";
+    } else if (selectedTickers.length > 0 && maxWeight * selectedTickers.length < 1) {
+      newErrors.weights = "최대 비중으로 100%를 채울 수 없어 해가 존재하지 않습니다";
     }
 
     setErrors(newErrors);
@@ -217,6 +227,15 @@ const OptimizationConfig: React.FC<OptimizationConfigProps> = ({
         {errors.weights && (
           <p className="text-danger text-xs">{errors.weights}</p>
         )}
+
+        <div className="rounded-xl border border-warning/30 bg-warning/5 p-4 text-xs leading-5 text-ink-secondary">
+          <p className="font-semibold text-ink">Research Lab · 추정 오차 주의</p>
+          <p className="mt-1">
+            기대수익률과 공분산은 선택한 과거 구간 안에서만 추정됩니다. 기본 무위험수익률은
+            0%, 최대 비중은 자산 수에 따라 최소 25%로 제한합니다. 표본 외 검증·회전율·세금·
+            거래비용을 포함하지 않은 최적화 결과이므로 그대로 실전 비중으로 사용하지 마세요.
+          </p>
+        </div>
 
         {/* Selected Assets Summary */}
         {selectedTickers.length > 0 && (

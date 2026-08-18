@@ -23,17 +23,23 @@ const TONE_STYLE: Record<OverviewTone, { color: string; bg: string }> = {
 const EVIDENCE_DOT: Record<EvidenceTone, string> = {
   positive: "var(--gains)",
   negative: "var(--losses)",
-  neutral: "var(--ink-muted)",
+  neutral: "var(--text-muted)",
+};
+
+const TONE_LABEL: Record<EvidenceTone, string> = {
+  positive: "우호",
+  negative: "경계",
+  neutral: "중립",
 };
 
 const HEALTH_DOT: Record<DataHealthLevel, string> = {
   ok: "var(--gains)",
   warn: "var(--chart-4)",
   error: "var(--losses)",
-  unknown: "var(--ink-muted)",
+  unknown: "var(--text-muted)",
 };
 
-/** Current market synthesis plus explicit checks against the user's holdings. */
+/** 시간축을 섞지 않는 시장 환경 요약과 사용자의 포트폴리오 확인점. */
 const DecisionBrief: React.FC = () => {
   const { data, isLoading, error, refetch } = useFetchOverviewQuery();
   const { data: holdings } = useFetchHoldingsQuery();
@@ -41,7 +47,7 @@ const DecisionBrief: React.FC = () => {
   if (error) {
     return <ErrorState message="판단 요약을 불러오지 못했습니다" onRetry={refetch} />;
   }
-  if (isLoading || !data) return <LoadingState label="시장 판단 근거를 정리하는 중..." />;
+  if (isLoading || !data) return <LoadingState label="시간축별 시장 근거를 정리하는 중..." />;
 
   const summary = holdings?.summary;
   const portfolioChecks: string[] = [];
@@ -59,21 +65,14 @@ const DecisionBrief: React.FC = () => {
       `${largestDrift.name ?? largestDrift.ticker} 목표 괴리 ${largestDrift.drift_pp >= 0 ? "+" : ""}${largestDrift.drift_pp.toFixed(1)}%p`
     );
   }
-  if (summary && summary.n_positions > 0 && portfolioChecks.length === 0) {
-    portfolioChecks.push("설정 기준(단일 25%·HHI 0.18) 이상의 집중 없음");
-  }
 
   const toneStyle = TONE_STYLE[data.tone];
   const unhealthy = data.data_status.filter((item) => item.level !== "ok");
 
   return (
     <Card
-      title="오늘의 판단 프레임"
-      action={
-        <span className="text-xs text-ink-muted">
-          처방이 아닌 관측 방향의 일치 여부
-        </span>
-      }
+      title="시간축별 시장 환경"
+      action={<span className="text-xs text-ink-muted">서로 다른 기간의 근거를 합산하지 않습니다</span>}
     >
       <div className="space-y-5">
         <div className="flex flex-wrap items-center gap-3">
@@ -86,27 +85,43 @@ const DecisionBrief: React.FC = () => {
           <span className="text-xs text-ink-muted">{data.method}</span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-          {data.evidence.map((item) => (
-            <Link
-              key={item.key}
-              href={item.link}
-              className="rounded-xl border border-edge p-3 hover:bg-raised transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <span
-                  className="h-2 w-2 rounded-full shrink-0"
-                  style={{ backgroundColor: EVIDENCE_DOT[item.tone] }}
-                  aria-hidden
-                />
-                <p className="text-sm font-semibold text-ink truncate">{item.title}</p>
-                {item.changed && <span className="badge-neutral ml-auto">변화</span>}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          {data.horizons.map((horizon) => (
+            <section key={horizon.key} className="rounded-xl border border-edge p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold text-ink">{horizon.label}</p>
+                  <p className="text-xs text-ink-muted">{horizon.window}</p>
+                </div>
+                <span className="badge-neutral text-right text-[10px] sm:text-xs">{TONE_LABEL[horizon.tone]} · {horizon.summary}</span>
               </div>
-              <p className="mt-1.5 text-xs text-ink-secondary line-clamp-2">{item.detail}</p>
-              {item.as_of && (
-                <p className="mt-2 text-[11px] text-ink-muted num">기준 {item.as_of}</p>
-              )}
-            </Link>
+              <div className="mt-3 space-y-3">
+                {horizon.evidence.length === 0 ? (
+                  <p className="text-sm text-ink-muted">가용 근거 없음</p>
+                ) : horizon.evidence.map((item) => (
+                  <Link key={item.key} href={item.link} className="block rounded-lg bg-raised p-3 hover:bg-overlay">
+                    <div className="flex items-start gap-2">
+                      <span
+                        className="mt-1 h-2 w-2 shrink-0 rounded-full"
+                        style={{ backgroundColor: EVIDENCE_DOT[item.tone] }}
+                        aria-hidden
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-ink">
+                          <span className="sr-only">{TONE_LABEL[item.tone]}: </span>
+                          {item.title}
+                        </p>
+                        <p className="mt-1 text-xs text-ink-secondary">{item.detail}</p>
+                        {item.as_of && (
+                          <p className="mt-1 text-xs text-ink-muted num">기준 {item.as_of.slice(0, 10)}</p>
+                        )}
+                      </div>
+                      {item.changed && <span className="badge-neutral">변화</span>}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </section>
           ))}
         </div>
 
@@ -114,14 +129,12 @@ const DecisionBrief: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {data.conflicts.length > 0 && (
               <div className="rounded-xl bg-raised p-3">
-                <p className="text-xs font-semibold text-ink-secondary mb-1">엇갈리는 신호</p>
-                {data.conflicts.map((text) => (
-                  <p key={text} className="text-sm text-ink">{text}</p>
-                ))}
+                <p className="text-xs font-semibold text-ink-secondary mb-1">엇갈리는 근거</p>
+                {data.conflicts.map((text) => <p key={text} className="text-sm text-ink">{text}</p>)}
               </div>
             )}
             {portfolioChecks.length > 0 && (
-              <Link href="/portfolio" className="rounded-xl bg-raised p-3 hover:bg-surface transition-colors">
+              <Link href="/portfolio" className="rounded-xl bg-raised p-3 hover:bg-overlay">
                 <p className="text-xs font-semibold text-ink-secondary mb-1">내 포트폴리오 확인점</p>
                 <p className="text-sm text-ink">{portfolioChecks.join(" · ")}</p>
               </Link>
@@ -129,26 +142,19 @@ const DecisionBrief: React.FC = () => {
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-edge pt-3">
-          <span className="text-xs font-semibold text-ink-secondary">데이터 상태</span>
+        <Link href="/data-trust" className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-edge pt-3">
+          <span className="text-xs font-semibold text-ink-secondary">데이터 신뢰도</span>
           {data.data_status.length === 0 ? (
             <span className="text-xs text-ink-muted">배치 상태표 미발행</span>
-          ) : (
-            data.data_status.map((item) => (
-              <span key={item.dataset} className="inline-flex items-center gap-1.5 text-xs text-ink-muted">
-                <span
-                  className="w-1.5 h-1.5 rounded-full"
-                  style={{ backgroundColor: HEALTH_DOT[item.level] }}
-                  aria-hidden
-                />
-                {item.label} {item.as_of ?? item.detail}
-              </span>
-            ))
-          )}
-          {unhealthy.length > 0 && (
-            <span className="text-xs text-losses">{unhealthy.length}개 확인 필요</span>
-          )}
-        </div>
+          ) : data.data_status.map((item) => (
+            <span key={item.dataset} className="inline-flex items-center gap-1.5 text-xs text-ink-muted">
+              <span className="sr-only">{item.level}: </span>
+              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: HEALTH_DOT[item.level] }} aria-hidden />
+              {item.label} {item.as_of ?? item.detail}
+            </span>
+          ))}
+          {unhealthy.length > 0 && <span className="text-xs text-losses">{unhealthy.length}개 확인 필요</span>}
+        </Link>
       </div>
     </Card>
   );

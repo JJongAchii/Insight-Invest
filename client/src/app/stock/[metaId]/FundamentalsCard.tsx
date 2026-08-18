@@ -30,8 +30,8 @@ const FundamentalsCard: React.FC<{
   isLoading: boolean;
 }> = ({ facts, asOf, note, isLoading }) => (
   <Card
-    title="SEC 핵심 재무"
-    action={asOf ? <span className="text-xs text-ink-muted num">제출 {asOf}</span> : undefined}
+    title="SEC 연간 핵심 재무 (10-K)"
+    action={asOf ? <span className="text-xs text-ink-muted num">최근 제출 {asOf}</span> : undefined}
   >
     {isLoading ? (
       <LoadingState label="SEC 재무를 불러오는 중..." />
@@ -52,7 +52,8 @@ const FundamentalsCard: React.FC<{
           ))}
         </div>
         <p className="text-xs text-ink-muted mt-3">
-          {note} 정정 제출은 현재 시점에 공개된 최신 filed 값을 사용합니다.
+          {note} 현재 연간 10-K만 제공하며 분기 10-Q는 포함하지 않습니다. 정정 제출은 현재
+          시점에 공개된 최신 filed 값을 사용합니다.
         </p>
       </div>
     )}
