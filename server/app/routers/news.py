@@ -2,7 +2,9 @@
 
 import logging
 import os
+import re
 import sys
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
@@ -11,6 +13,9 @@ from fastapi import APIRouter, HTTPException, Query
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../../..")))
 from app import schemas
 from datastore import storage
+from datastore import holdings as holdings_store
+from datastore import meta as meta_store
+from datastore import watchlist as watchlist_store
 from module.news.service import NewsService
 
 logger = logging.getLogger(__name__)
@@ -148,6 +153,61 @@ async def clear_cache() -> Dict[str, str]:
 
 STALE_HOURS = 72  # 금 19시 발행분이 월 09시(62h)까지 주말 내내 유지되도록
 
+TOPIC_KEYWORDS = {
+    "금리·통화정책": ("금리", "기준금리", "연준", "fed", "한국은행", "채권"),
+    "환율": ("환율", "원·달러", "원달러", "달러", "엔화", "위안"),
+    "반도체·AI": ("반도체", "메모리", "hbm", "ai", "인공지능", "칩"),
+    "에너지·원자재": ("유가", "원유", "석유", "가스", "에너지", "금값", "원자재"),
+    "무역·정책": ("관세", "수출", "수입", "무역", "규제", "정책"),
+}
+
+
+def _personal_relevance(data: dict) -> dict:
+    """보유·관심 자산 및 거시 주제의 결정론적 문자열 매핑.
+
+    감성·수익 예측이 아니며 제목/why에 명시적으로 등장한 경우만 붙인다.
+    """
+    payload = deepcopy(data)
+    try:
+        holdings = holdings_store.list_items()
+        watchlist = watchlist_store.list_items()
+        holding_ids = {int(value) for value in holdings.get("meta_id", [])}
+        watch_ids = {int(value) for value in watchlist.get("meta_id", [])}
+        ids = holding_ids | watch_ids
+        md = meta_store.meta_df()
+        assets = md[md["meta_id"].isin(ids)][["meta_id", "ticker", "name"]]
+    except Exception:
+        logger.debug("뉴스 개인 자산 매핑 준비 실패", exc_info=True)
+        assets = []
+        holding_ids, watch_ids = set(), set()
+
+    for rows in payload.get("sections", {}).values():
+        for item in rows:
+            text = f"{item.get('title', '')} {item.get('why', '')}".lower()
+            related = []
+            for asset in getattr(assets, "itertuples", lambda: [])():
+                name = str(asset.name or "").strip()
+                ticker = str(asset.ticker or "").strip()
+                name_hit = len(name) >= 2 and name.lower() in text
+                ticker_hit = len(ticker) >= 2 and re.search(
+                    rf"(?<![0-9a-z]){re.escape(ticker.lower())}(?![0-9a-z])", text
+                )
+                if name_hit or ticker_hit:
+                    mid = int(asset.meta_id)
+                    related.append({
+                        "meta_id": mid,
+                        "ticker": ticker,
+                        "name": name,
+                        "relation": "보유" if mid in holding_ids else "관심",
+                    })
+            item["related_assets"] = related
+            item["related_topics"] = [
+                topic for topic, words in TOPIC_KEYWORDS.items() if any(word in text for word in words)
+            ]
+    payload["relevance_method"] = "제목·요약의 종목명/티커 및 사전 정의 주제 키워드 일치"
+    payload["relevance_warning"] = "관련성 표시는 인과관계나 가격 방향 예측이 아닙니다."
+    return payload
+
 
 @router.get("/briefing")
 async def get_news_briefing() -> dict:
@@ -158,7 +218,7 @@ async def get_news_briefing() -> dict:
         now = datetime.now(as_of.tzinfo or timezone.utc)
         if now - as_of > timedelta(hours=STALE_HOURS):
             return {"active": False}
-        return {"active": True, **data}
+        return {"active": True, **_personal_relevance(data)}
     except Exception as e:
         logger.warning(f"news briefing 강등: {e}")
         return {"active": False}

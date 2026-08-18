@@ -1,28 +1,16 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { X } from "lucide-react";
+import { Pencil, X } from "lucide-react";
 
 import {
   useRemoveFromWatchlistMutation,
   WatchlistItem,
 } from "@/state/api";
 import { fmtEok, fmtPct, signClass } from "@/app/insight/format";
-
-const fmtPrice = (value: number | null, isKr: boolean): string => {
-  if (value === null || Number.isNaN(value)) return "—";
-  if (isKr) return `${Math.round(value).toLocaleString()}원`;
-  return `$${value.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-};
-
-const fmtAddedAt = (value: string | null): string => {
-  if (!value) return "—";
-  return value.split("T")[0];
-};
+import { formatDate, formatPrice } from "@/lib/market";
+import WatchlistThesisEditor from "./WatchlistThesisEditor";
 
 interface WatchlistTableProps {
   items: WatchlistItem[];
@@ -45,6 +33,7 @@ const WatchlistTable: React.FC<WatchlistTableProps> = ({
   liveChg,
 }) => {
   const router = useRouter();
+  const [editing, setEditing] = useState<WatchlistItem | null>(null);
   const [removeFromWatchlist] = useRemoveFromWatchlistMutation();
 
   const handleRemove = (e: React.MouseEvent, item: WatchlistItem) => {
@@ -57,12 +46,12 @@ const WatchlistTable: React.FC<WatchlistTableProps> = ({
       <table className="w-full text-sm">
         <thead>
           <tr className="table-header">
-            <th className="py-2.5 px-3 text-left rounded-l-lg">Name</th>
-            <th className="py-2.5 px-3 text-right">Price</th>
-            <th className="py-2.5 px-3 text-right">Chg</th>
+            <th className="py-2.5 px-3 text-left rounded-l-lg">종목·논거</th>
+            <th className="py-2.5 px-3 text-right">가격</th>
+            <th className="py-2.5 px-3 text-right">등락</th>
             <th className="py-2.5 px-3 text-right">외국인 20D</th>
             <th className="py-2.5 px-3 text-right">기관 20D</th>
-            {showAdded && <th className="py-2.5 px-3 text-right">Added</th>}
+            {showAdded && <th className="py-2.5 px-3 text-right">추가일</th>}
             <th className="py-2.5 px-3 text-right rounded-r-lg" />
           </tr>
         </thead>
@@ -75,6 +64,14 @@ const WatchlistTable: React.FC<WatchlistTableProps> = ({
                 key={item.meta_id}
                 className="table-row cursor-pointer"
                 onClick={() => router.push(`/stock/${item.meta_id}`)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    router.push(`/stock/${item.meta_id}`);
+                  }
+                }}
+                tabIndex={0}
+                role="button"
               >
                 <td className="table-cell">
                   <span className="font-medium text-ink">
@@ -83,10 +80,16 @@ const WatchlistTable: React.FC<WatchlistTableProps> = ({
                   <span className="ml-1.5 text-xs text-ink-muted num">
                     {item.ticker}
                   </span>
+                  <p className="mt-1 max-w-[260px] truncate text-xs text-ink-secondary">
+                    {item.thesis || "관심 논거를 기록해 두세요"}
+                  </p>
+                  {item.review_date && (
+                    <p className="mt-1 text-xs text-ink-muted">검토 {formatDate(item.review_date)}</p>
+                  )}
                 </td>
                 <td className="table-cell text-right">
                   <span className="num text-ink">
-                    {fmtPrice(item.latest_price, isKr)}
+                    {formatPrice(item.latest_price, item.iso_code)}
                   </span>
                 </td>
                 <td className="table-cell text-right">
@@ -107,25 +110,34 @@ const WatchlistTable: React.FC<WatchlistTableProps> = ({
                 {showAdded && (
                   <td className="table-cell text-right">
                     <span className="num text-ink-muted text-xs">
-                      {fmtAddedAt(item.added_at)}
+                      {formatDate(item.added_at)}
                     </span>
                   </td>
                 )}
                 <td className="table-cell text-right">
-                  <button
-                    onClick={(e) => handleRemove(e, item)}
-                    aria-label={`${item.name ?? item.ticker} 관심종목에서 제거`}
-                    className="p-1.5 rounded-lg text-ink-muted hover:text-losses
-                               hover:bg-raised transition-colors"
-                  >
-                    <X size={14} aria-hidden />
-                  </button>
+                  <div className="flex justify-end gap-1">
+                    <button
+                      onClick={(event) => { event.stopPropagation(); setEditing(item); }}
+                      aria-label={`${item.name ?? item.ticker} 관심 논거 편집`}
+                      className="p-1.5 rounded-lg text-ink-muted hover:text-primary-400 hover:bg-raised"
+                    >
+                      <Pencil size={14} aria-hidden />
+                    </button>
+                    <button
+                      onClick={(e) => handleRemove(e, item)}
+                      aria-label={`${item.name ?? item.ticker} 관심종목에서 제거`}
+                      className="p-1.5 rounded-lg text-ink-muted hover:text-losses hover:bg-raised transition-colors"
+                    >
+                      <X size={14} aria-hidden />
+                    </button>
+                  </div>
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
+      {editing && <WatchlistThesisEditor item={editing} onClose={() => setEditing(null)} />}
     </div>
   );
 };

@@ -23,6 +23,7 @@ from qdata import api as qdata_api
 from datastore import fx
 from datastore import holdings as holdings_store
 from datastore import meta
+from datastore import portfolio_ledger
 from datastore.prices import KR_ETF_META_ID_MIN, read_price_data
 from module import portfolio_risk
 from module.backtest import Backtest
@@ -41,6 +42,17 @@ class HoldingRequest(BaseModel):
     currency: Optional[str] = None
     target_weight: Optional[float] = None
     note: Optional[str] = ""
+    thesis: Optional[str] = ""
+    invalidation: Optional[str] = ""
+    review_date: Optional[date] = None
+
+
+class HoldingMetadataRequest(BaseModel):
+    target_weight: Optional[float] = None
+    note: str = ""
+    thesis: str = ""
+    invalidation: str = ""
+    review_date: Optional[date] = None
 
 
 # ---------- 헬퍼 ----------
@@ -203,7 +215,11 @@ def _empty_summary() -> dict:
 @router.get("")
 def get_holdings():
     """보유 포지션 + 평가·손익 요약."""
-    items = holdings_store.list_items()
+    items = (
+        portfolio_ledger.current_positions()
+        if portfolio_ledger.has_events()
+        else holdings_store.list_items()
+    )
     if items.empty:
         return {"positions": [], "summary": _empty_summary()}
 
@@ -276,6 +292,13 @@ def get_holdings():
                 "unrealized_pnl_pct": pnl_pct,
                 "market_value_krw": mv_krw,
                 "target_weight": target_weight,
+                "thesis": _none_if_na(getattr(r, "thesis", "")) or "",
+                "invalidation": _none_if_na(getattr(r, "invalidation", "")) or "",
+                "review_date": (
+                    pd.Timestamp(r.review_date).strftime("%Y-%m-%d")
+                    if _none_if_na(getattr(r, "review_date", None)) is not None
+                    else None
+                ),
                 "_mv_krw": mv_krw,
             }
         )
@@ -312,6 +335,9 @@ def get_holdings():
                     else None,
                     2,
                 ),
+                "thesis": p["thesis"],
+                "invalidation": p["invalidation"],
+                "review_date": p["review_date"],
             }
         )
 
@@ -359,6 +385,8 @@ def get_holdings():
 
 @router.post("")
 def add_holding(request: HoldingRequest):
+    if portfolio_ledger.has_events():
+        raise HTTPException(status_code=409, detail="원장 시작 후 수량·평단은 거래 이벤트로 변경하세요")
     md = meta.meta_df()
     row = md[md["meta_id"] == request.meta_id]
     if row.empty:
@@ -378,12 +406,46 @@ def add_holding(request: HoldingRequest):
         currency=currency,
         note=request.note or "",
         target_weight=request.target_weight,
+        thesis=request.thesis or "",
+        invalidation=request.invalidation or "",
+        review_date=request.review_date,
     )
     return {"n_positions": int(len(holdings_store.list_items()))}
 
 
+@router.put("/{meta_id}/metadata")
+def update_holding_metadata(meta_id: int, request: HoldingMetadataRequest):
+    if request.target_weight is not None and not 0 <= request.target_weight <= 1:
+        raise HTTPException(status_code=400, detail="target_weight must be between 0 and 1")
+    if portfolio_ledger.has_events():
+        try:
+            portfolio_ledger.upsert_position_metadata(meta_id, request.model_dump())
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+    else:
+        item = holdings_store.list_items()
+        hit = item[item["meta_id"] == meta_id]
+        if hit.empty:
+            raise HTTPException(status_code=404, detail="보유 종목을 찾을 수 없습니다")
+        row = hit.iloc[0]
+        holdings_store.upsert(
+            meta_id,
+            shares=float(row["shares"]),
+            avg_cost=float(row["avg_cost"]),
+            currency=str(row["currency"]),
+            note=request.note,
+            target_weight=request.target_weight,
+            thesis=request.thesis,
+            invalidation=request.invalidation,
+            review_date=request.review_date,
+        )
+    return {"n_positions": int(len(portfolio_ledger.current_positions()))}
+
+
 @router.delete("/{meta_id}")
 def remove_holding(meta_id: int):
+    if portfolio_ledger.has_events():
+        raise HTTPException(status_code=409, detail="원장 시작 후 보유 수량은 매도 이벤트로 변경하세요")
     holdings_store.remove(meta_id)
     return {"n_positions": int(len(holdings_store.list_items()))}
 
@@ -415,7 +477,11 @@ def get_holdings_risk():
     판단 라벨 없음 — 수치·전제·데이터 경고만. holdings 비면 empty, 공통 이력
     부족이면 insufficient. 어느 경로든 500을 내지 않는다.
     """
-    items = holdings_store.list_items()
+    items = (
+        portfolio_ledger.current_positions()
+        if portfolio_ledger.has_events()
+        else holdings_store.list_items()
+    )
     if items.empty:
         return {"empty": True}
 

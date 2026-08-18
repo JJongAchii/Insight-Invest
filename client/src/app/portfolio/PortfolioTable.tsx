@@ -26,6 +26,7 @@ interface PortfolioTableProps {
   positions: HoldingPosition[];
   onEdit: (position: HoldingPosition) => void;
   onRemove: (metaId: number) => void;
+  ledgerStarted?: boolean;
 }
 
 const SortIcon: React.FC<{ dir: false | "asc" | "desc" }> = ({ dir }) => (
@@ -47,6 +48,7 @@ const PortfolioTable: React.FC<PortfolioTableProps> = ({
   positions,
   onEdit,
   onRemove,
+  ledgerStarted = false,
 }) => {
   const router = useRouter();
   const [sorting, setSorting] = useState<SortingState>([
@@ -67,6 +69,10 @@ const PortfolioTable: React.FC<PortfolioTableProps> = ({
               <span className="ml-1.5 text-xs text-ink-muted num">
                 {p.ticker}
               </span>
+              <p className="mt-1 max-w-[220px] truncate text-xs text-ink-secondary">
+                {p.thesis || "투자 논거 미기록"}
+              </p>
+              {p.review_date && <p className="text-xs text-ink-muted">검토 {p.review_date}</p>}
             </div>
           );
         },
@@ -223,22 +229,24 @@ const PortfolioTable: React.FC<PortfolioTableProps> = ({
               >
                 <Pencil size={14} aria-hidden />
               </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRemove(p.meta_id);
-                }}
-                aria-label={`${p.name ?? p.ticker} 보유 제거`}
-                className="p-1.5 rounded-lg text-ink-muted hover:text-losses hover:bg-overlay transition-colors"
-              >
-                <Trash2 size={14} aria-hidden />
-              </button>
+              {!ledgerStarted && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemove(p.meta_id);
+                  }}
+                  aria-label={`${p.name ?? p.ticker} 보유 제거`}
+                  className="p-1.5 rounded-lg text-ink-muted hover:text-losses hover:bg-overlay transition-colors"
+                >
+                  <Trash2 size={14} aria-hidden />
+                </button>
+              )}
             </div>
           );
         },
       },
     ],
-    [onEdit, onRemove]
+    [ledgerStarted, onEdit, onRemove]
   );
 
   const table = useReactTable({
@@ -303,6 +311,13 @@ const PortfolioTable: React.FC<PortfolioTableProps> = ({
               key={row.id}
               className="table-row cursor-pointer"
               onClick={() => router.push(`/stock/${row.original.meta_id}`)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  router.push(`/stock/${row.original.meta_id}`);
+                }
+              }}
+              tabIndex={0}
             >
               {row.getVisibleCells().map((cell) => (
                 <td

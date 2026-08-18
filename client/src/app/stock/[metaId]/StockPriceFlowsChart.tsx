@@ -16,6 +16,7 @@ import {
 
 import { InsightTickerFlowRow, PricePoint } from "@/state/api";
 import { fmtEokAxis } from "../../insight/format";
+import { formatChartDate, formatDate } from "@/lib/market";
 
 interface StockPriceFlowsChartProps {
   prices: PricePoint[];
@@ -111,6 +112,7 @@ const StockPriceFlowsChart: React.FC<StockPriceFlowsChartProps> = ({
           axisLine={{ stroke: "var(--border)" }}
           tickLine={{ stroke: "var(--border)" }}
           minTickGap={40}
+          tickFormatter={formatChartDate}
         />
         <YAxis
           yAxisId="price"
@@ -137,6 +139,7 @@ const StockPriceFlowsChart: React.FC<StockPriceFlowsChartProps> = ({
           contentStyle={tooltipContentStyle}
           labelStyle={{ color: "var(--text-secondary)" }}
           formatter={tooltipFormatter}
+          labelFormatter={(label) => formatDate(String(label))}
         />
         {(frgnVisible || instVisible) && (
           <ReferenceLine

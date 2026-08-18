@@ -8,6 +8,7 @@ import {
   HoldingPosition,
   useAddHoldingMutation,
   useFetchMetaDataQuery,
+  useUpdateHoldingMetadataMutation,
 } from "@/state/api";
 import { tokenSelectStyles } from "@/components/ui/selectStyles";
 import { MetaRow } from "@/app/stocksearch/types";
@@ -17,6 +18,7 @@ interface HoldingModalProps {
   onClose: () => void;
   /** When set, edit that position (ticker locked, fields pre-filled). */
   editing: HoldingPosition | null;
+  ledgerStarted?: boolean;
 }
 
 interface TickerOption {
@@ -33,14 +35,20 @@ const HoldingModal: React.FC<HoldingModalProps> = ({
   open,
   onClose,
   editing,
+  ledgerStarted = false,
 }) => {
   const { data: rawMeta } = useFetchMetaDataQuery({}, { skip: !open });
   const [addHolding, { isLoading: saving }] = useAddHoldingMutation();
+  const [updateMetadata, { isLoading: metadataSaving }] =
+    useUpdateHoldingMetadataMutation();
 
   const [selected, setSelected] = useState<TickerOption | null>(null);
   const [shares, setShares] = useState("");
   const [avgCost, setAvgCost] = useState("");
   const [targetPct, setTargetPct] = useState("");
+  const [thesis, setThesis] = useState("");
+  const [invalidation, setInvalidation] = useState("");
+  const [reviewDate, setReviewDate] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const options = useMemo<TickerOption[]>(() => {
@@ -66,11 +74,17 @@ const HoldingModal: React.FC<HoldingModalProps> = ({
       setTargetPct(
         editing.target_weight == null ? "" : String(editing.target_weight * 100)
       );
+      setThesis(editing.thesis ?? "");
+      setInvalidation(editing.invalidation ?? "");
+      setReviewDate(editing.review_date ?? "");
     } else {
       setSelected(null);
       setShares("");
       setAvgCost("");
       setTargetPct("");
+      setThesis("");
+      setInvalidation("");
+      setReviewDate("");
     }
     setError(null);
   }, [open, editing]);
@@ -97,11 +111,11 @@ const HoldingModal: React.FC<HoldingModalProps> = ({
       setError("종목을 선택하세요");
       return;
     }
-    if (!Number.isFinite(sharesNum) || sharesNum <= 0) {
+    if (!ledgerStarted && (!Number.isFinite(sharesNum) || sharesNum <= 0)) {
       setError("수량을 올바르게 입력하세요");
       return;
     }
-    if (!Number.isFinite(avgCostNum) || avgCostNum <= 0) {
+    if (!ledgerStarted && (!Number.isFinite(avgCostNum) || avgCostNum <= 0)) {
       setError("평단을 올바르게 입력하세요");
       return;
     }
@@ -113,13 +127,26 @@ const HoldingModal: React.FC<HoldingModalProps> = ({
       return;
     }
     try {
-      await addHolding({
-        meta_id: selected.value,
-        shares: sharesNum,
-        avg_cost: avgCostNum,
-        currency,
-        target_weight: targetPctNum === null ? null : targetPctNum / 100,
-      }).unwrap();
+      if (ledgerStarted && editing) {
+        await updateMetadata({
+          meta_id: selected.value,
+          target_weight: targetPctNum === null ? null : targetPctNum / 100,
+          thesis,
+          invalidation,
+          review_date: reviewDate || null,
+        }).unwrap();
+      } else {
+        await addHolding({
+          meta_id: selected.value,
+          shares: sharesNum,
+          avg_cost: avgCostNum,
+          currency,
+          target_weight: targetPctNum === null ? null : targetPctNum / 100,
+          thesis,
+          invalidation,
+          review_date: reviewDate || null,
+        }).unwrap();
+      }
       onClose();
     } catch {
       setError("저장에 실패했습니다. 다시 시도하세요.");
@@ -137,11 +164,15 @@ const HoldingModal: React.FC<HoldingModalProps> = ({
         role="dialog"
         aria-modal="true"
         aria-label={editing ? "보유 종목 수정" : "보유 종목 추가"}
-        className="relative w-full max-w-md card"
+        className="relative max-h-[90vh] w-full max-w-xl overflow-y-auto card"
       >
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-base font-semibold text-ink">
-            {editing ? "보유 종목 수정" : "보유 종목 추가"}
+            {ledgerStarted && editing
+              ? "보유 판단 메모 수정"
+              : editing
+                ? "보유 종목 수정"
+                : "보유 종목 추가"}
           </h3>
           <button
             onClick={onClose}
@@ -178,6 +209,22 @@ const HoldingModal: React.FC<HoldingModalProps> = ({
             )}
           </div>
 
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label>
+              <span className="input-label">투자 논거</span>
+              <textarea className="input min-h-20" value={thesis} onChange={(e) => setThesis(e.target.value)} placeholder="왜 보유하는가?" />
+            </label>
+            <label>
+              <span className="input-label">무효화 조건</span>
+              <textarea className="input min-h-20" value={invalidation} onChange={(e) => setInvalidation(e.target.value)} placeholder="어떤 사실이면 매도·재검토할 것인가?" />
+            </label>
+          </div>
+
+          <label className="block max-w-xs">
+            <span className="input-label">다음 검토일</span>
+            <input type="date" className="input" value={reviewDate} onChange={(e) => setReviewDate(e.target.value)} />
+          </label>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="input-label">수량 (주)</label>
@@ -193,6 +240,7 @@ const HoldingModal: React.FC<HoldingModalProps> = ({
                 placeholder="0"
                 className="input num"
                 aria-label="보유 수량"
+                disabled={ledgerStarted}
               />
             </div>
             <div>
@@ -209,9 +257,16 @@ const HoldingModal: React.FC<HoldingModalProps> = ({
                 placeholder="0"
                 className="input num"
                 aria-label="평균 매입단가"
+                disabled={ledgerStarted}
               />
             </div>
           </div>
+
+          {ledgerStarted && (
+            <p className="text-xs text-ink-muted">
+              수량과 평단은 불변 거래 원장에서 파생됩니다. 변경하려면 매수·매도 이벤트를 기록하세요.
+            </p>
+          )}
 
           <div>
             <label className="input-label">목표 비중 (%) · 선택</label>
@@ -247,10 +302,10 @@ const HoldingModal: React.FC<HoldingModalProps> = ({
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={saving}
+              disabled={saving || metadataSaving}
               className="btn-primary px-4 py-2 text-sm"
             >
-              {saving ? "저장 중..." : editing ? "수정" : "추가"}
+              {saving || metadataSaving ? "저장 중..." : editing ? "수정" : "추가"}
             </button>
           </div>
         </div>

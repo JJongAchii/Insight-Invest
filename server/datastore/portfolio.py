@@ -123,12 +123,31 @@ def live_weights(port_id: int) -> pd.DataFrame:
 
 
 def port_summary() -> pd.DataFrame:
-    """[port_id, port_name, strategy_name, status, ann_ret, ann_vol, sharpe]."""
+    """전략 라이브러리용 요약 + 실행 전제/기간/검증 상태."""
     reg = registry()
     if reg.empty:
         return reg
     m = _read("metrics.parquet")[["port_id", "ann_ret", "ann_vol", "sharpe"]]
-    return reg.merge(m, on="port_id", how="left")
+    out = reg.merge(m, on="port_id", how="left")
+    records_by_id = records().set_index("port_id")
+    details = []
+    for port_id in out["port_id"]:
+        row = records_by_id.loc[port_id]
+        try:
+            cfg = json.loads(row.get("config")) if row.get("config") else {}
+        except (TypeError, ValueError):
+            cfg = {}
+        period = port_start_end_date(int(port_id))
+        details.append({
+            "created_at": pd.Timestamp(row.get("created_at")).isoformat() if pd.notna(row.get("created_at")) else None,
+            "bt_start": pd.Timestamp(period.iloc[0]["start_date"]).strftime("%Y-%m-%d") if not period.empty else None,
+            "bt_end": pd.Timestamp(period.iloc[0]["end_date"]).strftime("%Y-%m-%d") if not period.empty else None,
+            "benchmark": cfg.get("benchmark"),
+            "currency": cfg.get("currency"),
+            "cost_bps": cfg.get("cost_bps"),
+            "audit_status": "unverified",
+        })
+    return pd.concat([out.reset_index(drop=True), pd.DataFrame(details)], axis=1)
 
 
 def port_id_info(port_id: int) -> pd.DataFrame:

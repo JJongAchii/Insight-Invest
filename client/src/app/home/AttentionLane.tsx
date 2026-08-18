@@ -53,7 +53,8 @@ const AttentionLane: React.FC = () => {
   const { data, isLoading, error, refetch } = useFetchAttentionQuery();
 
   const items = useMemo(() => {
-    const list = data?.items ?? [];
+    // 매크로 국면·시장 위험도는 시간축 카드에서 한 번만 보여준다.
+    const list = (data?.items ?? []).filter((item) => item.category !== "macro");
     return [...list].sort(
       (a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]
     );
@@ -62,7 +63,7 @@ const AttentionLane: React.FC = () => {
   if (error) {
     return (
       <div className="rounded-xl border border-edge px-4 py-3 flex items-center justify-between gap-3">
-        <p className="text-sm text-ink-muted">오늘 주목 데이터를 불러오지 못했습니다.</p>
+        <p className="text-sm text-ink-muted">내 자산 확인점을 불러오지 못했습니다.</p>
         <button onClick={refetch} className="text-xs font-semibold text-primary-400 hover:underline">
           다시 시도
         </button>
@@ -81,7 +82,7 @@ const AttentionLane: React.FC = () => {
           }}
           aria-hidden
         />
-        오늘 주목 불러오는 중...
+        내 자산 확인점을 불러오는 중...
       </div>
     );
   }
@@ -89,11 +90,11 @@ const AttentionLane: React.FC = () => {
   return (
     <div>
       <h2 className="text-sm font-semibold text-ink-secondary mb-3">
-        오늘 주목
+        내 자산 확인점
       </h2>
       {items.length === 0 ? (
         <p className="text-sm text-ink-muted">
-          특이사항 없음 — 시장은 아래에서
+          보유·관심 종목에서 새로 확인할 예외가 없습니다.
         </p>
       ) : (
         <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">

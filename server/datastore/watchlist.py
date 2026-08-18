@@ -1,10 +1,10 @@
-"""관심종목 저장소 — {APP_DATA}/watchlist.parquet [meta_id, added_at, note].
+"""관심종목 저장소 — 가격 알림뿐 아니라 투자 논거와 검토 시점을 보존한다.
 
 portfolio.py와 같은 read-modify-write(파일 통째 교체) 패턴 — 단일 사용자 앱 전제.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pandas as pd
 
@@ -13,25 +13,75 @@ from datastore import storage
 logger = logging.getLogger(__name__)
 
 FILE = "watchlist.parquet"
-_EMPTY = ["meta_id", "added_at", "note"]
+_EMPTY = [
+    "meta_id",
+    "added_at",
+    "updated_at",
+    "note",
+    "thesis",
+    "catalyst",
+    "invalidation",
+    "review_date",
+]
+
+
+def _normalise(df: pd.DataFrame) -> pd.DataFrame:
+    """구 스키마 파일을 읽을 때 빈 값으로 전진 호환한다."""
+    out = df.copy()
+    for column in _EMPTY:
+        if column not in out.columns:
+            out[column] = None if column.endswith("_at") or column == "review_date" else ""
+    return out[_EMPTY]
 
 
 def list_items() -> pd.DataFrame:
     """관심종목 전체 [meta_id, added_at, note] — 파일 없으면 빈 프레임."""
     if not storage.exists(FILE):
         return pd.DataFrame(columns=_EMPTY)
-    return storage.read_parquet(FILE)
+    return _normalise(storage.read_parquet(FILE))
 
 
 def add(meta_id: int, note: str = "") -> None:
     """추가 (멱등 — 이미 있으면 행 교체, added_at 갱신)."""
     df = list_items()
     df = df[df["meta_id"] != meta_id]
-    new = pd.DataFrame(
-        [{"meta_id": int(meta_id), "added_at": datetime.utcnow(), "note": note or ""}]
-    )
+    now = datetime.now(timezone.utc)
+    new = pd.DataFrame([{
+        "meta_id": int(meta_id),
+        "added_at": now,
+        "updated_at": now,
+        "note": note or "",
+        "thesis": "",
+        "catalyst": "",
+        "invalidation": "",
+        "review_date": None,
+    }])
     out = pd.concat([df, new], ignore_index=True) if not df.empty else new
     storage.write_parquet(out, FILE)
+
+
+def update(
+    meta_id: int,
+    *,
+    note: str = "",
+    thesis: str = "",
+    catalyst: str = "",
+    invalidation: str = "",
+    review_date=None,
+) -> bool:
+    """기존 관심종목의 판단 필드를 갱신한다. 존재하지 않으면 False."""
+    df = list_items()
+    mask = df["meta_id"] == int(meta_id)
+    if not mask.any():
+        return False
+    df.loc[mask, "note"] = note or ""
+    df.loc[mask, "thesis"] = thesis or ""
+    df.loc[mask, "catalyst"] = catalyst or ""
+    df.loc[mask, "invalidation"] = invalidation or ""
+    df.loc[mask, "review_date"] = review_date
+    df.loc[mask, "updated_at"] = datetime.now(timezone.utc)
+    storage.write_parquet(df, FILE)
+    return True
 
 
 def remove(meta_id: int) -> None:

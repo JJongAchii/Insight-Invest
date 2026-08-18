@@ -343,6 +343,64 @@ def get_sparklines(
     return {"sparklines": sparklines}
 
 
+@router.get("/coverage")
+def get_price_coverage(
+    meta_ids: str = Query(..., description="Comma-separated meta_ids (max 50)"),
+):
+    """선택 자산의 실제 가격 가용 구간과 공통 교집합을 반환한다."""
+    try:
+        requested = list(dict.fromkeys(int(value.strip()) for value in meta_ids.split(",") if value.strip()))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid meta_ids format") from exc
+    if not requested or len(requested) > 50:
+        raise HTTPException(status_code=400, detail="meta_ids must contain 1-50 assets")
+
+    mapping = datastore.meta_df()
+    mapping = mapping[mapping["meta_id"].isin(requested)][["meta_id", "ticker", "iso_code"]]
+    frames = []
+    for iso in ("KR", "US"):
+        ids = [int(value) for value in mapping[mapping["iso_code"] == iso]["meta_id"]]
+        if ids:
+            frame = datastore.read_price_data(iso, meta_ids=ids)
+            if not frame.empty:
+                frames.append(frame[["meta_id", "trade_date"]])
+    prices = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    rows = []
+    starts, ends = [], []
+    for item in mapping.itertuples(index=False):
+        series = prices[prices["meta_id"] == item.meta_id] if not prices.empty else prices
+        if series.empty:
+            start = end = None
+            count = 0
+        else:
+            dates = pd.to_datetime(series["trade_date"])
+            start, end, count = dates.min(), dates.max(), int(dates.nunique())
+            starts.append(start)
+            ends.append(end)
+        rows.append({
+            "meta_id": int(item.meta_id),
+            "ticker": item.ticker,
+            "iso_code": item.iso_code,
+            "start": start.strftime("%Y-%m-%d") if start is not None else None,
+            "end": end.strftime("%Y-%m-%d") if end is not None else None,
+            "rows": count,
+        })
+    found = {row["meta_id"] for row in rows}
+    for missing in sorted(set(requested) - found):
+        rows.append({"meta_id": missing, "ticker": None, "iso_code": None, "start": None, "end": None, "rows": 0})
+    complete = len(starts) == len(requested)
+    effective_start = max(starts) if complete else None
+    effective_end = min(ends) if complete else None
+    return {
+        "assets": rows,
+        "effective_start": effective_start.strftime("%Y-%m-%d") if effective_start is not None else None,
+        "effective_end": effective_end.strftime("%Y-%m-%d") if effective_end is not None else None,
+        "complete": complete and effective_start <= effective_end,
+        "price_field": "adj_close",
+        "note": "모든 선택 자산에 가격이 있는 공통 가능 구간. 실제 백테스트는 휴장일 교집합과 워밍업으로 더 짧아질 수 있습니다.",
+    }
+
+
 @router.get("/compare")
 def get_compare_data(
     meta_ids: str = Query(..., description="Comma-separated meta_ids (max 5)"),

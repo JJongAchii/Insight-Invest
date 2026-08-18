@@ -23,6 +23,9 @@ _EMPTY = [
     "target_weight",
     "opened_at",
     "note",
+    "thesis",
+    "invalidation",
+    "review_date",
     "updated_at",
 ]
 
@@ -32,9 +35,10 @@ def list_items() -> pd.DataFrame:
     if not storage.exists(FILE):
         return pd.DataFrame(columns=_EMPTY)
     df = storage.read_parquet(FILE)
-    # 구 파일은 target_weight가 없다. 읽기 시 null로 승격해 무중단 마이그레이션한다.
-    if "target_weight" not in df.columns:
-        df["target_weight"] = None
+    # 구 파일의 누락 열은 읽기 시 승격해 무중단 마이그레이션한다.
+    for column in _EMPTY:
+        if column not in df.columns:
+            df[column] = None if column in {"target_weight", "review_date"} else ""
     return df.reindex(columns=_EMPTY)
 
 
@@ -45,6 +49,9 @@ def upsert(
     currency: str,
     note: str = "",
     target_weight: float | None = None,
+    thesis: str = "",
+    invalidation: str = "",
+    review_date=None,
 ) -> None:
     """추가/갱신 (이미 있으면 행 교체 — updated_at 갱신, opened_at은 최초값 보존)."""
     df = list_items()
@@ -62,6 +69,9 @@ def upsert(
             "target_weight": target_weight,
             "opened_at": opened_at,
             "note": note or "",
+            "thesis": thesis or "",
+            "invalidation": invalidation or "",
+            "review_date": review_date,
             "updated_at": now,
         }]
     )

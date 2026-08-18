@@ -165,9 +165,9 @@ const Simulation = () => {
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="page-title">Backtest Simulation</h1>
+          <h1 className="page-title">Research Lab · 백테스트</h1>
           <p className="page-description">
-            Test your investment strategies with historical data
+            가설을 과거 데이터에서 탐색하되, 미검증 결과를 실전 판단과 분리합니다
           </p>
         </div>
         <button

@@ -31,6 +31,14 @@ class WatchlistAddRequest(BaseModel):
     note: Optional[str] = ""
 
 
+class WatchlistUpdateRequest(BaseModel):
+    note: str = ""
+    thesis: str = ""
+    catalyst: str = ""
+    invalidation: str = ""
+    review_date: Optional[date] = None
+
+
 def _none_if_na(v):
     try:
         return None if pd.isna(v) else v
@@ -136,6 +144,14 @@ def get_watchlist():
                 "security_type": _none_if_na(r.security_type),
                 "added_at": added_at.isoformat() if pd.notna(added_at) else None,
                 "note": _none_if_na(r.note),
+                "thesis": _none_if_na(r.thesis),
+                "catalyst": _none_if_na(r.catalyst),
+                "invalidation": _none_if_na(r.invalidation),
+                "review_date": (
+                    pd.Timestamp(r.review_date).strftime("%Y-%m-%d")
+                    if _none_if_na(r.review_date) is not None
+                    else None
+                ),
                 "latest_price": latest_price,
                 "chg_pct": chg_pct,
                 "frgn_net_20d": frgn,
@@ -151,6 +167,21 @@ def add_to_watchlist(request: WatchlistAddRequest):
     if not (md["meta_id"] == request.meta_id).any():
         raise HTTPException(status_code=404, detail=f"meta_id {request.meta_id} not found")
     watchlist_store.add(request.meta_id, note=request.note or "")
+    return {"count": int(len(watchlist_store.list_items()))}
+
+
+@router.put("/{meta_id}")
+def update_watchlist_item(meta_id: int, request: WatchlistUpdateRequest):
+    updated = watchlist_store.update(
+        meta_id,
+        note=request.note,
+        thesis=request.thesis,
+        catalyst=request.catalyst,
+        invalidation=request.invalidation,
+        review_date=request.review_date,
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail=f"meta_id {meta_id} not in watchlist")
     return {"count": int(len(watchlist_store.list_items()))}
 
 

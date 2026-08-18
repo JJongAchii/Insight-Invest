@@ -21,6 +21,17 @@ const FactorSection: React.FC = () => {
     () => new Map((data?.current ?? []).map((c) => [c.factor, c])),
     [data]
   );
+  const unavailable = useMemo(
+    () => FACTOR_ORDER.filter((factor) => {
+      const row = byFactor.get(factor);
+      return !row || [row.ret_1d, row.ret_1w, row.ret_1m, row.ret_ytd].every((value) => value == null || !Number.isFinite(value));
+    }),
+    [byFactor]
+  );
+  const available = useMemo(
+    () => FACTOR_ORDER.filter((factor) => !unavailable.includes(factor)),
+    [unavailable]
+  );
 
   // Pivot history to {date, [factor]: cum_index rebased to 100 at window start}.
   const chartData = useMemo(() => {
@@ -42,7 +53,7 @@ const FactorSection: React.FC = () => {
       .map(([date, g]) => ({ date, ...g }));
   }, [data]);
 
-  const series: TimeSeriesSeries[] = FACTOR_ORDER.map((f) => ({
+  const series: TimeSeriesSeries[] = available.map((f) => ({
     key: f,
     name: FACTOR_NAMES_KR[f],
     color: FACTOR_COLORS[f],
@@ -70,14 +81,14 @@ const FactorSection: React.FC = () => {
       }
       action={
         data?.as_of && (
-          <span className="text-xs text-ink-muted num">as of {data.as_of}</span>
+              <span className="text-xs text-ink-muted num">기준 {data.as_of}</span>
         )
       }
     >
       {error ? (
-        <ErrorState message="Failed to load factor data" onRetry={refetch} />
+        <ErrorState message="팩터 데이터를 불러오지 못했습니다" onRetry={refetch} />
       ) : isLoading || !data ? (
-        <LoadingState label="Loading factor lens..." />
+        <LoadingState label="팩터 데이터를 불러오는 중..." />
       ) : data.current.length === 0 ? (
         <EmptyState title="팩터 데이터 수집 중" />
       ) : (
@@ -95,7 +106,7 @@ const FactorSection: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {FACTOR_ORDER.map((factor) => {
+                {available.map((factor) => {
                   const row = byFactor.get(factor);
                   if (!row) return null;
                   return (
@@ -139,6 +150,12 @@ const FactorSection: React.FC = () => {
             </table>
           </div>
 
+          {unavailable.length > 0 && (
+            <p className="rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm text-ink-secondary">
+              부분 데이터: {unavailable.map((factor) => FACTOR_NAMES_KR[factor]).join(", ")} 팩터는 현재값이 유효하지 않아 숨겼습니다.
+            </p>
+          )}
+
           {captions.length > 0 && (
             <p className="text-xs text-ink-muted">{captions.join(" · ")}</p>
           )}
@@ -150,10 +167,10 @@ const FactorSection: React.FC = () => {
                 팩터 로테이션
                 <InfoTip helpKey="factor.rotation" />
               </p>
-              <span className="text-xs text-ink-muted">3Y · indexed to 100</span>
+              <span className="text-xs text-ink-muted">3년 · 시작값 100</span>
             </div>
             {chartData.length === 0 ? (
-              <EmptyState title="No factor history" />
+              <EmptyState title="팩터 이력이 없습니다" />
             ) : (
               <TimeSeriesChart
                 data={chartData}

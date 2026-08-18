@@ -11,9 +11,9 @@ interface SearchbarProps {
 }
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-  { key: "name", label: "Name" },
-  { key: "return", label: "Return" },
-  { key: "sharpe", label: "Sharpe" },
+  { key: "name", label: "이름" },
+  { key: "return", label: "수익률" },
+  { key: "sharpe", label: "샤프" },
 ];
 
 const Searchbar: React.FC<SearchbarProps> = ({
@@ -27,7 +27,7 @@ const Searchbar: React.FC<SearchbarProps> = ({
       <div className="relative flex-grow min-w-[200px]">
         <input
           type="search"
-          placeholder="Search strategies..."
+          placeholder="전략 검색…"
           className="input pl-10"
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}

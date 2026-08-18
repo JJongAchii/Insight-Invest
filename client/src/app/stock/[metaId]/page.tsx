@@ -23,6 +23,7 @@ import FactorBars from "@/components/charts/FactorBars";
 import { fmtEok, fmtJo, Segmented } from "../../insight/format";
 import StockPriceFlowsChart from "./StockPriceFlowsChart";
 import FundamentalsCard from "./FundamentalsCard";
+import { formatDate, formatMarketCap, formatPrice } from "@/lib/market";
 
 type Period = "3m" | "6m" | "1y" | "3y" | "all";
 type FlowMode = "frgn" | "inst" | "both";
@@ -46,23 +47,6 @@ const fmtReturn = (value: number | null | undefined): string => {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";
   const sign = value >= 0 ? "+" : "";
   return `${sign}${(value * 100).toFixed(1)}%`;
-};
-
-const fmtPrice = (value: number | null | undefined, isKr: boolean): string => {
-  if (value === null || value === undefined || Number.isNaN(value)) return "—";
-  if (isKr) return `${Math.round(value).toLocaleString()}원`;
-  return `$${value.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-};
-
-const fmtMarketCapUsd = (value: number | null | undefined): string => {
-  if (value === null || value === undefined || Number.isNaN(value)) return "—";
-  if (value >= 1e12) return `$${(value / 1e12).toFixed(1)}T`;
-  if (value >= 1e9) return `$${(value / 1e9).toFixed(1)}B`;
-  if (value >= 1e6) return `$${(value / 1e6).toFixed(1)}M`;
-  return `$${value.toLocaleString()}`;
 };
 
 const returnDelta = (
@@ -241,11 +225,11 @@ const StockDetailPage = () => {
         </div>
         <div className="text-right">
           <p className="num text-3xl font-semibold text-ink">
-            {fmtPrice(summary.latest_price, isKr)}
+            {formatPrice(summary.latest_price, meta.iso_code)}
           </p>
           {summary.latest_date && (
             <p className="text-xs text-ink-muted mt-1 num">
-              기준일 {summary.latest_date}
+              가격 기준일 {formatDate(summary.latest_date)}
             </p>
           )}
         </div>
@@ -255,24 +239,24 @@ const StockDetailPage = () => {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <StatTile
           label="시가총액"
-          value={isKr ? fmtJo(mktcap) : fmtMarketCapUsd(mktcap)}
+          value={isKr ? fmtJo(mktcap) : formatMarketCap(mktcap, meta.iso_code)}
         />
-        <StatTile
+        {isKr && <StatTile
           label="거래대금"
           value={summary.value != null ? fmtJo(summary.value) : "—"}
-        />
-        <StatTile
+        />}
+        {isKr && <StatTile
           label="PER"
           value={summary.per != null ? summary.per.toFixed(2) : "—"}
-        />
-        <StatTile
+        />}
+        {isKr && <StatTile
           label="PBR"
           value={summary.pbr != null ? summary.pbr.toFixed(2) : "—"}
-        />
-        <StatTile
+        />}
+        {isKr && <StatTile
           label="배당수익률"
           value={summary.div != null ? `${summary.div.toFixed(2)}%` : "—"}
-        />
+        />}
         <StatTile
           label="YTD"
           value={fmtReturn(metrics.ytd_return)}

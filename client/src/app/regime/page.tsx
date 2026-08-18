@@ -12,8 +12,8 @@ import KoreaMacro from "./KoreaMacro";
 type MacroTab = "us" | "kr";
 
 const TABS: { id: MacroTab; label: string }[] = [
-  { id: "us", label: "US Indicators" },
-  { id: "kr", label: "Korea" },
+  { id: "us", label: "미국 지표" },
+  { id: "kr", label: "한국 지표" },
 ];
 
 const Regime = () => {
@@ -22,7 +22,7 @@ const Regime = () => {
   return (
     <div className="flex flex-col gap-6 pb-16">
       <PageHeader
-        title="Market Regime"
+        title="시장 국면"
         description="성장·물가 국면과 위험회피 압력 — 지표별 관측일을 함께 확인하세요"
       />
 

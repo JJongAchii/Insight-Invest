@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import SparklineChart from "@/components/charts/SparklineChart";
 import EmptyState from "@/components/ui/EmptyState";
 import LiveBadge from "@/components/LiveBadge";
+import { formatDate } from "@/lib/market";
 
 export interface Strategy {
   port_id: number;
@@ -12,6 +13,13 @@ export interface Strategy {
   ann_vol: number;
   sharpe: number;
   status?: string;
+  created_at?: string | null;
+  bt_start?: string | null;
+  bt_end?: string | null;
+  benchmark?: string | null;
+  currency?: string | null;
+  cost_bps?: number | null;
+  audit_status?: "unverified" | string | null;
 }
 
 interface StrategyNav {
@@ -35,8 +43,8 @@ const Contents = ({
   if (!strategyList || strategyList.length === 0) {
     return (
       <EmptyState
-        title="No strategies found"
-        hint="Run a backtest and save it to see it here"
+        title="저장된 연구 전략이 없습니다"
+        hint="백테스트를 실행하고 저장하면 이곳에서 전제와 기간을 함께 비교할 수 있습니다"
       />
     );
   }
@@ -54,8 +62,16 @@ const Contents = ({
             key={strategy.port_id}
             className="card-interactive flex p-5"
             onClick={() => handleGridClick(strategy.port_id)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                handleGridClick(strategy.port_id);
+              }
+            }}
+            role="link"
+            tabIndex={0}
           >
-            <div className="w-1/2 pr-4">
+            <div className="w-3/5 pr-4">
               <div className="flex items-center gap-2 mb-1">
                 <div className="font-semibold text-ink">
                   {strategy.port_name}
@@ -65,6 +81,7 @@ const Contents = ({
                     ACTIVE
                   </span>
                 )}
+                <span className="badge-neutral text-[10px]">미검증</span>
               </div>
               <div className="text-ink-muted text-xs mb-3">
                 {strategy.strategy_name}
@@ -96,8 +113,28 @@ const Contents = ({
                   </span>
                 </div>
               </div>
+              <dl className="mt-3 space-y-1 border-t border-edge pt-3 text-[11px] text-ink-muted">
+                <div className="flex justify-between gap-2">
+                  <dt>실험 구간</dt>
+                  <dd className="text-right num text-ink-secondary">
+                    {strategy.bt_start ?? "—"} ~ {strategy.bt_end ?? "—"}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt>전제</dt>
+                  <dd className="text-right text-ink-secondary">
+                    {strategy.benchmark ?? "BM 미기록"} · {strategy.currency ?? "통화 미기록"} · 비용 {strategy.cost_bps ?? "—"}bps
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt>저장일</dt>
+                  <dd className="text-right text-ink-secondary">
+                    {formatDate(strategy.created_at)}
+                  </dd>
+                </div>
+              </dl>
             </div>
-            <div className="w-1/2 flex flex-col items-center justify-center gap-1.5">
+            <div className="w-2/5 flex flex-col items-center justify-center gap-1.5">
               <SparklineChart
                 data={navValues}
                 width={140}

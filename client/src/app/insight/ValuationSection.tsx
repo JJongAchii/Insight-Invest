@@ -50,7 +50,7 @@ const ValuationSection: React.FC = () => {
     <Card
       title={
         <span className="inline-flex items-center gap-1.5">
-          {`Market Valuation — ${market}`}
+          {`시장 밸류에이션 · ${market}`}
           <InfoTip helpKey="valuation.gauge" />
         </span>
       }
@@ -58,7 +58,7 @@ const ValuationSection: React.FC = () => {
         <div className="flex items-center gap-3">
           {data?.as_of && (
             <span className="text-xs text-ink-muted num">
-              as of {data.as_of}
+              기준 {data.as_of}
             </span>
           )}
           <Segmented
@@ -70,9 +70,9 @@ const ValuationSection: React.FC = () => {
       }
     >
       {error ? (
-        <ErrorState message="Failed to load valuation data" onRetry={refetch} />
+        <ErrorState message="밸류에이션 데이터를 불러오지 못했습니다" onRetry={refetch} />
       ) : isLoading || !data ? (
-        <LoadingState label="Loading valuation data..." />
+        <LoadingState label="밸류에이션 데이터를 불러오는 중..." />
       ) : !current ? (
         <EmptyState
           title="밸류에이션 데이터 수집 중"
@@ -92,7 +92,11 @@ const ValuationSection: React.FC = () => {
             <StatTile
               label="PBR 백분위"
               value={
-                pctRankPbr === null ? "—" : `하위 ${pctRankPbr.toFixed(0)}%`
+                pctRankPbr === null
+                  ? "—"
+                  : pctRankPbr >= 50
+                    ? `역사적 상위 ${(100 - pctRankPbr).toFixed(1)}%`
+                    : `역사적 하위 ${pctRankPbr.toFixed(1)}%`
               }
               deltaType={
                 pctRankPbr === null
@@ -115,7 +119,7 @@ const ValuationSection: React.FC = () => {
                 </p>
                 {pctRankPbr !== null && (
                   <p className="text-xs text-ink-muted mt-0.5">
-                    현재 PBR은 역사적 하위 {pctRankPbr.toFixed(0)}% 구간
+                    현재 PBR은 {pctRankPbr >= 50 ? `역사적 상위 ${(100 - pctRankPbr).toFixed(1)}%` : `역사적 하위 ${pctRankPbr.toFixed(1)}%`} 구간
                   </p>
                 )}
               </div>
@@ -126,7 +130,7 @@ const ValuationSection: React.FC = () => {
               />
             </div>
             {chartData.length === 0 ? (
-              <EmptyState title="No valuation history" />
+              <EmptyState title="밸류에이션 이력이 없습니다" />
             ) : (
               <TimeSeriesChart
                 data={chartData}

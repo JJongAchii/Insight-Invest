@@ -10,6 +10,7 @@ import {
   RebalFreq,
   BenchmarkName,
   BacktestCurrency,
+  useFetchPriceCoverageQuery,
 } from "@/state/api";
 import Select, { SingleValue, MultiValue } from "react-select";
 import DatePicker from "react-datepicker";
@@ -43,6 +44,7 @@ interface ValidationErrors {
   algorithm?: string;
   dates?: string;
   weights?: string;
+  coverage?: string;
 }
 
 interface SetStrategyProps {
@@ -88,7 +90,7 @@ const SetStrategyInner: React.FC<SetStrategyProps> = ({
   const searchParams = useSearchParams();
   const { data } = useFetchTickersQuery({});
   const { data: algorithmData } = useFetchAlgorithmsQuery({});
-  const [startDate, setStartDate] = useState(new Date("2000-01-01"));
+  const [startDate, setStartDate] = useState(new Date("2010-01-01"));
   const [endDate, setEndDate] = useState(new Date());
   const [selectedIsoCode, setSelectedIsoCode] = useState<SelectOption | null>(
     null
@@ -113,6 +115,14 @@ const SetStrategyInner: React.FC<SetStrategyProps> = ({
     string,
     number
   > | null>(null);
+  const selectedMetaIds = useMemo(
+    () => selectedTickers.map((ticker) => Number(ticker.value)),
+    [selectedTickers]
+  );
+  const { data: coverage, isFetching: isCoverageLoading } =
+    useFetchPriceCoverageQuery(selectedMetaIds, {
+      skip: selectedMetaIds.length === 0 || selectedMetaIds.length > 50,
+    });
 
   // Apply URL params once, when the ticker universe is available
   const appliedParamsRef = useRef(false);
@@ -248,6 +258,8 @@ const SetStrategyInner: React.FC<SetStrategyProps> = ({
 
     if (selectedTickers.length === 0) {
       newErrors.tickers = "Please select at least one ticker";
+    } else if (selectedTickers.length > 50) {
+      newErrors.tickers = "한 번에 최대 50개 자산까지 검증할 수 있습니다";
     }
 
     if (!selectedAlgorithm) {
@@ -261,6 +273,19 @@ const SetStrategyInner: React.FC<SetStrategyProps> = ({
 
     if (startDate >= endDate) {
       newErrors.dates = "Start date must be before end date";
+    }
+
+    if (!coverage?.complete || !coverage.effective_start || !coverage.effective_end) {
+      newErrors.coverage = "선택 자산 모두에 공통 가격 구간이 있어야 실행할 수 있습니다";
+    } else {
+      const requestedStart = startDate.toISOString().split("T")[0];
+      const requestedEnd = endDate.toISOString().split("T")[0];
+      if (
+        requestedStart < coverage.effective_start ||
+        requestedEnd > coverage.effective_end
+      ) {
+        newErrors.coverage = `요청 기간을 실제 공통 구간 ${coverage.effective_start} ~ ${coverage.effective_end} 안으로 맞춰주세요`;
+      }
     }
 
     setErrors(newErrors);
@@ -290,6 +315,17 @@ const SetStrategyInner: React.FC<SetStrategyProps> = ({
       params,
     };
     onRunBacktest(payload);
+  };
+
+  const applyCoverageDates = () => {
+    if (!coverage?.effective_start || !coverage.effective_end) return;
+    setStartDate(new Date(`${coverage.effective_start}T12:00:00`));
+    setEndDate(new Date(`${coverage.effective_end}T12:00:00`));
+    setErrors((previous) => ({
+      ...previous,
+      dates: undefined,
+      coverage: undefined,
+    }));
   };
 
   return (
@@ -550,12 +586,64 @@ const SetStrategyInner: React.FC<SetStrategyProps> = ({
           <p className="text-danger text-xs">{errors.dates}</p>
         )}
 
+        {selectedTickers.length > 0 && (
+          <div className="rounded-xl border border-edge bg-raised/60 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-ink">실제 데이터 구간</p>
+                {isCoverageLoading ? (
+                  <p className="mt-1 text-xs text-ink-muted">가격 구간 확인 중…</p>
+                ) : coverage?.complete ? (
+                  <p className="mt-1 text-xs text-ink-secondary">
+                    공통 {coverage.effective_start} ~ {coverage.effective_end} · 조정주가
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs text-danger">
+                    가격이 없는 자산이 있어 공통 구간을 만들 수 없습니다.
+                  </p>
+                )}
+                {coverage?.assets.some((asset) => asset.rows === 0) && (
+                  <p className="mt-1 text-xs text-danger">
+                    누락: {coverage.assets
+                      .filter((asset) => asset.rows === 0)
+                      .map((asset) => asset.ticker ?? asset.meta_id)
+                      .join(", ")}
+                  </p>
+                )}
+                <p className="mt-2 text-[11px] leading-5 text-ink-muted">
+                  {coverage?.note ?? "종목을 선택하면 실제 저장 데이터의 교집합을 확인합니다."}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn-secondary shrink-0"
+                onClick={applyCoverageDates}
+                disabled={!coverage?.complete}
+              >
+                공통 구간 적용
+              </button>
+            </div>
+            {errors.coverage && (
+              <p className="mt-2 text-xs text-danger">{errors.coverage}</p>
+            )}
+          </div>
+        )}
+
+        <div className="rounded-xl border border-warning/30 bg-warning/5 p-4 text-xs leading-5 text-ink-secondary">
+          <p className="font-semibold text-ink">Research Lab · 연구용 미검증 결과</p>
+          <p className="mt-1">
+            실제 공통 가격 구간, 조정주가, 거래비용, 기준통화와 벤치마크를 명시합니다.
+            종목 선정 시점·상장폐지 포함 여부와 데이터 누출 감사까지 통과한 결과는 아니므로
+            실전 배분 근거로 바로 사용하지 마세요.
+          </p>
+        </div>
+
         {/* Run Button */}
         <div className="flex justify-end pt-2">
           <button
             className="btn-primary"
             onClick={handleButtonClick}
-            disabled={isLoading}
+            disabled={isLoading || isCoverageLoading}
           >
             {isLoading ? "Running..." : "Run Backtest"}
           </button>
