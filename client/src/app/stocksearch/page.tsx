@@ -12,6 +12,7 @@ import WatchlistSection from "./WatchlistSection";
 import { MetaRow, FilterState } from "./types";
 import PageHeader from "@/components/ui/PageHeader";
 import LoadingState from "@/components/ui/LoadingState";
+import ErrorState from "@/components/ui/ErrorState";
 
 type ViewMode = "list" | "compare";
 
@@ -34,7 +35,7 @@ const StockSearchContent = () => {
   });
 
   // Fetch meta data
-  const { data: rawData, isLoading } = useFetchMetaDataQuery({});
+  const { data: rawData, isLoading, error, refetch } = useFetchMetaDataQuery({});
 
   // Memoize data to avoid re-renders
   const data = useMemo(() => {
@@ -63,7 +64,7 @@ const StockSearchContent = () => {
     setSelectedIds((prev) => {
       if (prev.includes(metaId)) return prev;
       if (prev.length >= 5) {
-        alert("Maximum 5 stocks can be compared");
+        alert("비교 종목은 최대 5개까지 선택할 수 있습니다.");
         return prev;
       }
       return [...prev, metaId];
@@ -85,22 +86,22 @@ const StockSearchContent = () => {
     setViewMode("list");
   }, []);
 
-  if (isLoading) {
-    return (
-      <div className="card">
-        <LoadingState label="Loading stocks..." />
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col gap-6 pb-16">
       <PageHeader
         title="Stock Search"
-        description="Search and explore stock metadata across US and Korean markets"
+        description="미국·한국 시장의 종목을 검색하고 비교합니다"
       />
 
-      {viewMode === "list" ? (
+      {error ? (
+        <div className="card">
+          <ErrorState message="종목 목록을 불러오지 못했습니다" onRetry={refetch} />
+        </div>
+      ) : isLoading ? (
+        <div className="card">
+          <LoadingState label="종목 목록을 불러오는 중..." />
+        </div>
+      ) : viewMode === "list" ? (
         <>
           {/* Watchlist */}
           <WatchlistSection />
@@ -124,7 +125,7 @@ const StockSearchContent = () => {
 
           {/* Action Bar - Show when stocks are selected */}
           {selectedIds.length > 0 && (
-            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
+            <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-40">
               <div className="flex items-center gap-4 px-6 py-3 bg-overlay border border-edge-strong text-ink rounded-full shadow-lg">
                 <span className="text-sm">
                   {selectedIds.length} stock{selectedIds.length > 1 ? "s" : ""}{" "}
@@ -183,8 +184,14 @@ const StockSearch = () => {
   return (
     <Suspense
       fallback={
-        <div className="card">
-          <LoadingState label="Loading stocks..." />
+        <div className="flex flex-col gap-6 pb-16">
+          <PageHeader
+            title="Stock Search"
+            description="미국·한국 시장의 종목을 검색하고 비교합니다"
+          />
+          <div className="card">
+            <LoadingState label="종목 목록을 불러오는 중..." />
+          </div>
         </div>
       }
     >

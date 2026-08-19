@@ -76,6 +76,13 @@ const MetaTable: React.FC<MetaTableProps> = ({
     return () => clearTimeout(t);
   }, [quickFilterInput]);
 
+  // 상단 검색에서 같은 페이지의 ?q= 값만 바뀌어도 표 검색어를 동기화한다.
+  useEffect(() => {
+    const next = initialQuickFilter ?? "";
+    setQuickFilterInput(next);
+    setGlobalFilter(next);
+  }, [initialQuickFilter]);
+
   // Structured filters (market/sector/cap/type) are applied before the table.
   const filteredData = useMemo(() => {
     return data.filter((row) => {
@@ -266,7 +273,7 @@ const MetaTable: React.FC<MetaTableProps> = ({
     <div className="card">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
         <div>
-          <h3 className="text-base font-semibold text-ink">종목 목록</h3>
+          <h3 className="text-base font-semibold text-ink">Stock Universe</h3>
           <p className="text-sm text-ink-muted mt-0.5">
             {totalRows.toLocaleString()}개 종목
             {totalRows !== data.length &&

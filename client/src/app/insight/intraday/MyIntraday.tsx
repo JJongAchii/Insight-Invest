@@ -22,7 +22,7 @@ const MyIntraday = ({ my }: { my: NonNullable<IntradayMarketResponse["my"]> }) =
 
   return (
     <div className="card">
-      <h4 className="text-base font-semibold text-ink mb-4">내 종목 장중 현황</h4>
+      <h4 className="text-base font-semibold text-ink mb-4">My Stocks · Intraday</h4>
       {rows.length === 0 ? (
         <EmptyState title="KR 관심·보유 종목 없음" hint="관심 종목을 등록하면 장중 현황이 표시됩니다" />
       ) : (

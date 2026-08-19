@@ -291,7 +291,7 @@ const StockDetailPage = () => {
 
       {/* Price + flows chart */}
       <Card
-        title={isKr ? "가격 · 수급" : "가격"}
+        title={isKr ? "Price & Flows" : "Price"}
         action={
           <div className="flex flex-wrap items-center gap-3">
             {isKr && (
@@ -332,7 +332,7 @@ const StockDetailPage = () => {
         <Card
           title={
             <span className="inline-flex items-center gap-1.5">
-              수급 요약 (20일)
+              Flow Summary · 20D
               <InfoTip helpKey="signal.intensity" />
             </span>
           }
@@ -361,7 +361,7 @@ const StockDetailPage = () => {
           <Card
             title={
               <span className="inline-flex items-center gap-1.5">
-                팩터
+                Factor Exposure
                 <InfoTip helpKey="factor.exposure" />
               </span>
             }

@@ -70,7 +70,7 @@ export default function PortfolioOnboarding({ onManual }: { onManual: () => void
 
   return (
     <section className="card">
-      <h2 className="text-lg font-semibold text-ink">포트폴리오 시작하기</h2>
+      <h2 className="text-lg font-semibold text-ink">Start Your Portfolio</h2>
       <p className="mt-1 text-sm text-ink-secondary">
         현재 보유량을 개시 스냅샷으로 넣거나, 아래 원장에서 입금·매수부터 기록할 수 있습니다.
       </p>

@@ -21,7 +21,7 @@ const LiveHeadline: React.FC<LiveHeadlineProps> = ({ live }) => {
 
   if (nav.length === 0) {
     return (
-      <Card title="실전 운영 현황">
+      <Card title="Live Tracking">
         <EmptyState
           title="실전 추적 준비 중"
           hint="다음 데일리 파이프라인 실행 후 표시됩니다"
@@ -46,7 +46,7 @@ const LiveHeadline: React.FC<LiveHeadlineProps> = ({ live }) => {
 
   return (
     <Card
-      title="실전 운영 현황"
+      title="Live Tracking"
       action={
         live?.as_of ? (
           <span className="text-xs text-ink-muted">as_of {live.as_of}</span>

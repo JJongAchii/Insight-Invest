@@ -23,7 +23,7 @@ interface Item {
 const PremiseCard: React.FC<PremiseCardProps> = ({ premise, note }) => {
   if (!premise) {
     return (
-      <Card title="분석 전제">
+      <Card title="Research Premise">
         <p className="text-sm text-ink-muted">{note ?? "계산되지 않았습니다"}</p>
       </Card>
     );
@@ -50,7 +50,7 @@ const PremiseCard: React.FC<PremiseCardProps> = ({ premise, note }) => {
   ];
 
   return (
-    <Card title="분석 전제">
+    <Card title="Research Premise">
       {premise.cost_warning && (
         <div
           className="mb-4 px-3 py-2 rounded-lg text-sm"

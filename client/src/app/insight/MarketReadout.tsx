@@ -16,7 +16,7 @@ const MarketReadout: React.FC = () => {
   return (
     <div className="rounded-2xl border border-edge bg-surface p-4">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-        <h2 className="text-sm font-semibold text-ink">KR 시장 해석</h2>
+        <h2 className="text-sm font-semibold text-ink">KR Market Readout</h2>
         <span className="text-xs text-ink-muted">시장폭과 수급은 서로 다른 관측입니다</span>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

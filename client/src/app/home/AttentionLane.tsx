@@ -90,7 +90,7 @@ const AttentionLane: React.FC = () => {
   return (
     <div>
       <h2 className="text-sm font-semibold text-ink-secondary mb-3">
-        내 자산 확인점
+        Portfolio Attention
       </h2>
       {items.length === 0 ? (
         <p className="text-sm text-ink-muted">

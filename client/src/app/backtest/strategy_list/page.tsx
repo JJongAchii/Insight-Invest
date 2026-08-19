@@ -44,7 +44,7 @@ const StrategyList = () => {
   return (
     <div className="flex flex-col gap-6 pb-16">
       <PageHeader
-        title="Research Lab · 전략 보관함"
+        title="Research Lab · Strategy Library"
         description="백테스트 성과뿐 아니라 실행 전제·기간·검증 상태를 함께 확인합니다"
       />
 

@@ -23,10 +23,10 @@ const AllocationCard: React.FC<AllocationCardProps> = ({ summary }) => {
   }));
 
   return (
-    <Card title="배분 노출">
+    <Card title="Allocation Exposure">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div>
-          <h4 className="metric-label mb-3">섹터 배분</h4>
+          <h4 className="metric-label mb-3">Sector Allocation</h4>
           {sectorItems.length > 0 ? (
             <WeightBar items={sectorItems} />
           ) : (
@@ -34,7 +34,7 @@ const AllocationCard: React.FC<AllocationCardProps> = ({ summary }) => {
           )}
         </div>
         <div>
-          <h4 className="metric-label mb-3">시장 배분</h4>
+          <h4 className="metric-label mb-3">Market Allocation</h4>
           {marketItems.length > 0 ? (
             <WeightBar items={marketItems} />
           ) : (

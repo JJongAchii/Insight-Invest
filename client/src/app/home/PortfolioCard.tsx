@@ -31,7 +31,10 @@ const PortfolioCard: React.FC = () => {
 
   const top3 = useMemo(() => {
     const list = data?.positions ?? [];
-    return [...list].sort((a, b) => b.weight - a.weight).slice(0, 3);
+    return [...list]
+      .filter((position) => position.weight != null)
+      .sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0))
+      .slice(0, 3);
   }, [data]);
 
   // KR 장중 등락률 오버라이드 — meta_id → chg_pct (스펙 D4, active일 때만).
@@ -76,27 +79,33 @@ const PortfolioCard: React.FC = () => {
           }
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-4">
+          {!summary.valuation_complete && (
+            <Link href="/portfolio" className="block rounded-xl border border-[var(--chart-4)] px-3 py-2 text-sm text-ink-secondary hover:bg-raised">
+              가격 미확인 {summary.unpriced_positions}개 · 총 평가액과 손익을 확정하지 않습니다
+            </Link>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Totals */}
           <div>
-            <p className="metric-label mb-1">총 평가액</p>
-            <p className="metric-value">{fmtJo(summary.total_value_krw)}</p>
+            <p className="metric-label mb-1">{summary.valuation_complete ? "총 평가액" : "확인된 평가액"}</p>
+            <p className="metric-value">{summary.priced_positions > 0 ? fmtJo(summary.total_value_krw) : "—"}</p>
             <div className="flex gap-6 mt-4">
               <div>
                 <p className="metric-label mb-0.5">총 손익</p>
                 <p className="flex items-baseline gap-1.5">
                   <span className={signClassNum(summary.total_pnl_krw)}>
-                    {fmtSignedJo(summary.total_pnl_krw)}
+                    {summary.priced_positions > 0 ? fmtSignedJo(summary.total_pnl_krw) : "—"}
                   </span>
                   <span className={`text-xs ${signClassNum(summary.total_pnl_krw)}`}>
-                    {fmtFracPct(summary.total_pnl_pct)}
+                    {summary.priced_positions > 0 ? fmtFracPct(summary.total_pnl_pct) : "—"}
                   </span>
                 </p>
               </div>
               <div>
                 <p className="metric-label mb-0.5">일간 손익</p>
                 <p className={signClassNum(summary.day_pnl_krw)}>
-                  {fmtSignedJo(summary.day_pnl_krw)}
+                  {summary.priced_positions > 0 ? fmtSignedJo(summary.day_pnl_krw) : "—"}
                 </p>
               </div>
             </div>
@@ -120,7 +129,7 @@ const PortfolioCard: React.FC = () => {
                         {p.name ?? p.ticker}
                       </span>
                       <span className="ml-1.5 text-xs text-ink-muted num">
-                        {(p.weight * 100).toFixed(1)}%
+                        {((p.weight ?? 0) * 100).toFixed(1)}%
                       </span>
                     </span>
                     {live != null ? (
@@ -140,7 +149,9 @@ const PortfolioCard: React.FC = () => {
                   </button>
                 );
               })}
+              {top3.length === 0 && <p className="text-sm text-ink-muted">가격 확인 후 비중을 표시합니다.</p>}
             </div>
+          </div>
           </div>
         </div>
       )}

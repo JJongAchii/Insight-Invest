@@ -47,8 +47,8 @@ const InsightPage = () => {
         <div className="flex gap-1 border-b border-edge">
           {(
             [
-              ["live", intraday?.is_open ? "🔴 장중" : "오늘 마감"],
-              ["settled", "정산 인사이트"],
+              ["live", intraday?.is_open ? "🔴 Live" : "Today’s Close"],
+              ["settled", "Settled Insight"],
             ] as [Tab, string][]
           ).map(([key, label]) => (
             <button

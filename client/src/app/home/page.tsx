@@ -48,8 +48,8 @@ const Home = () => {
   return (
     <div className="flex flex-col gap-6 pb-16">
       <PageHeader
-        title="나의 대시보드"
-        description="시장 현황과 내 포트폴리오를 한눈에"
+        title="My Dashboard"
+        description="시장 현황과 내 포트폴리오를 한눈에 확인합니다"
       />
 
       <SinceLastVisit />
@@ -71,7 +71,7 @@ const Home = () => {
 
       <details className="rounded-2xl border border-edge bg-surface p-4">
         <summary className="cursor-pointer text-sm font-semibold text-ink">
-          시장 전체에서 새 후보 탐색
+          Explore New Candidates
         </summary>
         <div className="mt-4"><SpotlightLane /></div>
       </details>
@@ -86,7 +86,7 @@ const Home = () => {
 
       <details className="rounded-2xl border border-edge bg-surface p-4">
         <summary className="cursor-pointer text-sm font-semibold text-ink">
-          Research Lab 저장 전략
+          Saved Research Strategies
         </summary>
         <div className="mt-4"><StrategiesCard /></div>
       </details>

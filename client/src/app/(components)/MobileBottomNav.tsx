@@ -5,10 +5,10 @@ import { usePathname } from "next/navigation";
 import { BarChart3, BriefcaseBusiness, Home, Search } from "lucide-react";
 
 const items = [
-  { href: "/home", label: "홈", icon: Home },
-  { href: "/insight", label: "시장", icon: BarChart3 },
-  { href: "/stocksearch", label: "종목", icon: Search },
-  { href: "/portfolio", label: "자산", icon: BriefcaseBusiness },
+  { href: "/home", label: "Home", icon: Home },
+  { href: "/insight", label: "Markets", icon: BarChart3 },
+  { href: "/stocksearch", label: "Search", icon: Search },
+  { href: "/portfolio", label: "Portfolio", icon: BriefcaseBusiness },
 ];
 
 export default function MobileBottomNav() {
@@ -16,7 +16,7 @@ export default function MobileBottomNav() {
 
   return (
     <nav
-      aria-label="주요 메뉴"
+      aria-label="Primary navigation"
       className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-edge bg-surface/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
     >
       {items.map(({ href, label, icon: Icon }) => {

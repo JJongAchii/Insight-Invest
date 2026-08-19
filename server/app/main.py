@@ -40,12 +40,16 @@ app = FastAPI(
 
 origins = [
     "http://localhost:3000",  # Local development
+    "http://localhost:3001",  # Alternate local frontend
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
     "https://insight-invest-ten.vercel.app",  # Production frontend
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=r"https://insight-invest(?:-[a-zA-Z0-9]+)*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

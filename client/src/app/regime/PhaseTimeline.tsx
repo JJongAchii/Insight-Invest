@@ -35,7 +35,7 @@ const PhaseTimeline: React.FC = () => {
   }, [data]);
 
   return (
-    <Card title="경기·물가 추이">
+    <Card title="Growth & Inflation Trend">
       {error ? (
         <ErrorState message="국면 이력을 불러오지 못했습니다" onRetry={refetch} />
       ) : isLoading || !data ? (

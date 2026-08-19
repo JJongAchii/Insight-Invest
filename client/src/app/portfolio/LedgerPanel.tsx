@@ -63,6 +63,12 @@ export default function LedgerPanel() {
   const needsAmount = ["DEPOSIT", "WITHDRAW", "DIVIDEND", "FEE", "FX"].includes(
     type,
   );
+  const positive = (value: string) => Number.isFinite(Number(value)) && Number(value) > 0;
+  const canSubmit =
+    (!needsAsset || selected !== null) &&
+    (!needsTrade || (positive(shares) && positive(price))) &&
+    (!needsAmount || positive(amount)) &&
+    (type !== "FX" || positive(counterAmount));
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -96,7 +102,7 @@ export default function LedgerPanel() {
 
   return (
     <Card
-      title="거래·현금 원장"
+      title="Portfolio Ledger"
       action={
         <button
           className="btn-secondary"
@@ -297,11 +303,11 @@ export default function LedgerPanel() {
                 </p>
               )}
               <div className="flex items-center justify-between gap-3">
-                <p className="text-xs text-ink-muted">
-                  처음 기록할 때 현재 보유 종목이 개시 스냅샷으로 고정됩니다.
-                  이후 수량은 매수·매도 이벤트에서만 바뀝니다.
-                </p>
-                <button className="btn-primary" disabled={saving}>
+                <div className="text-xs text-ink-muted">
+                  <p>처음 기록할 때 현재 보유 종목이 개시 스냅샷으로 고정됩니다. 이후 수량은 매수·매도 이벤트에서만 바뀝니다.</p>
+                  {!canSubmit && <p className="mt-1 text-warning">종목과 0보다 큰 필수 값을 모두 입력하세요.</p>}
+                </div>
+                <button className="btn-primary" disabled={saving || !canSubmit}>
                   {saving ? "기록 중..." : "불변 이벤트 기록"}
                 </button>
               </div>

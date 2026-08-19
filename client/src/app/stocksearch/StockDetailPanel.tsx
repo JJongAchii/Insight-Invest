@@ -167,7 +167,7 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
         {/* Price Chart */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-ink-secondary">가격 차트</h3>
+            <h3 className="text-sm font-medium text-ink-secondary">Price Chart</h3>
             <div className="flex gap-1">
               {PERIOD_OPTIONS.map((opt) => (
                 <button

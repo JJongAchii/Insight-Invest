@@ -20,7 +20,7 @@ const signColor = (v: number): string => (v >= 0 ? "var(--gains)" : "var(--losse
 const DrawdownCard: React.FC<DrawdownCardProps> = ({ drawdowns, note }) => {
   if (!drawdowns) {
     return (
-      <Card title="낙폭">
+      <Card title="Drawdown">
         <p className="text-sm text-ink-muted">{note ?? "계산되지 않았습니다"}</p>
       </Card>
     );
@@ -29,7 +29,7 @@ const DrawdownCard: React.FC<DrawdownCardProps> = ({ drawdowns, note }) => {
   const chartData = drawdowns.underwater.map((p) => ({ date: p.date, dd: p.dd_pct }));
 
   return (
-    <Card title="낙폭">
+    <Card title="Drawdown">
       <TimeSeriesChart
         data={chartData}
         series={[{ key: "dd", name: "낙폭", color: "var(--losses)" }]}

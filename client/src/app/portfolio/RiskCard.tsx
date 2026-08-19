@@ -76,20 +76,20 @@ const RiskCard: React.FC = () => {
 
   if (error)
     return (
-      <Card title="위험 요약">
+      <Card title="Risk Summary">
         <ErrorState message="위험 정보를 불러오지 못했습니다" onRetry={refetch} />
       </Card>
     );
   if (isLoading || !data)
     return (
-      <Card title="위험 요약">
+      <Card title="Risk Summary">
         <LoadingState label="위험 지표 계산 중..." />
       </Card>
     );
   if (data.empty) return null;
   if (data.insufficient)
     return (
-      <Card title="위험 요약">
+      <Card title="Risk Summary">
         <p className="text-sm text-ink-muted">
           공통 가격 이력이 {data.overlap_days}일뿐이라 위험 지표를 계산하지 않습니다 (최소 60일).
         </p>
@@ -97,7 +97,7 @@ const RiskCard: React.FC = () => {
     );
 
   return (
-    <Card title="위험 요약">
+    <Card title="Risk Summary">
       <p className="text-xs text-ink-muted mb-4">
         현재 비중 고정 가정 · {data.basis?.window.start} ~ {data.basis?.window.end}
       </p>
@@ -142,7 +142,7 @@ const RiskCard: React.FC = () => {
 
       {data.corr && (
         <div className="mt-4">
-          <h4 className="text-sm font-medium text-ink mb-2">상관 히트맵</h4>
+          <h4 className="text-sm font-medium text-ink mb-2">Correlation Heatmap</h4>
           <CorrHeatmap corr={data.corr} />
         </div>
       )}

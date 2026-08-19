@@ -159,7 +159,7 @@ const NewsBriefingCard: React.FC = () => {
   const liveOpen = showLive || !active;
 
   return (
-    <Card title="오늘의 중요 뉴스">
+    <Card title="Today’s Key News">
       {isLoading ? (
         <LoadingState label="뉴스를 불러오는 중..." />
       ) : (
