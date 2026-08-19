@@ -26,11 +26,10 @@ import createWebStorage from "redux-persist/lib/storage/createWebStorage";
 /* REDUX PERSISTENCE */
 const createNoopStorage = () => {
   return {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     getItem(_key: string) {
+      void _key;
       return Promise.resolve(null);
     },
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     setItem(_key: string, value: string) {
       return Promise.resolve(value);
     },

@@ -4,7 +4,9 @@ import React, { useEffect, useState } from "react";
 import Navbar from "./(components)/Navbar";
 import Sidebar from "./(components)/Sidebar";
 import MobileBottomNav from "./(components)/MobileBottomNav";
+import PwaManager from "./(components)/PwaManager";
 import StoreProvider, { useAppSelector } from "./redux";
+import { usePathname } from "next/navigation";
 
 const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   const isSidebarCollapsed = useAppSelector(
@@ -50,7 +52,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
       )}
       <main
         className={`
-          flex min-w-0 flex-col w-full h-full px-4 pb-24 pt-4 md:px-6 md:pb-6 md:pt-6
+          app-main-safe flex min-w-0 flex-col w-full h-full px-4 pb-24 pt-4 md:px-6 md:pb-6 md:pt-6
           transition-all duration-200
           ${isSidebarCollapsed ? "md:pl-24" : "md:pl-[17rem]"}
         `}
@@ -59,11 +61,15 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
         <div className="flex-grow">{children}</div>
       </main>
       <MobileBottomNav />
+      <PwaManager />
     </div>
   );
 };
 
 const DashboardWrapper = ({ children }: { children: React.ReactNode }) => {
+  const pathname = usePathname();
+  if (pathname === "/login" || pathname === "/offline") return <>{children}</>;
+
   return (
     <StoreProvider>
       <DashboardLayout>{children}</DashboardLayout>

@@ -2,7 +2,7 @@
 
 import { useAppDispatch, useAppSelector } from "@/app/redux";
 import { setIsDarkMode, setIsSidebarCollapsed } from "@/state";
-import { Menu, Moon, Sun, Search } from "lucide-react";
+import { LogOut, Menu, Moon, Sun, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import React, { useState } from "react";
 
@@ -31,6 +31,11 @@ const Navbar = ({ onMobileMenuOpen }: { onMobileMenuOpen: () => void }) => {
     if (e.key === "Enter" && query.trim()) {
       router.push(`/stocksearch?q=${encodeURIComponent(query.trim())}`);
     }
+  };
+
+  const logout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
+    window.location.replace("/login");
   };
 
   return (
@@ -79,6 +84,15 @@ const Navbar = ({ onMobileMenuOpen }: { onMobileMenuOpen: () => void }) => {
           ) : (
             <Moon className="text-ink-secondary" size={20} />
           )}
+        </button>
+        <button
+          type="button"
+          onClick={logout}
+          className="p-2 hover:bg-raised rounded-xl transition-all duration-200"
+          aria-label="로그아웃"
+          title="Log out"
+        >
+          <LogOut className="text-ink-secondary" size={19} />
         </button>
       </div>
     </div>
