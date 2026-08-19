@@ -219,7 +219,12 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
                       color: "var(--text-primary)",
                     }}
                     labelStyle={{ color: "var(--text-secondary)" }}
-                    formatter={(value: number) => [formatPrice(value, stock.iso_code), "가격"]}
+                    formatter={(value) => [
+                      typeof value === "number"
+                        ? formatPrice(value, stock.iso_code)
+                        : String(value ?? "—"),
+                      "가격",
+                    ]}
                     labelFormatter={(label) => formatDate(String(label))}
                   />
                   <Line

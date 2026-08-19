@@ -228,8 +228,13 @@ const CompareView: React.FC<CompareViewProps> = ({
                     color: "var(--text-primary)",
                   }}
                   labelStyle={{ color: "var(--text-secondary)" }}
-                  labelFormatter={(label) => new Date(label).toLocaleDateString()}
-                  formatter={(value: number) => [value.toFixed(1), ""]}
+                  labelFormatter={(label) =>
+                    new Date(String(label ?? "")).toLocaleDateString()
+                  }
+                  formatter={(value) => [
+                    typeof value === "number" ? value.toFixed(1) : String(value ?? "—"),
+                    "",
+                  ]}
                 />
                 <Legend />
                 {tickers.map((ticker, index) => (

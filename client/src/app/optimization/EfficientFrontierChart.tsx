@@ -109,9 +109,9 @@ const EfficientFrontierChart: React.FC<EfficientFrontierChartProps> = ({
                 borderRadius: 12,
                 color: "var(--text-primary)",
               }}
-              formatter={(value: number, name: string) => [
-                `${value.toFixed(2)}%`,
-                name,
+              formatter={(value, name) => [
+                typeof value === "number" ? `${value.toFixed(2)}%` : String(value ?? "—"),
+                String(name),
               ]}
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               labelFormatter={(_label: unknown, payload: any) =>

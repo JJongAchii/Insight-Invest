@@ -85,21 +85,22 @@ const StockPriceFlowsChart: React.FC<StockPriceFlowsChartProps> = ({
       : `$${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
   const tooltipFormatter = (
-    value: number | string,
-    name: string
+    value: unknown,
+    name: unknown
   ): [string, string] => {
-    if (typeof value !== "number") return [String(value), name];
-    if (name === "종가") {
+    const seriesName = String(name ?? "");
+    if (typeof value !== "number") return [String(value ?? "—"), seriesName];
+    if (seriesName === "종가") {
       const formatted = isKr
         ? `${Math.round(value).toLocaleString()}원`
         : `$${value.toLocaleString(undefined, {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
           })}`;
-      return [formatted, name];
+      return [formatted, seriesName];
     }
     // Flow bars are denominated in 억
-    return [fmtEokTooltip(value), name];
+    return [fmtEokTooltip(value), seriesName];
   };
 
   return (
