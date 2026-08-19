@@ -10,7 +10,7 @@ import {
   useSetStrategyStatusMutation,
   NavPoint as LiveNavPoint,
 } from "@/state/api";
-import React, { useMemo } from "react";
+import React, { use, useMemo } from "react";
 import MetricSummary from "./MetricSummary";
 import LineChart from "./LineChart";
 import LiveMetricsTable from "./LiveMetricsTable";
@@ -33,7 +33,7 @@ import PeriodBarChart from "@/components/charts/PeriodBarChart";
 import { calculatePeriodReturns, NavPoint } from "@/components/charts/returns";
 
 interface StrategyDetailProps {
-  params: { port_id: number };
+  params: Promise<{ port_id: string }>;
 }
 
 interface ReturnBarRow {
@@ -94,7 +94,8 @@ const buildReturnData = (
 };
 
 const StrategyDetail = ({ params }: StrategyDetailProps) => {
-  const { port_id } = params;
+  const { port_id: portIdParam } = use(params);
+  const port_id = Number(portIdParam);
   const { data: strategyInfo } = useFetchStrategyByIdQuery(port_id);
   const { data: strategyNav } = useFetchStNavByIdQuery(port_id);
   const { data: strategyRebal } = useFetchStRebalByIdQuery(port_id);
