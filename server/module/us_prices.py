@@ -16,9 +16,9 @@ TICKER_SEGMENTS: dict[str, list[tuple[str, str | None, str | None]]] = {
 }
 
 GAP_LIMIT_TDAYS = 10  # 관측 간 영업일 공백 상한 — 초과는 티커 재배정·수집 구멍 신호
-JUMP_LIMIT = 1.00     # 분할 계수 변동 없는 날의 일수익 제외 상한 — 실체 경계 절단(D6) 후의
-                      # 최후 트립와이어. 개별주의 정상 급등(실적·임상 25~100%)은 제외하지
-                      # 않는다 — 오염형 점프는 실측상 수백~수천%다 (META +1,395%)
+JUMP_LIMIT = 1.00     # 분할 계수 변동 없는 날의 미확인 실체 경계 상한. 상장일/개명 창으로
+                      # 동일 실체가 확인되면 실제 급등으로 보존하고 경고만 남긴다. 실체가
+                      # 미확인되면 경계 이후 현재 세그먼트만 제공한다 (전체 종목 삭제 금지).
 JUMP_WARN = 0.25      # 경고 밴드 하한 — 25~100% 는 제외하지 않고 로그로만 남긴다
 
 
@@ -76,8 +76,12 @@ def _no_factor_jumps(px: pd.DataFrame) -> pd.Series:
     return r[~f_changed]
 
 
-def continuity_issues(px: pd.DataFrame) -> list[str]:
-    """티커 계보 오염 감지 (제외 사유) — 공백(영업일)·무분할 초대형 점프. 빈 리스트 = 통과."""
+def continuity_issues(px: pd.DataFrame, allow_large_jumps: bool = False) -> list[str]:
+    """티커 계보 오염 감지 — 공백과 미확인 실체의 무분할 초대형 점프.
+
+    ``allow_large_jumps``는 상장일/개명 창으로 동일 실체가 확인된 경우에만 쓴다.
+    이때 실제 급등은 보존하되 별도 경고 대상으로 남긴다.
+    """
     issues: list[str] = []
     d = px.index.values.astype("datetime64[D]")
     if len(d) > 1:
@@ -87,17 +91,43 @@ def continuity_issues(px: pd.DataFrame) -> list[str]:
             issues.append(
                 f"공백 {int(gaps.max())}영업일 ({px.index[i].date()}→{px.index[i+1].date()})"
             )
-    r = _no_factor_jumps(px)
-    for dt, v in r[r > JUMP_LIMIT].items():
-        issues.append(f"{dt.date()} |일수익| {v:.0%} (분할 계수 변동 없음)")
+    if not allow_large_jumps:
+        r = _no_factor_jumps(px)
+        for dt, v in r[r > JUMP_LIMIT].items():
+            issues.append(f"{dt.date()} |일수익| {v:.0%} (분할 계수 변동 없음)")
     return issues
 
 
-def continuity_warnings(px: pd.DataFrame) -> list[str]:
-    """경고 밴드 (제외하지 않음) — 무분할 25~100% 점프. 정상 급등일 가능성이 높다."""
+def continuity_cutoff(
+    px: pd.DataFrame, allow_large_jumps: bool = False
+) -> pd.Timestamp | None:
+    """마지막 미해결 연속성 경계에서 시작하는 현재 가격 세그먼트를 반환할 기준일.
+
+    경계 이전 이력을 현재 실체와 잇는 것은 실패 폐쇄 원칙에 어긋나지만, 과거의
+    정상 급등 하나 때문에 현재가까지 포함한 종목 전체를 삭제해서도 안 된다.
+    공백이면 재관측 첫날, 무분할 초대형 점프면 점프 당일을 새 세그먼트 시작으로
+    삼는다. 경계가 없으면 ``None``이다.
+    """
+    boundaries: list[pd.Timestamp] = []
+    d = px.index.values.astype("datetime64[D]")
+    if len(d) > 1:
+        gaps = np.busday_count(d[:-1], d[1:])
+        boundaries.extend(
+            pd.Timestamp(px.index[i + 1])
+            for i in np.flatnonzero(gaps > GAP_LIMIT_TDAYS)
+        )
+    if not allow_large_jumps:
+        jumps = _no_factor_jumps(px)
+        boundaries.extend(pd.Timestamp(value) for value in jumps[jumps > JUMP_LIMIT].index)
+    return max(boundaries) if boundaries else None
+
+
+def continuity_warnings(px: pd.DataFrame, include_large: bool = False) -> list[str]:
+    """제외하지 않는 무분할 가격 점프. 검증된 실체면 100% 초과도 포함한다."""
     r = _no_factor_jumps(px)
+    upper = pd.Series(True, index=r.index) if include_large else r <= JUMP_LIMIT
     return [
-        f"{dt.date()} |일수익| {v:.0%}" for dt, v in r[(r > JUMP_WARN) & (r <= JUMP_LIMIT)].items()
+        f"{dt.date()} |일수익| {v:.0%}" for dt, v in r[(r > JUMP_WARN) & upper].items()
     ]
 
 

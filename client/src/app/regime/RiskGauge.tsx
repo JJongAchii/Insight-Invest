@@ -99,7 +99,7 @@ const RiskGauge: React.FC<{ className?: string }> = ({ className = "" }) => {
     <Card
       title={
         <span className="inline-flex items-center gap-1.5">
-          시장 위험도
+          Market Risk Score
           <InfoTip helpKey="regime.gauge" />
         </span>
       }

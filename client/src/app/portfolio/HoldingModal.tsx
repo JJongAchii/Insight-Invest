@@ -105,6 +105,14 @@ const HoldingModal: React.FC<HoldingModalProps> = ({
   const sharesNum = Number(shares);
   const avgCostNum = Number(avgCost);
   const targetPctNum = targetPct.trim() === "" ? null : Number(targetPct);
+  const targetValid =
+    targetPctNum === null ||
+    (Number.isFinite(targetPctNum) && targetPctNum >= 0 && targetPctNum <= 100);
+  const canSubmit =
+    selected !== null &&
+    targetValid &&
+    (ledgerStarted ||
+      (Number.isFinite(sharesNum) && sharesNum > 0 && Number.isFinite(avgCostNum) && avgCostNum > 0));
 
   const handleSubmit = async () => {
     if (!selected) {
@@ -163,16 +171,16 @@ const HoldingModal: React.FC<HoldingModalProps> = ({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={editing ? "보유 종목 수정" : "보유 종목 추가"}
+        aria-label={editing ? "Edit Holding" : "Add Holding"}
         className="relative max-h-[90vh] w-full max-w-xl overflow-y-auto card"
       >
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-base font-semibold text-ink">
             {ledgerStarted && editing
-              ? "보유 판단 메모 수정"
+              ? "Edit Holding Notes"
               : editing
-                ? "보유 종목 수정"
-                : "보유 종목 추가"}
+                ? "Edit Holding"
+                : "Add Holding"}
           </h3>
           <button
             onClick={onClose}
@@ -290,6 +298,11 @@ const HoldingModal: React.FC<HoldingModalProps> = ({
           </div>
 
           {error && <p className="text-danger text-xs">{error}</p>}
+          {!canSubmit && (
+            <p className="text-warning text-xs">
+              종목과 0보다 큰 수량·평단을 입력하고 목표 비중 범위를 확인하세요.
+            </p>
+          )}
 
           <div className="flex justify-end gap-2 pt-1">
             <button
@@ -297,15 +310,15 @@ const HoldingModal: React.FC<HoldingModalProps> = ({
               onClick={onClose}
               className="btn-secondary px-4 py-2 text-sm"
             >
-              취소
+              Cancel
             </button>
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={saving || metadataSaving}
+              disabled={saving || metadataSaving || !canSubmit}
               className="btn-primary px-4 py-2 text-sm"
             >
-              {saving || metadataSaving ? "저장 중..." : editing ? "수정" : "추가"}
+              {saving || metadataSaving ? "저장 중..." : editing ? "Save Changes" : "Add Holding"}
             </button>
           </div>
         </div>

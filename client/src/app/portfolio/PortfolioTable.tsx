@@ -147,7 +147,7 @@ const PortfolioTable: React.FC<PortfolioTableProps> = ({
         header: "손익",
         cell: ({ row }) => {
           const p = row.original;
-          const sign = p.unrealized_pnl_native > 0 ? "+" : "";
+          const sign = (p.unrealized_pnl_native ?? 0) > 0 ? "+" : "";
           return (
             <div className="flex flex-col items-end">
               <span className={signClassNum(p.unrealized_pnl_native)}>
@@ -167,7 +167,10 @@ const PortfolioTable: React.FC<PortfolioTableProps> = ({
         accessorKey: "weight",
         header: "비중",
         cell: ({ row }) => {
-          const pct = row.original.weight * 100;
+          const pct = row.original.weight == null ? null : row.original.weight * 100;
+          if (pct == null) {
+            return <span className="text-xs text-ink-muted">가격 확인 필요</span>;
+          }
           return (
             <div className="flex flex-col items-end gap-1 min-w-[64px]">
               <span className="num text-sm font-semibold text-ink-secondary">

@@ -120,8 +120,8 @@ const OptimizationPage = () => {
             <div className="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
             <p className="text-ink-secondary font-medium">
               {selectedTab === "correlation"
-                ? "Calculating correlations..."
-                : "Running optimization..."}
+                ? "상관관계를 계산하는 중..."
+                : "최적화 계산 중..."}
             </p>
           </div>
         </div>
@@ -133,8 +133,7 @@ const OptimizationPage = () => {
           Portfolio Optimization
         </h1>
         <p className="text-sm text-ink-muted mt-1">
-          Optimize your portfolio using Mean-Variance or Risk Parity methods, or
-          analyze asset correlations
+          평균-분산·리스크 패리티 배분과 자산 간 상관관계를 분석합니다
         </p>
       </div>
 
@@ -237,15 +236,11 @@ const OptimizationPage = () => {
           </div>
           <h3 className="text-lg font-medium text-ink-secondary mb-2">
             {selectedTab === "correlation"
-              ? "No correlation results yet"
-              : "No optimization results yet"}
+              ? "아직 상관관계 분석 결과가 없습니다"
+              : "아직 최적화 결과가 없습니다"}
           </h3>
           <p className="text-sm text-ink-muted">
-            Select at least 2 assets and click{" "}
-            {selectedTab === "correlation"
-              ? "“Run Analysis”"
-              : "“Run Optimization”"}{" "}
-            to see results
+            자산을 2개 이상 선택한 뒤 {selectedTab === "correlation" ? "Run Analysis" : "Run Optimization"}를 실행하세요
           </p>
         </div>
       )}

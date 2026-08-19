@@ -32,10 +32,10 @@ const PhaseCrisisCard: React.FC<PhaseCrisisCardProps> = ({
   bmNote,
 }) => {
   return (
-    <Card title="국면·위기 구간">
+    <Card title="Regimes & Crisis Periods">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <h4 className="text-sm font-medium text-ink mb-2">국면별 월평균 수익</h4>
+          <h4 className="text-sm font-medium text-ink mb-2">Monthly Return by Regime</h4>
           {!phases || phases.rows.length === 0 ? (
             <p className="text-sm text-ink-muted">{phasesNote ?? "계산되지 않았습니다"}</p>
           ) : (
@@ -59,7 +59,7 @@ const PhaseCrisisCard: React.FC<PhaseCrisisCardProps> = ({
         </div>
 
         <div>
-          <h4 className="text-sm font-medium text-ink mb-2">위기 구간</h4>
+          <h4 className="text-sm font-medium text-ink mb-2">Crisis Periods</h4>
           {crisis.length === 0 ? (
             <p className="text-sm text-ink-muted">계산되지 않았습니다</p>
           ) : (

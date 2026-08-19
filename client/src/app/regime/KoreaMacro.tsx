@@ -108,7 +108,7 @@ const KoreaMacro: React.FC = () => {
         <Card
           title={
             <span className="inline-flex items-center gap-1.5">
-              금리 — 기준금리 · 국고채 3Y/10Y
+              Korea Rates · Base Rate & KTB
               <InfoTip helpKey="kr.rates" />
             </span>
           }

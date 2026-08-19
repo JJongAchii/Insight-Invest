@@ -20,14 +20,14 @@ const fmtCostDrag = (v: number | null): string => (v == null ? "—" : `−${Mat
 const TradingRealityCard: React.FC<TradingRealityCardProps> = ({ trading, note }) => {
   if (!trading) {
     return (
-      <Card title="거래 현실">
+      <Card title="Trading Reality">
         <p className="text-sm text-ink-muted">{note ?? "계산되지 않았습니다"}</p>
       </Card>
     );
   }
 
   return (
-    <Card title="거래 현실">
+    <Card title="Trading Reality">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatTile label="리밸 횟수" value={`${trading.n_rebals}회`} />
         <StatTile

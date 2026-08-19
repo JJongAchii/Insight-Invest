@@ -21,7 +21,7 @@ const NextRebalCard: React.FC<{ portId: number; isActive: boolean }> = ({ portId
   const sig = data?.signals.find((s) => s.port_id === portId);
 
   return (
-    <Card title="다음 리밸런싱">
+    <Card title="Next Rebalance">
       {isError ? (
         <ErrorState message="신호를 불러오지 못했습니다" />
       ) : !sig ? (

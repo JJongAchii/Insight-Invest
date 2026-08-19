@@ -558,7 +558,8 @@ def get_price_history(
     if meta_row.empty:
         raise HTTPException(status_code=404, detail=f"Stock with meta_id {meta_id} not found")
 
-    iso_code = meta_row.iloc[0]["iso_code"]
+    meta_item = meta_row.iloc[0]
+    iso_code = str(meta_item["iso_code"])
 
     # Default to 1 year of data
     if end_date is None:
@@ -573,8 +574,21 @@ def get_price_history(
         end_date=end_date,
     )
 
+    meta_payload = {
+        "meta_id": int(meta_item["meta_id"]),
+        "ticker": None if pd.isna(meta_item["ticker"]) else str(meta_item["ticker"]),
+        "name": None if pd.isna(meta_item["name"]) else str(meta_item["name"]),
+        "sector": None if pd.isna(meta_item["sector"]) else str(meta_item["sector"]),
+        "iso_code": iso_code,
+        "marketcap": (
+            int(meta_item["marketcap"])
+            if pd.notna(meta_item["marketcap"])
+            else None
+        ),
+    }
+
     if price_df.empty:
-        return {"prices": [], "meta": meta_row.iloc[0].to_dict()}
+        return {"prices": [], "meta": meta_payload}
 
     price_df = price_df.sort_values("trade_date")
 
@@ -597,18 +611,7 @@ def get_price_history(
 
     return {
         "prices": prices,
-        "meta": {
-            "meta_id": int(meta_row.iloc[0]["meta_id"]),
-            "ticker": meta_row.iloc[0]["ticker"],
-            "name": meta_row.iloc[0]["name"],
-            "sector": meta_row.iloc[0]["sector"],
-            "iso_code": iso_code,
-            "marketcap": (
-                int(meta_row.iloc[0]["marketcap"])
-                if pd.notna(meta_row.iloc[0]["marketcap"])
-                else None
-            ),
-        },
+        "meta": meta_payload,
     }
 
 

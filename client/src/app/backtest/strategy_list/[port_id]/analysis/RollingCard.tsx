@@ -51,7 +51,7 @@ const RollingCard: React.FC<RollingCardProps> = ({ rolling, note, bmNote }) => {
 
   if (!rolling) {
     return (
-      <Card title="롤링 성과">
+      <Card title="Rolling Performance">
         <p className="text-sm text-ink-muted">{note ?? "계산되지 않았습니다"}</p>
       </Card>
     );
@@ -64,12 +64,12 @@ const RollingCard: React.FC<RollingCardProps> = ({ rolling, note, bmNote }) => {
 
   return (
     <Card
-      title="롤링 성과"
+      title="Rolling Performance"
       action={<span className="text-xs text-ink-muted">창 {rolling.window}거래일</span>}
     >
       <div className="flex flex-col gap-6">
         <div>
-          <h4 className="text-sm font-medium text-ink mb-2">롤링 1년 수익률</h4>
+          <h4 className="text-sm font-medium text-ink mb-2">Rolling 1Y Return</h4>
           <TimeSeriesChart
             data={retData}
             series={series}
@@ -79,7 +79,7 @@ const RollingCard: React.FC<RollingCardProps> = ({ rolling, note, bmNote }) => {
           />
         </div>
         <div>
-          <h4 className="text-sm font-medium text-ink mb-2">롤링 샤프</h4>
+          <h4 className="text-sm font-medium text-ink mb-2">Rolling Sharpe</h4>
           <TimeSeriesChart
             data={sharpeData}
             series={series}

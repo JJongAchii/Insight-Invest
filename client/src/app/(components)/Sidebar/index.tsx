@@ -3,13 +3,11 @@
 import { useAppSelector } from "@/app/redux";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import {
   IoHome,
   IoSearch,
-  IoBarChart,
   IoTelescope,
-  IoChevronDown,
   IoOptions,
   IoTrendingUp,
   IoBriefcase,
@@ -27,6 +25,7 @@ interface SidebarLinkProps {
   isCollapsed: boolean;
   isDropdown?: boolean;
   onClick?: () => void;
+  activePrefixes?: string[];
 }
 
 const SidebarLink = ({
@@ -36,9 +35,14 @@ const SidebarLink = ({
   isCollapsed,
   isDropdown = false,
   onClick,
+  activePrefixes = [],
 }: SidebarLinkProps) => {
   const pathname = usePathname();
-  const isActive = pathname === href || (pathname === "/" && href === "/home");
+  const isActive =
+    pathname === href ||
+    pathname.startsWith(`${href}/`) ||
+    activePrefixes.some((prefix) => pathname.startsWith(prefix)) ||
+    (pathname === "/" && href === "/home");
 
   return (
     <Link
@@ -98,7 +102,6 @@ const Sidebar = ({
     (state) => state.global.isSidebarCollapsed
   );
 
-  const [isResearchDropdownOpen, setIsResearchDropdownOpen] = useState(false);
   const pathname = usePathname();
 
   useEffect(() => {
@@ -106,10 +109,6 @@ const Sidebar = ({
     // pathname 변경에만 반응해 모바일 탐색 후 본문을 즉시 보여준다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
-
-  const toggleResearchDropdown = () => {
-    setIsResearchDropdownOpen(!isResearchDropdownOpen);
-  };
 
   return (
     <div
@@ -150,42 +149,43 @@ const Sidebar = ({
       {/* Navigation Links */}
       <nav className="flex-1 overflow-y-auto py-4 space-y-1">
         {/* MARKETS */}
-        <SectionHeader label="시장" isCollapsed={isSidebarCollapsed} />
+        <SectionHeader label="Markets" isCollapsed={isSidebarCollapsed} />
         <SidebarLink
           href="/home"
           icon={IoHome}
-          label="대시보드"
+          label="Dashboard"
           isCollapsed={isSidebarCollapsed}
           onClick={onMobileClose}
         />
         <SidebarLink
           href="/insight"
           icon={IoTrendingUp}
-          label="한국 시장 인사이트"
+          label="KR Market Insight"
           isCollapsed={isSidebarCollapsed}
           onClick={onMobileClose}
         />
         <SidebarLink
           href="/stocksearch"
           icon={IoSearch}
-          label="종목 탐색"
+          label="Stock Search"
+          activePrefixes={["/stock/"]}
           isCollapsed={isSidebarCollapsed}
           onClick={onMobileClose}
         />
         <SidebarLink
           href="/data-trust"
           icon={IoShieldCheckmark}
-          label="데이터 신뢰센터"
+          label="Data Trust"
           isCollapsed={isSidebarCollapsed}
           onClick={onMobileClose}
         />
 
         {/* PORTFOLIO */}
-        <SectionHeader label="포트폴리오" isCollapsed={isSidebarCollapsed} />
+        <SectionHeader label="Portfolio" isCollapsed={isSidebarCollapsed} />
         <SidebarLink
           href="/portfolio"
           icon={IoBriefcase}
-          label="포트폴리오"
+          label="My Portfolio"
           isCollapsed={isSidebarCollapsed}
           onClick={onMobileClose}
         />
@@ -193,78 +193,42 @@ const Sidebar = ({
         <SidebarLink
           href="/journal"
           icon={IoDocumentText}
-          label="판단 저널"
+          label="Decision Journal"
           isCollapsed={isSidebarCollapsed}
           onClick={onMobileClose}
         />
 
         {/* Research Lab: 투자 화면과 연구 도구를 시각적으로 분리한다. */}
         <SectionHeader label="Research Lab" isCollapsed={isSidebarCollapsed} />
-        <div>
-          <button
-            type="button"
-            onClick={toggleResearchDropdown}
-            aria-expanded={isResearchDropdownOpen}
-            className={`
-              flex w-auto items-center justify-between cursor-pointer
-              ${isSidebarCollapsed ? "md:justify-center md:py-3 md:mx-2" : "md:px-4 md:py-2.5 md:mx-3"}
-              max-md:px-4 max-md:py-2.5 max-md:mx-3
-              rounded-xl
-              text-ink-secondary hover:bg-raised hover:text-ink
-              transition-all duration-200
-            `}
-          >
-            <div className="flex items-center gap-3">
-              <IoBarChart className="w-5 h-5 flex-shrink-0" />
-              <span className={`${isSidebarCollapsed ? "md:hidden" : ""} text-sm font-medium`}>
-                Research Lab
-              </span>
-            </div>
-            <IoChevronDown
-              className={`
-                  ${isSidebarCollapsed ? "md:hidden" : ""}
-                  w-4 h-4 transition-transform duration-200
-                  ${isResearchDropdownOpen ? "rotate-180" : ""}
-                `}
-            />
-          </button>
-
-          {isResearchDropdownOpen && (
-            <div className="mt-1 space-y-1">
-              <SidebarLink
-                href="/backtest/simulation"
-                icon={FaRunning}
-                label="백테스트"
-                isCollapsed={isSidebarCollapsed}
-                isDropdown
-                onClick={onMobileClose}
-              />
-              <SidebarLink
-                href="/backtest/strategy_list"
-                icon={FaList}
-                label="전략 보관함"
-                isCollapsed={isSidebarCollapsed}
-                isDropdown
-                onClick={onMobileClose}
-              />
-            </div>
-          )}
-        </div>
+        <SidebarLink
+          href="/backtest/simulation"
+          icon={FaRunning}
+          label="Backtest"
+          isCollapsed={isSidebarCollapsed}
+          onClick={onMobileClose}
+        />
+        <SidebarLink
+          href="/backtest/strategy_list"
+          icon={FaList}
+          label="Strategy Library"
+          isCollapsed={isSidebarCollapsed}
+          onClick={onMobileClose}
+        />
 
         <SidebarLink
           href="/optimization"
           icon={IoOptions}
-          label="포트폴리오 최적화"
+          label="Portfolio Optimization"
           isCollapsed={isSidebarCollapsed}
           onClick={onMobileClose}
         />
 
         {/* MACRO */}
-        <SectionHeader label="매크로" isCollapsed={isSidebarCollapsed} />
+        <SectionHeader label="Macro" isCollapsed={isSidebarCollapsed} />
         <SidebarLink
           href="/regime"
           icon={IoTelescope}
-          label="시장 국면"
+          label="Market Regime"
           isCollapsed={isSidebarCollapsed}
           onClick={onMobileClose}
         />

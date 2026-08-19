@@ -30,7 +30,7 @@ const FundamentalsCard: React.FC<{
   isLoading: boolean;
 }> = ({ facts, asOf, note, isLoading }) => (
   <Card
-    title="SEC 연간 핵심 재무 (10-K)"
+    title="SEC Annual Fundamentals · 10-K"
     action={asOf ? <span className="text-xs text-ink-muted num">최근 제출 {asOf}</span> : undefined}
   >
     {isLoading ? (

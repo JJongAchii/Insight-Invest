@@ -66,7 +66,7 @@ interface ExpectationCardProps {
 const ExpectationCard: React.FC<ExpectationCardProps> = ({ expectation }) => {
   if (!expectation) {
     return (
-      <Card title="기대 대비 위치">
+      <Card title="Expectation Check">
         <p className="text-sm text-ink-muted">표본 부족(최소 5일·분포 60개)</p>
       </Card>
     );
@@ -76,7 +76,7 @@ const ExpectationCard: React.FC<ExpectationCardProps> = ({ expectation }) => {
     expectation;
 
   return (
-    <Card title="기대 대비 위치">
+    <Card title="Expectation Check">
       <div className="mb-5">
         <p className="text-sm text-ink">
           저장 후 {n_days}거래일 수익 {fmtPct(live_ret_pct)}는 백테스트의 모든{" "}

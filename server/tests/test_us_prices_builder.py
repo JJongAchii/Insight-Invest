@@ -152,25 +152,27 @@ def test_builder_schema_and_meta_join(monkeypatch, bi, capsys):
     assert "미러 최종일" in capsys.readouterr().err
 
 
-def test_builder_guard_excludes_with_warning(monkeypatch, bi, capsys):
-    """초대형 점프(9,900% — JUMP_LIMIT 초과) 티커는 제외 + 경고, 나머지는 생존."""
-    dates = pd.bdate_range("2026-01-05", periods=3)
+def test_builder_guard_cuts_before_unresolved_jump_without_deleting_ticker(
+    monkeypatch, bi, capsys
+):
+    """오염 의심 경계 이전 이력만 버리고 현재 가격 세그먼트는 계속 제공한다."""
+    dates = pd.bdate_range("2026-01-05", periods=4)
     px = pd.concat(
         [
             pd.DataFrame(
                 {
                     "date": dates,
                     "ticker": "GOOD",
-                    "close": [100.0, 101.0, 102.0],
-                    "adj_close": [100.0, 101.0, 102.0],
+                    "close": [100.0, 101.0, 102.0, 103.0],
+                    "adj_close": [100.0, 101.0, 102.0, 103.0],
                 }
             ),
             pd.DataFrame(
                 {
                     "date": dates,
                     "ticker": "BAD",
-                    "close": [1.0, 1.0, 100.0],
-                    "adj_close": [1.0, 1.0, 100.0],
+                    "close": [1.0, 1.0, 100.0, 101.0],
+                    "adj_close": [1.0, 1.0, 100.0, 101.0],
                 }
             ),
         ]
@@ -180,8 +182,45 @@ def test_builder_guard_excludes_with_warning(monkeypatch, bi, capsys):
         monkeypatch, bi, px, pd.DataFrame({"ticker": [], "ex_date": [], "cash_amount": []}), meta_df
     )
     out = bi.build_us_prices()
-    assert set(out.ticker) == {"GOOD"}
-    assert "연속성 가드" in capsys.readouterr().err
+    assert set(out.ticker) == {"GOOD", "BAD"}
+    bad = out[out.ticker == "BAD"].sort_values("trade_date")
+    assert bad["trade_date"].tolist() == [dates[2], dates[3]]
+    assert pd.isna(bad["gross_return"].iloc[0])
+    assert bad["gross_return"].iloc[1] == pytest.approx(0.01)
+    assert "연속성 가드 절단" in capsys.readouterr().err
+
+
+def test_builder_verified_identity_keeps_legitimate_large_jump(monkeypatch, bi, capsys):
+    """상장일로 동일 실체가 확인된 종목의 실제 급등은 이력과 수익률을 보존한다."""
+    dates = pd.bdate_range("2021-02-01", periods=4)
+    px = pd.DataFrame(
+        {
+            "date": dates,
+            "ticker": "CPSH",
+            "close": [6.8, 6.94, 16.54, 16.8],
+            "adj_close": [6.8, 6.94, 16.54, 16.8],
+        }
+    )
+    meta_df = pd.DataFrame({"meta_id": [8919], "ticker": ["CPSH"], "iso_code": ["US"]})
+    events = pd.DataFrame(columns=["ticker", "event_type", "event_date", "event_ticker"])
+    details = pd.DataFrame({"ticker": ["CPSH"], "list_date": [pd.Timestamp("1997-05-09")]})
+    _fake_mirror(
+        monkeypatch,
+        bi,
+        px,
+        pd.DataFrame({"ticker": [], "ex_date": [], "cash_amount": []}),
+        meta_df,
+        events=events,
+        details=details,
+    )
+
+    out = bi.build_us_prices()
+
+    assert out["trade_date"].tolist() == dates.tolist()
+    assert out["gross_return"].iloc[2] == pytest.approx(16.54 / 6.94 - 1)
+    err = capsys.readouterr().err
+    assert "연속성 가드 절단" not in err
+    assert "검증된 실체" in err
 
 
 def test_builder_returns_none_on_mirror_failure(monkeypatch, bi, capsys):
@@ -223,9 +262,8 @@ def test_builder_fails_closed_when_required_freshness_is_exceeded(
     assert "필수 신선도 4일 초과" in capsys.readouterr().err
 
 
-def test_builder_all_excluded_returns_none_instead_of_crashing(monkeypatch, bi, capsys):
-    """전 종목이 연속성 가드에 걸리면 out이 비어 pd.concat이 ValueError로 죽는다 —
-    None + 경고로 안전하게 스킵해야 한다 (기존 파일 유지, 파이프라인 비중단)."""
+def test_builder_single_row_current_segment_is_still_priceable(monkeypatch, bi, capsys):
+    """마지막 관측이 경계여도 현재가는 제공하고 수익률은 미측정으로 남긴다."""
     dates = pd.bdate_range("2026-01-05", periods=3)
     px = pd.DataFrame(
         {
@@ -240,10 +278,13 @@ def test_builder_all_excluded_returns_none_instead_of_crashing(monkeypatch, bi, 
         monkeypatch, bi, px, pd.DataFrame({"ticker": [], "ex_date": [], "cash_amount": []}), meta_df
     )
     out = bi.build_us_prices()
-    assert out is None
+    assert out is not None
+    assert len(out) == 1
+    assert out.iloc[0]["ticker"] == "BAD"
+    assert out.iloc[0]["adj_close"] == 100.0
+    assert pd.isna(out.iloc[0]["gross_return"])
     err = capsys.readouterr().err
-    assert "연속성 가드" in err
-    assert "0종목" in err
+    assert "연속성 가드 절단" in err
 
 
 def test_dividend_load_floored_and_non_trading_ex_date_flagged(monkeypatch, bi, capsys):

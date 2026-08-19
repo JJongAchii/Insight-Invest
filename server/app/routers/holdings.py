@@ -201,6 +201,9 @@ def _empty_summary() -> dict:
         "total_pnl_pct": None,
         "day_pnl_krw": 0.0,
         "n_positions": 0,
+        "priced_positions": 0,
+        "unpriced_positions": 0,
+        "valuation_complete": True,
         "sector_alloc": [],
         "market_alloc": [],
         "top_weight": None,
@@ -367,6 +370,8 @@ def get_holdings():
         return sorted(rows, key=lambda x: (x["weight"] is None, -(x["weight"] or 0)))
 
     total_pnl_pct = (total_pnl_krw / total_cost_krw) if total_cost_krw > 0 else None
+    priced_positions = sum(p["market_value_krw"] is not None for p in positions)
+    unpriced_positions = len(positions) - priced_positions
     summary = {
         "total_value_krw": _r(total_value_krw, 2),
         "total_cost_krw": _r(total_cost_krw, 2),
@@ -374,6 +379,9 @@ def get_holdings():
         "total_pnl_pct": _r(total_pnl_pct, 4),
         "day_pnl_krw": _r(day_pnl_krw, 2),
         "n_positions": len(positions),
+        "priced_positions": priced_positions,
+        "unpriced_positions": unpriced_positions,
+        "valuation_complete": unpriced_positions == 0,
         "sector_alloc": _alloc(sector_agg),
         "market_alloc": _market_alloc(market_agg),
         "top_weight": _r(top_weight, 4),

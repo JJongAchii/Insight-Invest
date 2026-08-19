@@ -61,3 +61,42 @@ def test_holdings_response_computes_target_drift(monkeypatch):
     assert by_id[1]["drift_pp"] == 10.0
     assert by_id[2]["drift_pp"] == -10.0
     assert out["summary"]["target_total"] == 1.0
+
+
+def test_holdings_response_marks_missing_prices_without_fake_zero_weight(monkeypatch):
+    items = pd.DataFrame(
+        {
+            "meta_id": [8919],
+            "shares": [283.0],
+            "avg_cost": [8.02],
+            "currency": ["USD"],
+            "target_weight": [None],
+        }
+    )
+    md = pd.DataFrame(
+        {
+            "meta_id": [8919],
+            "ticker": ["CPSH"],
+            "name": ["CPS Technologies"],
+            "iso_code": ["US"],
+            "security_type": ["stock"],
+            "sector": ["Technology"],
+        }
+    )
+    monkeypatch.setattr(router.portfolio_ledger, "has_events", lambda: False)
+    monkeypatch.setattr(router.holdings_store, "list_items", lambda: items)
+    monkeypatch.setattr(router.meta, "meta_df", lambda: md)
+    monkeypatch.setattr(router, "build_price_map", lambda _df: {})
+    monkeypatch.setattr(router, "_usdkrw_latest", lambda: 1_380.0)
+
+    out = router.get_holdings()
+
+    position = out["positions"][0]
+    assert position["latest_price"] is None
+    assert position["market_value_krw"] is None
+    assert position["weight"] is None
+    assert out["summary"]["priced_positions"] == 0
+    assert out["summary"]["unpriced_positions"] == 1
+    assert out["summary"]["valuation_complete"] is False
+    assert out["summary"]["top_weight"] is None
+    assert out["summary"]["hhi"] is None

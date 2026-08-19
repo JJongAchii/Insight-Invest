@@ -47,7 +47,7 @@ export default function DataTrustPage() {
   return (
     <div className="flex flex-col gap-6 pb-16">
       <PageHeader
-        title="데이터 신뢰센터"
+        title="Data Trust"
         description="판단에 사용한 데이터의 기준일·마지막 빌드·부분 결측을 확인합니다"
       />
       {error ? <div className="card"><ErrorState message="데이터 상태를 불러오지 못했습니다" onRetry={refetch} /></div> : isLoading || !data ? <div className="card"><LoadingState label="데이터 상태를 확인하는 중..." /></div> : (
@@ -56,7 +56,7 @@ export default function DataTrustPage() {
             <div className="flex items-start gap-3">
               <Database className="mt-0.5 text-primary-400" size={20} aria-hidden />
               <div>
-                <h2 className="font-semibold text-ink">판정 원칙</h2>
+                <h2 className="font-semibold text-ink">Evaluation Rules</h2>
                 <p className="mt-1 text-sm text-ink-secondary">달력 일수가 아니라 평일 세션 경과를 기준으로 보며, 미국 가격 1세션·한국 인사이트 2세션을 기본 허용 지연으로 둡니다. 거래소 휴일은 배치의 완결 세션 검증이 최종 기준입니다.</p>
                 <p className="mt-2 text-xs text-ink-muted">요청 계산 시각 {new Date(data.generated_at).toLocaleString("ko-KR")}</p>
               </div>

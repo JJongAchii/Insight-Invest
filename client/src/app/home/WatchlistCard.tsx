@@ -44,7 +44,7 @@ const WatchlistCard: React.FC = () => {
           href="/stocksearch"
           className="text-xs font-medium text-ink-muted hover:text-ink transition-colors"
         >
-          종목 검색 →
+          Search Stocks →
         </Link>
       }
     >

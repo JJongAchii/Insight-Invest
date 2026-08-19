@@ -16,7 +16,7 @@ interface HoldingsNowCardProps {
 const HoldingsNowCard: React.FC<HoldingsNowCardProps> = ({ weights }) => {
   if (!weights || weights.length === 0) {
     return (
-      <Card title="현재 보유 비중 (어제 종가 기준, 드리프트 반영)">
+      <Card title="Current Holdings · Prior Close">
         <p className="text-sm text-ink-muted">다음 배치부터 집계됩니다</p>
       </Card>
     );
@@ -30,7 +30,7 @@ const HoldingsNowCard: React.FC<HoldingsNowCardProps> = ({ weights }) => {
 
   return (
     <Card
-      title="현재 보유 비중 (어제 종가 기준, 드리프트 반영)"
+      title="Current Holdings · Prior Close"
       action={<span className="text-xs text-ink-muted">{tradeDate}</span>}
     >
       <WeightBar

@@ -31,14 +31,14 @@ const MonthRow: React.FC<{ month: string; ret_pct: number }> = ({ month, ret_pct
 const MonthlyStatsCard: React.FC<MonthlyStatsCardProps> = ({ monthly, note, bmNote }) => {
   if (!monthly) {
     return (
-      <Card title="월별 통계">
+      <Card title="Monthly Statistics">
         <p className="text-sm text-ink-muted">{note ?? "계산되지 않았습니다"}</p>
       </Card>
     );
   }
 
   return (
-    <Card title="월별 통계">
+    <Card title="Monthly Statistics">
       <div className="grid grid-cols-2 gap-3 mb-6">
         <StatTile label="승률" value={fmtPct(monthly.win_rate)} />
         <StatTile label="승률 (BM 대비)" value={fmtPct(monthly.win_rate_vs_bm)} />
@@ -46,7 +46,7 @@ const MonthlyStatsCard: React.FC<MonthlyStatsCardProps> = ({ monthly, note, bmNo
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <h4 className="text-sm font-medium text-ink mb-2">최고 월</h4>
+          <h4 className="text-sm font-medium text-ink mb-2">Best Months</h4>
           {monthly.best.length === 0 ? (
             <p className="text-sm text-ink-muted">계산되지 않았습니다</p>
           ) : (
@@ -58,7 +58,7 @@ const MonthlyStatsCard: React.FC<MonthlyStatsCardProps> = ({ monthly, note, bmNo
           )}
         </div>
         <div>
-          <h4 className="text-sm font-medium text-ink mb-2">최악 월</h4>
+          <h4 className="text-sm font-medium text-ink mb-2">Worst Months</h4>
           {monthly.worst.length === 0 ? (
             <p className="text-sm text-ink-muted">계산되지 않았습니다</p>
           ) : (

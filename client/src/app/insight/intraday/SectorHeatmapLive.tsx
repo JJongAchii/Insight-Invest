@@ -11,7 +11,7 @@ const tileColor = (chg: number) => {
 /** 섹터 히트맵 — 거래대금 내림차순, 상위 4개는 2칸 타일. */
 const SectorHeatmapLive = ({ sectors }: { sectors: IntradaySectorRow[] }) => (
   <div className="card">
-    <h4 className="text-base font-semibold text-ink mb-4">섹터 히트맵</h4>
+    <h4 className="text-base font-semibold text-ink mb-4">Sector Heatmap</h4>
     <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-1.5">
       {sectors.map((s, i) => (
         <div

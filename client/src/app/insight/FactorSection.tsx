@@ -75,7 +75,7 @@ const FactorSection: React.FC = () => {
     <Card
       title={
         <span className="inline-flex items-center gap-1.5">
-          팩터 렌즈
+          Factor Lens
           <InfoTip helpKey="factor.lens" />
         </span>
       }

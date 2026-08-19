@@ -225,14 +225,14 @@ export interface HoldingPosition {
   latest_price: number | null;
   /** Day change, %. */
   day_chg_pct: number | null;
-  market_value_native: number;
+  market_value_native: number | null;
   cost_value_native: number;
-  unrealized_pnl_native: number;
+  unrealized_pnl_native: number | null;
   /** Fraction, e.g. 0.12 = +12%. */
-  unrealized_pnl_pct: number;
-  market_value_krw: number;
+  unrealized_pnl_pct: number | null;
+  market_value_krw: number | null;
   /** Fraction of total portfolio value (0..1). */
-  weight: number;
+  weight: number | null;
   /** Optional target within invested assets, fraction (0..1). */
   target_weight: number | null;
   /** Actual minus target, percentage points. */
@@ -259,15 +259,18 @@ export interface HoldingsSummary {
   total_cost_krw: number;
   total_pnl_krw: number;
   /** Fraction, e.g. 0.12 = +12%. */
-  total_pnl_pct: number;
+  total_pnl_pct: number | null;
   day_pnl_krw: number;
   n_positions: number;
+  priced_positions: number;
+  unpriced_positions: number;
+  valuation_complete: boolean;
   sector_alloc: HoldingsSectorAlloc[];
   market_alloc: HoldingsMarketAlloc[];
   /** Largest single-position weight, fraction (0..1). */
-  top_weight: number;
+  top_weight: number | null;
   /** Herfindahl index Σ(weight²), 0..1. */
-  hhi: number;
+  hhi: number | null;
   /** Sum of configured target weights; null when no targets are set. */
   target_total: number | null;
 }
@@ -1408,6 +1411,33 @@ export const api = createApi({
     // Holdings (real positions) endpoints
     fetchHoldings: builder.query<HoldingsResponse, void>({
       query: () => "/holdings",
+      transformResponse: (response: HoldingsResponse) => {
+        // 프런트/API가 순차 배포되어도 가격 누락을 0원으로 오인하지 않는다.
+        const positions = response.positions.map((position) => ({
+          ...position,
+          weight:
+            position.market_value_krw == null
+              ? null
+              : (position.weight ?? null),
+        }));
+        const pricedPositions = positions.filter(
+          (position) => position.market_value_krw != null,
+        ).length;
+        const unpricedPositions = positions.length - pricedPositions;
+        return {
+          ...response,
+          positions,
+          summary: {
+            ...response.summary,
+            priced_positions:
+              response.summary.priced_positions ?? pricedPositions,
+            unpriced_positions:
+              response.summary.unpriced_positions ?? unpricedPositions,
+            valuation_complete:
+              response.summary.valuation_complete ?? unpricedPositions === 0,
+          },
+        };
+      },
       providesTags: ["Holdings"],
     }),
     fetchHoldingsRisk: builder.query<HoldingsRiskResponse, void>({

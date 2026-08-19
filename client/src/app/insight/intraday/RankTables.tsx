@@ -81,9 +81,9 @@ const RankTables = ({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      <StockTable title="거래대금 TOP 10" rows={topValue} tickerToMetaId={tickerToMetaId} />
-      <StockTable title="급등 TOP 10" rows={up} tickerToMetaId={tickerToMetaId} />
-      <StockTable title="급락 TOP 10" rows={down} tickerToMetaId={tickerToMetaId} />
+      <StockTable title="Most Traded · Top 10" rows={topValue} tickerToMetaId={tickerToMetaId} />
+      <StockTable title="Top Gainers · Top 10" rows={up} tickerToMetaId={tickerToMetaId} />
+      <StockTable title="Top Losers · Top 10" rows={down} tickerToMetaId={tickerToMetaId} />
     </div>
   );
 };

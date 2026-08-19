@@ -94,9 +94,9 @@ export default function JournalPage() {
   return (
     <div className="flex flex-col gap-6 pb-16">
       <PageHeader
-        title="의사결정 저널"
+        title="Decision Journal"
         description="판단 당시의 관찰·반증·무효화 조건과 데이터 기준일을 함께 남깁니다"
-        actions={<button className="btn-primary" onClick={() => setShowForm((value) => !value)}>{showForm ? "작성 닫기" : "새 판단 기록"}</button>}
+        actions={<button className="btn-primary" onClick={() => setShowForm((value) => !value)}>{showForm ? "Close Editor" : "New Decision"}</button>}
       />
 
       {dueCount > 0 && (

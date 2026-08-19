@@ -37,7 +37,7 @@ export default function SinceLastVisit() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Clock3 size={18} className="text-primary-400" aria-hidden />
-          <h2 id="since-title" className="text-sm font-semibold text-ink">지난 방문 이후</h2>
+          <h2 id="since-title" className="text-sm font-semibold text-ink">Since Last Visit</h2>
         </div>
         {previousVisit && <span className="text-xs text-ink-muted">이전 방문 {formatDate(previousVisit)}</span>}
       </div>

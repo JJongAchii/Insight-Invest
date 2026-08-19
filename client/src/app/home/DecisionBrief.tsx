@@ -51,6 +51,9 @@ const DecisionBrief: React.FC = () => {
 
   const summary = holdings?.summary;
   const portfolioChecks: string[] = [];
+  if ((summary?.unpriced_positions ?? 0) > 0) {
+    portfolioChecks.push(`가격 미확인 ${summary?.unpriced_positions}개`);
+  }
   if (summary?.top_weight != null && summary.top_weight >= 0.25) {
     portfolioChecks.push(`최대 종목 비중 ${(summary.top_weight * 100).toFixed(1)}%`);
   }
@@ -71,7 +74,7 @@ const DecisionBrief: React.FC = () => {
 
   return (
     <Card
-      title="시간축별 시장 환경"
+      title="Market Context by Horizon"
       action={<span className="text-xs text-ink-muted">서로 다른 기간의 근거를 합산하지 않습니다</span>}
     >
       <div className="space-y-5">

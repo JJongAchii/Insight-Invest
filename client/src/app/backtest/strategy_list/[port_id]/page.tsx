@@ -323,7 +323,7 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
           <LiveMetricsTable live={liveData} bmMetrics={bmDetails.metrics} />
           {yearlyMonthlyReturns}
 
-          <h3 className="section-header border-t border-edge pt-6">백테스트 분석</h3>
+          <h3 className="section-header border-t border-edge pt-6">Backtest Analysis</h3>
           {renderAnalyticsGroup(
             <>
               {premiseCard}
