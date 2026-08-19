@@ -68,12 +68,14 @@ const PeriodBarChart: React.FC<PeriodBarChartProps> = ({
             color: "var(--text-primary)",
           }}
           labelStyle={{ color: "var(--text-secondary)" }}
-          formatter={(value: number | string) =>
+          formatter={(value) =>
             typeof value === "number"
               ? yFormatter
                 ? yFormatter(value)
                 : value.toLocaleString(undefined, { maximumFractionDigits: 2 })
-              : value
+              : Array.isArray(value)
+                ? value.join(" – ")
+                : String(value ?? "—")
           }
         />
         {series.length > 1 && (

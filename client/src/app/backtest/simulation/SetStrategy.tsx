@@ -559,7 +559,7 @@ const SetStrategyInner: React.FC<SetStrategyProps> = ({
             <label className="input-label">Start Date</label>
             <DatePicker
               selected={startDate}
-              onChange={(date) => {
+              onChange={(date: Date | null) => {
                 setStartDate(date || new Date());
                 if (errors.dates)
                   setErrors((prev) => ({ ...prev, dates: undefined }));
@@ -572,7 +572,7 @@ const SetStrategyInner: React.FC<SetStrategyProps> = ({
             <label className="input-label">End Date</label>
             <DatePicker
               selected={endDate}
-              onChange={(date) => {
+              onChange={(date: Date | null) => {
                 setEndDate(date || new Date());
                 if (errors.dates)
                   setErrors((prev) => ({ ...prev, dates: undefined }));
