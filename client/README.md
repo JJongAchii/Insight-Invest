@@ -1,4 +1,18 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Insight Invest의 Next.js 클라이언트이자 개인 접근 게이트/API 프록시다.
+
+## Runtime environment
+
+기존 Vercel 환경 변수 이름과의 무중단 호환을 유지한다. 새 배포에서는 server-only 이름을
+권장한다.
+
+```text
+API_BASE_URL=<Lambda Function URL>       # fallback: NEXT_PUBLIC_API_BASE_URL
+API_KEY=<Lambda X-API-Key>               # fallback: NEXT_PUBLIC_API_KEY
+SITE_ACCESS_HASH=<access-code sha256>    # optional; repository default exists
+```
+
+`NEXT_PUBLIC_*` fallback을 사용해도 해당 값은 client component에서 참조하지 않으므로 새
+브라우저 번들에는 포함되지 않는다. API 요청은 `/api/backend/*`를 통해서만 전달된다.
 
 ## Getting Started
 

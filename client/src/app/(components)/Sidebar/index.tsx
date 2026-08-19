@@ -17,6 +17,7 @@ import {
 } from "react-icons/io5";
 import { FaRunning, FaList } from "react-icons/fa";
 import { IconType } from "react-icons";
+import Image from "next/image";
 
 interface SidebarLinkProps {
   href: string;
@@ -130,9 +131,13 @@ const Sidebar = ({
         `}
       >
         <Link href="/home" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-primary-400 to-primary-600 rounded-xl flex items-center justify-center shadow-lg shadow-primary-500/25">
-            <span className="text-white font-bold text-sm">II</span>
-          </div>
+          <Image
+            src="/icons/icon-192.png"
+            alt=""
+            width={32}
+            height={32}
+            className="rounded-xl shadow-lg shadow-primary-500/25"
+          />
           <span className={`${isSidebarCollapsed ? "md:hidden" : ""} font-semibold text-ink`}>
             Insight Invest
           </span>

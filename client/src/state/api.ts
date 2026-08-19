@@ -1256,13 +1256,9 @@ export interface IntradayMarketResponse {
 export const api = createApi({
   reducerPath: "api",
   baseQuery: fetchBaseQuery({
-    baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL,
-    prepareHeaders: (headers) => {
-      // Lambda Function URL 보호용 앱 토큰 (main.py 미들웨어와 쌍)
-      const apiKey = process.env.NEXT_PUBLIC_API_KEY;
-      if (apiKey) headers.set("X-API-Key", apiKey);
-      return headers;
-    },
+    // 브라우저는 같은 출처의 Next.js 프록시만 호출한다. Lambda URL과 API 키는
+    // 서버 Route Handler 안에 남아 클라이언트 번들·네트워크 패널에 노출되지 않는다.
+    baseUrl: "/api/backend/",
   }),
   tagTypes: [
     "Strategy",

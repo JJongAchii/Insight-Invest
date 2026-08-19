@@ -44,6 +44,20 @@ jobs:
             --query 'imageDetails[0].imageDigest' --output text)
           echo "IMAGE_URI=${{ steps.ecr.outputs.registry }}/$ECR_REPO@$DIGEST" >> $GITHUB_ENV
 
+      - name: Wait for protected web proxy
+        run: |
+          for attempt in $(seq 1 40); do
+            BODY=$(curl -fsS https://insight-invest-ten.vercel.app/api/auth/status || true)
+            if echo "$BODY" | grep -q '"proxyReady":true'; then
+              echo "Vercel proxy is ready"
+              exit 0
+            fi
+            echo "Waiting for Vercel proxy ($attempt/40)"
+            sleep 15
+          done
+          echo "Vercel proxy did not become ready; refusing to tighten API access first"
+          exit 1
+
       - name: Deploy CloudFormation stack
         run: |
           aws cloudformation deploy \
@@ -60,3 +74,6 @@ jobs:
           URL=$(aws cloudformation describe-stacks --stack-name insight-invest-api \
             --query 'Stacks[0].Outputs[?OutputKey==`FunctionUrl`].OutputValue' --output text)
           curl -sf "$URL/health" | grep healthy
+          curl -sf -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
+            -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
+            "$URL/meta" >/dev/null

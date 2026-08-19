@@ -9,11 +9,14 @@ Insight-Invest FastAPI Application
 - 인증: API_TOKEN 환경변수 설정 시 X-API-Key 헤더 필수 (공개 Function URL 보호)
 """
 
+import hmac
 import os
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+
+from .access import valid_site_access
 
 from .routers import (
     attention,
@@ -61,8 +64,13 @@ async def require_api_token(request: Request, call_next):
     token = os.environ.get("API_TOKEN", "")
     open_paths = {"/", "/health"}
     if token and request.url.path not in open_paths and request.method != "OPTIONS":
-        if request.headers.get("x-api-key") != token:
-            return JSONResponse(status_code=401, content={"detail": "invalid or missing API key"})
+        api_key_valid = hmac.compare_digest(request.headers.get("x-api-key", ""), token)
+        site_access_valid = valid_site_access(request.headers.get("x-site-access"))
+        if not api_key_valid or not site_access_valid:
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "invalid or missing access credentials"},
+            )
     return await call_next(request)
 
 

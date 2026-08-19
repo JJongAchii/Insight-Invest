@@ -101,6 +101,28 @@ body,
     background-color: var(--canvas);
     background-image: var(--ambient);
     background-attachment: fixed;
+    padding-top: env(safe-area-inset-top);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+
+  .app-main-safe {
+    padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+  }
+
+  @media (min-width: 768px) {
+    .app-main-safe {
+      padding-bottom: 1.5rem;
+    }
+  }
+
+  @media (display-mode: standalone) {
+    html,
+    body {
+      min-height: 100dvh;
+    }
   }
 }
 
