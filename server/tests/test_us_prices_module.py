@@ -10,6 +10,7 @@ from module.us_prices import (
     apply_entity_windows,
     compose_total_return,
     continuity_issues,
+    continuity_cutoff,
     continuity_warnings,
     entity_windows,
     stitch_segments,
@@ -127,6 +128,16 @@ def test_continuity_jump_bands_split_warn_and_exclude():
     issues = continuity_issues(hard_px)
     assert len(issues) == 1 and "150%" in issues[0]
     assert continuity_warnings(hard_px) == []
+
+
+def test_continuity_cutoff_keeps_only_the_current_clean_segment():
+    """미해결 초대형 점프가 있어도 종목 전체를 지우지 않고 경계 이후만 보존한다."""
+    idx = pd.bdate_range("2021-01-08", periods=6)
+    px = _px(idx, [3.0, 3.2, 6.84, 7.0, 16.54, 16.8], [3.0, 3.2, 6.84, 7.0, 16.54, 16.8])
+
+    assert len(continuity_issues(px)) == 2
+    assert continuity_cutoff(px) == idx[4]
+    assert continuity_issues(px.loc[idx[4]:]) == []
 
 
 def test_continuity_split_day_not_flagged():

@@ -166,6 +166,9 @@ def build_us_prices():
                 "[warn] us_prices: qdata 에 events/details 로더 없음 (구버전) — 실체 경계 절단 생략",
                 file=sys.stderr,
             )
+        verified_identities = (
+            set(windows["final"]) if windows is not None and len(windows) else set()
+        )
         chain_src = (
             set(windows["src"]) - finals if windows is not None and len(windows) else set()
         )
@@ -209,29 +212,40 @@ def build_us_prices():
         )
         return None
 
-    out, skipped, soft_warned, lost_div = [], [], [], 0.0
+    out, truncated, soft_warned, lost_div = [], [], [], 0.0
     for tk, g in px.groupby("ticker", sort=False):
         g = g.sort_values("date").set_index("date")
-        issues = uspx.continuity_issues(g)
+        identity_verified = tk in verified_identities
+        issues = uspx.continuity_issues(g, allow_large_jumps=identity_verified)
+        cutoff = None
         if issues:
-            skipped.append(f"{tk}({'; '.join(issues[:2])})")
-            continue
-        warns = uspx.continuity_warnings(g)
+            cutoff = uspx.continuity_cutoff(g, allow_large_jumps=identity_verified)
+            if cutoff is None:
+                raise RuntimeError(f"{tk}: 연속성 사유가 있지만 절단 기준일이 없습니다")
+            original_start = g.index.min()
+            g = g.loc[g.index >= cutoff]
+            truncated.append(
+                f"{tk}({original_start.date()}→{cutoff.date()}; {'; '.join(issues[:2])})"
+            )
+        warns = uspx.continuity_warnings(g, include_large=identity_verified)
         if warns:
-            soft_warned.append(f"{tk}({warns[0]})")
+            verified = "검증된 실체; " if identity_verified else ""
+            soft_warned.append(f"{tk}({verified}{warns[0]})")
         dv = div[div["ticker"] == tk]
+        if cutoff is not None:
+            dv = dv[dv["ex_date"] >= cutoff]
         lost_div += float(dv.loc[~dv["ex_date"].isin(g.index), "cash_amount"].sum())
         res = uspx.compose_total_return(g, dv)
         res = res.reset_index().rename(columns={"date": "trade_date"})
         res["ticker"] = tk
         out.append(res)
 
-    if skipped:
-        print(f"[warn] us_prices: 연속성 가드 제외 {len(skipped)}종목 — {skipped[:20]}",
+    if truncated:
+        print(f"[warn] us_prices: 연속성 가드 절단 {len(truncated)}종목 — {truncated[:20]}",
               file=sys.stderr)
     if soft_warned:
         print(
-            f"[warn] us_prices: 경고 밴드(무분할 25~100% 점프) {len(soft_warned)}종목 — "
+            f"[warn] us_prices: 가격 점프 경고(검증된 실체는 100% 초과 포함) {len(soft_warned)}종목 — "
             f"제외 아님, 표본: {soft_warned[:10]}",
             file=sys.stderr,
         )
@@ -245,7 +259,7 @@ def build_us_prices():
     missing = sorted(set(us["ticker"]) - set(df["ticker"]))
     if missing:
         print(f"[warn] us_prices: meta 등록 but 미수록 {len(missing)}종목 "
-              "(플로어 이전 상폐·미러 부재·가드 제외)", file=sys.stderr)
+              "(플로어 이전 상폐·미러 부재)", file=sys.stderr)
     df = df[["meta_id", "trade_date", "ticker", "adj_close", "gross_return"]]
     # 서빙 필터 키(meta_id) 정렬 — 로우그룹 프루닝 유지 (flows_by_ticker 관례와 동일).
     # server/datastore/prices.py._us_prices 는 ("meta_id","in",...) 필터로 읽는다 —
