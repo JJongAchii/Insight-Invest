@@ -18,7 +18,7 @@ from datastore import fx, index_prices
 from datastore import meta as meta_store
 from datastore import portfolio
 from module import analytics, portfolio_risk, regime, strategy_analytics
-from module.backtest import Backtest
+from module.backtest import Backtest, BacktestDataContractError
 from module.util import backtest_result, result_metrics
 
 logger = logging.getLogger(__name__)
@@ -50,6 +50,29 @@ VALID_STATUS = {"saved", "active"}
 # Lambda는 요청마다 다른 컨테이너일 수 있어 인메모리 결과 공유 불가 —
 # 백테스트 결과를 S3(tmp_results/{token}/)에 보관하고 저장 시 토큰으로 리로드한다.
 TMP_DIR = "tmp_results"
+BACKTEST_CALCULATION_VERSION = "backtest_close_execution_v2"
+
+
+def _execution_contract(algorithm: str, return_basis: str) -> dict:
+    data_dependent = algorithm in {"momentum", "dual_mmt"}
+    return {
+        "calculation_version": BACKTEST_CALCULATION_VERSION,
+        "return_basis": return_basis,
+        "signal_rule": (
+            "data_through_previous_session_close" if data_dependent else "predefined_weights"
+        ),
+        "execution_rule": (
+            "previous_session_close_signal__rebalance_session_close_execution"
+            if data_dependent
+            else "predefined_weights__rebalance_session_close_execution"
+        ),
+        "execution_price": "close",
+        "cash_distributions": (
+            "included"
+            if return_basis == "split_adjusted_total_return_including_cash_distributions"
+            else "not_exactly_included"
+        ),
+    }
 
 
 def _finite(x) -> Optional[float]:
@@ -92,6 +115,9 @@ def _persist_result(
                 "cost_bps": float(config["cost_bps"]),
                 "currency": config["currency"],
                 "benchmark": config["benchmark"],
+                "return_basis": config["return_basis"],
+                "execution_rule": config["execution_rule"],
+                "calculation_version": config["calculation_version"],
                 "params": json.dumps(config.get("params") or {}),
             }
         ]
@@ -171,6 +197,7 @@ def _build_response(
     metric_series: pd.Series,
     price: pd.DataFrame,
     bm_name: str,
+    calculation_contract: dict,
 ) -> dict:
     bm = _resolve_benchmark(bm_name, nav)
     bm_metrics = _short_metrics(result_metrics(bm)) if len(bm) > 1 else {}
@@ -181,19 +208,31 @@ def _build_response(
 
     contrib = analytics.contribution(book, price)
 
+    weight_rows = []
+    price_dates = pd.DatetimeIndex(price.index).sort_values().unique()
+    data_dependent = calculation_contract["signal_rule"] != "predefined_weights"
+    for row in weights_long.itertuples():
+        execution_date = pd.Timestamp(row.date)
+        prior = price_dates[price_dates < execution_date]
+        signal_date = prior[-1].strftime("%Y-%m-%d") if data_dependent and len(prior) else None
+        weight_rows.append(
+            {
+                "date": execution_date.strftime("%Y-%m-%d"),  # compatibility alias
+                "signal_date": signal_date,
+                "execution_date": execution_date.strftime("%Y-%m-%d"),
+                "execution_price": calculation_contract["execution_price"],
+                "ticker": row.ticker,
+                "weight": round(float(row.w), 6),
+            }
+        )
+
     return {
         "result_token": token,
         "strategy_name": strategy_name,
+        "calculation_contract": calculation_contract,
         "nav": _serialize_series(nav),
         "benchmark": {"name": bm_name, "nav": _serialize_series(bm)},
-        "weights": [
-            {
-                "date": pd.Timestamp(r.date).strftime("%Y-%m-%d"),
-                "ticker": r.ticker,
-                "weight": round(float(r.w), 6),
-            }
-            for r in weights_long.itertuples()
-        ],
+        "weights": weight_rows,
         "metrics": {
             "strategy": _short_metrics(metric_series),
             "benchmark": bm_metrics,
@@ -243,6 +282,14 @@ def _run_and_respond(
     if price.empty:
         raise HTTPException(status_code=404, detail="No price data found for given assets")
 
+    return_basis = price.attrs.get("return_basis")
+    if not return_basis:
+        raise HTTPException(
+            status_code=400,
+            detail="Return basis is unavailable; the backtest was stopped before mixing data.",
+        )
+    calculation_contract = _execution_contract(algorithm, str(return_basis))
+
     if currency == "KRW":
         price = fx.to_krw(price, tickers_iso)
 
@@ -275,6 +322,9 @@ def _run_and_respond(
         "currency": currency,
         "params": params or {},
         "benchmark": benchmark,
+        "return_basis": calculation_contract["return_basis"],
+        "execution_rule": calculation_contract["execution_rule"],
+        "calculation_version": calculation_contract["calculation_version"],
     }
     metrics_row = pd.DataFrame([_short_metrics(metric_series)])
     _persist_result(token, weights=weight, nav=nav, metrics_row=metrics_row, config=config)
@@ -288,6 +338,7 @@ def _run_and_respond(
         metric_series=metric_series,
         price=price,
         bm_name=benchmark,
+        calculation_contract=calculation_contract,
     )
 
 
@@ -489,6 +540,9 @@ async def get_strategy_analytics(port_id: int):
             "rebal_freq": cfg.get("rebal_freq"),
             "cost_bps": _finite(cost_bps) if cost_bps is not None else None,
             "currency": cfg.get("currency"),
+            "return_basis": cfg.get("return_basis"),
+            "execution_rule": cfg.get("execution_rule"),
+            "calculation_version": cfg.get("calculation_version"),
             "universe_n": len(portfolio.universe(port_id)),
             "saved_at": pd.Timestamp(row["created_at"].iloc[0]).strftime("%Y-%m-%d"),
             "bt_start": nav.index.min().strftime("%Y-%m-%d"),
@@ -738,7 +792,10 @@ async def run_backtest(request: schemas.BacktestRequest):
             )
 
     bt = Backtest(strategy_name=request.strategy_name)
-    price = bt.data(meta_id=request.meta_id)
+    try:
+        price = bt.data(meta_id=request.meta_id)
+    except BacktestDataContractError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     mapping = meta_store.resolve(meta_ids=request.meta_id)
     tickers_iso = dict(zip(mapping["ticker"], mapping["iso_code"]))
@@ -770,7 +827,10 @@ async def run_backtest_from_weights(request: schemas.FromWeightsRequest):
     tickers_iso = dict(zip(mapping["ticker"], mapping["iso_code"]))
 
     bt = Backtest(strategy_name=request.strategy_name)
-    price = bt.data(tickers=mapping["ticker"].tolist())
+    try:
+        price = bt.data(tickers=mapping["ticker"].tolist())
+    except BacktestDataContractError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return _run_and_respond(
         strategy_name=request.strategy_name,

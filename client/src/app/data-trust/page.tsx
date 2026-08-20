@@ -62,6 +62,28 @@ export default function DataTrustPage() {
               </div>
             </div>
           </section>
+          <section className="card">
+            <div>
+              <h2 className="font-semibold text-ink">Calculation Contracts</h2>
+              <p className="mt-1 text-sm text-ink-secondary">가격·수익률·밸류에이션 숫자가 포함하는 범위와 실행 시점을 확인합니다.</p>
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+              {(data.calculation_contracts ?? []).map((item) => (
+                <article key={item.key} className="rounded-xl border border-edge bg-raised p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-sm font-semibold text-ink">{item.label}</p>
+                    <span className="text-xs text-ink-muted num">{item.version}</span>
+                  </div>
+                  <dl className="mt-3 space-y-2 text-xs">
+                    <div><dt className="inline text-ink-muted">Basis · </dt><dd className="inline text-ink">{item.basis}</dd></div>
+                    {item.execution && <div><dt className="inline text-ink-muted">Execution · </dt><dd className="inline text-ink">{item.execution}</dd></div>}
+                    <div><dt className="inline text-ink-muted">Coverage · </dt><dd className="inline text-ink">{item.coverage}</dd></div>
+                  </dl>
+                  <p className="mt-3 text-xs text-ink-secondary">{item.detail}</p>
+                </article>
+              ))}
+            </div>
+          </section>
           {data.data_status.length === 0 ? (
             <div className="card text-sm text-ink-muted">배치 상태표가 아직 발행되지 않았습니다.</div>
           ) : (

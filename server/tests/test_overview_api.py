@@ -1,6 +1,7 @@
 """홈 판단 요약은 방향 충돌과 데이터 신선도를 숨기지 않는다."""
 
 import pandas as pd
+
 from app.routers import overview
 
 
@@ -106,3 +107,26 @@ def test_data_status_marks_failed_required_build(monkeypatch):
     us = next(row for row in rows if row["dataset"] == "us_prices")
     assert us["level"] == "error"
     assert us["detail"] == "최근 빌드 실패"
+
+
+def test_calculation_contracts_do_not_overstate_kr_etf_or_execution_timing():
+    contracts = {row["key"]: row for row in overview._calculation_contracts()}
+
+    etf = contracts["kr_etf_returns"]
+    assert etf["basis"] == "KRX reference-price adjusted return"
+    assert "Total Return으로 표시하지 않습니다" in etf["detail"]
+
+    cash = contracts["kr_cash_distributions"]
+    assert cash["basis"] == "Unavailable"
+    assert cash["version"] == "kr_cash_events_gated_v1"
+
+    study = contracts["factor_signal_returns"]
+    assert study["execution"] == "D close signal → D+1 open entry"
+    assert study["version"] == "kr_price_return_v2"
+
+    backtest = contracts["backtest_returns"]
+    assert backtest["version"] == "backtest_close_execution_v2"
+    assert "혼합 시 실행 중단" in backtest["coverage"]
+
+    us_valuation = contracts["us_valuation"]
+    assert us_valuation["coverage"] == "PER/PBR 미산출"

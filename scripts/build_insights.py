@@ -151,8 +151,7 @@ def build_asset_master() -> pd.DataFrame:
     asset_master.assert_ticker_coverage(kr_master, "qdata_krx_stock_master", kr["ticker"])
     storage.write_parquet(updated_registry, "asset_id_registry.parquet")
     print(
-        f"[asset_master] {len(master):,}종목, 신규 ID {added:,}, "
-        f"KR 주식 {len(kr):,}종목 100% 매칭"
+        f"[asset_master] {len(master):,}종목, 신규 ID {added:,}, KR 주식 {len(kr):,}종목 100% 매칭"
     )
     return master
 
@@ -709,31 +708,81 @@ def build_sector_perf() -> pd.DataFrame:
 
 
 def build_valuation_daily():
-    """시장별 일별 밸류에이션 — 시총가중 조화 PER/PBR + 시총가중 배당수익률.
+    """시장별 일별 밸류에이션과 산출 커버리지.
 
-    PER/PBR=0은 KRX 결측 표기(적자 등)라 양수만 사용. pct_rank는 전 기간 백분위.
-    krx_fundamental 미수집(백필 중)이면 None 반환 → main이 스킵.
+    가격 유니버스를 왼쪽 축으로 삼아 펀더멘털이 없는 종목을 조용히 삭제하지
+    않는다. PER/PBR=0은 KRX의 산출불가 표기이므로 양수 종목만 조화평균에 쓰되,
+    종목수·시총 기준 커버리지와 적자/0 이하 EPS 비중을 함께 발행한다.
+    ``pct_rank_*``는 화면의 현재 위치 설명 전용이며 과거 시점 전략 입력으로
+    사용하면 안 되는 full-history 통계다.
     """
     try:
-        f = qdata_api.load_krx_fundamental(columns=["market", "per", "pbr", "div"])
+        f = qdata_api.load_krx_fundamental(columns=["per", "pbr", "div", "eps", "bps", "dps"])
     except FileNotFoundError:
         print("[skip] valuation (fundamental 미수집)")
         return None
 
     start = pd.Timestamp(f["date"].min()).strftime("%Y-%m-%d")
-    px = qdata_api.load_krx_prices(start=start, columns=["mktcap"])
-    m = f.merge(px[["date", "ticker", "mktcap"]], on=["date", "ticker"], how="inner")
+    px = qdata_api.load_krx_prices(
+        start=start,
+        columns=["market", "close", "mktcap", "shares"],
+    )
+    f = f.drop_duplicates(["date", "ticker"], keep="last")
+    px = px.drop_duplicates(["date", "ticker"], keep="last")
+    m = px.merge(
+        f,
+        on=["date", "ticker"],
+        how="left",
+        validate="one_to_one",
+        indicator=True,
+    )
     m = m[m["mktcap"] > 0]
 
     def _agg(g: pd.DataFrame) -> pd.Series:
         pe = g[g["per"] > 0]
         pb = g[g["pbr"] > 0]
         dv = g.dropna(subset=["div"])
+        earnings = g.dropna(subset=["eps", "shares"])
+        earnings = earnings[earnings["shares"] > 0]
+        total_cap = g["mktcap"].sum()
+
+        def _coverage(part: pd.DataFrame) -> tuple[float, float]:
+            return (
+                len(part) / len(g) * 100.0 if len(g) else np.nan,
+                part["mktcap"].sum() / total_cap * 100.0 if total_cap > 0 else np.nan,
+            )
+
+        per_names, per_cap = _coverage(pe)
+        pbr_names, pbr_cap = _coverage(pb)
+        div_names, div_cap = _coverage(dv)
+        earnings_names, earnings_cap = _coverage(earnings)
+        fund = g[g["_merge"] == "both"]
+        fund_names, fund_cap = _coverage(fund)
+        non_positive_eps = g[g["eps"].notna() & (g["eps"] <= 0)]
         return pd.Series(
             {
                 "per": pe["mktcap"].sum() / (pe["mktcap"] / pe["per"]).sum() if len(pe) else np.nan,
                 "pbr": pb["mktcap"].sum() / (pb["mktcap"] / pb["pbr"]).sum() if len(pb) else np.nan,
                 "div": (dv["div"] * dv["mktcap"]).sum() / dv["mktcap"].sum() if len(dv) else np.nan,
+                "n_stocks": int(len(g)),
+                "fundamental_name_coverage_pct": fund_names,
+                "fundamental_mktcap_coverage_pct": fund_cap,
+                "per_name_coverage_pct": per_names,
+                "per_mktcap_coverage_pct": per_cap,
+                "pbr_name_coverage_pct": pbr_names,
+                "pbr_mktcap_coverage_pct": pbr_cap,
+                "dividend_name_coverage_pct": div_names,
+                "dividend_mktcap_coverage_pct": div_cap,
+                "earnings_name_coverage_pct": earnings_names,
+                "earnings_mktcap_coverage_pct": earnings_cap,
+                "non_positive_eps_name_pct": (
+                    len(non_positive_eps) / len(g) * 100.0 if len(g) else np.nan
+                ),
+                "aggregate_earnings_yield_pct": (
+                    (earnings["eps"] * earnings["shares"]).sum() / earnings["mktcap"].sum() * 100.0
+                    if len(earnings) and earnings["mktcap"].sum() > 0
+                    else np.nan
+                ),
             }
         )
 
@@ -741,7 +790,8 @@ def build_valuation_daily():
     df = df.sort_values(["market", "date"]).reset_index(drop=True)
     for col in ("pbr", "per"):
         df[f"pct_rank_{col}"] = df.groupby("market")[col].rank(pct=True) * 100
-    df = df[["date", "market", "per", "pbr", "div", "pct_rank_pbr", "pct_rank_per"]]
+    df["percentile_scope"] = "full_available_history_display_only"
+    df["calculation_version"] = "kr_market_valuation_v2"
     df["as_of"] = pd.Timestamp(m["date"].max()).strftime("%Y-%m-%d")
     return df
 
@@ -1041,6 +1091,10 @@ def build_rebal_signals():
 
 SIGNAL_HORIZONS = (5, 20, 60)  # 이벤트 이후 성과 측정 거래일 수
 SIGNAL_COOLDOWN = 20  # 종목별 이벤트 재발화 최소 간격(거래일) — 연속 참 구간 dedup
+RETURN_CALCULATION_VERSION = "kr_price_return_v2"
+NEXT_OPEN_EXECUTION_RULE = "signal_close_D__entry_open_D+1__exit_open_D+1+H"
+FACTOR_EXECUTION_RULE = "signal_close_D__entry_open_D+1__exit_open_D+2"
+PRICE_RETURN_BASIS = "split_adjusted_price_return_ex_cash_distributions"
 
 
 def _signed_streak(F: pd.DataFrame) -> pd.DataFrame:
@@ -1092,11 +1146,24 @@ def _study_row(sig: str, h: int, excess: np.ndarray, fwd_ret: np.ndarray) -> dic
     }
 
 
+def _forward_open_returns(adj_open: pd.DataFrame, horizon: int) -> pd.DataFrame:
+    """D 종가 확정 신호의 실행 가능 전방수익률(%).
+
+    신호일 D의 종가·수급·밸류에이션은 장 마감 뒤에야 확정되므로 D 종가 체결을
+    가정하지 않는다. 진입은 D+1 시가, 청산은 그로부터 ``horizon`` 거래일 뒤
+    시가(D+1+H)다. 마지막 H+1개 신호일은 미래 청산가가 없어 NaN으로 남는다.
+    """
+    if horizon <= 0:
+        raise ValueError("horizon은 양수여야 합니다")
+    return (adj_open.shift(-(horizon + 1)) / adj_open.shift(-1) - 1.0) * 100.0
+
+
 def build_signal_study():
     """신호 이벤트 스터디 — 전 기간(2016~) 신호 발생 재구성 + 전방 초과성과.
 
     유동성 종목(시총≥100억, 스팩 제외, 당일 거래 존재)에 한해 13개 신호를
-    정의하고, 각 이벤트 이후 h∈{5,20,60} 거래일 초과수익(adj_close 기반)을
+    정의하고, 각 이벤트를 다음 거래일 수정시가에 진입한 뒤 h∈{5,20,60}
+    거래일 후 수정시가에 청산한 초과수익을
     집계한다. baseline을 포함한 모든 신호가 이 유니버스를 공유한다.
 
     벤치마크는 **유동성 유니버스 동일가중 횡단면 평균**이다. 시총가중 KOSPI를
@@ -1119,10 +1186,12 @@ def build_signal_study():
     """
     try:
         px = qdata_api.load_krx_prices(
-            columns=["adj_close", "close", "chg_pct", "mktcap", "volume"]
+            columns=["open", "adj_factor", "adj_close", "chg_pct", "mktcap", "volume"]
         )
-        px = px[["date", "ticker", "adj_close", "chg_pct", "mktcap", "volume"]]  # close 미사용
         P = px.pivot(index="date", columns="ticker", values="adj_close").sort_index()
+        adjusted_open = px.pivot(index="date", columns="ticker", values="open").reindex_like(
+            P
+        ) * px.pivot(index="date", columns="ticker", values="adj_factor").reindex_like(P)
         M = px.pivot(index="date", columns="ticker", values="mktcap").reindex_like(P)
         CH = px.pivot(index="date", columns="ticker", values="chg_pct").reindex_like(P)
         V = px.pivot(index="date", columns="ticker", values="volume").reindex_like(P)
@@ -1193,7 +1262,6 @@ def build_signal_study():
         }
         del ret_5d, ret_20d, hi_252, intensity_20d, streak, CH, M
 
-        Pv = P.to_numpy(dtype="float64")
         Lv = liquid.to_numpy()
         n_dates = len(P.index)
         as_of = _as_of()
@@ -1209,8 +1277,7 @@ def build_signal_study():
 
         rows = []
         for h in SIGNAL_HORIZONS:
-            fwd = np.full_like(Pv, np.nan)
-            fwd[: n_dates - h] = (Pv[h:] / Pv[: n_dates - h] - 1) * 100
+            fwd = _forward_open_returns(adjusted_open, h).to_numpy(dtype="float64")
             fwd = np.where(Lv, fwd, np.nan)  # 벤치마크·기준선 모두 유동성 유니버스
             with warnings.catch_warnings():  # 상장 전/상폐 후 전부-NaN 행 → 빈 평균
                 warnings.simplefilter("ignore", RuntimeWarning)
@@ -1223,7 +1290,7 @@ def build_signal_study():
 
             for sig, ev in events.items():
                 dpos, tpos = ev[:, 0], ev[:, 1]
-                keep = dpos + h < n_dates  # 지평선이 이력 밖이면 제외
+                keep = dpos + h + 1 < n_dates  # D+1 진입·D+1+H 청산이 모두 있어야 함
                 dpos, tpos = dpos[keep], tpos[keep]
                 e, f = exc[dpos, tpos], fwd[dpos, tpos]
                 m = np.isfinite(e) & np.isfinite(f)  # 상폐 등 결측 제외
@@ -1232,6 +1299,9 @@ def build_signal_study():
 
         df = pd.DataFrame(rows)
         df["as_of"] = as_of
+        df["return_basis"] = PRICE_RETURN_BASIS
+        df["execution_rule"] = NEXT_OPEN_EXECUTION_RULE
+        df["calculation_version"] = RETURN_CALCULATION_VERSION
         print("[signal_study]")
         print(df.to_string(index=False))
         return df
@@ -1262,14 +1332,18 @@ def _factor_scores(P: pd.DataFrame, M: pd.DataFrame, PER: pd.DataFrame) -> dict:
 def _factor_returns_df():
     """일별 롱숏 5분위 스프레드 (KOSPI+KOSDAQ 유동성 유니버스) — 1회 계산 캐시.
 
-    각 일자 횡단면을 팩터별로 5분위 랭크, 상위20% 평균 익일수익 − 하위20% 평균
-    (등가중, 익일수익으로 look-ahead 방지). cum_index는 시작 100 재기준화 체인.
+    각 일자 D 마감 데이터로 횡단면을 팩터별 5분위 랭크하고 D+1 시가 진입,
+    D+2 시가 청산 수익의 상위20% 평균 − 하위20% 평균을 계산한다. 종가 확정
+    신호를 같은 날 종가에 체결하는 가정은 쓰지 않는다. cum_index는 시작 100 체인.
     """
     if "factor_returns" in _cache:
         return _cache["factor_returns"]
 
-    px = qdata_api.load_krx_prices(columns=["adj_close", "mktcap"])
+    px = qdata_api.load_krx_prices(columns=["open", "adj_factor", "adj_close", "mktcap"])
     P = px.pivot(index="date", columns="ticker", values="adj_close").sort_index()
+    adjusted_open = px.pivot(index="date", columns="ticker", values="open").reindex_like(
+        P
+    ) * px.pivot(index="date", columns="ticker", values="adj_factor").reindex_like(P)
     M = px.pivot(index="date", columns="ticker", values="mktcap").sort_index()
     del px
 
@@ -1282,7 +1356,7 @@ def _factor_returns_df():
     del fund
 
     liquid = M >= MKTCAP_FLOOR
-    fwd_1d = P.shift(-1) / P - 1  # 익일수익 (t→t+1) — look-ahead 방지
+    fwd_1d = _forward_open_returns(adjusted_open, 1) / 100.0
     scores = _factor_scores(P, M, PER)
     del PER
 
@@ -1299,6 +1373,14 @@ def _factor_returns_df():
             pd.DataFrame(
                 {
                     "date": spread.index,
+                    "entry_date": pd.Series(P.index, index=P.index)
+                    .shift(-1)
+                    .reindex(spread.index)
+                    .to_numpy(),
+                    "exit_date": pd.Series(P.index, index=P.index)
+                    .shift(-2)
+                    .reindex(spread.index)
+                    .to_numpy(),
                     "factor": factor,
                     "spread": spread.to_numpy(),
                     "cum_index": cum_index.to_numpy(),
@@ -1307,6 +1389,9 @@ def _factor_returns_df():
         )
     df = pd.concat(frames, ignore_index=True).sort_values(["factor", "date"]).reset_index(drop=True)
     df["as_of"] = pd.Timestamp(P.index[-1]).strftime("%Y-%m-%d")
+    df["return_basis"] = PRICE_RETURN_BASIS
+    df["execution_rule"] = FACTOR_EXECUTION_RULE
+    df["calculation_version"] = RETURN_CALCULATION_VERSION
     _cache["factor_returns"] = df
     return df
 
@@ -1369,6 +1454,9 @@ def build_factor_current():
         )
     df = pd.DataFrame(rows)
     df["as_of"] = fr["as_of"].iloc[0]
+    df["return_basis"] = PRICE_RETURN_BASIS
+    df["execution_rule"] = FACTOR_EXECUTION_RULE
+    df["calculation_version"] = RETURN_CALCULATION_VERSION
     print("[factor_current]")
     print(df.to_string(index=False))
     return df

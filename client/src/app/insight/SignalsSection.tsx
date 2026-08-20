@@ -92,7 +92,7 @@ const TrackRecordStrip: React.FC<{
     <div className="rounded-xl border border-edge bg-raised p-3 flex flex-col gap-2.5">
       <div className="flex items-center gap-1.5">
         <span className="text-xs font-semibold text-ink-secondary">
-          역사적 성과 ·{" "}
+          Historical Track Record ·{" "}
           {b20 ? "동일가중 평균 대비" : "구 벤치마크 기준 · 집계 갱신 대기"}{" "}
           (2016~)
         </span>
@@ -111,7 +111,7 @@ const TrackRecordStrip: React.FC<{
               key={h}
               className="rounded-lg border border-edge bg-surface px-3 py-2"
             >
-              <p className="text-[11px] text-ink-muted">{h}일 후 초과수익</p>
+              <p className="text-[11px] text-ink-muted">{h}D Forward Excess</p>
               {r ? (
                 <>
                   {delta !== null && (
@@ -242,6 +242,12 @@ const SignalsSection: React.FC = () => {
         <div className="flex flex-col gap-3">
           {investor === "frgn" && studyRows.length > 0 && (
             <TrackRecordStrip rows={studyRows} baseline={baselineRows} />
+          )}
+          {investor === "frgn" && studyData?.execution_rule && (
+            <p className="rounded-lg bg-raised px-3 py-2 text-xs text-ink-secondary">
+              <span className="font-semibold text-ink">Execution</span> · 신호일 종가 확정 후 다음 거래일 시가에 진입하고, 표시된 거래일 뒤 시가에 청산한 가격수익률입니다.
+              {studyData.calculation_version && <span className="ml-2 text-ink-muted num">{studyData.calculation_version}</span>}
+            </p>
           )}
           <p className="text-xs text-ink-muted flex items-center gap-1.5">
             <span>{CAPTIONS[type]}</span>

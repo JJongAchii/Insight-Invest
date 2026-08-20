@@ -223,6 +223,17 @@ async def get_valuation(market: str = "KOSPI"):
         "div": last["div"],
         "pct_rank_per": last["pct_rank_per"],
         "pct_rank_pbr": last["pct_rank_pbr"],
+        "n_stocks": last.get("n_stocks"),
+        "fundamental_name_coverage_pct": last.get("fundamental_name_coverage_pct"),
+        "fundamental_mktcap_coverage_pct": last.get("fundamental_mktcap_coverage_pct"),
+        "per_name_coverage_pct": last.get("per_name_coverage_pct"),
+        "per_mktcap_coverage_pct": last.get("per_mktcap_coverage_pct"),
+        "pbr_name_coverage_pct": last.get("pbr_name_coverage_pct"),
+        "pbr_mktcap_coverage_pct": last.get("pbr_mktcap_coverage_pct"),
+        "earnings_name_coverage_pct": last.get("earnings_name_coverage_pct"),
+        "earnings_mktcap_coverage_pct": last.get("earnings_mktcap_coverage_pct"),
+        "non_positive_eps_name_pct": last.get("non_positive_eps_name_pct"),
+        "aggregate_earnings_yield_pct": last.get("aggregate_earnings_yield_pct"),
     }
     wk = df.copy()
     wk["week"] = wk["date"].dt.to_period("W").astype(str)
@@ -233,6 +244,8 @@ async def get_valuation(market: str = "KOSPI"):
             "as_of": _as_of(df),
             "rows": wk[["date", "per", "pbr", "div"]].to_dict(orient="records"),
             "current": current,
+            "calculation_version": last.get("calculation_version"),
+            "percentile_scope": last.get("percentile_scope"),
         }
     )
 
@@ -240,9 +253,16 @@ async def get_valuation(market: str = "KOSPI"):
 @router.get("/signals/study")
 async def get_signals_study():
     """신호 이벤트 스터디 — 신호×지평선별 전방 초과성과 집계 (signal_study.parquet)."""
-    df = _read("signal_study.parquet")
+    df = signal_stats.load_study()
     if df is None or df.empty:
-        return {"as_of": None, "rows": []}
+        return {
+            "as_of": None,
+            "rows": [],
+            "return_basis": None,
+            "execution_rule": None,
+            "calculation_version": signal_stats.REQUIRED_CALCULATION_VERSION,
+            "status": "rebuild_required_or_unavailable",
+        }
     cols = [
         "signal_type",
         "horizon",
@@ -252,7 +272,15 @@ async def get_signals_study():
         "hit_rate",
         "avg_fwd_ret",
     ]
-    return _round2({"as_of": _as_of(df), "rows": df[cols].to_dict(orient="records")})
+    return _round2(
+        {
+            "as_of": _as_of(df),
+            "rows": df[cols].to_dict(orient="records"),
+            "return_basis": df.iloc[-1].get("return_basis"),
+            "execution_rule": df.iloc[-1].get("execution_rule"),
+            "calculation_version": df.iloc[-1].get("calculation_version"),
+        }
+    )
 
 
 @router.get("/spotlight")
@@ -332,7 +360,18 @@ async def get_spotlight():
 async def get_factors():
     """팩터 렌즈 — 현재 스냅샷 + 누적지수 이력(최근 ~3년, 주간 다운샘플)."""
     cur = _read("factor_current.parquet")
-    hist = _read("factor_returns.parquet", columns=["date", "factor", "cum_index", "as_of"])
+    hist = _read("factor_returns.parquet")
+
+    if not signal_stats.is_current_artifact(cur) or not signal_stats.is_current_artifact(hist):
+        return {
+            "as_of": None,
+            "current": [],
+            "history": [],
+            "return_basis": None,
+            "execution_rule": None,
+            "calculation_version": signal_stats.REQUIRED_CALCULATION_VERSION,
+            "status": "rebuild_required_or_unavailable",
+        }
 
     current = []
     if cur is not None and not cur.empty:
@@ -350,7 +389,24 @@ async def get_factors():
     if as_of is None and cur is not None and not cur.empty:
         as_of = _as_of(cur)
 
-    return _round2({"as_of": as_of, "current": current, "history": history})
+    return _round2(
+        {
+            "as_of": as_of,
+            "current": current,
+            "history": history,
+            "return_basis": (
+                hist.iloc[-1].get("return_basis") if hist is not None and not hist.empty else None
+            ),
+            "execution_rule": (
+                hist.iloc[-1].get("execution_rule") if hist is not None and not hist.empty else None
+            ),
+            "calculation_version": (
+                hist.iloc[-1].get("calculation_version")
+                if hist is not None and not hist.empty
+                else None
+            ),
+        }
+    )
 
 
 @lru_cache(maxsize=1)

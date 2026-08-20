@@ -86,7 +86,7 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
     if (!priceData?.prices) return [];
     return priceData.prices.map((p) => ({
       date: p.trade_date,
-      price: p.adj_close,
+      price: p.value ?? p.adj_close,
     }));
   }, [priceData]);
 

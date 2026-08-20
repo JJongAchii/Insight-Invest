@@ -93,12 +93,18 @@ const FactorSection: React.FC = () => {
         <EmptyState title="팩터 데이터 수집 중" />
       ) : (
         <div className="flex flex-col gap-6">
+          {data.execution_rule && (
+            <div className="rounded-xl border border-edge bg-raised p-3 text-xs text-ink-secondary">
+              <span className="font-semibold text-ink">Execution</span> · 신호일 종가 확정 후 다음 거래일 시가에 진입해 측정합니다.
+              {data.calculation_version && <span className="ml-2 text-ink-muted num">{data.calculation_version}</span>}
+            </div>
+          )}
           {/* Current factor spread returns */}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="table-header">
-                  <th className="py-2.5 px-3 text-left rounded-l-lg">팩터</th>
+                  <th className="py-2.5 px-3 text-left rounded-l-lg">Factor</th>
                   <th className="py-2.5 px-3 text-right">1D</th>
                   <th className="py-2.5 px-3 text-right">1W</th>
                   <th className="py-2.5 px-3 text-right">1M</th>
@@ -164,7 +170,7 @@ const FactorSection: React.FC = () => {
           <div>
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm font-medium text-ink-secondary inline-flex items-center gap-1.5">
-                팩터 로테이션
+                Factor Rotation
                 <InfoTip helpKey="factor.rotation" />
               </p>
               <span className="text-xs text-ink-muted">3년 · 시작값 100</span>

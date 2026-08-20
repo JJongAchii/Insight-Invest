@@ -1,6 +1,7 @@
 from datetime import date
 
 import pandas as pd
+import pytest
 
 from datastore import prices
 
@@ -52,3 +53,41 @@ def test_kr_price_source_routes_by_security_type_not_meta_id(monkeypatch):
         "005930": 80_000.0,
         "069500": 40_000.0,
     }
+
+
+def test_kr_etf_source_is_explicitly_raw_price(monkeypatch):
+    mapping = pd.DataFrame({"meta_id": [10], "ticker": ["069500"]})
+    source = pd.DataFrame(
+        {
+            "date": pd.to_datetime(["2026-08-19", "2026-08-20"]),
+            "ticker": ["069500", "069500"],
+            "close": [40_000.0, 40_400.0],
+        }
+    )
+    monkeypatch.setattr(prices.qdata_api, "load_krx_etf_prices", lambda **_kwargs: source.copy())
+
+    result = prices._kr_etf_prices(mapping, date(2026, 8, 19), date(2026, 8, 20))
+
+    assert result["series_value"].tolist() == [40_000.0, 40_400.0]
+    assert set(result["return_basis"]) == {"raw_price_return_ex_cash_distributions"}
+    assert result["gross_return"].iloc[1] == pytest.approx(0.01)
+
+
+def test_kr_etf_prefers_krx_reference_price_adjusted_series(monkeypatch):
+    mapping = pd.DataFrame({"meta_id": [10], "ticker": ["069500"]})
+    source = pd.DataFrame(
+        {
+            "date": pd.to_datetime(["2026-08-19", "2026-08-20"]),
+            "ticker": ["069500", "069500"],
+            "close": [40_000.0, 38_000.0],
+            "adj_close": [38_000.0, 38_000.0],
+            "chg_pct": [0.0, 0.0],
+        }
+    )
+    monkeypatch.setattr(prices.qdata_api, "load_krx_etf_prices", lambda **_kwargs: source.copy())
+
+    result = prices._kr_etf_prices(mapping, date(2026, 8, 19), date(2026, 8, 20))
+
+    assert result["series_value"].tolist() == [38_000.0, 38_000.0]
+    assert set(result["return_basis"]) == {"krx_reference_price_adjusted_return"}
+    assert result["gross_return"].tolist() == [0.0, 0.0]

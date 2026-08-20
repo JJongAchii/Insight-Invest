@@ -11,16 +11,64 @@ Provides endpoints for:
 import logging
 import math
 from datetime import date, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
-import datastore
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
 
+import datastore
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/price", tags=["Price"])
+
+KRX_RATIO_TOLERANCE = 0.011
+
+
+def _series_contract(meta_row: pd.Series, return_basis: Optional[str] = None) -> Dict:
+    """차트·성과 숫자가 실제로 무엇을 포함하는지 명시하는 표시 계약."""
+    iso_code = str(meta_row.get("iso_code", ""))
+    security_type = str(meta_row.get("security_type", "")).upper()
+    if iso_code == "US":
+        return {
+            "series_type": "total_return_index",
+            "label": "Total Return",
+            "return_basis": "split_adjusted_total_return_including_cash_distributions",
+            "capital_actions": "included",
+            "cash_distributions": "included",
+            "calculation_version": "us_total_return_v1",
+            "warning": None,
+        }
+    if security_type == "ETF":
+        if return_basis == "krx_reference_price_adjusted_return":
+            return {
+                "series_type": "krx_reference_price_adjusted",
+                "label": "KRX Adjusted Price",
+                "return_basis": return_basis,
+                "capital_actions": "included_from_krx_reference_price",
+                "cash_distributions": "implicit_in_reference_price",
+                "calculation_version": "kr_etf_reference_price_v1",
+                "warning": "KRX 분배락 기준가격은 반영하지만 현금 분배 이벤트를 직접 합성한 Total Return은 아닙니다.",
+            }
+        return {
+            "series_type": "raw_close",
+            "label": "Raw Price",
+            "return_basis": "raw_price_return_ex_cash_distributions",
+            "capital_actions": "unverified",
+            "cash_distributions": "excluded",
+            "calculation_version": "kr_etf_raw_price_v1",
+            "warning": "KR ETF는 현재 원종가 기준이며 분배금과 자본행동 조정은 포함하지 않습니다.",
+        }
+    return {
+        "series_type": "split_adjusted_price",
+        "label": "Adjusted Price",
+        "return_basis": "split_adjusted_price_return_ex_cash_distributions",
+        "capital_actions": "included_from_krx_reference_price",
+        "cash_distributions": "excluded",
+        "calculation_version": "kr_price_return_v1",
+        "warning": "현금배당은 포함하지 않은 가격수익률입니다.",
+    }
 
 
 def _calculate_metrics(prices: pd.Series) -> Dict[str, Optional[float]]:
@@ -95,11 +143,14 @@ def _calculate_metrics(prices: pd.Series) -> Dict[str, Optional[float]]:
     }
 
 
-def _kr_summary_extras(ticker: str) -> Dict:
-    """KR 종목 부가 정보 — 최근일 거래대금·시총, 최신 PER/PBR/배당수익률, 20일 수급.
+def _kr_summary_extras(ticker: str, security_type: str = "STOCK") -> Dict:
+    """KR 종목 부가 정보와 동일 기준일 밸류에이션 검증 결과.
 
-    소스별 독립 try/except — 어떤 소스가 없어도 (fundamental 백필 중 등) None으로 응답.
+    가격과 펀더멘털을 독립적인 최신 행으로 섞지 않고 ``date,ticker``가 같은 행만
+    사용한다. KRX 공시 비율은 EPS/BPS/DPS·주식수·시총·종가로 재계산해 허용오차를
+    벗어나면 해당 비율을 fail-closed 처리한다.
     """
+    is_etf = str(security_type).upper() == "ETF"
     extras: Dict = {
         "value": None,
         "mktcap": None,
@@ -107,13 +158,33 @@ def _kr_summary_extras(ticker: str) -> Dict:
         "pbr": None,
         "div": None,
         "flows_recent": None,
+        "valuation": {
+            "status": "not_applicable" if is_etf else "unavailable",
+            "as_of": None,
+            "price_as_of": None,
+            "fundamental_as_of": None,
+            "source": "KRX",
+            "calculation_version": "kr_valuation_v2",
+            "per_status": "not_applicable" if is_etf else "unavailable",
+            "pbr_status": "not_applicable" if is_etf else "unavailable",
+            "dividend_yield_status": "not_applicable" if is_etf else "unavailable",
+            "missing_reasons": (["ETF에는 기업 밸류에이션을 적용하지 않습니다."] if is_etf else []),
+            "inputs": None,
+            "checks": None,
+        },
     }
-    start = (date.today() - timedelta(days=14)).isoformat()
+    start = (date.today() - timedelta(days=31)).isoformat()
+    px = pd.DataFrame()
+    fund = pd.DataFrame()
 
     try:
         from qdata import api as qdata_api
 
-        px = qdata_api.load_krx_prices(start=start, tickers=[ticker], columns=["value", "mktcap"])
+        px = qdata_api.load_krx_prices(
+            start=start,
+            tickers=[ticker],
+            columns=["close", "value", "mktcap", "shares"],
+        )
         if not px.empty:
             row = px.sort_values("date").iloc[-1]
             extras["value"] = float(row["value"]) if pd.notna(row["value"]) else None
@@ -122,21 +193,144 @@ def _kr_summary_extras(ticker: str) -> Dict:
         logger.warning(f"KR price extras 조회 실패: {ticker}", exc_info=True)
 
     try:
-        from qdata import api as qdata_api
-
         fund = qdata_api.load_krx_fundamental(
-            start=start, tickers=[ticker], columns=["per", "pbr", "div"]
+            start=start,
+            tickers=[ticker],
+            columns=["per", "pbr", "div", "eps", "bps", "dps"],
         )
-        if not fund.empty:
-            row = fund.sort_values("date").iloc[-1]
-            # KRX는 PER/PBR=0을 결측(적자·산출불가) 표기로 사용 — 0은 None 처리
-            per = float(row["per"]) if pd.notna(row["per"]) else 0.0
-            pbr = float(row["pbr"]) if pd.notna(row["pbr"]) else 0.0
-            extras["per"] = per if per > 0 else None
-            extras["pbr"] = pbr if pbr > 0 else None
-            extras["div"] = float(row["div"]) if pd.notna(row["div"]) else None
     except Exception:
         logger.debug(f"KR fundamental 조회 실패 (미수집 가능): {ticker}")
+
+    if not is_etf and not px.empty and not fund.empty:
+        try:
+            price_cols = ["date", "ticker", "close", "mktcap", "shares"]
+            fund_cols = ["date", "ticker", "per", "pbr", "div", "eps", "bps", "dps"]
+            same_day = px[price_cols].merge(
+                fund[fund_cols],
+                on=["date", "ticker"],
+                how="inner",
+                validate="one_to_one",
+            )
+            if same_day.empty:
+                extras["valuation"]["missing_reasons"] = [
+                    "가격과 펀더멘털의 공통 기준일이 없습니다."
+                ]
+            else:
+                row = same_day.sort_values("date").iloc[-1]
+
+                def _number(name: str) -> Optional[float]:
+                    return float(row[name]) if pd.notna(row[name]) else None
+
+                close = _number("close")
+                mktcap = _number("mktcap")
+                shares = _number("shares")
+                eps = _number("eps")
+                bps = _number("bps")
+                dps = _number("dps")
+                source_per = _number("per")
+                source_pbr = _number("pbr")
+                source_div = _number("div")
+                computed_per = (
+                    mktcap / (eps * shares)
+                    if mktcap and shares and shares > 0 and eps and eps > 0
+                    else None
+                )
+                computed_pbr = (
+                    mktcap / (bps * shares)
+                    if mktcap and shares and shares > 0 and bps and bps > 0
+                    else None
+                )
+                computed_div = (
+                    dps / close * 100.0 if close and close > 0 and dps is not None else None
+                )
+
+                def _ratio_status(
+                    source: Optional[float], computed: Optional[float], unavailable: str
+                ) -> tuple[Optional[float], str, Optional[float]]:
+                    if computed is None:
+                        return None, unavailable, None
+                    if source is None or source <= 0:
+                        return None, "source_unavailable", None
+                    error = abs(source - computed)
+                    if error > KRX_RATIO_TOLERANCE:
+                        return None, "quality_error", error
+                    return source, "ok", error
+
+                per, per_status, per_error = _ratio_status(
+                    source_per,
+                    computed_per,
+                    (
+                        "loss_or_zero_earnings"
+                        if eps is not None and eps <= 0
+                        else "input_unavailable"
+                    ),
+                )
+                pbr, pbr_status, pbr_error = _ratio_status(
+                    source_pbr,
+                    computed_pbr,
+                    (
+                        "non_positive_or_missing_book_value"
+                        if bps is not None and bps <= 0
+                        else "input_unavailable"
+                    ),
+                )
+                if computed_div is None or source_div is None:
+                    div, div_status, div_error = None, "input_unavailable", None
+                else:
+                    div_error = abs(source_div - computed_div)
+                    div_status = "ok" if div_error <= KRX_RATIO_TOLERANCE else "quality_error"
+                    div = source_div if div_status == "ok" else None
+
+                valuation_date = pd.Timestamp(row["date"]).strftime("%Y-%m-%d")
+                statuses = (per_status, pbr_status, div_status)
+                reasons = [
+                    text
+                    for status, text in (
+                        (
+                            per_status,
+                            "PER: 이익이 0 이하이거나 입력·품질 검증을 통과하지 못했습니다.",
+                        ),
+                        (
+                            pbr_status,
+                            "PBR: 자본이 0 이하이거나 입력·품질 검증을 통과하지 못했습니다.",
+                        ),
+                        (div_status, "Dividend Yield: 입력·품질 검증을 통과하지 못했습니다."),
+                    )
+                    if status != "ok"
+                ]
+                extras.update({"per": per, "pbr": pbr, "div": div})
+                extras["valuation"] = {
+                    "status": "ok" if "ok" in statuses else "unavailable",
+                    "as_of": valuation_date,
+                    "price_as_of": valuation_date,
+                    "fundamental_as_of": valuation_date,
+                    "source": "KRX",
+                    "calculation_version": "kr_valuation_v2",
+                    "per_status": per_status,
+                    "pbr_status": pbr_status,
+                    "dividend_yield_status": div_status,
+                    "missing_reasons": reasons,
+                    "inputs": {
+                        "close": close,
+                        "market_cap": mktcap,
+                        "shares": shares,
+                        "eps": eps,
+                        "bps": bps,
+                        "dps": dps,
+                    },
+                    "checks": {
+                        "per_recomputed": computed_per,
+                        "pbr_recomputed": computed_pbr,
+                        "dividend_yield_recomputed": computed_div,
+                        "per_abs_error": per_error,
+                        "pbr_abs_error": pbr_error,
+                        "dividend_yield_abs_error": div_error,
+                        "tolerance": KRX_RATIO_TOLERANCE,
+                    },
+                }
+        except Exception:
+            logger.warning("KR valuation 동일일 검증 실패: %s", ticker, exc_info=True)
+            extras["valuation"]["missing_reasons"] = ["밸류에이션 검증에 실패했습니다."]
 
     try:
         from datastore import storage
@@ -166,6 +360,7 @@ _EMPTY_EXTRAS: Dict = {
     "pbr": None,
     "div": None,
     "flows_recent": None,
+    "valuation": None,
 }
 
 
@@ -349,7 +544,9 @@ def get_price_coverage(
 ):
     """선택 자산의 실제 가격 가용 구간과 공통 교집합을 반환한다."""
     try:
-        requested = list(dict.fromkeys(int(value.strip()) for value in meta_ids.split(",") if value.strip()))
+        requested = list(
+            dict.fromkeys(int(value.strip()) for value in meta_ids.split(",") if value.strip())
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid meta_ids format") from exc
     if not requested or len(requested) > 50:
@@ -377,23 +574,36 @@ def get_price_coverage(
             start, end, count = dates.min(), dates.max(), int(dates.nunique())
             starts.append(start)
             ends.append(end)
-        rows.append({
-            "meta_id": int(item.meta_id),
-            "ticker": item.ticker,
-            "iso_code": item.iso_code,
-            "start": start.strftime("%Y-%m-%d") if start is not None else None,
-            "end": end.strftime("%Y-%m-%d") if end is not None else None,
-            "rows": count,
-        })
+        rows.append(
+            {
+                "meta_id": int(item.meta_id),
+                "ticker": item.ticker,
+                "iso_code": item.iso_code,
+                "start": start.strftime("%Y-%m-%d") if start is not None else None,
+                "end": end.strftime("%Y-%m-%d") if end is not None else None,
+                "rows": count,
+            }
+        )
     found = {row["meta_id"] for row in rows}
     for missing in sorted(set(requested) - found):
-        rows.append({"meta_id": missing, "ticker": None, "iso_code": None, "start": None, "end": None, "rows": 0})
+        rows.append(
+            {
+                "meta_id": missing,
+                "ticker": None,
+                "iso_code": None,
+                "start": None,
+                "end": None,
+                "rows": 0,
+            }
+        )
     complete = len(starts) == len(requested)
     effective_start = max(starts) if complete else None
     effective_end = min(ends) if complete else None
     return {
         "assets": rows,
-        "effective_start": effective_start.strftime("%Y-%m-%d") if effective_start is not None else None,
+        "effective_start": (
+            effective_start.strftime("%Y-%m-%d") if effective_start is not None else None
+        ),
         "effective_end": effective_end.strftime("%Y-%m-%d") if effective_end is not None else None,
         "complete": complete and effective_start <= effective_end,
         "price_field": "adj_close",
@@ -580,15 +790,15 @@ def get_price_history(
         "name": None if pd.isna(meta_item["name"]) else str(meta_item["name"]),
         "sector": None if pd.isna(meta_item["sector"]) else str(meta_item["sector"]),
         "iso_code": iso_code,
-        "marketcap": (
-            int(meta_item["marketcap"])
-            if pd.notna(meta_item["marketcap"])
-            else None
-        ),
+        "marketcap": (int(meta_item["marketcap"]) if pd.notna(meta_item["marketcap"]) else None),
     }
 
     if price_df.empty:
-        return {"prices": [], "meta": meta_payload}
+        return {
+            "prices": [],
+            "meta": meta_payload,
+            "series_contract": _series_contract(meta_item),
+        }
 
     price_df = price_df.sort_values("trade_date")
 
@@ -603,6 +813,11 @@ def get_price_history(
                     else str(row["trade_date"])
                 ),
                 "adj_close": float(row["adj_close"]) if pd.notna(row["adj_close"]) else None,
+                "value": (
+                    float(row.get("series_value"))
+                    if pd.notna(row.get("series_value"))
+                    else (float(row["adj_close"]) if pd.notna(row["adj_close"]) else None)
+                ),
                 "gross_return": (
                     float(row["gross_return"]) if pd.notna(row.get("gross_return")) else None
                 ),
@@ -612,6 +827,15 @@ def get_price_history(
     return {
         "prices": prices,
         "meta": meta_payload,
+        "series_contract": _series_contract(
+            meta_item,
+            (
+                str(price_df["return_basis"].iloc[-1])
+                if "return_basis" in price_df.columns
+                and pd.notna(price_df["return_basis"].iloc[-1])
+                else None
+            ),
+        ),
     }
 
 
@@ -630,7 +854,21 @@ def _build_summary(meta_id: int, meta_row: pd.Series) -> Dict:
         end_date=end_date,
     )
 
-    extras = _kr_summary_extras(meta_row["ticker"]) if iso_code == "KR" else dict(_EMPTY_EXTRAS)
+    extras = (
+        _kr_summary_extras(meta_row["ticker"], str(meta_row.get("security_type", "STOCK")))
+        if iso_code == "KR"
+        else dict(_EMPTY_EXTRAS)
+    )
+    series_contract = _series_contract(
+        meta_row,
+        (
+            str(price_df["return_basis"].iloc[-1])
+            if not price_df.empty
+            and "return_basis" in price_df.columns
+            and pd.notna(price_df["return_basis"].iloc[-1])
+            else None
+        ),
+    )
 
     if price_df.empty:
         return {
@@ -647,11 +885,14 @@ def _build_summary(meta_id: int, meta_row: pd.Series) -> Dict:
             },
             "latest_price": None,
             "latest_date": None,
+            "series_contract": series_contract,
             **extras,
         }
 
     price_df = price_df.sort_values("trade_date")
-    prices = price_df.set_index("trade_date")["adj_close"]
+    value_column = "series_value" if "series_value" in price_df.columns else "adj_close"
+    latest_price_column = "close" if "close" in price_df.columns else value_column
+    prices = price_df.set_index("trade_date")[value_column]
 
     metrics = _calculate_metrics(prices)
 
@@ -660,12 +901,13 @@ def _build_summary(meta_id: int, meta_row: pd.Series) -> Dict:
         "ticker": meta_row["ticker"],
         "name": meta_row["name"],
         "metrics": metrics,
-        "latest_price": float(price_df["adj_close"].iloc[-1]),
+        "latest_price": float(price_df[latest_price_column].iloc[-1]),
         "latest_date": (
             price_df["trade_date"].iloc[-1].isoformat()
             if hasattr(price_df["trade_date"].iloc[-1], "isoformat")
             else str(price_df["trade_date"].iloc[-1])
         ),
+        "series_contract": series_contract,
         **extras,
     }
 

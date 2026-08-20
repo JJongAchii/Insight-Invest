@@ -147,6 +147,19 @@ const StockDetailPage = () => {
   const tradingViewSymbol = isKr ? `KRX-${meta.ticker}` : meta.ticker;
   const showFrgn = flowMode === "frgn" || flowMode === "both";
   const showInst = flowMode === "inst" || flowMode === "both";
+  // Vercel과 Lambda가 동시에 교체되는 짧은 구간에는 구 API 응답에 계약 필드가
+  // 없을 수 있다. 화면을 깨뜨리지 않고 종전 가격 라벨로 안전하게 폴백한다.
+  const seriesContract = priceData?.series_contract ?? summary.series_contract ?? {
+    series_type: isKr ? "split_adjusted_price" as const : "total_return_index" as const,
+    label: isKr ? "Adjusted Price" as const : "Total Return" as const,
+    return_basis: isKr
+      ? "split_adjusted_price_return_ex_cash_distributions"
+      : "split_adjusted_total_return_including_cash_distributions",
+    capital_actions: "included",
+    cash_distributions: isKr ? "excluded" as const : "included" as const,
+    calculation_version: "legacy_api_fallback",
+    warning: isKr ? "현금배당은 포함하지 않은 가격수익률입니다." : null,
+  };
 
   return (
     <div className="flex flex-col gap-6 pb-16">
@@ -232,17 +245,24 @@ const StockDetailPage = () => {
               가격 기준일 {formatDate(summary.latest_date)}
             </p>
           )}
+          <p className="mt-1 text-xs text-ink-muted">
+            {seriesContract.label} · {seriesContract.cash_distributions === "included"
+              ? "현금분배 포함"
+              : seriesContract.cash_distributions === "implicit_in_reference_price"
+                ? "분배락 기준가격 반영"
+                : "현금분배 제외"}
+          </p>
         </div>
       </div>
 
       {/* Stat tiles */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <StatTile
-          label="시가총액"
+          label="Market Cap"
           value={isKr ? fmtJo(mktcap) : formatMarketCap(mktcap, meta.iso_code)}
         />
         {isKr && <StatTile
-          label="거래대금"
+          label="Trading Value"
           value={summary.value != null ? fmtJo(summary.value) : "—"}
         />}
         {isKr && <StatTile
@@ -254,7 +274,7 @@ const StockDetailPage = () => {
           value={summary.pbr != null ? summary.pbr.toFixed(2) : "—"}
         />}
         {isKr && <StatTile
-          label="배당수익률"
+          label="Dividend Yield"
           value={summary.div != null ? `${summary.div.toFixed(2)}%` : "—"}
         />}
         <StatTile
@@ -263,22 +283,38 @@ const StockDetailPage = () => {
           deltaType={returnDelta(metrics.ytd_return)}
         />
         <StatTile
-          label="1Y 수익률"
+          label="1Y Return"
           value={fmtReturn(metrics.return_1y)}
           deltaType={returnDelta(metrics.return_1y)}
         />
         <StatTile
-          label="3M 수익률"
+          label="3M Return"
           value={fmtReturn(metrics.return_3m)}
           deltaType={returnDelta(metrics.return_3m)}
         />
-        <StatTile label="변동성" value={fmtReturn(metrics.volatility)} />
+        <StatTile label="Volatility" value={fmtReturn(metrics.volatility)} />
         <StatTile
           label="MDD"
           value={fmtReturn(metrics.mdd)}
           deltaType={metrics.mdd != null && metrics.mdd < 0 ? "loss" : "neutral"}
         />
       </div>
+
+      {isKr && !isEtf && summary.valuation && (
+        <div className="rounded-xl border border-edge bg-raised px-4 py-3 text-xs text-ink-secondary">
+          <p>
+            <span className="font-semibold text-ink">Valuation</span>
+            {summary.valuation.as_of ? ` · 기준 ${formatDate(summary.valuation.as_of)}` : " · 기준일 없음"}
+            {` · ${summary.valuation.calculation_version}`}
+          </p>
+          <p className="mt-1 text-ink-muted">
+            같은 날짜의 KRX 종가·시가총액·주식수와 EPS/BPS/DPS로 PER·PBR·Dividend Yield를 재계산해 원천값과 대조합니다.
+          </p>
+          {summary.valuation.missing_reasons.length > 0 && (
+            <p className="mt-1 text-warning">{summary.valuation.missing_reasons.join(" ")}</p>
+          )}
+        </div>
+      )}
 
       {!isKr && !isEtf && (
         <FundamentalsCard
@@ -315,13 +351,20 @@ const StockDetailPage = () => {
         {priceLoading ? (
           <LoadingState label="가격 데이터를 불러오는 중..." />
         ) : priceData?.prices && priceData.prices.length > 0 ? (
-          <StockPriceFlowsChart
-            prices={priceData.prices}
-            flows={flowsData?.rows ?? null}
-            showFrgn={showFrgn}
-            showInst={showInst}
-            isKr={isKr}
-          />
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-raised px-3 py-2 text-xs">
+              <span className="font-semibold text-ink">{seriesContract.label}</span>
+              <span className="text-ink-muted">{seriesContract.calculation_version}</span>
+              {seriesContract.warning && <span className="w-full text-warning">{seriesContract.warning}</span>}
+            </div>
+            <StockPriceFlowsChart
+              prices={priceData.prices}
+              flows={flowsData?.rows ?? null}
+              showFrgn={showFrgn}
+              showInst={showInst}
+              isKr={isKr}
+            />
+          </div>
         ) : (
           <EmptyState title="가격 데이터가 없습니다" />
         )}

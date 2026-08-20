@@ -16,7 +16,16 @@ logger = logging.getLogger(__name__)
 
 _PARTS = ("insight", "signal_study.parquet")
 BASELINE = "baseline"
+REQUIRED_CALCULATION_VERSION = "kr_price_return_v2"
 _UNSET = object()  # "인자 미지정"과 "데이터 없음(None)"을 구분하기 위한 센티널
+
+
+def is_current_artifact(df: pd.DataFrame | None) -> bool:
+    """same-close 구 산출물이 새 코드와 섞여 노출되지 않게 버전을 검증한다."""
+    if df is None or df.empty or "calculation_version" not in df.columns:
+        return False
+    versions = set(df["calculation_version"].dropna().astype(str))
+    return versions == {REQUIRED_CALCULATION_VERSION}
 
 
 def load_study() -> pd.DataFrame | None:
@@ -26,7 +35,11 @@ def load_study() -> pd.DataFrame | None:
     컨테이너가 며칠 살아남아도 갱신된 값을 바로 읽는 쪽이 낫다.
     """
     try:
-        return storage.read_parquet(*_PARTS)
+        df = storage.read_parquet(*_PARTS)
+        if not is_current_artifact(df):
+            logger.warning("signal_study 계산 버전 불일치 — v2 재빌드 전 실측치 숨김")
+            return None
+        return df
     except Exception:
         logger.debug("signal_study 로드 실패", exc_info=True)
         return None
@@ -59,9 +72,7 @@ def excess_vs_baseline(
 def format_evidence(n_events: int, median_delta: float, hit_delta: float, horizon: int) -> str:
     """'과거 27.6만건 · 20일 뒤 기준선 대비 -2.4%p (승률 -3.1%p)'."""
     n = f"{n_events / 10000:.1f}만건" if n_events >= 10000 else f"{n_events:,}건"
-    return (
-        f"과거 {n} · {horizon}일 뒤 기준선 대비 " f"{median_delta:+.1f}%p (승률 {hit_delta:+.1f}%p)"
-    )
+    return f"과거 {n} · {horizon}일 뒤 기준선 대비 {median_delta:+.1f}%p (승률 {hit_delta:+.1f}%p)"
 
 
 def evidence_phrase(

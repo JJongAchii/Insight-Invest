@@ -14,6 +14,20 @@ from module.util import backtest_result
 
 logger = logging.getLogger(__name__)
 
+US_RETURN_BASIS = "split_adjusted_total_return_including_cash_distributions"
+
+
+class BacktestDataContractError(ValueError):
+    """가격 커버리지나 수익률 기준 계약을 충족하지 못한 백테스트 입력."""
+
+
+class ReturnBasisMismatchError(BacktestDataContractError):
+    """서로 다른 수익률 기준을 한 포트폴리오로 조용히 합치려 할 때 발생한다."""
+
+
+class MissingPriceCoverageError(BacktestDataContractError):
+    """요청한 자산 중 가격 패널에서 사라진 자산이 있을 때 발생한다."""
+
 
 class Backtest:
     def __init__(
@@ -37,6 +51,25 @@ class Backtest:
             {"US": [meta_ids], "KR": [meta_ids], "tickers": {meta_id: ticker}}
         """
         mapping = datastore.meta.resolve(meta_ids=meta_id, tickers=tickers)
+
+        if meta_id is not None:
+            requested_ids = {int(value) for value in meta_id}
+            resolved_ids = set(mapping["meta_id"].astype(int))
+            missing_ids = sorted(requested_ids - resolved_ids)
+            if missing_ids:
+                raise MissingPriceCoverageError(
+                    "종목 마스터에 없는 meta_id가 있어 백테스트를 중단했습니다: "
+                    + ", ".join(map(str, missing_ids))
+                )
+        if tickers is not None:
+            requested_symbols = {str(value) for value in tickers}
+            resolved_symbols = set(mapping["ticker"].astype(str))
+            missing_symbols = sorted(requested_symbols - resolved_symbols)
+            if missing_symbols:
+                raise MissingPriceCoverageError(
+                    "종목 마스터에 없는 ticker가 있어 백테스트를 중단했습니다: "
+                    + ", ".join(missing_symbols)
+                )
 
         result = {"US": [], "KR": [], "tickers": {}}
         for row in mapping.itertuples():
@@ -90,6 +123,8 @@ class Backtest:
                     end_date=end_date,
                 )
                 if not us_df.empty:
+                    us_df = us_df.copy()
+                    us_df["return_basis"] = US_RETURN_BASIS
                     all_data.append(us_df)
 
             # KR 데이터 조회
@@ -109,6 +144,27 @@ class Backtest:
 
             # 병합 - Polars 사용으로 성능 향상
             combined_df = pd.concat(all_data, ignore_index=True)
+            requested_tickers = set(iso_info["tickers"].values())
+            found_tickers = set(combined_df["ticker"].astype(str))
+            missing_tickers = sorted(requested_tickers - found_tickers)
+            if missing_tickers:
+                raise MissingPriceCoverageError(
+                    "요청 자산의 가격 이력이 없어 백테스트를 중단했습니다: "
+                    + ", ".join(missing_tickers)
+                )
+            if (
+                "return_basis" not in combined_df.columns
+                or combined_df["return_basis"].isna().any()
+            ):
+                raise ReturnBasisMismatchError(
+                    "가격 수익률 기준이 명시되지 않은 자산이 있어 백테스트를 중단했습니다."
+                )
+            return_bases = sorted(set(combined_df["return_basis"].astype(str)))
+            if len(return_bases) != 1:
+                raise ReturnBasisMismatchError(
+                    "서로 다른 수익률 기준을 한 백테스트에서 혼합할 수 없습니다: "
+                    + ", ".join(return_bases)
+                )
 
             # pivot using Polars for better performance
             pl_df = pl.from_pandas(combined_df[["trade_date", "ticker", "adj_close"]])
@@ -119,6 +175,8 @@ class Backtest:
             data = data.set_index("trade_date")
             data.index = pd.to_datetime(data.index)
             data = data.sort_index()
+            data.attrs["return_basis"] = return_bases[0]
+            data.attrs["price_field"] = "adj_close"
 
             logger.info(f"Iceberg 가격 데이터 로드: {len(data)} rows, {len(data.columns)} tickers")
             return data

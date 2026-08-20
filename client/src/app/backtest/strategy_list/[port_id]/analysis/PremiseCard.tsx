@@ -37,6 +37,15 @@ const PremiseCard: React.FC<PremiseCardProps> = ({ premise, note }) => {
       value: premise.cost_bps == null ? "—" : `${premise.cost_bps}bps`,
     },
     { label: "통화", value: dash(premise.currency) },
+    ...(premise.return_basis
+      ? [{ label: "Return Basis", value: premise.return_basis }]
+      : []),
+    ...(premise.execution_rule
+      ? [{ label: "Execution", value: premise.execution_rule }]
+      : []),
+    ...(premise.calculation_version
+      ? [{ label: "Version", value: premise.calculation_version }]
+      : []),
     { label: "유니버스", value: `${premise.universe_n}종목` },
     {
       label: "구간",

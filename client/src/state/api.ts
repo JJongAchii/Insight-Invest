@@ -78,8 +78,20 @@ export interface StockMetrics {
 
 export interface PricePoint {
   trade_date: string;
+  /** Canonical series value for display; use this instead of the compatibility adj_close alias. */
+  value?: number | null;
   adj_close: number | null;
   gross_return: number | null;
+}
+
+export interface PriceSeriesContract {
+  series_type: "raw_close" | "split_adjusted_price" | "krx_reference_price_adjusted" | "total_return_index";
+  label: "Raw Price" | "Adjusted Price" | "KRX Adjusted Price" | "Total Return";
+  return_basis: string;
+  capital_actions: string;
+  cash_distributions: "included" | "excluded" | "implicit_in_reference_price";
+  calculation_version: string;
+  warning: string | null;
 }
 
 export interface StockMeta {
@@ -94,6 +106,7 @@ export interface StockMeta {
 export interface PriceHistoryResponse {
   prices: PricePoint[];
   meta: StockMeta;
+  series_contract?: PriceSeriesContract;
 }
 
 export interface PriceSummaryFlows {
@@ -119,6 +132,21 @@ export interface PriceSummaryResponse {
   /** Dividend yield, %. */
   div: number | null;
   flows_recent: PriceSummaryFlows | null;
+  series_contract?: PriceSeriesContract;
+  valuation?: {
+    status: "ok" | "unavailable" | "not_applicable";
+    as_of: string | null;
+    price_as_of: string | null;
+    fundamental_as_of: string | null;
+    source: string;
+    calculation_version: string;
+    per_status: string;
+    pbr_status: string;
+    dividend_yield_status: string;
+    missing_reasons: string[];
+    inputs: Record<string, number | null> | null;
+    checks: Record<string, number | null> | null;
+  } | null;
 }
 
 export interface SparklineResponse {
@@ -436,6 +464,16 @@ export interface DataHealthItem {
   expected_lag_sessions: number;
 }
 
+export interface CalculationContract {
+  key: string;
+  label: string;
+  version: string;
+  basis: string;
+  execution: string | null;
+  coverage: string;
+  detail: string;
+}
+
 export interface OverviewHorizon {
   key: "intraday" | "tactical" | "structural";
   label: string;
@@ -453,6 +491,7 @@ export interface OverviewResponse {
   evidence: OverviewEvidence[];
   conflicts: string[];
   data_status: DataHealthItem[];
+  calculation_contracts: CalculationContract[];
   method: string;
 }
 
@@ -617,8 +656,20 @@ export interface NavPoint {
 
 export interface WeightPoint {
   date: string;
+  signal_date?: string | null;
+  execution_date?: string;
+  execution_price?: "close";
   ticker: string;
   weight: number;
+}
+
+export interface BacktestCalculationContract {
+  calculation_version: string;
+  return_basis: string;
+  signal_rule: string;
+  execution_rule: string;
+  execution_price: "close";
+  cash_distributions: "included" | "not_exactly_included";
 }
 
 export interface MetricSet {
@@ -670,6 +721,7 @@ export interface BacktestAnalytics {
 export interface BacktestRunResult {
   result_token: string;
   strategy_name: string;
+  calculation_contract?: BacktestCalculationContract;
   nav: NavPoint[];
   benchmark: { name: string; nav: NavPoint[] };
   weights: WeightPoint[];
@@ -710,6 +762,9 @@ export interface AnalyticsPremise {
   rebal_freq: string | null;
   cost_bps: number | null;
   currency: string | null;
+  return_basis?: string | null;
+  execution_rule?: string | null;
+  calculation_version?: string | null;
   universe_n: number;
   saved_at: string | null;
   bt_start: string;
@@ -1088,12 +1143,25 @@ export interface InsightValuationCurrent {
   /** Historical percentile rank, 0–100 (lower = cheaper). */
   pct_rank_per: number | null;
   pct_rank_pbr: number | null;
+  n_stocks: number | null;
+  fundamental_name_coverage_pct: number | null;
+  fundamental_mktcap_coverage_pct: number | null;
+  per_name_coverage_pct: number | null;
+  per_mktcap_coverage_pct: number | null;
+  pbr_name_coverage_pct: number | null;
+  pbr_mktcap_coverage_pct: number | null;
+  earnings_name_coverage_pct: number | null;
+  earnings_mktcap_coverage_pct: number | null;
+  non_positive_eps_name_pct: number | null;
+  aggregate_earnings_yield_pct: number | null;
 }
 
 export interface InsightValuationResponse {
   as_of: string;
   rows: InsightValuationRow[];
   current: InsightValuationCurrent | null;
+  calculation_version: string | null;
+  percentile_scope: string | null;
 }
 
 export interface InsightIndexRow {
@@ -1146,8 +1214,12 @@ export interface SignalStudyRow {
 }
 
 export interface SignalStudyResponse {
-  as_of: string;
+  as_of: string | null;
   rows: SignalStudyRow[];
+  return_basis: string | null;
+  execution_rule: string | null;
+  calculation_version: string | null;
+  status?: "rebuild_required_or_unavailable";
 }
 
 export type FactorName = "momentum" | "value" | "size" | "lowvol";
@@ -1169,9 +1241,13 @@ export interface FactorHistoryPoint {
 }
 
 export interface FactorLensResponse {
-  as_of: string;
+  as_of: string | null;
   current: FactorCurrentRow[];
   history: FactorHistoryPoint[];
+  return_basis: string | null;
+  execution_rule: string | null;
+  calculation_version: string | null;
+  status?: "rebuild_required_or_unavailable";
 }
 
 export interface FactorExposureRow {

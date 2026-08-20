@@ -37,6 +37,84 @@ EXPECTED_LAG_SESSIONS = {
 }
 
 
+def _calculation_contracts() -> list[dict]:
+    """판단 화면의 핵심 계산 의미. 파일 신선도와 별개로 항상 노출한다."""
+    return [
+        {
+            "key": "kr_stock_returns",
+            "label": "KR Stock Returns",
+            "version": "kr_price_return_v1",
+            "basis": "Split-adjusted price return",
+            "execution": None,
+            "coverage": "자본행동 포함 · 현금배당 제외",
+            "detail": "KRX 기준가 변화를 이용해 분할 등 가격 연속성을 조정합니다.",
+        },
+        {
+            "key": "kr_etf_returns",
+            "label": "KR ETF Returns",
+            "version": "kr_etf_reference_price_v1",
+            "basis": "KRX reference-price adjusted return",
+            "execution": None,
+            "coverage": "분배락 기준가격 반영 · 현금 이벤트 직접 합성 아님",
+            "detail": "KRX 공식 등락률로 가격 단절을 조정하지만, 정확한 현금 이벤트가 없어 Total Return으로 표시하지 않습니다.",
+        },
+        {
+            "key": "kr_cash_distributions",
+            "label": "KR Cash Distributions",
+            "version": "kr_cash_events_gated_v1",
+            "basis": "Unavailable",
+            "execution": None,
+            "coverage": "공식 현금 이벤트 소스 계약 미확정",
+            "detail": "금액·분배락일·정정·상폐 이력을 함께 보장하는 공식 계약이 확인될 때까지 가격이나 NAV로 추정하지 않습니다.",
+        },
+        {
+            "key": "us_returns",
+            "label": "US Returns",
+            "version": "us_total_return_v1",
+            "basis": "Split-adjusted total return",
+            "execution": None,
+            "coverage": "분할·현금배당 포함",
+            "detail": "Massive 가격·배당 이벤트를 결합한 총수익 계열입니다.",
+        },
+        {
+            "key": "factor_signal_returns",
+            "label": "Factor & Signal Returns",
+            "version": "kr_price_return_v2",
+            "basis": "Split-adjusted price return",
+            "execution": "D close signal → D+1 open entry",
+            "coverage": "현금배당 제외",
+            "detail": "신호 확정 전에 체결했다고 가정하지 않으며, 다음 거래일 시가부터 성과를 잽니다.",
+        },
+        {
+            "key": "backtest_returns",
+            "label": "Backtest Returns",
+            "version": "backtest_close_execution_v2",
+            "basis": "Explicit single return basis per run",
+            "execution": "Momentum: prior close signal → rebalance close fill",
+            "coverage": "서로 다른 수익률 기준 혼합 시 실행 중단",
+            "detail": "현재 일반 엔진은 종가 체결 계약입니다. 모멘텀은 직전 세션까지의 데이터만 사용하며, KR 가격수익률과 US Total Return을 한 실행에 섞지 않습니다.",
+        },
+        {
+            "key": "kr_market_valuation",
+            "label": "KR Market Valuation",
+            "version": "kr_market_valuation_v2",
+            "basis": "Cap-weighted harmonic PER/PBR",
+            "execution": None,
+            "coverage": "양수 비율 종목만 집계 · 커버리지 별도 표시",
+            "detail": "가격 유니버스를 기준으로 결측 종목을 삭제하지 않고 포함률을 함께 공개합니다.",
+        },
+        {
+            "key": "us_valuation",
+            "label": "US Valuation",
+            "version": "sec_annual_facts_v1",
+            "basis": "Annual SEC facts only",
+            "execution": None,
+            "coverage": "PER/PBR 미산출",
+            "detail": "현재 SEC filed 기준 연간 사실만 표시합니다. 검증된 4분기 TTM 체인과 동일 기준일 시총이 준비되기 전에는 PER/PBR로 재표시하지 않습니다.",
+        },
+    ]
+
+
 def _finite(value):
     try:
         value = float(value)
@@ -116,7 +194,9 @@ def _data_status() -> list[dict]:
                 "built_at": None if pd.isna(row.get("built_at")) else str(row.get("built_at")),
                 "row_count": None if pd.isna(row.get("row_count")) else int(row.get("row_count")),
                 "message": None if pd.isna(row.get("message")) else str(row.get("message")),
-                "build_version": None if pd.isna(row.get("build_version")) else str(row.get("build_version")),
+                "build_version": (
+                    None if pd.isna(row.get("build_version")) else str(row.get("build_version"))
+                ),
                 "expected_lag_sessions": EXPECTED_LAG_SESSIONS[dataset],
             }
         )
@@ -395,10 +475,15 @@ def get_overview():
 
     conflicts = []
     tones = {item["key"]: item["tone"] for item in evidence}
-    if tones.get("gauge") in {"positive", "negative"} and tones.get("breadth") in {
-        "positive",
-        "negative",
-    } and tones["gauge"] != tones["breadth"]:
+    if (
+        tones.get("gauge") in {"positive", "negative"}
+        and tones.get("breadth")
+        in {
+            "positive",
+            "negative",
+        }
+        and tones["gauge"] != tones["breadth"]
+    ):
         conflicts.append("글로벌 시장 위험도와 KR 시장 참여 폭이 반대 방향입니다.")
     if breadth_delta is not None and flow_value is not None:
         if (breadth_delta > 0 and flow_value < 0) or (breadth_delta < 0 and flow_value > 0):
@@ -412,5 +497,6 @@ def get_overview():
         "evidence": evidence,
         "conflicts": conflicts,
         "data_status": _data_status(),
+        "calculation_contracts": _calculation_contracts(),
         "method": "장중·전술(1~4주)·구조적(3~12개월) 근거를 분리하며, 전 시간축이 일치할 때만 전체 방향을 표시",
     }
