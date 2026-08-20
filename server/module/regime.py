@@ -5,8 +5,8 @@
 캐시된 원본 DataFrame/Series는 절대 in-place 수정하지 않는다.
 """
 
-from functools import lru_cache
 from datetime import datetime
+from functools import lru_cache
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -38,27 +38,8 @@ def _fred(series: str) -> pd.Series:
 
 @lru_cache(maxsize=1)
 def _cpi() -> pd.Series:
-    """CPIAUCSL 월간 — RDS 아카이브(1947~) ∪ qdata 레이크(2006~, 일일 갱신).
-
-    레이크 FRED START가 2006이라 1998~ 국면 산출엔 아카이브로 과거를 보강한다
-    (routers/regime._macro_data와 같은 패턴). 같은 달은 최신 수집(qdata) 우선.
-    아카이브가 없으면 레이크 단독으로 동작한다.
-    """
-    live = _fred("CPIAUCSL").dropna()
-    try:
-        from datastore import storage
-
-        macro = storage.read_parquet("macro.parquet")
-        ids = macro.loc[macro["fred"] == "CPIAUCSL", "macro_id"]
-        arch = storage.read_parquet("macro_data.parquet")
-        arch = arch[arch["macro_id"].isin(ids)]
-        archive = pd.Series(
-            arch["value"].to_numpy(), index=pd.to_datetime(arch["base_date"])
-        ).dropna()
-    except (FileNotFoundError, KeyError):
-        return live
-    s = pd.concat([archive, live])
-    return s[~s.index.duplicated(keep="last")].sort_index()  # 같은 달은 live 우선
+    """CPIAUCSL 월간 — qdata FRED 단일 원천(1980~)."""
+    return _fred("CPIAUCSL").dropna().sort_index()
 
 
 @lru_cache(maxsize=1)

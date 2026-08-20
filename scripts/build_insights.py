@@ -6,6 +6,7 @@ APP_DATA(기본 s3://insight-invest-datalake/app) 아래 parquet로 결과를 �
 krx_flows 전체 로드(수백 MB)는 로컬에서만 허용 — Lambda에서는 절대 금지.
 
 빌더:
+- asset_master: qdata KRX·ETF·Massive 참조축 → 앱 단일 종목 마스터.
 - regime_asset_perf: 매크로 4국면 × 자산 월간수익 기술통계 (P3).
 - flows_summary: 시장(KOSPI/KOSDAQ/ALL) × 투자자별 일별 수급 합계 (전 기간).
 - flows_top: 1d/5d/21d 창 × frgn/inst 순매수·순매도 상위 30.
@@ -18,7 +19,6 @@ krx_flows 전체 로드(수백 MB)는 로컬에서만 허용 — Lambda에서는
   10일+·매집형) × 상한 5. 웹 홈 레인·텔레그램 신호 섹션 공용.
 - sector_index: 시장×업종 일별 시총가중 지수 (2016~, 시작 100 체인).
 - sector_perf: 업종별 최신 성과 스냅샷 (1d/1w/1m/3m/YTD + 시총 비중).
-- kr_etf_meta: 현재 상장 KRX ETF 유니버스 → 앱 meta 확장용 (APP_DATA 루트에 저장).
 - valuation_daily: 시장별 밸류에이션 집계 (시총가중 조화 PER·PBR, 배당수익률)
   — krx_fundamental 미수집 시 스킵.
 - signal_study: 신호 13종 × 지평선 3개 전방 초과성과. 벤치마크는 유동성 유니버스
@@ -51,11 +51,12 @@ import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "server"))
 
+from qdata import api as qdata_api  # noqa: E402
+
 from datastore import fx, meta, portfolio, prices, storage  # noqa: E402
-from module import regime, spotlight  # noqa: E402
+from module import asset_master, regime, spotlight  # noqa: E402
 from module.backtest import Backtest  # noqa: E402
 from module.util import backtest_result  # noqa: E402
-from qdata import api as qdata_api  # noqa: E402
 
 ETF_TICKERS = ["SPY", "QQQ", "TLT", "GLD", "DBC"]
 WINDOWS = {"1d": 1, "1w": 5, "1m": 21}  # 거래일 수
@@ -89,11 +90,13 @@ def _latest_price_snapshot() -> pd.DataFrame:
     """마지막 거래일 종목 스냅샷 [market, close, chg_pct, mktcap] (index=ticker)."""
     if "snap" not in _cache:
         start = (pd.Timestamp.today() - pd.DateOffset(days=14)).strftime("%Y-%m-%d")
-        px = qdata_api.load_krx_prices(start=start, columns=["market", "close", "chg_pct", "mktcap"])
-        last = px["date"].max()
-        _cache["snap"] = (
-            px[px["date"] == last].set_index("ticker")[["market", "close", "chg_pct", "mktcap"]]
+        px = qdata_api.load_krx_prices(
+            start=start, columns=["market", "close", "chg_pct", "mktcap"]
         )
+        last = px["date"].max()
+        _cache["snap"] = px[px["date"] == last].set_index("ticker")[
+            ["market", "close", "chg_pct", "mktcap"]
+        ]
     return _cache["snap"]
 
 
@@ -107,6 +110,51 @@ def _name_map() -> dict:
 
 
 # ---------------------------------------------------------------- 빌더
+
+
+def build_asset_master() -> pd.DataFrame:
+    """qdata만으로 KR 주식·KR ETF·US 주식/ETF 통합 마스터를 발행한다.
+
+    asset_id_registry는 기존 관심종목·보유종목·저장 전략의 숫자 참조를 보존하는
+    앱 내부 레지스트리다. 최초 전환 때 명시적으로 만들어야 하며, 과거 meta 덤프를
+    자동 폴백으로 읽는 경로는 두지 않는다.
+    """
+    if not storage.exists("asset_id_registry.parquet"):
+        raise FileNotFoundError(
+            "asset_id_registry.parquet 없음 — 자산 ID 전환 레지스트리를 먼저 발행해야 한다"
+        )
+
+    kr = qdata_api.load_krx_stock_master()
+
+    etf_start = (pd.Timestamp.today() - pd.Timedelta(days=31)).strftime("%Y-%m-%d")
+    kr_etf = qdata_api.load_krx_etf_meta(start=etf_start)
+
+    us_tickers = qdata_api.load_us_tickers(active=True)
+    try:
+        us_details = qdata_api.load_us_ticker_details(
+            tickers=sorted(us_tickers["ticker"].dropna().astype(str).unique())
+        )
+    except FileNotFoundError:
+        us_details = pd.DataFrame()
+
+    source = asset_master.compose_source_master(
+        asset_master.kr_stock_rows(kr),
+        asset_master.kr_etf_rows(kr_etf),
+        asset_master.us_rows(us_tickers, us_details),
+    )
+    registry = storage.read_parquet("asset_id_registry.parquet")
+    now = pd.Timestamp.now(tz="Asia/Seoul").isoformat()
+    master, updated_registry, added = asset_master.reconcile_registry(source, registry, now)
+
+    # KRX 현행 마스터와 앱 KR 주식의 조인 카디널리티는 정확히 같아야 한다.
+    kr_master = master[master["iso_code"].eq("KR")]
+    asset_master.assert_ticker_coverage(kr_master, "qdata_krx_stock_master", kr["ticker"])
+    storage.write_parquet(updated_registry, "asset_id_registry.parquet")
+    print(
+        f"[asset_master] {len(master):,}종목, 신규 ID {added:,}, "
+        f"KR 주식 {len(kr):,}종목 100% 매칭"
+    )
+    return master
 
 
 US_PRICE_FLOOR = "2008-01-02"  # 스펙 D4 — 배당 축 신뢰 구간 (ETF 분배금 2007 중반부터)
@@ -169,16 +217,16 @@ def build_us_prices():
         verified_identities = (
             set(windows["final"]) if windows is not None and len(windows) else set()
         )
-        chain_src = (
-            set(windows["src"]) - finals if windows is not None and len(windows) else set()
-        )
+        chain_src = set(windows["src"]) - finals if windows is not None and len(windows) else set()
         want = sorted(finals | seg_src | chain_src)
 
         frames = []
         for y in range(int(US_PRICE_FLOOR[:4]), pd.Timestamp.today().year + 1):
             chunk = qdata_api.load_us_prices(
-                start=max(f"{y}-01-01", US_PRICE_FLOOR), end=f"{y}-12-31",
-                tickers=want, columns=["close", "adj_close"],
+                start=max(f"{y}-01-01", US_PRICE_FLOOR),
+                end=f"{y}-12-31",
+                tickers=want,
+                columns=["close", "adj_close"],
             )
             if not chunk.empty:
                 frames.append(chunk)
@@ -202,8 +250,11 @@ def build_us_prices():
 
     stale_days = (pd.Timestamp.today().normalize() - px["date"].max()).days
     if stale_days > 4:
-        print(f"[warn] us_prices: 미러 최종일 {px['date'].max().date()} ({stale_days}일 경과) — "
-              "리밸 신호는 is_new_period 가 자연 스킵", file=sys.stderr)
+        print(
+            f"[warn] us_prices: 미러 최종일 {px['date'].max().date()} ({stale_days}일 경과) — "
+            "리밸 신호는 is_new_period 가 자연 스킵",
+            file=sys.stderr,
+        )
     max_age = os.environ.get("US_PRICES_MAX_AGE_DAYS")
     if max_age is not None and stale_days > int(max_age):
         print(
@@ -241,8 +292,10 @@ def build_us_prices():
         out.append(res)
 
     if truncated:
-        print(f"[warn] us_prices: 연속성 가드 절단 {len(truncated)}종목 — {truncated[:20]}",
-              file=sys.stderr)
+        print(
+            f"[warn] us_prices: 연속성 가드 절단 {len(truncated)}종목 — {truncated[:20]}",
+            file=sys.stderr,
+        )
     if soft_warned:
         print(
             f"[warn] us_prices: 가격 점프 경고(검증된 실체는 100% 초과 포함) {len(soft_warned)}종목 — "
@@ -258,8 +311,11 @@ def build_us_prices():
     df = pd.concat(out, ignore_index=True).merge(us, on="ticker", how="inner")
     missing = sorted(set(us["ticker"]) - set(df["ticker"]))
     if missing:
-        print(f"[warn] us_prices: meta 등록 but 미수록 {len(missing)}종목 "
-              "(플로어 이전 상폐·미러 부재)", file=sys.stderr)
+        print(
+            f"[warn] us_prices: meta 등록 but 미수록 {len(missing)}종목 "
+            "(플로어 이전 상폐·미러 부재)",
+            file=sys.stderr,
+        )
     df = df[["meta_id", "trade_date", "ticker", "adj_close", "gross_return"]]
     # 서빙 필터 키(meta_id) 정렬 — 로우그룹 프루닝 유지 (flows_by_ticker 관례와 동일).
     # server/datastore/prices.py._us_prices 는 ("meta_id","in",...) 필터로 읽는다 —
@@ -277,9 +333,7 @@ def _monthly_returns() -> pd.DataFrame:
     rets = px.resample("ME").last().pct_change() * 100
 
     idx = qdata_api.load_krx_index()
-    kospi = (
-        idx[idx["index"] == "KOSPI"].set_index("date")["close"].sort_index()
-    )
+    kospi = idx[idx["index"] == "KOSPI"].set_index("date")["close"].sort_index()
     rets["KOSPI"] = kospi.resample("ME").last().pct_change() * 100
 
     rets.index = pd.PeriodIndex(rets.index, freq="M")
@@ -321,9 +375,11 @@ def build_flows_summary() -> pd.DataFrame:
     all_mkt = flows.groupby(["date", "investor"], as_index=False)[cols].sum()
     all_mkt["market"] = "ALL"
     df = pd.concat([per_mkt, all_mkt], ignore_index=True)
-    df = df[["date", "market", "investor", *cols]].sort_values(
-        ["date", "market", "investor"]
-    ).reset_index(drop=True)
+    df = (
+        df[["date", "market", "investor", *cols]]
+        .sort_values(["date", "market", "investor"])
+        .reset_index(drop=True)
+    )
     df["as_of"] = _as_of()
     return df
 
@@ -337,9 +393,7 @@ def build_flows_top() -> pd.DataFrame:
 
     frames = []
     max_win = max(WINDOWS.values())
-    recent = flows[
-        (flows["date"] >= dates[-max_win]) & (flows["investor"].isin(["frgn", "inst"]))
-    ]
+    recent = flows[(flows["date"] >= dates[-max_win]) & (flows["investor"].isin(["frgn", "inst"]))]
     for wname, n in WINDOWS.items():
         sub = recent[recent["date"] >= dates[-n]]
         agg = sub.groupby(["investor", "ticker", "market"], as_index=False)[
@@ -360,8 +414,17 @@ def build_flows_top() -> pd.DataFrame:
     df = df.join(snap[["close", "chg_pct", "mktcap"]], on="ticker")
     df = df[
         [
-            "window", "investor", "rank", "ticker", "name", "market",
-            "net_value", "net_volume", "close", "chg_pct", "mktcap",
+            "window",
+            "investor",
+            "rank",
+            "ticker",
+            "name",
+            "market",
+            "net_value",
+            "net_volume",
+            "close",
+            "chg_pct",
+            "mktcap",
         ]
     ].reset_index(drop=True)
     df["as_of"] = _as_of()
@@ -381,9 +444,11 @@ def build_flows_by_ticker() -> pd.DataFrame:
     wide = wide.rename(
         columns={"frgn": "frgn_net", "inst": "inst_net", "indiv": "indiv_net"}
     ).reset_index()
-    df = wide[["ticker", "date", "frgn_net", "inst_net", "indiv_net"]].sort_values(
-        ["ticker", "date"]
-    ).reset_index(drop=True)
+    df = (
+        wide[["ticker", "date", "frgn_net", "inst_net", "indiv_net"]]
+        .sort_values(["ticker", "date"])
+        .reset_index(drop=True)
+    )
     df.columns.name = None
     df["as_of"] = _as_of()
     return df
@@ -423,8 +488,15 @@ def build_breadth_daily() -> pd.DataFrame:
     g = long.groupby(["date", "market"])
     df = g[
         [
-            "advances", "declines", "unchanged", "new_high_52w", "new_low_52w",
-            "limit_up", "limit_down", "above_ma20", "ma20_valid",
+            "advances",
+            "declines",
+            "unchanged",
+            "new_high_52w",
+            "new_low_52w",
+            "limit_up",
+            "limit_down",
+            "above_ma20",
+            "ma20_valid",
         ]
     ].sum()
     df["total_value"] = g["value"].sum()
@@ -434,13 +506,20 @@ def build_breadth_daily() -> pd.DataFrame:
     df = df.reset_index()
     df = df[df["date"] >= "2017-01-01"]
     count_cols = [
-        "advances", "declines", "unchanged", "new_high_52w", "new_low_52w",
-        "limit_up", "limit_down",
+        "advances",
+        "declines",
+        "unchanged",
+        "new_high_52w",
+        "new_low_52w",
+        "limit_up",
+        "limit_down",
     ]
     df[count_cols] = df[count_cols].astype(int)
-    df = df[
-        ["date", "market", *count_cols, "pct_above_ma20", "total_value"]
-    ].sort_values(["date", "market"]).reset_index(drop=True)
+    df = (
+        df[["date", "market", *count_cols, "pct_above_ma20", "total_value"]]
+        .sort_values(["date", "market"])
+        .reset_index(drop=True)
+    )
     df["as_of"] = pd.Timestamp(px["date"].max()).strftime("%Y-%m-%d")
     return df
 
@@ -458,9 +537,7 @@ def build_flows_signals() -> pd.DataFrame:
     names = _name_map()
 
     # streak 탐색 창 — 260거래일이면 실무적으로 충분 (그 이상 연속은 260으로 포화)
-    sub = flows[
-        (flows["date"] >= dates[-260]) & (flows["investor"].isin(["frgn", "inst"]))
-    ]
+    sub = flows[(flows["date"] >= dates[-260]) & (flows["investor"].isin(["frgn", "inst"]))]
 
     # 20거래일 가격수익률 (adj_close)
     adj = qdata_api.load_krx_prices(
@@ -506,8 +583,19 @@ def build_flows_signals() -> pd.DataFrame:
     df.loc[(df["ret_20d"] > 0) & (df["intensity_20d"] < -0.3), "divergence"] = "bear"
     df = df[
         [
-            "ticker", "name", "market", "close", "chg_pct", "mktcap", "investor",
-            "streak", "net_1d", "net_20d", "intensity_20d", "ret_20d", "divergence",
+            "ticker",
+            "name",
+            "market",
+            "close",
+            "chg_pct",
+            "mktcap",
+            "investor",
+            "streak",
+            "net_1d",
+            "net_20d",
+            "intensity_20d",
+            "ret_20d",
+            "divergence",
         ]
     ].reset_index(drop=True)
     df["as_of"] = _as_of()
@@ -516,7 +604,6 @@ def build_flows_signals() -> pd.DataFrame:
 
 
 MIN_SECTOR_STOCKS = 5  # 구성 종목 5개 미만 업종은 지수 제외 (노이즈 컷)
-ETF_META_ID_BASE = 900_000  # KR ETF meta_id = 900000 + int(ticker); 비숫자 티커는 990000+ 순번
 
 
 def _sector_index() -> pd.DataFrame:
@@ -546,9 +633,8 @@ def _sector_index() -> pd.DataFrame:
     valid = merged.dropna(subset=["ret", "w"]).copy()
     valid["wret"] = valid["ret"] * valid["w"]
 
-    agg = (
-        valid.groupby(["date", "market", "sector"], as_index=False)
-        .agg(wret=("wret", "sum"), w=("w", "sum"), n_stocks=("ret", "size"))
+    agg = valid.groupby(["date", "market", "sector"], as_index=False).agg(
+        wret=("wret", "sum"), w=("w", "sum"), n_stocks=("ret", "size")
     )
     agg = agg[(agg["n_stocks"] >= MIN_SECTOR_STOCKS) & (agg["w"] > 0)].copy()
     agg["ret_1d"] = agg["wret"] / agg["w"]
@@ -619,47 +705,6 @@ def build_sector_perf() -> pd.DataFrame:
         )
     df = pd.DataFrame(rows).sort_values(["market", "sector"]).reset_index(drop=True)
     df["as_of"] = as_of
-    return df
-
-
-def build_kr_etf_meta() -> pd.DataFrame:
-    """현재 상장 KRX ETF → 앱 meta 스키마 행.
-
-    meta_id = 900000 + int(ticker) (6자리 숫자 티커); 비숫자·충돌 시 990000+ 순번.
-    krx_etf에는 종목명·시총이 없어 name=ticker, marketcap=None (클라이언트는 티커 표시).
-    """
-    etf = qdata_api.load_krx_etf_prices()
-    last = etf["date"].max()
-    live = sorted(etf.loc[etf["date"] == last, "ticker"].unique())
-    rng = etf[etf["ticker"].isin(live)].groupby("ticker")["date"].agg(["min", "max"])
-
-    used: set[int] = set()
-    next_seq = ETF_META_ID_BASE + 90_000  # 990000
-    rows = []
-    for ticker in live:
-        if ticker.isdigit() and ETF_META_ID_BASE + int(ticker) not in used:
-            mid = ETF_META_ID_BASE + int(ticker)
-        else:
-            while next_seq in used:
-                next_seq += 1
-            mid = next_seq
-        used.add(mid)
-        rows.append(
-            {
-                "meta_id": mid,
-                "ticker": ticker,
-                "name": ticker,
-                "security_type": "etf",
-                "asset_class": None,
-                "sector": None,
-                "iso_code": "KR",
-                "marketcap": None,
-                "min_date": rng.loc[ticker, "min"].strftime("%Y-%m-%d"),
-                "max_date": rng.loc[ticker, "max"].strftime("%Y-%m-%d"),
-            }
-        )
-    df = pd.DataFrame(rows)
-    df["as_of"] = pd.Timestamp(last).strftime("%Y-%m-%d")
     return df
 
 
@@ -737,7 +782,9 @@ def _book_to_weights(
         if fallback_weights is not None and not fallback_weights.empty:
             seed = fallback_weights[fallback_weights != 0]
             s = float(seed.sum())
-            seed = seed / s if s > 0 else None  # book 관례와 동일 — 투자자산 내 재정규화 (현금 잔여 무시)
+            seed = (
+                seed / s if s > 0 else None
+            )  # book 관례와 동일 — 투자자산 내 재정규화 (현금 잔여 무시)
         if seed is not None and not seed.empty:
             tail_row = seed.rename("weights").rename_axis("ticker").reset_index()
             tail_row.insert(0, "Date", nav_last)
@@ -951,8 +998,13 @@ def build_rebal_signals():
             target = rebal_signal.next_period_weights(price, algorithm, params)
             if not target:
                 raise ValueError("목표 비중 산출 실패")
-            w = bt.rebalance(price=price, method=algorithm, freq=freq,
-                             custom_weight=params.get("weights"), params=params)
+            w = bt.rebalance(
+                price=price,
+                method=algorithm,
+                freq=freq,
+                custom_weight=params.get("weights"),
+                params=params,
+            )
             if w is None or w.empty:
                 raise ValueError("prev 산출 실패 — 워밍업 창 부족 (전량 '진입' 오표시 방지)")
             prev = w.iloc[-1].dropna().to_dict()
@@ -1019,7 +1071,7 @@ def _event_cooldown(pos: np.ndarray, cooldown: int) -> np.ndarray:
     order = np.lexsort((pos[:, 0], pos[:, 1]))  # 1순위 ticker, 2순위 date
     p = pos[order]
     keep = []
-    last_ticker, last_date = -1, -(10 ** 9)
+    last_ticker, last_date = -1, -(10**9)
     for dpos, tpos in p:
         if tpos != last_ticker or dpos - last_date >= cooldown:
             keep.append((dpos, tpos))
@@ -1266,8 +1318,9 @@ def build_factor_returns():
         print("[factor_returns]")
         print(
             df.groupby("factor")
-            .agg(n=("spread", "size"), spread_mean=("spread", "mean"),
-                 cum_last=("cum_index", "last"))
+            .agg(
+                n=("spread", "size"), spread_mean=("spread", "mean"), cum_last=("cum_index", "last")
+            )
             .to_string()
         )
         return df
@@ -1353,9 +1406,7 @@ def build_factor_pct_ticker():
             "lowvol": (-(returns.rolling(60, min_periods=40).std())).loc[last],
         }
         liquid = M.loc[last] >= MKTCAP_FLOOR
-        df = pd.DataFrame(
-            {f: (scores[f].where(liquid).rank(pct=True) * 100) for f in FACTOR_NAMES}
-        )
+        df = pd.DataFrame({f: (scores[f].where(liquid).rank(pct=True) * 100) for f in FACTOR_NAMES})
         df = df.dropna(how="all").reset_index().rename(columns={"index": "ticker"})
         df.columns.name = None
         df["as_of"] = pd.Timestamp(last).strftime("%Y-%m-%d")
@@ -1413,10 +1464,55 @@ def build_spotlight():
         return None
 
 
+def build_asset_coverage() -> pd.DataFrame:
+    """검색·TOP·사용자 상태가 단일 마스터에 완전히 연결되는지 발행 전 검사한다."""
+    master = storage.read_parquet("asset_master.parquet")
+    as_of = pd.Timestamp.now(tz="Asia/Seoul").isoformat()
+    reports = []
+
+    kr = qdata_api.load_krx_stock_master()
+    kr_master = master[master["iso_code"].eq("KR")]
+    reports.append(
+        asset_master.assert_ticker_coverage(kr_master, "qdata_krx_stock_master", kr["ticker"])
+    )
+    for label, parts in (
+        ("flows_top", ("insight", "flows_top.parquet")),
+        ("flows_signals", ("insight", "flows_signals.parquet")),
+        ("spotlight", ("insight", "spotlight.parquet")),
+        ("intraday", ("kr_intraday_latest.parquet",)),
+    ):
+        if storage.exists(*parts):
+            df = storage.read_parquet(*parts, columns=["ticker"])
+            reports.append(asset_master.assert_ticker_coverage(kr_master, label, df["ticker"]))
+
+    available_ids = set(master["meta_id"].astype(int))
+    for label, parts in (
+        ("holdings", ("holdings.parquet",)),
+        ("watchlist", ("watchlist.parquet",)),
+        ("portfolio_universe", ("portfolio", "universe.parquet")),
+    ):
+        if not storage.exists(*parts):
+            continue
+        df = storage.read_parquet(*parts, columns=["meta_id"])
+        requested = {int(value) for value in df["meta_id"].dropna()}
+        missing = sorted(requested - available_ids)
+        if missing:
+            raise ValueError(
+                f"{label} meta_id가 자산 마스터에 없음: {len(missing)}/{len(requested)} "
+                f"{missing[:30]}"
+            )
+        reports.append({"dataset": label, "requested": len(requested), "missing": 0})
+
+    out = pd.DataFrame(reports)
+    out["as_of"] = as_of
+    return out
+
+
 # ---------------------------------------------------------------- 실행
 
 
 BUILDERS = [
+    ("asset_master.parquet", build_asset_master, {}),  # qdata 유일 원천 + 안정 ID
     ("us_prices.parquet", build_us_prices, {"row_group_size": 100_000}),  # P0: US 가격 앱 추출
     ("insight/regime_asset_perf.parquet", build_regime_asset_perf, {}),
     ("insight/flows_summary.parquet", build_flows_summary, {}),
@@ -1426,15 +1522,19 @@ BUILDERS = [
     ("insight/flows_signals.parquet", build_flows_signals, {}),
     ("insight/sector_index.parquet", build_sector_index, {}),
     ("insight/sector_perf.parquet", build_sector_perf, {}),
-    ("kr_etf_meta.parquet", build_kr_etf_meta, {}),  # 앱 루트 — meta_df()가 union
     ("insight/valuation_daily.parquet", build_valuation_daily, {}),
     ("insight/signal_study.parquet", build_signal_study, {}),  # Track B: 신호 이벤트 스터디
     ("insight/factor_returns.parquet", build_factor_returns, {}),  # Track B: 팩터 렌즈
     ("insight/factor_current.parquet", build_factor_current, {}),  # (factor_returns 캐시 파생)
-    ("insight/factor_pct_ticker.parquet", build_factor_pct_ticker, {}),  # 브리프 재료 + Lambda 부담 경감
+    (
+        "insight/factor_pct_ticker.parquet",
+        build_factor_pct_ticker,
+        {},
+    ),  # 브리프 재료 + Lambda 부담 경감
     ("insight/spotlight.parquet", build_spotlight, {}),  # 오늘의 신호 종목 (전시장 스캔)
     ("portfolio/live_nav.parquet", build_track_strategies, {}),  # 전략 실전 추적 (P7)
     ("portfolio/rebal_signals.parquet", build_rebal_signals, {}),  # active 전략 리밸 전일 신호
+    ("asset_coverage.parquet", build_asset_coverage, {}),  # 모든 링크·사용자 상태 무결성
 ]
 
 
@@ -1472,15 +1572,24 @@ def _parse_args(argv=None):
     choices = [_builder_name(path) for path, _, _ in BUILDERS]
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--only", action="append", choices=choices, default=[],
+        "--only",
+        action="append",
+        choices=choices,
+        default=[],
         help="지정 빌더만 실행 (여러 번 지정 가능)",
     )
     parser.add_argument(
-        "--exclude", action="append", choices=choices, default=[],
+        "--exclude",
+        action="append",
+        choices=choices,
+        default=[],
         help="지정 빌더 제외 (여러 번 지정 가능)",
     )
     parser.add_argument(
-        "--require", action="append", choices=choices, default=[],
+        "--require",
+        action="append",
+        choices=choices,
+        default=[],
         help="None/예외를 허용하지 않을 필수 빌더 (여러 번 지정 가능)",
     )
     return parser.parse_args(argv)
@@ -1494,9 +1603,9 @@ def main(argv=None):
     if only and excluded:
         raise SystemExit("--only와 --exclude는 함께 사용할 수 없습니다")
     selected = [
-        item for item in BUILDERS
-        if (not only or _builder_name(item[0]) in only)
-        and _builder_name(item[0]) not in excluded
+        item
+        for item in BUILDERS
+        if (not only or _builder_name(item[0]) in only) and _builder_name(item[0]) not in excluded
     ]
     not_selected_required = required - {_builder_name(x[0]) for x in selected}
     if not_selected_required:

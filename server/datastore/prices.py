@@ -18,7 +18,6 @@ from datastore import meta, storage
 logger = logging.getLogger(__name__)
 
 US_ARCHIVE = "us_prices.parquet"
-KR_ETF_META_ID_MIN = 900_000  # kr_etf_meta.parquet의 meta_id 대역 — ETF 소스 라우팅 기준
 
 
 def _date_filters(start_date: date | None, end_date: date | None) -> list:
@@ -92,8 +91,9 @@ def read_price_data(
 
     try:
         if iso_code == "KR":
-            etf = mapping[mapping["meta_id"] >= KR_ETF_META_ID_MIN]
-            stock = mapping[mapping["meta_id"] < KR_ETF_META_ID_MIN]
+            is_etf = mapping["security_type"].astype(str).str.upper().eq("ETF")
+            etf = mapping[is_etf]
+            stock = mapping[~is_etf]
             frames = []
             if not stock.empty:
                 frames.append(_kr_prices(stock, start_date, end_date))

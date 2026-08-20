@@ -31,7 +31,7 @@ class Backtest:
         self, meta_id: Optional[List[int]] = None, tickers: Optional[List[str]] = None
     ) -> dict:
         """
-        meta_id 또는 tickers로 iso_code 조회 (datastore meta.parquet)
+        meta_id 또는 tickers로 iso_code 조회 (통합 asset_master.parquet)
 
         Returns:
             {"US": [meta_ids], "KR": [meta_ids], "tickers": {meta_id: ticker}}

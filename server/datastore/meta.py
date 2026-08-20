@@ -1,46 +1,27 @@
-"""종목 메타·전략·매크로 정의 — RDS tb_meta/tb_strategy/tb_macro 덤프 parquet.
+"""qdata에서 매일 발행한 단일 자산 마스터와 앱 코드 카탈로그."""
 
-거의 불변 데이터라 프로세스 수명 동안 캐시한다 (Lambda 컨테이너 재사용 시 유지,
-콜드스타트 시 자연 갱신).
-"""
-
+import time
 from functools import lru_cache
 
 import pandas as pd
 
 from datastore import storage
+from datastore.catalog import macro_df, strategy_df
 
 
 @lru_cache(maxsize=1)
+def _meta_for_bucket(_bucket: int) -> pd.DataFrame:
+    return storage.read_parquet("asset_master.parquet")
+
+
 def meta_df() -> pd.DataFrame:
-    """tb_meta 전체: meta_id, ticker, name, isin, security_type, asset_class,
-    sector, iso_code, marketcap, fee, remark, min_date, max_date.
-
-    {APP_DATA}/kr_etf_meta.parquet(빌더 산출 — KR ETF, meta_id≥900000)이 있으면
-    같은 스키마로 정렬해 union한다 (없는 컬럼은 결측)."""
-    df = storage.read_parquet("meta.parquet")
-    if storage.exists("kr_etf_meta.parquet"):
-        etf = storage.read_parquet("kr_etf_meta.parquet")
-        etf = etf.reindex(columns=df.columns)  # meta 스키마에 없는 컬럼(as_of 등) 제거, 결측→NaN
-        df = pd.concat([df, etf], ignore_index=True)
-    return df
-
-
-@lru_cache(maxsize=1)
-def strategy_df() -> pd.DataFrame:
-    """tb_strategy: strategy_id, strategy, strategy_name."""
-    return storage.read_parquet("strategy.parquet")
-
-
-@lru_cache(maxsize=1)
-def macro_df() -> pd.DataFrame:
-    """tb_macro: macro_id, fred(시리즈 ID), 표시명 등 매크로 정의."""
-    return storage.read_parquet("macro.parquet")
+    """통합 자산 마스터. 5분마다 새 발행분을 확인해 warm Lambda도 갱신한다."""
+    return _meta_for_bucket(int(time.time() // 300))
 
 
 def resolve(meta_ids: list[int] | None = None, tickers: list[str] | None = None) -> pd.DataFrame:
-    """meta_id/ticker 부분집합의 [meta_id, ticker, iso_code] 매핑."""
-    df = meta_df()[["meta_id", "ticker", "iso_code"]]
+    """meta_id/ticker 부분집합의 가격 소스 라우팅 매핑."""
+    df = meta_df()[["meta_id", "ticker", "iso_code", "security_type"]]
     if meta_ids is not None:
         df = df[df["meta_id"].isin(meta_ids)]
     if tickers is not None:
