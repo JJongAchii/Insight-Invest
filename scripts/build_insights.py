@@ -1155,7 +1155,14 @@ def _forward_open_returns(adj_open: pd.DataFrame, horizon: int) -> pd.DataFrame:
     """
     if horizon <= 0:
         raise ValueError("horizon은 양수여야 합니다")
-    return (adj_open.shift(-(horizon + 1)) / adj_open.shift(-1) - 1.0) * 100.0
+    entry = adj_open.shift(-1)
+    exit_ = adj_open.shift(-(horizon + 1))
+    # KRX 원천에는 거래정지·구 이력 일부의 시가가 0으로 기록돼 있다. 0 시가를
+    # 체결 가능 가격으로 취급하면 나눗셈 결과가 +/-inf가 되고, 한 행만으로도
+    # 팩터 누적지수와 현재 요약 전체가 NaN이 된다. 양수·유한한 양쪽 시가가
+    # 모두 있는 경우만 실행 가능한 수익률로 인정한다.
+    valid = entry.gt(0) & exit_.gt(0) & np.isfinite(entry) & np.isfinite(exit_)
+    return ((exit_ / entry - 1.0) * 100.0).where(valid)
 
 
 def build_signal_study():
@@ -1369,6 +1376,8 @@ def _factor_returns_df():
         spread = ((top - bot) * 100).dropna()
         norm = (1 + spread / 100).cumprod()
         cum_index = 100.0 * norm / norm.iloc[0]  # 시작 100 재기준화 (sector_index 관례)
+        if not np.isfinite(spread).all() or not np.isfinite(cum_index).all():
+            raise ValueError(f"{factor}: 팩터 수익률 산출물에 비유한값이 있습니다")
         frames.append(
             pd.DataFrame(
                 {
