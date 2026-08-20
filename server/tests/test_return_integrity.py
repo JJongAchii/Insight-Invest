@@ -42,6 +42,23 @@ def test_forward_return_requires_positive_horizon():
         bi._forward_open_returns(pd.DataFrame({"AAA": [1.0, 2.0]}), 0)
 
 
+def test_forward_return_rejects_zero_or_nonfinite_execution_prices():
+    dates = pd.bdate_range("2026-08-03", periods=5)
+    adjusted_open = pd.DataFrame(
+        {
+            "ZERO_ENTRY": [100.0, 0.0, 110.0, 121.0, 133.1],
+            "ZERO_EXIT": [100.0, 90.0, 0.0, 108.9, 119.79],
+            "INF_EXIT": [100.0, 90.0, np.inf, 108.9, 119.79],
+        },
+        index=dates,
+    )
+
+    out = bi._forward_open_returns(adjusted_open, 1)
+
+    assert out.loc[dates[0]].isna().all()
+    assert np.isfinite(out.to_numpy(dtype="float64")[~out.isna().to_numpy()]).all()
+
+
 def test_factor_scores_do_not_change_when_future_tail_is_perturbed():
     """여러 조기 경계에서 미래 꼬리를 바꿔도 과거 팩터 점수는 같아야 한다.
 
