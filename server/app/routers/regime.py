@@ -44,30 +44,21 @@ async def get_macro_info():
 def _macro_data() -> pd.DataFrame:
     """매크로 시계열 [base_date, macro_id, fred, value].
 
-    소스 = RDS 시절 아카이브(macro_data.parquet) ∪ qdata FRED(레이크에 있는 시리즈만,
-    일일 갱신). 같은 날짜는 최신 수집(qdata) 우선.
+    소스는 qdata FRED 단일 원천이다. 필요한 장기 구간은 qdata가 1980년부터
+    직접 수집하므로 별도 DB 덤프나 아카이브 보강을 허용하지 않는다.
     """
     macro = datastore.macro_df()[["macro_id", "fred"]]
-    archive = storage.read_parquet("macro_data.parquet").merge(macro, on="macro_id", how="inner")
-    archive = archive[["base_date", "macro_id", "fred", "value"]]
+    from qdata import api as qdata_api
 
-    try:
-        from qdata import api as qdata_api
-
-        live = qdata_api.load_fred(macro["fred"].tolist())
-        live = live.stack().rename("value").reset_index()
-        live.columns = ["base_date", "fred", "value"]
-        live = live.merge(macro, on="fred", how="inner")[
-            ["base_date", "macro_id", "fred", "value"]
-        ]
-    except (FileNotFoundError, KeyError):
-        live = pd.DataFrame(columns=archive.columns)
-
-    merged = pd.concat([archive, live], ignore_index=True)
-    merged["base_date"] = pd.to_datetime(merged["base_date"])
-    merged = merged.drop_duplicates(subset=["fred", "base_date"], keep="last")
-    merged = merged[merged["base_date"] >= "1980-01-01"]
-    return merged.sort_values("base_date").reset_index(drop=True)
+    live = qdata_api.load_fred(macro["fred"].tolist())
+    live = live.stack().rename("value").reset_index()
+    live.columns = ["base_date", "fred", "value"]
+    live = live.merge(macro, on="fred", how="inner", validate="many_to_one")[
+        ["base_date", "macro_id", "fred", "value"]
+    ]
+    live["base_date"] = pd.to_datetime(live["base_date"])
+    live = live[live["base_date"] >= "1980-01-01"]
+    return live.sort_values("base_date").reset_index(drop=True)
 
 
 @router.get("/data")

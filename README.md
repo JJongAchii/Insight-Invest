@@ -54,8 +54,9 @@ Insight-Invest 쪽 변경은 pull 이후 서브프로세스로 새로 호출되�
 |--------|------|------|
 | KR 전 종목 (KOSPI+KOSDAQ, 상폐 포함, 2016~) | qdata KRX 패널 | 매일 (배치 EC2 → S3 sync) |
 | US 종목·ETF (앱 meta 등록분, 2008~) | qdata Massive 전종목 가격 + 분할·배당 | 매일 09:00·19:00 KST 배치 → `app/us_prices.parquet` |
-| FRED 매크로 (레짐 대시보드) | qdata FRED + RDS 시절 아카이브 병합 | 매일 |
-| 종목 메타 9,325건 / 포트폴리오 | `app/meta.parquet` / `app/portfolio/` | 앱에서 저장 시 |
+| FRED 매크로 (레짐 대시보드) | qdata FRED 단일 원천(필요 시계열 1980~ 직접 수집) | 매일 |
+| 통합 종목 마스터 | qdata KRX 주식·ETF + Massive 티커 참조 → `app/asset_master.parquet` | 매일 |
+| 앱 자산 ID / 포트폴리오 | `app/asset_id_registry.parquet` / `app/portfolio/` | 신규 상장·앱 저장 시 |
 | 뉴스 | Google News RSS 실시간 | 요청 시 |
 
 ## 로컬 개발
@@ -130,6 +131,8 @@ docs/superpowers/          # 설계·구현계획 기록 (폐기된 것 포함)
 - **v3.1 (2026-07-27)**: 배치를 맥 launchd에서 EC2 `qdata-collector` + EventBridge로 이관
   (README가 이관 전 구조를 그대로 담고 있던 것을 이때 정정). 종목별 팩터 백분위
   parquet 영속화 — `/factor-exposure`가 콜드스타트마다 520일치 전종목을 로드하던 것을 대체.
+- **v3.2 (2026-08)**: RDS 덤프 기반 종목·매크로·전략 정의 의존 제거. qdata 단일 종목
+  마스터와 append-only 앱 ID 레지스트리로 전환하고 신규 상장을 일일 자동 편입.
 - **v3 (2026-07)**: qdata 소비자로 재구조. RDS·Iceberg·Athena·ECS/Copilot·자체 ETL 제거,
   Lambda+S3 parquet 전환. KR 데이터를 Yahoo `.KS`(KOSDAQ 미지원)에서 KRX 전 종목 패널로 교체.
   월 비용 ~$54 → $0.1 미만. 배경과 결정 기록: quant-data `docs/adr/0002-s3-mirror.md`

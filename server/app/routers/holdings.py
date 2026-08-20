@@ -22,9 +22,8 @@ from qdata import api as qdata_api
 
 from datastore import fx
 from datastore import holdings as holdings_store
-from datastore import meta
-from datastore import portfolio_ledger
-from datastore.prices import KR_ETF_META_ID_MIN, read_price_data
+from datastore import meta, portfolio_ledger
+from datastore.prices import read_price_data
 from module import portfolio_risk
 from module.backtest import Backtest
 
@@ -157,16 +156,23 @@ def _usdkrw_latest() -> Optional[float]:
 
 
 def build_price_map(df: pd.DataFrame) -> dict:
-    """[meta_id, ticker, iso_code] → {meta_id: (latest_price, day_chg_pct)}.
+    """[meta_id, ticker, iso_code,(security_type)] → 최신 가격 맵.
 
-    소스별로 라우팅: KR 종목/ETF(meta_id≥900000)/US. attention 라우터도 공유한다.
+    소스별로 라우팅: KR 종목/ETF/US. 숫자 ID 대역이 아니라 마스터 유형을 쓴다.
     """
     out: dict = {}
     if df.empty:
         return out
+    if "security_type" not in df.columns:
+        types = meta.meta_df()[["meta_id", "security_type"]]
+        before = len(df)
+        df = df.merge(types, on="meta_id", how="left", validate="many_to_one")
+        if len(df) != before or df["security_type"].isna().any():
+            raise ValueError("가격 라우팅용 security_type 조인 실패")
     kr = df[df["iso_code"] == "KR"]
-    kr_stock = kr[kr["meta_id"] < KR_ETF_META_ID_MIN]
-    kr_etf = kr[kr["meta_id"] >= KR_ETF_META_ID_MIN]
+    is_etf = kr["security_type"].astype(str).str.upper().eq("ETF")
+    kr_stock = kr[~is_etf]
+    kr_etf = kr[is_etf]
     us = df[df["iso_code"] == "US"]
 
     if not kr_stock.empty:
@@ -333,9 +339,11 @@ def get_holdings():
                 "weight": _r(weight, 4),
                 "target_weight": _r(target_weight, 4),
                 "drift_pp": _r(
-                    (weight - target_weight) * 100
-                    if weight is not None and target_weight is not None
-                    else None,
+                    (
+                        (weight - target_weight) * 100
+                        if weight is not None and target_weight is not None
+                        else None
+                    ),
                     2,
                 ),
                 "thesis": p["thesis"],
@@ -394,7 +402,9 @@ def get_holdings():
 @router.post("")
 def add_holding(request: HoldingRequest):
     if portfolio_ledger.has_events():
-        raise HTTPException(status_code=409, detail="원장 시작 후 수량·평단은 거래 이벤트로 변경하세요")
+        raise HTTPException(
+            status_code=409, detail="원장 시작 후 수량·평단은 거래 이벤트로 변경하세요"
+        )
     md = meta.meta_df()
     row = md[md["meta_id"] == request.meta_id]
     if row.empty:
@@ -453,7 +463,9 @@ def update_holding_metadata(meta_id: int, request: HoldingMetadataRequest):
 @router.delete("/{meta_id}")
 def remove_holding(meta_id: int):
     if portfolio_ledger.has_events():
-        raise HTTPException(status_code=409, detail="원장 시작 후 보유 수량은 매도 이벤트로 변경하세요")
+        raise HTTPException(
+            status_code=409, detail="원장 시작 후 보유 수량은 매도 이벤트로 변경하세요"
+        )
     holdings_store.remove(meta_id)
     return {"n_positions": int(len(holdings_store.list_items()))}
 
