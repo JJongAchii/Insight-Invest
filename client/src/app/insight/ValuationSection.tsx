@@ -26,6 +26,9 @@ const METRIC_OPTIONS: { id: ValuationMetric; label: string }[] = [
 const fmtRatio = (v: number | null | undefined): string =>
   v === null || v === undefined || Number.isNaN(v) ? "—" : v.toFixed(2);
 
+const fmtCoverage = (v: number | null | undefined): string =>
+  v === null || v === undefined || Number.isNaN(v) ? "—" : `${v.toFixed(1)}%`;
+
 /** Market-level cap-weighted PER/PBR/dividend valuation card. */
 const ValuationSection: React.FC = () => {
   const [market, setMarket] = useState<InsightMarket>("KOSPI");
@@ -84,13 +87,13 @@ const ValuationSection: React.FC = () => {
             <StatTile label="PER" value={fmtRatio(current.per)} />
             <StatTile label="PBR" value={fmtRatio(current.pbr)} />
             <StatTile
-              label="배당수익률"
+              label="Dividend Yield"
               value={
                 current.div === null ? "—" : `${current.div.toFixed(2)}%`
               }
             />
             <StatTile
-              label="PBR 백분위"
+              label="PBR Percentile"
               value={
                 pctRankPbr === null
                   ? "—"
@@ -111,11 +114,37 @@ const ValuationSection: React.FC = () => {
             />
           </div>
 
+          <div className="rounded-xl border border-edge bg-raised p-4">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-ink">Coverage</p>
+                <p className="mt-0.5 text-xs text-ink-muted">
+                  양수 PER/PBR만 시장 배수에 포함하며, 빠진 적자·결측 종목의 비중을 함께 표시합니다.
+                </p>
+              </div>
+              {data.calculation_version && (
+                <span className="text-xs text-ink-muted num">{data.calculation_version}</span>
+              )}
+            </div>
+            <dl className="mt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
+              <div><dt className="text-ink-muted">PER · 종목</dt><dd className="mt-1 font-semibold text-ink num">{fmtCoverage(current.per_name_coverage_pct)}</dd></div>
+              <div><dt className="text-ink-muted">PER · 시총</dt><dd className="mt-1 font-semibold text-ink num">{fmtCoverage(current.per_mktcap_coverage_pct)}</dd></div>
+              <div><dt className="text-ink-muted">PBR · 종목</dt><dd className="mt-1 font-semibold text-ink num">{fmtCoverage(current.pbr_name_coverage_pct)}</dd></div>
+              <div><dt className="text-ink-muted">적자/0 EPS · 종목</dt><dd className="mt-1 font-semibold text-ink num">{fmtCoverage(current.non_positive_eps_name_pct)}</dd></div>
+            </dl>
+            {current.aggregate_earnings_yield_pct != null && (
+              <p className="mt-3 text-xs text-ink-secondary">
+                Aggregate Earnings Yield <span className="num font-semibold text-ink">{current.aggregate_earnings_yield_pct.toFixed(2)}%</span>
+                <span className="text-ink-muted"> · EPS가 있는 종목의 적자까지 포함 · 종목 {fmtCoverage(current.earnings_name_coverage_pct)} / 시총 {fmtCoverage(current.earnings_mktcap_coverage_pct)}</span>
+              </p>
+            )}
+          </div>
+
           <div>
             <div className="flex items-center justify-between mb-2">
               <div>
                 <p className="text-sm font-medium text-ink-secondary">
-                  {metric === "pbr" ? "PBR 추이" : "PER 추이"}
+                  {metric === "pbr" ? "PBR History" : "PER History"}
                 </p>
                 {pctRankPbr !== null && (
                   <p className="text-xs text-ink-muted mt-0.5">

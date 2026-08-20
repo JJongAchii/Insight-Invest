@@ -45,6 +45,7 @@ _STUDY_COLS = [
     "hit_rate",
     "avg_fwd_ret",
     "as_of",
+    "calculation_version",
 ]
 
 
@@ -112,9 +113,19 @@ def test_spotlight_groups_ordered_and_marked(monkeypatch, tmp_path):
     )
     study = pd.DataFrame(
         [
-            ["baseline", 20, 6_000_000, -0.5, -1.80, 41.2, 3.0, "2026-07-31"],
-            ["near_52w_high_hold", 20, 282_143, 0.5, -1.26, 44.2, 4.0, "2026-07-31"],
-            ["frgn_streak10", 20, 1_847, 0.2, -1.29, 43.0, 3.5, "2026-07-31"],
+            ["baseline", 20, 6_000_000, -0.5, -1.80, 41.2, 3.0, "2026-07-31", "kr_price_return_v2"],
+            [
+                "near_52w_high_hold",
+                20,
+                282_143,
+                0.5,
+                -1.26,
+                44.2,
+                4.0,
+                "2026-07-31",
+                "kr_price_return_v2",
+            ],
+            ["frgn_streak10", 20, 1_847, 0.2, -1.29, 43.0, 3.5, "2026-07-31", "kr_price_return_v2"],
         ],
         columns=_STUDY_COLS,
     )

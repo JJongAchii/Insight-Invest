@@ -72,7 +72,7 @@ const StockPriceFlowsChart: React.FC<StockPriceFlowsChartProps> = ({
       const flow = flowByDate.get(p.trade_date);
       return {
         date: p.trade_date,
-        price: p.adj_close,
+        price: p.value ?? p.adj_close,
         frgn: flow ? flow.frgn_net / 1e8 : null,
         inst: flow ? flow.inst_net / 1e8 : null,
       };

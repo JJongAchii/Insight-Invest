@@ -52,6 +52,14 @@ const loadStoredResult = (): BacktestRunResult | null => {
 const formatPct = (v: number | null | undefined) =>
   typeof v === "number" ? `${v.toFixed(2)}%` : "—";
 
+const apiErrorMessage = (error: unknown): string => {
+  if (typeof error === "object" && error !== null && "data" in error) {
+    const data = (error as { data?: { detail?: unknown } }).data;
+    if (typeof data?.detail === "string") return data.detail;
+  }
+  return "백테스트를 실행하지 못했습니다.";
+};
+
 // 인터페이스 타입은 암묵적 인덱스 시그니처가 없어 차트 data 타입에 바로 못 넘긴다
 const toSeriesData = (points: { date: string; value: number }[]) =>
   points.map((p) => ({ date: p.date, value: p.value }));
@@ -69,6 +77,7 @@ const Simulation = () => {
   const [runBacktest, { isLoading }] = useRunBacktestMutation();
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("performance");
+  const [runError, setRunError] = useState<string | null>(null);
 
   const [selectedTicker, setSelectedTicker] = useState<
     Record<string, SaveStrategyPayload>
@@ -82,6 +91,7 @@ const Simulation = () => {
 
   const handleRunBacktest = async (payload: BacktestPayload) => {
     try {
+      setRunError(null);
       const result = await runBacktest(payload).unwrap();
       setBacktestResult(result);
       setActiveTab("performance");
@@ -94,6 +104,7 @@ const Simulation = () => {
       }));
     } catch (error) {
       console.error("Error running backtest:", error);
+      setRunError(apiErrorMessage(error));
       setBacktestResult(null);
     }
   };
@@ -180,6 +191,31 @@ const Simulation = () => {
       </div>
 
       <SetStrategy onRunBacktest={handleRunBacktest} isLoading={isLoading} />
+
+      {runError && (
+        <div className="rounded-xl border border-losses/30 bg-losses/5 px-4 py-3 text-sm text-losses">
+          {runError}
+        </div>
+      )}
+
+      {backtestResult?.calculation_contract && (
+        <div className="rounded-xl border border-edge bg-raised px-4 py-3 text-xs text-ink-secondary">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="font-semibold text-ink">Execution Contract</span>
+            <span className="text-ink-muted num">
+              {backtestResult.calculation_contract.calculation_version}
+            </span>
+          </div>
+          <p className="mt-1">
+            Basis · {backtestResult.calculation_contract.return_basis} · Execution · 리밸런스 거래일 종가
+          </p>
+          {backtestResult.calculation_contract.cash_distributions !== "included" && (
+            <p className="mt-1 text-warning">
+              정확한 현금분배 이벤트를 합성한 Total Return이 아닙니다. 서로 다른 수익률 기준의 자산은 한 실행에서 혼합하지 않습니다.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Result Tabs */}
       <div className="inline-flex self-start rounded-lg bg-raised p-1 overflow-x-auto max-w-full">
