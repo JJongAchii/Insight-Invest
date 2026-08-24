@@ -83,7 +83,15 @@ export default function NotificationSettings() {
   const test = async () => {
     try {
       const result = await sendTest().unwrap();
-      setMessage(result.sent > 0 ? "테스트 알림을 전송했습니다." : "활성 구독을 찾지 못했습니다.");
+      if (result.sent > 0) {
+        setMessage("테스트 알림을 전송했습니다.");
+      } else if (result.subscriptions === 0) {
+        setMessage("서버에 활성 구독이 없습니다. 이 기기의 알림을 다시 활성화해 주세요.");
+      } else if (result.failed > 0) {
+        setMessage("Push 제공자가 전송을 거절했습니다. 잠시 후 다시 시도해 주세요.");
+      } else {
+        setMessage("전송할 테스트 알림이 없습니다.");
+      }
     } catch {
       setMessage("테스트 알림을 전송하지 못했습니다.");
     }

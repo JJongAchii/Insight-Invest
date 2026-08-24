@@ -56,7 +56,8 @@ Insight-Invest 쪽 변경은 pull 이후 서브프로세스로 새로 호출되�
 
 iOS/iPadOS 16.4+의 홈 화면 PWA와 데스크톱 브라우저에 표준 Web Push를 보낸다.
 `WEB_PUSH_PUBLIC_KEY`와 `WEB_PUSH_PRIVATE_KEY`는 P-256 raw key의 base64url(no padding),
-`WEB_PUSH_SUBJECT`는 운영 연락처다. 키가 없으면 API·화면은 정상 동작하고 Push만
+`WEB_PUSH_SUBJECT`는 Apple도 검증할 수 있는 공개 HTTPS URL 또는 실제 `mailto:` 연락처다
+(`.local` 주소 금지). 키가 없으면 API·화면은 정상 동작하고 Push만
 fail-closed로 비활성화된다. GitHub Actions 배포에는 같은 이름의 repository secret을 둔다.
 
 EventBridge의 `insight-invest-action-poller`가 데이터 배치 뒤 09:45·20:30 KST에 실행된다.

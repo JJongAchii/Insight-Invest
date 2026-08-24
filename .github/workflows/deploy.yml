@@ -70,7 +70,7 @@ jobs:
               AnthropicApiKey=${{ secrets.ANTHROPIC_API_KEY }} \
               WebPushPublicKey=${{ secrets.WEB_PUSH_PUBLIC_KEY }} \
               WebPushPrivateKey=${{ secrets.WEB_PUSH_PRIVATE_KEY }} \
-              WebPushSubject=mailto:admin@insight-invest.local \
+              WebPushSubject=https://insight-invest-ten.vercel.app \
             --no-fail-on-empty-changeset
 
       - name: Smoke test
