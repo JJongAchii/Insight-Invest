@@ -5,6 +5,10 @@
 포트폴리오 구성 → 백테스트 → 저장·비교, 효율적 투자선/리스크 패리티 최적화,
 매크로 레짐 대시보드, 종목 검색·비교, 마켓 뉴스를 하나의 웹앱에서 제공한다.
 
+`Action Center`는 기존 Attention·Watchlist·Holdings·Journal·Strategy·Data Trust를
+공통 Event 계약으로 묶는다. 가격 기준 교차, Thesis 검토일, 리밸런싱, 데이터 이상을
+한 Inbox/Calendar에 표시하고 판단 근거를 Decision Journal 초안으로 넘길 수 있다.
+
 ## 아키텍처 (2026-07 재구조)
 
 **"무거운 일은 배치로, 서빙은 요청 시에만"** — 상시 가동 자원이 0개다.
@@ -46,7 +50,18 @@ Insight-Invest 쪽 변경은 pull 이후 서브프로세스로 새로 호출되�
 | 인증 | 앱 레벨 `X-API-Key` 미들웨어 (`API_TOKEN` 환경변수) | `/`·`/health`만 공개 |
 | 배포 | GitHub Actions → ECR → CloudFormation (`infra/template.yaml`) | 서빙 스택. 배치 EC2는 CFN 밖 (콘솔 생성) |
 | 배치 | EC2 `qdata-collector` + EventBridge Scheduler 2개 | 코드 갱신은 `git pull` — 배포 절차 없음 |
-| 프론트 | Next.js 14 (Vercel) | |
+| 프론트 | Next.js 16 (Vercel) | PWA·iOS Home Screen·Web Push |
+
+### Web Push
+
+iOS/iPadOS 16.4+의 홈 화면 PWA와 데스크톱 브라우저에 표준 Web Push를 보낸다.
+`WEB_PUSH_PUBLIC_KEY`와 `WEB_PUSH_PRIVATE_KEY`는 P-256 raw key의 base64url(no padding),
+`WEB_PUSH_SUBJECT`는 운영 연락처다. 키가 없으면 API·화면은 정상 동작하고 Push만
+fail-closed로 비활성화된다. GitHub Actions 배포에는 같은 이름의 repository secret을 둔다.
+
+EventBridge의 `insight-invest-action-poller`가 데이터 배치 뒤 09:45·20:30 KST에 실행된다.
+동일 event/subscription 조합은 delivery receipt로 한 번만 보내며, 여러 건은 한 알림으로
+묶어 과도한 알림을 방지한다.
 
 ### 데이터 소스
 

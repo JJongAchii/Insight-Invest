@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { BookOpenCheck, CalendarClock } from "lucide-react";
+import Link from "next/link";
 
 import PageHeader from "@/components/ui/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
@@ -78,6 +79,26 @@ export default function JournalPage() {
   const [create, { isLoading: isCreating, error: createError }] = useCreateJournalMutation();
   const [form, setForm] = useState<CreateJournalPayload>(initialForm);
   const [showForm, setShowForm] = useState(false);
+
+  useEffect(() => {
+    const raw = sessionStorage.getItem("ii-journal-prefill");
+    if (!raw) return;
+    try {
+      const item = JSON.parse(raw);
+      setForm({
+        ...initialForm(),
+        observation: [item.title, item.detail].filter(Boolean).join(" — "),
+        invalidation: "",
+        source_event_id: item.event_id,
+        source_event: item,
+      });
+      setShowForm(true);
+    } catch {
+      // 손상된 로컬 초안은 버리고 일반 편집기를 유지한다.
+    } finally {
+      sessionStorage.removeItem("ii-journal-prefill");
+    }
+  }, []);
 
   const dueCount = useMemo(
     () => (data?.items ?? []).filter((item) => !item.reviewed_at && item.review_date <= new Date().toISOString().slice(0, 10)).length,
@@ -160,7 +181,7 @@ export default function JournalPage() {
       ) : (
         <div className="space-y-4">
           {data.items.map((entry) => (
-            <article key={entry.entry_id} className="card">
+            <article id={`entry-${entry.entry_id}`} key={entry.entry_id} className="card scroll-mt-24">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <span className="badge-neutral">{HORIZON_LABEL[entry.horizon]}</span>
@@ -180,6 +201,15 @@ export default function JournalPage() {
               <details className="mt-4 text-sm">
                 <summary className="cursor-pointer text-ink-secondary">작성 당시 데이터 스냅샷</summary>
                 <div className="mt-2 rounded-xl border border-edge p-3 text-xs text-ink-muted">
+                  {entry.evidence_snapshot.source_event?.title && (
+                    <p className="mb-2 text-ink-secondary">
+                      Source: {entry.evidence_snapshot.source_event.link ? (
+                        <Link href={entry.evidence_snapshot.source_event.link} className="text-primary-400 hover:underline">
+                          {entry.evidence_snapshot.source_event.title}
+                        </Link>
+                      ) : entry.evidence_snapshot.source_event.title}
+                    </p>
+                  )}
                   <p>{entry.evidence_snapshot.tone_label ?? "종합 문구 없음"}</p>
                   <p>계산 {formatDate(entry.evidence_snapshot.generated_at)}</p>
                   <p>{entry.evidence_snapshot.method}</p>

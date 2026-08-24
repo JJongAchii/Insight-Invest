@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, BriefcaseBusiness, Home, Search } from "lucide-react";
+import { BellRing, BriefcaseBusiness, Home, Search } from "lucide-react";
 
 const items = [
   { href: "/home", label: "Home", icon: Home },
-  { href: "/insight", label: "Markets", icon: BarChart3 },
+  { href: "/actions", label: "Actions", icon: BellRing },
   { href: "/stocksearch", label: "Search", icon: Search },
   { href: "/portfolio", label: "Portfolio", icon: BriefcaseBusiness },
 ];

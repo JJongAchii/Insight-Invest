@@ -38,6 +38,19 @@ Parameters:
     NoEcho: true
     Default: ""
     Description: 뉴스 큐레이션용 Anthropic API 키 (뉴스 폴러 전용 — 없으면 규칙 폴백)
+  WebPushPublicKey:
+    Type: String
+    Default: ""
+    Description: VAPID public key (base64url, 없으면 Web Push 비활성)
+  WebPushPrivateKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: VAPID private key (base64url)
+  WebPushSubject:
+    Type: String
+    Default: "mailto:admin@insight-invest.local"
+    Description: VAPID contact subject
 
 Resources:
   ApiRole:
@@ -69,6 +82,11 @@ Resources:
                   - !Sub arn:aws:s3:::${DataBucket}/app/tmp_results/*
                   - !Sub arn:aws:s3:::${DataBucket}/app/watchlist.parquet
                   - !Sub arn:aws:s3:::${DataBucket}/app/holdings.parquet
+                  - !Sub arn:aws:s3:::${DataBucket}/app/action_states.parquet
+                  - !Sub arn:aws:s3:::${DataBucket}/app/notification_subscriptions.parquet
+                  - !Sub arn:aws:s3:::${DataBucket}/app/notification_deliveries.parquet
+                  - !Sub arn:aws:s3:::${DataBucket}/app/decision_journal.parquet
+                  - !Sub arn:aws:s3:::${DataBucket}/app/decision_journal_reviews.parquet
 
   ApiFunction:
     Type: AWS::Lambda::Function
@@ -86,6 +104,9 @@ Resources:
           APP_DATA: !Sub s3://${DataBucket}/app
           API_TOKEN: !Ref ApiToken
           SITE_ACCESS_HASH: !Ref SiteAccessHash
+          WEB_PUSH_PUBLIC_KEY: !Ref WebPushPublicKey
+          WEB_PUSH_PRIVATE_KEY: !Ref WebPushPrivateKey
+          WEB_PUSH_SUBJECT: !Ref WebPushSubject
 
   ApiUrl:
     Type: AWS::Lambda::Url
@@ -249,6 +270,90 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt NewsPollerScheduleDawn.Arn
+
+  ActionPollerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: action-notifications
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [s3:GetObject, s3:ListBucket]
+                Resource:
+                  - !Sub arn:aws:s3:::${DataBucket}
+                  - !Sub arn:aws:s3:::${DataBucket}/qdata/*
+                  - !Sub arn:aws:s3:::${DataBucket}/app/*
+              - Effect: Allow
+                Action: [s3:PutObject]
+                Resource:
+                  - !Sub arn:aws:s3:::${DataBucket}/app/notification_subscriptions.parquet
+                  - !Sub arn:aws:s3:::${DataBucket}/app/notification_deliveries.parquet
+
+  ActionPollerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: insight-invest-action-poller
+      PackageType: Image
+      Code: { ImageUri: !Ref ImageUri }
+      ImageConfig: { Command: ["app.action_poller.handler"] }
+      Role: !GetAtt ActionPollerRole.Arn
+      Architectures: [x86_64]
+      MemorySize: 1536
+      Timeout: 120
+      Environment:
+        Variables:
+          QDATA_LAKE: !Sub s3://${DataBucket}/qdata
+          APP_DATA: !Sub s3://${DataBucket}/app
+          WEB_PUSH_PUBLIC_KEY: !Ref WebPushPublicKey
+          WEB_PUSH_PRIVATE_KEY: !Ref WebPushPrivateKey
+          WEB_PUSH_SUBJECT: !Ref WebPushSubject
+
+  # 가격·인사이트 배치가 끝난 뒤 실행한다. 중복 전송은 delivery receipt가 막는다.
+  ActionPollerScheduleMorning:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: insight-invest-action-poll-morning
+      ScheduleExpression: cron(45 0 ? * MON-FRI *)  # 09:45 KST
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ActionPollerFunction.Arn
+          Id: action-poller-morning
+
+  ActionPollerScheduleEvening:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: insight-invest-action-poll-evening
+      ScheduleExpression: cron(30 11 ? * MON-FRI *)  # 20:30 KST
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ActionPollerFunction.Arn
+          Id: action-poller-evening
+
+  ActionPollerMorningInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ActionPollerFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ActionPollerScheduleMorning.Arn
+
+  ActionPollerEveningInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ActionPollerFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ActionPollerScheduleEvening.Arn
 
 Outputs:
   FunctionUrl:

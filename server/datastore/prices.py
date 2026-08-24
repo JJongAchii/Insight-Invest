@@ -13,6 +13,7 @@ import logging
 from datetime import date
 
 import pandas as pd
+from pyarrow import ArrowInvalid
 from qdata import api as qdata_api
 
 from datastore import meta, storage
@@ -104,12 +105,33 @@ def _kr_etf_prices(mapping: pd.DataFrame, start_date, end_date) -> pd.DataFrame:
 
 def _us_prices(mapping: pd.DataFrame, start_date, end_date) -> pd.DataFrame:
     """앱 us_prices.parquet (meta_id 키, 컬럼 그대로 보존됨)."""
-    filters = [("meta_id", "in", mapping["meta_id"].tolist()), *_date_filters(start_date, end_date)]
-    df = storage.read_parquet(
-        US_ARCHIVE,
-        columns=["meta_id", "trade_date", "ticker", "adj_close", "gross_return"],
-        filters=filters,
-    )
+    filters = [
+        ("meta_id", "in", mapping["meta_id"].tolist()),
+        *_date_filters(start_date, end_date),
+    ]
+    try:
+        df = storage.read_parquet(
+            US_ARCHIVE,
+            columns=[
+                "meta_id",
+                "trade_date",
+                "ticker",
+                "close",
+                "adj_close",
+                "gross_return",
+            ],
+            filters=filters,
+        )
+    except (ArrowInvalid, KeyError) as exc:
+        if "close" not in str(exc).lower():
+            raise
+        # 무중단 배포: 새 서버가 먼저 떠도 다음 배치 전의 구 앱 파일을 계속 읽는다.
+        # 폴백 파일에는 raw close를 꾸며 넣지 않아 하류가 adj_close를 가격으로 명시 폴백한다.
+        df = storage.read_parquet(
+            US_ARCHIVE,
+            columns=["meta_id", "trade_date", "ticker", "adj_close", "gross_return"],
+            filters=filters,
+        )
     return df
 
 

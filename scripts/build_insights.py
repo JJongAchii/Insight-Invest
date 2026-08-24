@@ -286,6 +286,9 @@ def build_us_prices():
             dv = dv[dv["ex_date"] >= cutoff]
         lost_div += float(dv.loc[~dv["ex_date"].isin(g.index), "cash_amount"].sum())
         res = uspx.compose_total_return(g, dv)
+        # 절대 가격·가격 알림·평가손익은 raw close, 성과는 adj_close/TR을 쓴다.
+        # 둘을 같은 앱 파일에 보존하되 소비자가 목적에 맞는 열을 선택한다.
+        res["close"] = g["close"].astype("float64")
         res = res.reset_index().rename(columns={"date": "trade_date"})
         res["ticker"] = tk
         out.append(res)
@@ -315,7 +318,7 @@ def build_us_prices():
             "(플로어 이전 상폐·미러 부재)",
             file=sys.stderr,
         )
-    df = df[["meta_id", "trade_date", "ticker", "adj_close", "gross_return"]]
+    df = df[["meta_id", "trade_date", "ticker", "close", "adj_close", "gross_return"]]
     # 서빙 필터 키(meta_id) 정렬 — 로우그룹 프루닝 유지 (flows_by_ticker 관례와 동일).
     # server/datastore/prices.py._us_prices 는 ("meta_id","in",...) 필터로 읽는다 —
     # ticker 정렬로 쓰면 로우그룹당 meta_id 폭이 넓어져 프루닝이 무력화된다.

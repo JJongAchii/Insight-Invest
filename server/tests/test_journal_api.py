@@ -1,6 +1,7 @@
 import json
 
 from app.routers import journal
+from datastore import action_state
 
 
 def test_journal_captures_evidence_and_appends_review(monkeypatch, tmp_path):
@@ -26,6 +27,12 @@ def test_journal_captures_evidence_and_appends_review(monkeypatch, tmp_path):
         counter_evidence="외국인 순매수",
         invalidation="시장폭 55% 회복",
         review_date="2026-09-01",
+        source_event_id="a" * 24,
+        source_event={
+            "title": "시장폭 경고",
+            "data_as_of": "2026-08-18",
+            "link": "/insight",
+        },
     )
 
     created = journal.create_journal_entry(request)
@@ -34,10 +41,15 @@ def test_journal_captures_evidence_and_appends_review(monkeypatch, tmp_path):
     assert len(rows) == 1
     assert rows[0]["entry_id"] == created["entry_id"]
     assert rows[0]["evidence_snapshot"]["tone_label"] == "시간축별 혼조"
+    assert rows[0]["evidence_snapshot"]["source_event"]["title"] == "시장폭 경고"
+    assert action_state.list_states().iloc[0]["state"] == "read"
     assert json.dumps(rows[0]["evidence_snapshot"], ensure_ascii=False)
 
     journal.review_journal_entry(
-        created["entry_id"], journal.JournalReviewRequest(outcome="보류 판단 유지", lesson="시장폭 확인 유효")
+        created["entry_id"],
+        journal.JournalReviewRequest(
+            outcome="보류 판단 유지", lesson="시장폭 확인 유효"
+        ),
     )
     reviewed = journal.get_journal()["items"][0]
     assert reviewed["outcome"] == "보류 판단 유지"

@@ -22,6 +22,10 @@ _EMPTY = [
     "catalyst",
     "invalidation",
     "review_date",
+    "alerts_enabled",
+    "alert_price_above",
+    "alert_price_below",
+    "alert_change_pct",
 ]
 
 
@@ -30,7 +34,19 @@ def _normalise(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     for column in _EMPTY:
         if column not in out.columns:
-            out[column] = None if column.endswith("_at") or column == "review_date" else ""
+            if column == "alerts_enabled":
+                out[column] = False
+            elif (
+                column.endswith("_at")
+                or column == "review_date"
+                or column.startswith("alert_")
+            ):
+                out[column] = None
+            else:
+                out[column] = ""
+    out["alerts_enabled"] = out["alerts_enabled"].fillna(False).astype(bool)
+    for column in ("alert_price_above", "alert_price_below", "alert_change_pct"):
+        out[column] = pd.to_numeric(out[column], errors="coerce")
     return out[_EMPTY]
 
 
@@ -46,16 +62,24 @@ def add(meta_id: int, note: str = "") -> None:
     df = list_items()
     df = df[df["meta_id"] != meta_id]
     now = datetime.now(timezone.utc)
-    new = pd.DataFrame([{
-        "meta_id": int(meta_id),
-        "added_at": now,
-        "updated_at": now,
-        "note": note or "",
-        "thesis": "",
-        "catalyst": "",
-        "invalidation": "",
-        "review_date": None,
-    }])
+    new = pd.DataFrame(
+        [
+            {
+                "meta_id": int(meta_id),
+                "added_at": now,
+                "updated_at": now,
+                "note": note or "",
+                "thesis": "",
+                "catalyst": "",
+                "invalidation": "",
+                "review_date": None,
+                "alerts_enabled": False,
+                "alert_price_above": None,
+                "alert_price_below": None,
+                "alert_change_pct": None,
+            }
+        ]
+    )
     out = pd.concat([df, new], ignore_index=True) if not df.empty else new
     storage.write_parquet(out, FILE)
 
@@ -68,6 +92,10 @@ def update(
     catalyst: str = "",
     invalidation: str = "",
     review_date=None,
+    alerts_enabled: bool = False,
+    alert_price_above: float | None = None,
+    alert_price_below: float | None = None,
+    alert_change_pct: float | None = None,
 ) -> bool:
     """기존 관심종목의 판단 필드를 갱신한다. 존재하지 않으면 False."""
     df = list_items()
@@ -79,6 +107,10 @@ def update(
     df.loc[mask, "catalyst"] = catalyst or ""
     df.loc[mask, "invalidation"] = invalidation or ""
     df.loc[mask, "review_date"] = review_date
+    df.loc[mask, "alerts_enabled"] = bool(alerts_enabled)
+    df.loc[mask, "alert_price_above"] = alert_price_above
+    df.loc[mask, "alert_price_below"] = alert_price_below
+    df.loc[mask, "alert_change_pct"] = alert_change_pct
     df.loc[mask, "updated_at"] = datetime.now(timezone.utc)
     storage.write_parquet(df, FILE)
     return True

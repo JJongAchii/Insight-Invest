@@ -8,12 +8,12 @@ enrich 소스가 없어도 항목은 None으로 응답한다.
 import logging
 import os
 import sys
-from datetime import date, timedelta
-from typing import Optional
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../../../")))
 
@@ -22,13 +22,14 @@ from datastore import watchlist as watchlist_store
 from datastore.prices import read_price_data
 
 logger = logging.getLogger(__name__)
+KST = ZoneInfo("Asia/Seoul")
 
 router = APIRouter(prefix="/watchlist", tags=["Watchlist"])
 
 
 class WatchlistAddRequest(BaseModel):
     meta_id: int
-    note: Optional[str] = ""
+    note: str | None = ""
 
 
 class WatchlistUpdateRequest(BaseModel):
@@ -36,7 +37,11 @@ class WatchlistUpdateRequest(BaseModel):
     thesis: str = ""
     catalyst: str = ""
     invalidation: str = ""
-    review_date: Optional[date] = None
+    review_date: date | None = None
+    alerts_enabled: bool = False
+    alert_price_above: float | None = Field(None, gt=0)
+    alert_price_below: float | None = Field(None, gt=0)
+    alert_change_pct: float | None = Field(None, ge=0.1, le=100)
 
 
 def _none_if_na(v):
@@ -47,20 +52,26 @@ def _none_if_na(v):
 
 
 def _kr_latest_prices(tickers: list[str]) -> dict:
-    """{ticker: (close, chg_pct)} — KRX 패널 최근일, 한 번의 호출."""
+    """{ticker: (close, previous_close, chg_pct, as_of)} — KRX 최근 2점."""
     out: dict = {}
     try:
         from qdata import api as qdata_api
 
-        start = (date.today() - timedelta(days=14)).isoformat()
+        start = (datetime.now(KST).date() - timedelta(days=14)).isoformat()
         px = qdata_api.load_krx_prices(start=start, tickers=tickers, columns=["close", "chg_pct"])
         if px.empty:
             return out
-        last = px.sort_values("date").groupby("ticker").tail(1)
-        for r in last.itertuples():
-            out[r.ticker] = (
-                float(r.close) if pd.notna(r.close) else None,
-                float(r.chg_pct) if pd.notna(r.chg_pct) else None,
+        for ticker, group in px.sort_values("date").groupby("ticker"):
+            rows = group.dropna(subset=["close"])
+            if rows.empty:
+                continue
+            last = rows.iloc[-1]
+            previous = float(rows.iloc[-2]["close"]) if len(rows) >= 2 else None
+            out[ticker] = (
+                float(last["close"]),
+                previous,
+                float(last["chg_pct"]) if pd.notna(last["chg_pct"]) else None,
+                pd.Timestamp(last["date"]).strftime("%Y-%m-%d"),
             )
     except Exception:
         logger.warning("watchlist KR price enrich 실패", exc_info=True)
@@ -81,29 +92,47 @@ def _kr_flows(tickers: list[str]) -> dict:
             out.setdefault(r.ticker, {})[r.investor] = (
                 float(r.net_20d) if pd.notna(r.net_20d) else None
             )
-    except Exception:
+    except Exception:  # noqa: BLE001 - optional enrich source must not fail the watchlist
         logger.debug("watchlist flows enrich 실패 (flows_signals 부재 가능)")
     return out
 
 
 def _us_latest_prices(meta_ids: list[int]) -> dict:
-    """{meta_id: (adj_close, chg_pct)} — 최근 2점으로 등락률(%) 산출."""
+    """US 현재·직전 raw close와 기업행동 보정 일간 수익률을 반환한다."""
     out: dict = {}
     try:
         df = read_price_data(
-            "US", meta_ids=meta_ids, start_date=date.today() - timedelta(days=30)
+            "US",
+            meta_ids=meta_ids,
+            start_date=datetime.now(KST).date() - timedelta(days=30),
         )
         if df.empty:
             return out
-        for mid, g in df.groupby("meta_id"):
-            g = g.sort_values("trade_date")["adj_close"].dropna()
-            if g.empty:
+        for mid, group in df.groupby("meta_id"):
+            price_column = (
+                "close"
+                if "close" in group.columns and group["close"].notna().any()
+                else "adj_close"
+            )
+            valid = group.sort_values("trade_date").dropna(subset=[price_column])
+            if valid.empty:
                 continue
-            last = float(g.iloc[-1])
+            values = valid[price_column]
+            last = float(values.iloc[-1])
             chg = None
-            if len(g) >= 2 and g.iloc[-2] != 0:
-                chg = (last / float(g.iloc[-2]) - 1.0) * 100.0
-            out[int(mid)] = (last, chg)
+            latest_return = valid.iloc[-1].get("gross_return")
+            if pd.notna(latest_return):
+                chg = float(latest_return) * 100.0
+            elif len(values) >= 2 and values.iloc[-2] != 0:
+                # 구형 파일이나 첫 배치의 수익률 결측에만 가격비 폴백한다.
+                chg = (last / float(values.iloc[-2]) - 1.0) * 100.0
+            previous = float(values.iloc[-2]) if len(values) >= 2 else None
+            out[int(mid)] = (
+                last,
+                previous,
+                chg,
+                pd.Timestamp(valid["trade_date"].iloc[-1]).strftime("%Y-%m-%d"),
+            )
     except Exception:
         logger.warning("watchlist US price enrich 실패", exc_info=True)
     return out
@@ -127,13 +156,17 @@ def get_watchlist():
 
     out = []
     for r in df.itertuples():
-        latest_price = chg_pct = frgn = inst = None
+        latest_price = previous_price = chg_pct = price_as_of = frgn = inst = None
         if r.iso_code == "KR":
-            latest_price, chg_pct = kr_px.get(r.ticker, (None, None))
+            latest_price, previous_price, chg_pct, price_as_of = kr_px.get(
+                r.ticker, (None, None, None, None)
+            )
             flows = kr_fl.get(r.ticker, {})
             frgn, inst = flows.get("frgn"), flows.get("inst")
         elif r.iso_code == "US":
-            latest_price, chg_pct = us_px.get(int(r.meta_id), (None, None))
+            latest_price, previous_price, chg_pct, price_as_of = us_px.get(
+                int(r.meta_id), (None, None, None, None)
+            )
         added_at = r.added_at
         out.append(
             {
@@ -153,9 +186,15 @@ def get_watchlist():
                     else None
                 ),
                 "latest_price": latest_price,
+                "previous_price": previous_price,
                 "chg_pct": chg_pct,
+                "price_as_of": price_as_of,
                 "frgn_net_20d": frgn,
                 "inst_net_20d": inst,
+                "alerts_enabled": bool(_none_if_na(r.alerts_enabled) or False),
+                "alert_price_above": _none_if_na(r.alert_price_above),
+                "alert_price_below": _none_if_na(r.alert_price_below),
+                "alert_change_pct": _none_if_na(r.alert_change_pct),
             }
         )
     return {"items": out, "count": len(out)}
@@ -167,7 +206,7 @@ def add_to_watchlist(request: WatchlistAddRequest):
     if not (md["meta_id"] == request.meta_id).any():
         raise HTTPException(status_code=404, detail=f"meta_id {request.meta_id} not found")
     watchlist_store.add(request.meta_id, note=request.note or "")
-    return {"count": int(len(watchlist_store.list_items()))}
+    return {"count": len(watchlist_store.list_items())}
 
 
 @router.put("/{meta_id}")
@@ -179,13 +218,17 @@ def update_watchlist_item(meta_id: int, request: WatchlistUpdateRequest):
         catalyst=request.catalyst,
         invalidation=request.invalidation,
         review_date=request.review_date,
+        alerts_enabled=request.alerts_enabled,
+        alert_price_above=request.alert_price_above,
+        alert_price_below=request.alert_price_below,
+        alert_change_pct=request.alert_change_pct,
     )
     if not updated:
         raise HTTPException(status_code=404, detail=f"meta_id {meta_id} not in watchlist")
-    return {"count": int(len(watchlist_store.list_items()))}
+    return {"count": len(watchlist_store.list_items())}
 
 
 @router.delete("/{meta_id}")
 def remove_from_watchlist(meta_id: int):
     watchlist_store.remove(meta_id)
-    return {"count": int(len(watchlist_store.list_items()))}
+    return {"count": len(watchlist_store.list_items())}

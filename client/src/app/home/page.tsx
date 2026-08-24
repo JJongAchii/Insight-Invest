@@ -9,7 +9,7 @@ import WatchlistCard from "./WatchlistCard";
 import StrategiesCard from "./StrategiesCard";
 import FlowsTopCard from "./FlowsTopCard";
 import NewsBriefingCard from "./NewsBriefingCard";
-import AttentionLane from "./AttentionLane";
+import ActionCenterSummary from "./ActionCenterSummary";
 import SpotlightLane from "./SpotlightLane";
 import PortfolioCard from "./PortfolioCard";
 import DecisionBrief from "./DecisionBrief";
@@ -53,7 +53,7 @@ const Home = () => {
       />
 
       <SinceLastVisit />
-      <AttentionLane />
+      <ActionCenterSummary />
       <DecisionBrief />
 
       {/* 판단 직후 내 자산 영향을 확인한다. */}
