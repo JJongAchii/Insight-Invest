@@ -49,7 +49,7 @@ Parameters:
     Description: VAPID private key (base64url)
   WebPushSubject:
     Type: String
-    Default: "mailto:admin@insight-invest.local"
+    Default: "https://insight-invest-ten.vercel.app"
     Description: VAPID contact subject
 
 Resources:

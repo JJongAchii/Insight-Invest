@@ -1695,7 +1695,14 @@ export const api = createApi({
       invalidatesTags: ["Notifications"],
     }),
     sendTestNotification: builder.mutation<
-      { sent: number; failed: number },
+      {
+        enabled: boolean;
+        subscriptions: number;
+        events: number;
+        sent: number;
+        failed: number;
+        disabled: number;
+      },
       void
     >({
       query: () => ({ url: "/notifications/test", method: "POST" }),

@@ -12,9 +12,7 @@ logger = logging.getLogger(__name__)
 def config() -> dict:
     public_key = os.environ.get("WEB_PUSH_PUBLIC_KEY", "").strip()
     private_key = os.environ.get("WEB_PUSH_PRIVATE_KEY", "").strip()
-    subject = os.environ.get(
-        "WEB_PUSH_SUBJECT", "mailto:admin@insight-invest.local"
-    ).strip()
+    subject = os.environ.get("WEB_PUSH_SUBJECT", "https://insight-invest-ten.vercel.app").strip()
     return {
         "enabled": bool(public_key and private_key),
         "public_key": public_key,
@@ -58,8 +56,7 @@ def dispatch(events: list[dict], *, test: bool = False) -> dict:
         else [
             event
             for event in events
-            if event.get("severity") in {"high", "medium"}
-            and event.get("state") == "new"
+            if event.get("severity") in {"high", "medium"} and event.get("state") == "new"
         ]
     )
     sent = failed = disabled = 0
@@ -72,8 +69,7 @@ def dispatch(events: list[dict], *, test: bool = False) -> dict:
         pending = [
             event
             for event in selected
-            if test
-            or not notifications.delivered(event["event_id"], row.subscription_id)
+            if test or not notifications.delivered(event["event_id"], row.subscription_id)
         ]
         if not pending:
             continue
@@ -84,9 +80,7 @@ def dispatch(events: list[dict], *, test: bool = False) -> dict:
         payload = {
             "title": "Insight Invest",
             "body": body,
-            "tag": "insight-action-digest"
-            if len(pending) > 1
-            else f"insight-{lead['event_id']}",
+            "tag": "insight-action-digest" if len(pending) > 1 else f"insight-{lead['event_id']}",
             "url": "/actions" if len(pending) > 1 else lead.get("link") or "/actions",
             "event_id": lead["event_id"],
             "badge": len(pending),
@@ -95,9 +89,7 @@ def dispatch(events: list[dict], *, test: bool = False) -> dict:
             send_to_subscription(subscription, payload)
             if not test:
                 for event in pending:
-                    notifications.record_delivery(
-                        event["event_id"], row.subscription_id
-                    )
+                    notifications.record_delivery(event["event_id"], row.subscription_id)
             sent += 1
         except Exception as exc:
             status = getattr(getattr(exc, "response", None), "status_code", None)

@@ -3,6 +3,12 @@ from datastore import notifications
 from module import action_push
 
 
+def test_default_vapid_subject_uses_public_https_origin(monkeypatch):
+    monkeypatch.delenv("WEB_PUSH_SUBJECT", raising=False)
+
+    assert action_push.config()["subject"] == "https://insight-invest-ten.vercel.app"
+
+
 def test_subscription_roundtrip_and_delivery_receipt(monkeypatch, tmp_path):
     monkeypatch.setenv("APP_DATA", str(tmp_path))
     monkeypatch.setenv("WEB_PUSH_PUBLIC_KEY", "public")
@@ -18,9 +24,7 @@ def test_subscription_roundtrip_and_delivery_receipt(monkeypatch, tmp_path):
     assert subscribed["subscribed"] is True
     assert len(frame) == 1
 
-    monkeypatch.setattr(
-        action_push, "send_to_subscription", lambda *_args, **_kwargs: None
-    )
+    monkeypatch.setattr(action_push, "send_to_subscription", lambda *_args, **_kwargs: None)
     event = {
         "event_id": "a" * 24,
         "severity": "high",
