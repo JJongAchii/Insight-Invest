@@ -18,6 +18,10 @@ export default function WatchlistThesisEditor({
   const [invalidation, setInvalidation] = useState(item.invalidation ?? "");
   const [reviewDate, setReviewDate] = useState(item.review_date ?? "");
   const [note, setNote] = useState(item.note ?? "");
+  const [alertsEnabled, setAlertsEnabled] = useState(item.alerts_enabled ?? false);
+  const [priceAbove, setPriceAbove] = useState(item.alert_price_above?.toString() ?? "");
+  const [priceBelow, setPriceBelow] = useState(item.alert_price_below?.toString() ?? "");
+  const [changePct, setChangePct] = useState(item.alert_change_pct?.toString() ?? "");
 
   useEffect(() => {
     const onEscape = (event: KeyboardEvent) => event.key === "Escape" && onClose();
@@ -34,6 +38,10 @@ export default function WatchlistThesisEditor({
       invalidation,
       review_date: reviewDate || null,
       note,
+      alerts_enabled: alertsEnabled,
+      alert_price_above: priceAbove ? Number(priceAbove) : null,
+      alert_price_below: priceBelow ? Number(priceBelow) : null,
+      alert_change_pct: changePct ? Number(changePct) : null,
     }).unwrap();
     onClose();
   };
@@ -48,7 +56,7 @@ export default function WatchlistThesisEditor({
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 id="watch-thesis-title" className="text-lg font-semibold text-ink">관심 논거 편집</h2>
+            <h2 id="watch-thesis-title" className="text-lg font-semibold text-ink">Thesis & Alerts</h2>
             <p className="text-sm text-ink-muted">{item.name ?? item.ticker} · {item.ticker}</p>
           </div>
           <button type="button" onClick={onClose} aria-label="편집 닫기" className="p-2 text-ink-muted hover:text-ink">
@@ -79,6 +87,35 @@ export default function WatchlistThesisEditor({
               <input className="input" value={note} onChange={(e) => setNote(e.target.value)} />
             </label>
           </div>
+          <section className="rounded-xl border border-edge bg-raised p-4">
+            <label className="flex cursor-pointer items-center justify-between gap-4">
+              <span>
+                <span className="block text-sm font-semibold text-ink">Price Alerts</span>
+                <span className="mt-0.5 block text-xs text-ink-muted">기준을 처음 통과할 때 Action Center와 기기 알림에 표시합니다.</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={alertsEnabled}
+                onChange={(event) => setAlertsEnabled(event.target.checked)}
+                className="h-5 w-5 accent-primary-500"
+              />
+            </label>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <label>
+                <span className="input-label">Price Above</span>
+                <input type="number" min="0" step="any" className="input" value={priceAbove} onChange={(event) => setPriceAbove(event.target.value)} placeholder="상단 가격" />
+              </label>
+              <label>
+                <span className="input-label">Price Below</span>
+                <input type="number" min="0" step="any" className="input" value={priceBelow} onChange={(event) => setPriceBelow(event.target.value)} placeholder="하단 가격" />
+              </label>
+              <label>
+                <span className="input-label">Daily Move ±%</span>
+                <input type="number" min="0.1" max="100" step="0.1" className="input" value={changePct} onChange={(event) => setChangePct(event.target.value)} placeholder="5.0" />
+              </label>
+            </div>
+            {item.price_as_of && <p className="mt-3 text-xs text-ink-muted">Latest price data {item.price_as_of}</p>}
+          </section>
           {error && <p className="text-sm text-losses">저장하지 못했습니다. 잠시 후 다시 시도해 주세요.</p>}
           <div className="flex justify-end gap-2">
             <button type="button" className="btn-secondary" onClick={onClose}>취소</button>

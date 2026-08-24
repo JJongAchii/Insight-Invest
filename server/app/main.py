@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse
 from .access import valid_site_access
 
 from .routers import (
+    actions,
     attention,
     backtest,
     holdings,
@@ -27,6 +28,7 @@ from .routers import (
     journal,
     meta,
     news,
+    notifications,
     optimization,
     overview,
     portfolio_ledger,
@@ -84,6 +86,8 @@ app.include_router(optimization.router)
 app.include_router(watchlist.router)
 app.include_router(holdings.router)
 app.include_router(attention.router)
+app.include_router(actions.router)
+app.include_router(notifications.router)
 app.include_router(overview.router)
 app.include_router(price.stock_router)
 app.include_router(intraday.router)

@@ -12,6 +12,22 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#0a0f1a",
     orientation: "portrait-primary",
     categories: ["finance", "productivity"],
+    shortcuts: [
+      {
+        name: "Action Center",
+        short_name: "Actions",
+        description: "지금 확인할 투자 Action",
+        url: "/actions?source=shortcut",
+        icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }],
+      },
+      {
+        name: "My Portfolio",
+        short_name: "Portfolio",
+        description: "보유 자산과 위험 확인",
+        url: "/portfolio?source=shortcut",
+        icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }],
+      },
+    ],
     icons: [
       {
         src: "/icons/icon-192.png",

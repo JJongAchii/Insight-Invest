@@ -217,9 +217,15 @@ export interface WatchlistItem {
   invalidation: string | null;
   review_date: string | null;
   latest_price: number | null;
+  previous_price: number | null;
   chg_pct: number | null;
+  price_as_of: string | null;
   frgn_net_20d: number | null;
   inst_net_20d: number | null;
+  alerts_enabled: boolean;
+  alert_price_above: number | null;
+  alert_price_below: number | null;
+  alert_change_pct: number | null;
 }
 
 export interface WatchlistResponse {
@@ -237,6 +243,10 @@ export interface UpdateWatchlistPayload {
   catalyst?: string;
   invalidation?: string;
   review_date?: string | null;
+  alerts_enabled?: boolean;
+  alert_price_above?: number | null;
+  alert_price_below?: number | null;
+  alert_change_pct?: number | null;
 }
 
 // Types for holdings (real positions) operations
@@ -508,7 +518,7 @@ export interface JournalEntry {
   counter_evidence: string;
   invalidation: string;
   review_date: string;
-  evidence_snapshot: Partial<OverviewResponse>;
+  evidence_snapshot: Partial<OverviewResponse> & { source_event?: Partial<ActionItem> };
   reviewed_at: string | null;
   outcome: string | null;
   lesson: string | null;
@@ -528,6 +538,8 @@ export interface CreateJournalPayload {
   counter_evidence?: string;
   invalidation?: string;
   review_date: string;
+  source_event_id?: string;
+  source_event?: Partial<ActionItem>;
 }
 
 // Types for the "오늘 주목" attention lane
@@ -547,6 +559,57 @@ export interface AttentionItem {
 export interface AttentionResponse {
   as_of: string;
   items: AttentionItem[];
+}
+
+export type ActionState = "new" | "read" | "snoozed" | "dismissed";
+export type ActionKind = "attention" | "alert" | "review" | "rebalance" | "data" | "system";
+
+export interface ActionItem {
+  event_id: string;
+  kind: ActionKind;
+  category: string;
+  severity: AttentionSeverity;
+  title: string;
+  detail: string;
+  link: string;
+  meta_id: number | null;
+  ticker: string | null;
+  name: string | null;
+  occurred_at: string | null;
+  available_at: string;
+  data_as_of: string | null;
+  scheduled_for: string | null;
+  source: string;
+  actions: string[];
+  state: ActionState;
+  snoozed_until: string | null;
+}
+
+export interface ActionCenterResponse {
+  generated_at: string;
+  data_as_of: string | null;
+  items: ActionItem[];
+  calendar: ActionItem[];
+  counts: {
+    total: number;
+    actionable: number;
+    high: number;
+    new: number;
+    badge: number;
+    scheduled: number;
+  };
+}
+
+export interface NotificationConfigResponse {
+  enabled: boolean;
+  public_key: string | null;
+  subscriptions: number;
+}
+
+export interface PushSubscriptionPayload {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+  user_agent: string;
 }
 
 // Types for the "오늘의 신호 종목" market spotlight lane
@@ -1343,7 +1406,9 @@ export const api = createApi({
     "Watchlist",
     "Holdings",
     "Attention",
+    "Actions",
     "Journal",
+    "Notifications",
     "PortfolioLedger",
   ],
   endpoints: (builder) => ({
@@ -1459,14 +1524,14 @@ export const api = createApi({
         method: "POST",
         body,
       }),
-      invalidatesTags: ["Watchlist"],
+      invalidatesTags: ["Watchlist", "Attention", "Actions"],
     }),
     removeFromWatchlist: builder.mutation<WatchlistMutationResponse, number>({
       query: (metaId) => ({
         url: `/watchlist/${metaId}`,
         method: "DELETE",
       }),
-      invalidatesTags: ["Watchlist"],
+      invalidatesTags: ["Watchlist", "Attention", "Actions"],
     }),
     updateWatchlist: builder.mutation<
       WatchlistMutationResponse,
@@ -1477,7 +1542,7 @@ export const api = createApi({
         method: "PUT",
         body,
       }),
-      invalidatesTags: ["Watchlist", "Attention"],
+      invalidatesTags: ["Watchlist", "Attention", "Actions"],
     }),
 
     // Holdings (real positions) endpoints
@@ -1525,7 +1590,7 @@ export const api = createApi({
       AddLedgerEventPayload
     >({
       query: (body) => ({ url: "/portfolio-ledger", method: "POST", body }),
-      invalidatesTags: ["PortfolioLedger", "Holdings", "Attention"],
+      invalidatesTags: ["PortfolioLedger", "Holdings", "Attention", "Actions"],
     }),
 
     fetchOverview: builder.query<OverviewResponse, void>({
@@ -1541,7 +1606,7 @@ export const api = createApi({
       CreateJournalPayload
     >({
       query: (body) => ({ url: "/journal", method: "POST", body }),
-      invalidatesTags: ["Journal"],
+      invalidatesTags: ["Journal", "Actions"],
     }),
     reviewJournal: builder.mutation<
       { review_id: string },
@@ -1552,7 +1617,7 @@ export const api = createApi({
         method: "POST",
         body,
       }),
-      invalidatesTags: ["Journal"],
+      invalidatesTags: ["Journal", "Actions"],
     }),
     addHolding: builder.mutation<HoldingMutationResponse, AddHoldingPayload>({
       query: (body) => ({
@@ -1560,7 +1625,7 @@ export const api = createApi({
         method: "POST",
         body,
       }),
-      invalidatesTags: ["Holdings", "Attention"],
+      invalidatesTags: ["Holdings", "Attention", "Actions"],
     }),
     updateHoldingMetadata: builder.mutation<
       HoldingMutationResponse,
@@ -1571,20 +1636,69 @@ export const api = createApi({
         method: "PUT",
         body,
       }),
-      invalidatesTags: ["Holdings", "Attention"],
+      invalidatesTags: ["Holdings", "Attention", "Actions"],
     }),
     removeHolding: builder.mutation<HoldingMutationResponse, number>({
       query: (metaId) => ({
         url: `/holdings/${metaId}`,
         method: "DELETE",
       }),
-      invalidatesTags: ["Holdings", "Attention"],
+      invalidatesTags: ["Holdings", "Attention", "Actions"],
     }),
 
     // Attention ("오늘 주목") endpoint
     fetchAttention: builder.query<AttentionResponse, void>({
       query: () => "/attention",
       providesTags: ["Attention"],
+    }),
+
+    fetchActions: builder.query<
+      ActionCenterResponse,
+      { horizonDays?: number; includeDismissed?: boolean } | void
+    >({
+      query: (params) => {
+        const query = new URLSearchParams();
+        if (params?.horizonDays) query.set("horizon_days", String(params.horizonDays));
+        if (params?.includeDismissed) query.set("include_dismissed", "true");
+        const suffix = query.toString();
+        return `/actions${suffix ? `?${suffix}` : ""}`;
+      },
+      providesTags: ["Actions"],
+    }),
+    updateActionState: builder.mutation<
+      { event_id: string; state: ActionState; snoozed_until: string | null },
+      { event_id: string; state: ActionState; snoozed_until?: string }
+    >({
+      query: ({ event_id, ...body }) => ({
+        url: `/actions/${event_id}/state`,
+        method: "PUT",
+        body,
+      }),
+      invalidatesTags: ["Actions"],
+    }),
+    fetchNotificationConfig: builder.query<NotificationConfigResponse, void>({
+      query: () => "/notifications/config",
+      providesTags: ["Notifications"],
+    }),
+    subscribeNotifications: builder.mutation<
+      { subscription_id: string; subscribed: boolean },
+      PushSubscriptionPayload
+    >({
+      query: (body) => ({ url: "/notifications/subscriptions", method: "POST", body }),
+      invalidatesTags: ["Notifications"],
+    }),
+    unsubscribeNotifications: builder.mutation<
+      { unsubscribed: boolean },
+      { endpoint: string }
+    >({
+      query: (body) => ({ url: "/notifications/subscriptions", method: "DELETE", body }),
+      invalidatesTags: ["Notifications"],
+    }),
+    sendTestNotification: builder.mutation<
+      { sent: number; failed: number },
+      void
+    >({
+      query: () => ({ url: "/notifications/test", method: "POST" }),
     }),
 
     // Market spotlight ("오늘의 신호 종목") endpoint
@@ -1723,7 +1837,7 @@ export const api = createApi({
         method: "POST",
         body: { status },
       }),
-      invalidatesTags: ["Strategy"],
+      invalidatesTags: ["Strategy", "Actions"],
     }),
 
     // Optimization endpoints
@@ -1798,6 +1912,12 @@ export const {
   useRemoveHoldingMutation,
   // Attention hook
   useFetchAttentionQuery,
+  useFetchActionsQuery,
+  useUpdateActionStateMutation,
+  useFetchNotificationConfigQuery,
+  useSubscribeNotificationsMutation,
+  useUnsubscribeNotificationsMutation,
+  useSendTestNotificationMutation,
   // Market spotlight hook
   useFetchSpotlightQuery,
   // News hooks

@@ -17,7 +17,8 @@ const WatchlistSection: React.FC = () => {
   const items = data?.items ?? [];
 
   return (
-    <Card
+    <div id="watchlist" className="scroll-mt-24">
+      <Card
       title={
         <span className="inline-flex items-center gap-2">
           <Star size={16} className="text-amber-400" fill="currentColor" aria-hidden />
@@ -34,19 +35,20 @@ const WatchlistSection: React.FC = () => {
           {collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
         </button>
       }
-    >
-      {collapsed ? null : isLoading ? (
-        <LoadingState label="관심종목을 불러오는 중..." />
-      ) : items.length === 0 ? (
-        <EmptyState
-          icon={<Star size={28} aria-hidden />}
-          title="관심종목이 없습니다"
-          hint="별표로 종목을 추가하세요"
-        />
-      ) : (
-        <WatchlistTable items={items} />
-      )}
-    </Card>
+      >
+        {collapsed ? null : isLoading ? (
+          <LoadingState label="관심종목을 불러오는 중..." />
+        ) : items.length === 0 ? (
+          <EmptyState
+            icon={<Star size={28} aria-hidden />}
+            title="관심종목이 없습니다"
+            hint="별표로 종목을 추가하세요"
+          />
+        ) : (
+          <WatchlistTable items={items} />
+        )}
+      </Card>
+    </div>
   );
 };
 

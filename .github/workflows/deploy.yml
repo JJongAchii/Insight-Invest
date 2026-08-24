@@ -4,6 +4,7 @@
 #   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY  — ECR push + CFN deploy 권한
 #   GH_PAT                                     — quant-data(private) 읽기용 PAT
 #   API_TOKEN                                  — X-API-Key 앱 토큰
+#   WEB_PUSH_PUBLIC_KEY / WEB_PUSH_PRIVATE_KEY  — VAPID 키 (없으면 Push 비활성)
 
 name: deploy-api
 
@@ -67,6 +68,9 @@ jobs:
             --parameter-overrides ImageUri=$IMAGE_URI ApiToken=${{ secrets.API_TOKEN }} \
               KrxId=${{ secrets.KRX_ID }} KrxPw=${{ secrets.KRX_PW }} \
               AnthropicApiKey=${{ secrets.ANTHROPIC_API_KEY }} \
+              WebPushPublicKey=${{ secrets.WEB_PUSH_PUBLIC_KEY }} \
+              WebPushPrivateKey=${{ secrets.WEB_PUSH_PRIVATE_KEY }} \
+              WebPushSubject=mailto:admin@insight-invest.local \
             --no-fail-on-empty-changeset
 
       - name: Smoke test
