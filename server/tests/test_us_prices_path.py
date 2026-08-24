@@ -40,6 +40,35 @@ def test_read_price_data_us_single_source(fake_us_file):
     assert out.equals(out.sort_values(["ticker", "trade_date"]).reset_index(drop=True))
 
 
+def test_read_price_data_us_preserves_raw_close(monkeypatch):
+    source = pd.DataFrame(
+        {
+            "meta_id": [1, 1],
+            "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+            "ticker": ["SPY", "SPY"],
+            "close": [500.0, 250.0],
+            "adj_close": [250.0, 250.0],
+            "gross_return": [float("nan"), 0.0],
+        }
+    )
+
+    monkeypatch.setattr(
+        prices.storage,
+        "read_parquet",
+        lambda _name, columns=None, filters=None: source[columns].copy(),
+    )
+    monkeypatch.setattr(
+        prices.meta,
+        "resolve",
+        lambda **_kwargs: pd.DataFrame({"meta_id": [1], "ticker": ["SPY"], "iso_code": ["US"]}),
+    )
+
+    out = prices.read_price_data("US", meta_ids=[1])
+
+    assert out["close"].tolist() == [500.0, 250.0]
+    assert out["gross_return"].iloc[-1] == 0.0
+
+
 def test_us_adj_close_wide(fake_us_file):
     wide = prices.us_adj_close_wide(["SPY", "SHY"])
     assert list(wide.columns) == ["SHY", "SPY"] or list(wide.columns) == ["SPY", "SHY"]

@@ -124,7 +124,7 @@ def _kr_etf_latest(tickers: list[str]) -> dict:
 
 
 def _us_latest(meta_ids: list[int]) -> dict:
-    """{meta_id: (adj_close, chg_pct)} — 최근 2점으로 등락률(%) 산출."""
+    """{meta_id: (raw close, 기업행동 보정 chg_pct)}."""
     out: dict = {}
     if not meta_ids:
         return out
@@ -133,12 +133,19 @@ def _us_latest(meta_ids: list[int]) -> dict:
         if df.empty:
             return out
         for mid, g in df.groupby("meta_id"):
-            s = g.sort_values("trade_date")["adj_close"].dropna()
+            price_column = (
+                "close" if "close" in g.columns and g["close"].notna().any() else "adj_close"
+            )
+            s = g.sort_values("trade_date")[price_column].dropna()
             if s.empty:
                 continue
             last = float(s.iloc[-1])
             chg = None
-            if len(s) >= 2 and s.iloc[-2] != 0:
+            valid = g.sort_values("trade_date").dropna(subset=[price_column])
+            latest_return = valid.iloc[-1].get("gross_return")
+            if pd.notna(latest_return):
+                chg = float(latest_return) * 100.0
+            elif len(s) >= 2 and s.iloc[-2] != 0:
                 chg = (last / float(s.iloc[-2]) - 1.0) * 100.0
             out[int(mid)] = (last, chg)
     except Exception:
@@ -571,7 +578,10 @@ def get_holdings_risk():
                     weights.pop(t)
             prices = prices[[c for c in prices.columns if c in weights]]
             if not weights:
-                return {"empty": True, "reason": "환율 조회 실패로 평가 가능한 포지션 없음"}
+                return {
+                    "empty": True,
+                    "reason": "환율 조회 실패로 평가 가능한 포지션 없음",
+                }
             total_w = sum(weights.values())
             weights = {t: w / total_w for t, w in weights.items()}
 

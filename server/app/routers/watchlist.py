@@ -15,9 +15,7 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../../../"))
-)
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../../../")))
 
 from datastore import meta, storage
 from datastore import watchlist as watchlist_store
@@ -60,9 +58,7 @@ def _kr_latest_prices(tickers: list[str]) -> dict:
         from qdata import api as qdata_api
 
         start = (datetime.now(KST).date() - timedelta(days=14)).isoformat()
-        px = qdata_api.load_krx_prices(
-            start=start, tickers=tickers, columns=["close", "chg_pct"]
-        )
+        px = qdata_api.load_krx_prices(start=start, tickers=tickers, columns=["close", "chg_pct"])
         if px.empty:
             return out
         for ticker, group in px.sort_values("date").groupby("ticker"):
@@ -102,7 +98,7 @@ def _kr_flows(tickers: list[str]) -> dict:
 
 
 def _us_latest_prices(meta_ids: list[int]) -> dict:
-    """{meta_id: (latest, previous, chg_pct, as_of)} — 앱 Total Return 패널 최근 2점."""
+    """US 현재·직전 raw close와 기업행동 보정 일간 수익률을 반환한다."""
     out: dict = {}
     try:
         df = read_price_data(
@@ -113,13 +109,22 @@ def _us_latest_prices(meta_ids: list[int]) -> dict:
         if df.empty:
             return out
         for mid, group in df.groupby("meta_id"):
-            valid = group.sort_values("trade_date").dropna(subset=["adj_close"])
+            price_column = (
+                "close"
+                if "close" in group.columns and group["close"].notna().any()
+                else "adj_close"
+            )
+            valid = group.sort_values("trade_date").dropna(subset=[price_column])
             if valid.empty:
                 continue
-            values = valid["adj_close"]
+            values = valid[price_column]
             last = float(values.iloc[-1])
             chg = None
-            if len(values) >= 2 and values.iloc[-2] != 0:
+            latest_return = valid.iloc[-1].get("gross_return")
+            if pd.notna(latest_return):
+                chg = float(latest_return) * 100.0
+            elif len(values) >= 2 and values.iloc[-2] != 0:
+                # 구형 파일이나 첫 배치의 수익률 결측에만 가격비 폴백한다.
                 chg = (last / float(values.iloc[-2]) - 1.0) * 100.0
             previous = float(values.iloc[-2]) if len(values) >= 2 else None
             out[int(mid)] = (
@@ -199,9 +204,7 @@ def get_watchlist():
 def add_to_watchlist(request: WatchlistAddRequest):
     md = meta.meta_df()
     if not (md["meta_id"] == request.meta_id).any():
-        raise HTTPException(
-            status_code=404, detail=f"meta_id {request.meta_id} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"meta_id {request.meta_id} not found")
     watchlist_store.add(request.meta_id, note=request.note or "")
     return {"count": len(watchlist_store.list_items())}
 
@@ -221,9 +224,7 @@ def update_watchlist_item(meta_id: int, request: WatchlistUpdateRequest):
         alert_change_pct=request.alert_change_pct,
     )
     if not updated:
-        raise HTTPException(
-            status_code=404, detail=f"meta_id {meta_id} not in watchlist"
-        )
+        raise HTTPException(status_code=404, detail=f"meta_id {meta_id} not in watchlist")
     return {"count": len(watchlist_store.list_items())}
 
 

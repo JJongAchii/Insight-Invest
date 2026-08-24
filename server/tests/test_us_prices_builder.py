@@ -117,7 +117,11 @@ def test_builder_sorts_by_meta_id_not_ticker(monkeypatch, bi, capsys):
     )
     meta_df = pd.DataFrame({"meta_id": [20, 1], "ticker": ["AAA", "ZZZ"], "iso_code": ["US", "US"]})
     _fake_mirror(
-        monkeypatch, bi, px, pd.DataFrame({"ticker": [], "ex_date": [], "cash_amount": []}), meta_df
+        monkeypatch,
+        bi,
+        px,
+        pd.DataFrame({"ticker": [], "ex_date": [], "cash_amount": []}),
+        meta_df,
     )
     out = bi.build_us_prices()
     assert out["meta_id"].tolist() == sorted(out["meta_id"].tolist())
@@ -143,18 +147,18 @@ def test_builder_schema_and_meta_join(monkeypatch, bi, capsys):
         "meta_id",
         "trade_date",
         "ticker",
+        "close",
         "adj_close",
         "gross_return",
         "as_of",
     ]
+    assert out["close"].tolist() == [500.0, 505.0, 500.0]
     assert out["gross_return"].iloc[2] == pytest.approx((500.0 + 2.0) / 505.0 - 1)
     # 픽스처가 과거 날짜이므로 신선도 경고(§5)가 함께 발화해야 한다
     assert "미러 최종일" in capsys.readouterr().err
 
 
-def test_builder_guard_cuts_before_unresolved_jump_without_deleting_ticker(
-    monkeypatch, bi, capsys
-):
+def test_builder_guard_cuts_before_unresolved_jump_without_deleting_ticker(monkeypatch, bi, capsys):
     """오염 의심 경계 이전 이력만 버리고 현재 가격 세그먼트는 계속 제공한다."""
     dates = pd.bdate_range("2026-01-05", periods=4)
     px = pd.concat(
@@ -179,7 +183,11 @@ def test_builder_guard_cuts_before_unresolved_jump_without_deleting_ticker(
     )
     meta_df = pd.DataFrame({"meta_id": [1, 2], "ticker": ["GOOD", "BAD"], "iso_code": ["US", "US"]})
     _fake_mirror(
-        monkeypatch, bi, px, pd.DataFrame({"ticker": [], "ex_date": [], "cash_amount": []}), meta_df
+        monkeypatch,
+        bi,
+        px,
+        pd.DataFrame({"ticker": [], "ex_date": [], "cash_amount": []}),
+        meta_df,
     )
     out = bi.build_us_prices()
     assert set(out.ticker) == {"GOOD", "BAD"}
@@ -236,9 +244,7 @@ def test_builder_returns_none_on_mirror_failure(monkeypatch, bi, capsys):
     assert "기존 파일 유지" in capsys.readouterr().err
 
 
-def test_builder_fails_closed_when_required_freshness_is_exceeded(
-    monkeypatch, bi, capsys
-):
+def test_builder_fails_closed_when_required_freshness_is_exceeded(monkeypatch, bi, capsys):
     dates = pd.bdate_range("2026-01-05", periods=3)
     px = pd.DataFrame(
         {
@@ -275,7 +281,11 @@ def test_builder_single_row_current_segment_is_still_priceable(monkeypatch, bi, 
     )
     meta_df = pd.DataFrame({"meta_id": [1], "ticker": ["BAD"], "iso_code": ["US"]})
     _fake_mirror(
-        monkeypatch, bi, px, pd.DataFrame({"ticker": [], "ex_date": [], "cash_amount": []}), meta_df
+        monkeypatch,
+        bi,
+        px,
+        pd.DataFrame({"ticker": [], "ex_date": [], "cash_amount": []}),
+        meta_df,
     )
     out = bi.build_us_prices()
     assert out is not None
@@ -340,20 +350,40 @@ def test_builder_applies_entity_windows(monkeypatch, bi, capsys):
     d1, d2, d3, d4 = pd.to_datetime(["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08"])
     px = pd.concat(
         [
-            pd.DataFrame({"date": [d1, d2], "ticker": "NEWT",
-                          "close": [1.0, 1.1], "adj_close": [1.0, 1.1]}),  # 남의 회사 (개명 전)
-            pd.DataFrame({"date": [d1, d2], "ticker": "OLDT",
-                          "close": [50.0, 51.0], "adj_close": [50.0, 51.0]}),
-            pd.DataFrame({"date": [d3, d4], "ticker": "NEWT",
-                          "close": [51.5, 52.0], "adj_close": [51.5, 52.0]}),  # 진짜 (개명 후)
+            pd.DataFrame(
+                {
+                    "date": [d1, d2],
+                    "ticker": "NEWT",
+                    "close": [1.0, 1.1],
+                    "adj_close": [1.0, 1.1],
+                }
+            ),  # 남의 회사 (개명 전)
+            pd.DataFrame(
+                {
+                    "date": [d1, d2],
+                    "ticker": "OLDT",
+                    "close": [50.0, 51.0],
+                    "adj_close": [50.0, 51.0],
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "date": [d3, d4],
+                    "ticker": "NEWT",
+                    "close": [51.5, 52.0],
+                    "adj_close": [51.5, 52.0],
+                }
+            ),  # 진짜 (개명 후)
         ]
     )
-    events = pd.DataFrame({
-        "ticker": ["NEWT", "NEWT"],
-        "event_type": ["ticker_change", "ticker_change"],
-        "event_date": [d1, d3],
-        "event_ticker": ["OLDT", "NEWT"],
-    })
+    events = pd.DataFrame(
+        {
+            "ticker": ["NEWT", "NEWT"],
+            "event_type": ["ticker_change", "ticker_change"],
+            "event_date": [d1, d3],
+            "event_ticker": ["OLDT", "NEWT"],
+        }
+    )
     details = pd.DataFrame({"ticker": ["NEWT"], "list_date": [d1]})
     meta_df = pd.DataFrame({"meta_id": [7], "ticker": ["NEWT"], "iso_code": ["US"]})
     div = pd.DataFrame({"ticker": [], "ex_date": [], "cash_amount": []})
@@ -373,8 +403,14 @@ def test_builder_applies_entity_windows(monkeypatch, bi, capsys):
 def test_builder_proceeds_without_reference_loaders(monkeypatch, bi, capsys):
     """events/details 미러 부재 → 절단 생략 + 경고, 빌드는 계속 (하위호환)."""
     dates = pd.bdate_range("2026-01-05", periods=3)
-    px = pd.DataFrame({"date": dates, "ticker": "SPY",
-                       "close": [500.0, 505.0, 500.0], "adj_close": [500.0, 505.0, 500.0]})
+    px = pd.DataFrame(
+        {
+            "date": dates,
+            "ticker": "SPY",
+            "close": [500.0, 505.0, 500.0],
+            "adj_close": [500.0, 505.0, 500.0],
+        }
+    )
     div = pd.DataFrame({"ticker": [], "ex_date": [], "cash_amount": []})
     meta_df = pd.DataFrame({"meta_id": [1], "ticker": ["SPY"], "iso_code": ["US"]})
     _fake_mirror(monkeypatch, bi, px, div, meta_df)  # events/details 기본값 = 부재
@@ -388,8 +424,14 @@ def test_builder_proceeds_without_reference_loaders(monkeypatch, bi, capsys):
 def test_builder_old_qdata_without_loaders(monkeypatch, bi, capsys):
     """구버전 qdata(로더 부재) → hasattr 분기로 절단 생략 + 경고, 빌드는 계속."""
     dates = pd.bdate_range("2026-01-05", periods=3)
-    px = pd.DataFrame({"date": dates, "ticker": "SPY",
-                       "close": [500.0, 505.0, 500.0], "adj_close": [500.0, 505.0, 500.0]})
+    px = pd.DataFrame(
+        {
+            "date": dates,
+            "ticker": "SPY",
+            "close": [500.0, 505.0, 500.0],
+            "adj_close": [500.0, 505.0, 500.0],
+        }
+    )
     div = pd.DataFrame({"ticker": [], "ex_date": [], "cash_amount": []})
     meta_df = pd.DataFrame({"meta_id": [1], "ticker": ["SPY"], "iso_code": ["US"]})
     _fake_mirror(monkeypatch, bi, px, div, meta_df)
