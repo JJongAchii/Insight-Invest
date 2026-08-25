@@ -99,7 +99,7 @@ const RiskCard: React.FC = () => {
   return (
     <Card title="Risk Summary">
       <p className="text-xs text-ink-muted mb-4">
-        현재 비중 고정 가정 · {data.basis?.window.start} ~ {data.basis?.window.end}
+        현재 비중 고정 가정 · {data.basis?.window.start} ~ {data.basis?.window.end} · KRW 환산 split-adjusted 가격수익률
       </p>
       <div className="flex flex-wrap gap-3">
         <Tile label="연환산 변동성" value={data.ann_vol == null ? "—" : `${data.ann_vol.toFixed(1)}%`} />

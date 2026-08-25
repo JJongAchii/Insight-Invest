@@ -84,8 +84,12 @@ def _kr_etf_prices(mapping: pd.DataFrame, start_date, end_date) -> pd.DataFrame:
     )
     if "adj_close" not in out.columns:
         out["adj_close"] = out["close"]  # deprecated compatibility alias
-    out["series_value"] = out["adj_close"].where(has_adjusted, out["close"]).astype("float64")
-    source_return = out.get("chg_pct", pd.Series(index=out.index, dtype="float64")) / 100.0
+    out["series_value"] = (
+        out["adj_close"].where(has_adjusted, out["close"]).astype("float64")
+    )
+    source_return = (
+        out.get("chg_pct", pd.Series(index=out.index, dtype="float64")) / 100.0
+    )
     out["gross_return"] = source_return.where(has_adjusted, raw_return)
     out["return_basis"] = "raw_price_return_ex_cash_distributions"
     out.loc[has_adjusted, "return_basis"] = "krx_reference_price_adjusted_return"
@@ -117,21 +121,42 @@ def _us_prices(mapping: pd.DataFrame, start_date, end_date) -> pd.DataFrame:
                 "trade_date",
                 "ticker",
                 "close",
+                "split_adj_close",
                 "adj_close",
                 "gross_return",
             ],
             filters=filters,
         )
-    except (ArrowInvalid, KeyError) as exc:
-        if "close" not in str(exc).lower():
-            raise
-        # 무중단 배포: 새 서버가 먼저 떠도 다음 배치 전의 구 앱 파일을 계속 읽는다.
-        # 폴백 파일에는 raw close를 꾸며 넣지 않아 하류가 adj_close를 가격으로 명시 폴백한다.
-        df = storage.read_parquet(
-            US_ARCHIVE,
-            columns=["meta_id", "trade_date", "ticker", "adj_close", "gross_return"],
-            filters=filters,
-        )
+    except (ArrowInvalid, KeyError):
+        try:
+            # 무중단 배포 1: X-Ray용 split 계열 발행 전의 현행 파일.
+            df = storage.read_parquet(
+                US_ARCHIVE,
+                columns=[
+                    "meta_id",
+                    "trade_date",
+                    "ticker",
+                    "close",
+                    "adj_close",
+                    "gross_return",
+                ],
+                filters=filters,
+            )
+        except (ArrowInvalid, KeyError) as exc:
+            if "close" not in str(exc).lower():
+                raise
+            # 무중단 배포 2: raw close도 없던 구 파일. raw를 꾸며 넣지는 않는다.
+            df = storage.read_parquet(
+                US_ARCHIVE,
+                columns=[
+                    "meta_id",
+                    "trade_date",
+                    "ticker",
+                    "adj_close",
+                    "gross_return",
+                ],
+                filters=filters,
+            )
     return df
 
 
@@ -144,8 +169,8 @@ def read_price_data(
 ) -> pd.DataFrame:
     """기존 iceberg_client.read_price_data와 동일 계약.
 
-    Returns: 기존 5개 열. KR 경로는 전환 기간 동안 ``close``, ``series_value``,
-    ``return_basis``를 추가로 제공하며 기존 열은 유지한다.
+    Returns: 기존 5개 열. KR 경로는 ``close``, ``series_value``, ``return_basis``를,
+    US 신규 파일은 위험 비교용 ``split_adj_close``를 추가로 제공한다.
     """
     mapping = meta.resolve(meta_ids=meta_ids, tickers=tickers)
     mapping = mapping[mapping["iso_code"] == iso_code]
@@ -180,7 +205,11 @@ def us_adj_close_wide(
     tickers: list[str], start_date: date | None = None, end_date: date | None = None
 ) -> pd.DataFrame:
     """US adj_close(총수익 계열) wide — datetime 인덱스 × 티커 컬럼."""
-    df = read_price_data("US", tickers=tickers, start_date=start_date, end_date=end_date)
+    df = read_price_data(
+        "US", tickers=tickers, start_date=start_date, end_date=end_date
+    )
     if df.empty:
         return pd.DataFrame()
-    return df.pivot(index="trade_date", columns="ticker", values="adj_close").sort_index()
+    return df.pivot(
+        index="trade_date", columns="ticker", values="adj_close"
+    ).sort_index()

@@ -22,9 +22,14 @@ const AllocationCard: React.FC<AllocationCardProps> = ({ summary }) => {
     value: m.weight,
   }));
 
+  const assetItems: WeightBarItem[] = summary.asset_alloc.map((item) => ({
+    label: item.label,
+    value: item.weight,
+  }));
+
   return (
     <Card title="Allocation Exposure">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
         <div>
           <h4 className="metric-label mb-3">Sector Allocation</h4>
           {sectorItems.length > 0 ? (
@@ -37,6 +42,14 @@ const AllocationCard: React.FC<AllocationCardProps> = ({ summary }) => {
           <h4 className="metric-label mb-3">Market Allocation</h4>
           {marketItems.length > 0 ? (
             <WeightBar items={marketItems} />
+          ) : (
+            <p className="text-sm text-ink-muted">데이터 없음</p>
+          )}
+        </div>
+        <div>
+          <h4 className="metric-label mb-3">Asset Type</h4>
+          {assetItems.length > 0 ? (
+            <WeightBar items={assetItems} />
           ) : (
             <p className="text-sm text-ink-muted">데이터 없음</p>
           )}

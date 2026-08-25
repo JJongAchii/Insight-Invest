@@ -30,8 +30,9 @@ krx_flows 전체 로드(수백 MB)는 로컬에서만 허용 — Lambda에서는
   as_of]로도 기록한다.
 - rebal_signals: active 전략의 리밸 전일 신호 — 다음 거래일이 새 주기면 목표 비중
   → {APP_DATA}/portfolio/rebal_signals.parquet.
-- external_events: FRED·Federal Reserve 공식 일정과 추적 종목의 Massive Earnings·
-  DART·SEC 실제 공시. 공급원별 실패는 상태표에 기록하고 마지막 정상 행만 보존한다.
+- external_events: FRED·Federal Reserve 공식 일정과 추적 종목의 Finnhub/Massive
+  Earnings·DART·SEC 실제 공시. 공급원별 실패는 상태표에 기록하고 마지막 정상
+  행만 보존한다.
 
 모든 테이블에 as_of(마지막 거래일 "YYYY-MM-DD") 컬럼 포함.
 
@@ -299,8 +300,10 @@ def build_us_prices():
         lost_div += float(dv.loc[~dv["ex_date"].isin(g.index), "cash_amount"].sum())
         res = uspx.compose_total_return(g, dv)
         # 절대 가격·가격 알림·평가손익은 raw close, 성과는 adj_close/TR을 쓴다.
-        # 둘을 같은 앱 파일에 보존하되 소비자가 목적에 맞는 열을 선택한다.
+        # 위험·상관은 배당 계약을 섞지 않도록 split_adj_close(분할만 조정)를 쓴다.
+        # 세 계열을 같은 앱 파일에 보존하되 소비자가 목적에 맞는 열을 선택한다.
         res["close"] = g["close"].astype("float64")
+        res["split_adj_close"] = g["adj_close"].astype("float64")
         res = res.reset_index().rename(columns={"date": "trade_date"})
         res["ticker"] = tk
         out.append(res)
@@ -330,7 +333,17 @@ def build_us_prices():
             "(플로어 이전 상폐·미러 부재)",
             file=sys.stderr,
         )
-    df = df[["meta_id", "trade_date", "ticker", "close", "adj_close", "gross_return"]]
+    df = df[
+        [
+            "meta_id",
+            "trade_date",
+            "ticker",
+            "close",
+            "split_adj_close",
+            "adj_close",
+            "gross_return",
+        ]
+    ]
     # 서빙 필터 키(meta_id) 정렬 — 로우그룹 프루닝 유지 (flows_by_ticker 관례와 동일).
     # server/datastore/prices.py._us_prices 는 ("meta_id","in",...) 필터로 읽는다 —
     # ticker 정렬로 쓰면 로우그룹당 meta_id 폭이 넓어져 프루닝이 무력화된다.
@@ -1664,8 +1677,9 @@ def build_external_events() -> pd.DataFrame:
     """외부 일정·실제 공시를 공급원별 fail-soft 계약으로 발행한다.
 
     FRED와 FOMC는 공식 게시 일정만 미래 이벤트로 허용한다. DART와 SEC는 실제
-    접수일 이후의 observed 이벤트만 만든다. Massive 권한이 없으면 상태를
-    ``upgrade_required``로 기록하고 Earnings 날짜를 추정하지 않는다.
+    접수일 이후의 observed 이벤트만 만든다. Earnings는 Finnhub 공식 API를 우선하고,
+    키가 없을 때만 기존 Massive 권한을 확인한다. 둘 다 사용할 수 없으면 상태를
+    명시하고 Earnings 날짜를 추정하지 않는다.
     """
     now = pd.Timestamp.now(tz="Asia/Seoul")
     available_at = now.isoformat()
@@ -1691,9 +1705,23 @@ def build_external_events() -> pd.DataFrame:
             return external_events.ProviderResult(
                 external_events.empty_events(), "0 tracked US assets", today.isoformat()
             )
-        return external_events.fetch_massive_earnings(
-            qdata_settings.massive_api_key(), assets, today, macro_end, available_at
-        )
+        finnhub_key = os.environ.get("FINNHUB_API_KEY", "").strip()
+        if finnhub_key:
+            return external_events.fetch_finnhub_earnings(
+                finnhub_key, assets, filing_start, macro_end, available_at
+            )
+        try:
+            return external_events.fetch_massive_earnings(
+                qdata_settings.massive_api_key(),
+                assets,
+                filing_start,
+                macro_end,
+                available_at,
+            )
+        except external_events.EntitlementRequired as exc:
+            raise external_events.ConfigurationRequired(
+                "FINNHUB_API_KEY를 등록하거나 Massive Benzinga Earnings 권한이 필요합니다"
+            ) from exc
 
     def dart():
         if assets[assets["iso_code"].eq("KR")].empty:
@@ -1724,7 +1752,12 @@ def build_external_events() -> pd.DataFrame:
     specs = [
         ("fred", "FRED Macro", {"fred"}, fred),
         ("federal_reserve", "Federal Reserve", {"federal_reserve"}, fomc),
-        ("massive_earnings", "Massive Earnings", {"massive_earnings"}, earnings),
+        (
+            "us_earnings",
+            "US Earnings",
+            {"finnhub_earnings", "massive_earnings"},
+            earnings,
+        ),
         ("dart", "DART Filings", {"dart"}, dart),
         ("sec", "SEC Filings", {"sec"}, sec),
     ]
@@ -1763,7 +1796,9 @@ def build_external_events() -> pd.DataFrame:
         except external_events.ProviderUnavailable as exc:
             preserved = preserve(source_names)
             status = (
-                "upgrade_required"
+                "configuration_required"
+                if isinstance(exc, external_events.ConfigurationRequired)
+                else "upgrade_required"
                 if isinstance(exc, external_events.EntitlementRequired)
                 else "preserved"
                 if not preserved.empty

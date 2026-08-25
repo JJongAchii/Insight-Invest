@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from module.portfolio_risk import MIN_OVERLAP_DAYS, build_report, clean_panel
+from module.portfolio_risk import build_report, clean_panel
 
 
 def _panel(values: dict, start="2022-01-03") -> pd.DataFrame:
@@ -34,6 +34,31 @@ def test_two_asset_hand_math():
     # 같이 움직이므로 +1 (개별 수익률의 부호가 아니라 평균 대비 방향이 결정)
     assert r["avg_pair_corr"] == pytest.approx(1.0, rel=1e-9)
     assert r["corr"].shape == (2, 2)
+    assert sum(row["risk_share"] for row in r["risk_contributions"]) == pytest.approx(
+        1.0
+    )
+    assert sum(
+        row["risk_contribution_pct"] for row in r["risk_contributions"]
+    ) == pytest.approx(r["ann_vol"])
+
+
+def test_risk_contribution_identifies_the_more_volatile_holding():
+    idx = pd.bdate_range("2022-01-03", periods=120)
+    calm_returns = np.resize(np.array([0.002, -0.001]), len(idx))
+    volatile_returns = np.resize(np.array([0.03, -0.025]), len(idx))
+    prices = pd.DataFrame(
+        {
+            "CALM": 100 * np.cumprod(1 + calm_returns),
+            "VOL": 100 * np.cumprod(1 + volatile_returns),
+        },
+        index=idx,
+    )
+
+    report = build_report(prices, {"CALM": 0.5, "VOL": 0.5}, min_overlap=10)
+
+    assert report["risk_contributions"][0]["ticker"] == "VOL"
+    assert report["risk_contributions"][0]["risk_share"] > 0.9
+    assert report["diversification_ratio"] is not None
 
 
 def test_single_asset_skips_corr():

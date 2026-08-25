@@ -16,7 +16,9 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../../../")))
+sys.path.insert(
+    0, os.path.abspath(os.path.join(os.path.abspath(__file__), "../../../"))
+)
 
 from qdata import api as qdata_api
 
@@ -25,7 +27,6 @@ from datastore import holdings as holdings_store
 from datastore import meta, portfolio_ledger
 from datastore.prices import read_price_data
 from module import portfolio_risk
-from module.backtest import Backtest
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,9 @@ def _kr_stock_latest(tickers: list[str]) -> dict:
         from qdata import api as qdata_api
 
         start = (date.today() - timedelta(days=14)).isoformat()
-        px = qdata_api.load_krx_prices(start=start, tickers=tickers, columns=["close", "chg_pct"])
+        px = qdata_api.load_krx_prices(
+            start=start, tickers=tickers, columns=["close", "chg_pct"]
+        )
         if px.empty:
             return out
         last = px.sort_values("date").groupby("ticker").tail(1)
@@ -129,12 +132,16 @@ def _us_latest(meta_ids: list[int]) -> dict:
     if not meta_ids:
         return out
     try:
-        df = read_price_data("US", meta_ids=meta_ids, start_date=date.today() - timedelta(days=30))
+        df = read_price_data(
+            "US", meta_ids=meta_ids, start_date=date.today() - timedelta(days=30)
+        )
         if df.empty:
             return out
         for mid, g in df.groupby("meta_id"):
             price_column = (
-                "close" if "close" in g.columns and g["close"].notna().any() else "adj_close"
+                "close"
+                if "close" in g.columns and g["close"].notna().any()
+                else "adj_close"
             )
             s = g.sort_values("trade_date")[price_column].dropna()
             if s.empty:
@@ -219,8 +226,11 @@ def _empty_summary() -> dict:
         "valuation_complete": True,
         "sector_alloc": [],
         "market_alloc": [],
+        "asset_alloc": [],
         "top_weight": None,
+        "top3_weight": None,
         "hhi": None,
+        "effective_positions": None,
         "target_total": None,
     }
 
@@ -253,6 +263,7 @@ def get_holdings():
     day_pnl_krw = 0.0
     sector_agg: dict = {}
     market_agg: dict = {}
+    asset_agg: dict = {}
 
     for r in df.itertuples():
         mid = int(r.meta_id)
@@ -269,12 +280,22 @@ def get_holdings():
         stored_target = getattr(r, "target_weight", None)
         target_weight = float(stored_target) if pd.notna(stored_target) else None
 
-        mv_krw = mv_native * fxrate if (mv_native is not None and fxrate is not None) else None
+        mv_krw = (
+            mv_native * fxrate
+            if (mv_native is not None and fxrate is not None)
+            else None
+        )
         cost_krw = cost_native * fxrate if fxrate is not None else None
         day_native = (
-            shares * price * (chg / 100.0) if (price is not None and chg is not None) else None
+            shares * price * (chg / 100.0)
+            if (price is not None and chg is not None)
+            else None
         )
-        day_krw = day_native * fxrate if (day_native is not None and fxrate is not None) else None
+        day_krw = (
+            day_native * fxrate
+            if (day_native is not None and fxrate is not None)
+            else None
+        )
 
         # 요약 누적 — 평가 가능한(가격 있는) 포지션만 손익 총계에 반영
         if mv_krw is not None:
@@ -286,6 +307,8 @@ def get_holdings():
             sector_agg[sec] = sector_agg.get(sec, 0.0) + mv_krw
             mkt = r.iso_code if r.iso_code in ("KR", "US") else "US"
             market_agg[mkt] = market_agg.get(mkt, 0.0) + mv_krw
+            asset_type = "ETF" if str(r.security_type).upper() == "ETF" else "Equity"
+            asset_agg[asset_type] = asset_agg.get(asset_type, 0.0) + mv_krw
         if day_krw is not None:
             day_pnl_krw += day_krw
 
@@ -323,7 +346,9 @@ def get_holdings():
     positions = []
     for p in raw:
         mv = p.pop("_mv_krw")
-        weight = mv / total_value_krw if (mv is not None and total_value_krw > 0) else None
+        weight = (
+            mv / total_value_krw if (mv is not None and total_value_krw > 0) else None
+        )
         target_weight = p["target_weight"]
         positions.append(
             {
@@ -366,6 +391,8 @@ def get_holdings():
 
     hhi = sum(w * w for w in weights) if weights else None
     top_weight = max(weights) if weights else None
+    top3_weight = sum(sorted(weights, reverse=True)[:3]) if weights else None
+    effective_positions = 1 / hhi if hhi and hhi > 0 else None
     targets = [p["target_weight"] for p in positions if p["target_weight"] is not None]
 
     def _alloc(agg: dict) -> list:
@@ -399,8 +426,11 @@ def get_holdings():
         "valuation_complete": unpriced_positions == 0,
         "sector_alloc": _alloc(sector_agg),
         "market_alloc": _market_alloc(market_agg),
+        "asset_alloc": _market_alloc(asset_agg),
         "top_weight": _r(top_weight, 4),
+        "top3_weight": _r(top3_weight, 4),
         "hhi": _r(hhi, 4),
+        "effective_positions": _r(effective_positions, 1),
         "target_total": _r(sum(targets), 4) if targets else None,
     }
     return {"positions": positions, "summary": summary}
@@ -415,9 +445,13 @@ def add_holding(request: HoldingRequest):
     md = meta.meta_df()
     row = md[md["meta_id"] == request.meta_id]
     if row.empty:
-        raise HTTPException(status_code=404, detail=f"meta_id {request.meta_id} not found")
+        raise HTTPException(
+            status_code=404, detail=f"meta_id {request.meta_id} not found"
+        )
     if request.target_weight is not None and not 0 <= request.target_weight <= 1:
-        raise HTTPException(status_code=400, detail="target_weight must be between 0 and 1")
+        raise HTTPException(
+            status_code=400, detail="target_weight must be between 0 and 1"
+        )
 
     currency = request.currency
     if not currency:
@@ -441,7 +475,9 @@ def add_holding(request: HoldingRequest):
 @router.put("/{meta_id}/metadata")
 def update_holding_metadata(meta_id: int, request: HoldingMetadataRequest):
     if request.target_weight is not None and not 0 <= request.target_weight <= 1:
-        raise HTTPException(status_code=400, detail="target_weight must be between 0 and 1")
+        raise HTTPException(
+            status_code=400, detail="target_weight must be between 0 and 1"
+        )
     if portfolio_ledger.has_events():
         try:
             portfolio_ledger.upsert_position_metadata(meta_id, request.model_dump())
@@ -481,9 +517,7 @@ def remove_holding(meta_id: int):
 
 RISK_HISTORY_START = "2019-06-03"  # covid_2020 창 + 워밍업 여유
 STALE_CAL_DAYS = 7  # 패널 마지막 날짜보다 이보다 오래 뒤처지면 동결 의심
-HALT_ROWS = (
-    5  # 최근 N행 거래량 합 0 → 거래정지 의심 (spotlight와 같은 취지, 여기는 최근 5일 합 기준)
-)
+HALT_ROWS = 5  # 최근 N행 거래량 합 0 → 거래정지 의심 (spotlight와 같은 취지, 여기는 최근 5일 합 기준)
 
 
 def _recent_kr_volume(tickers: list) -> pd.DataFrame:
@@ -495,6 +529,45 @@ def _recent_kr_volume(tickers: list) -> pd.DataFrame:
     except Exception:
         logger.debug("risk 거래량 조회 실패 — 정지 경고 생략", exc_info=True)
         return pd.DataFrame()
+
+
+def _risk_price_history(assets: pd.DataFrame) -> pd.DataFrame:
+    """KR·US 공통 split-adjusted 위험 패널을 구성한다.
+
+    양 시장 모두 분할 등 기업행동만 조정하고 현금분배는 포함하지 않는다. US의
+    총수익 ``adj_close``는 이 목적에 쓰지 않는다. 전환 전 US 앱 파일처럼
+    ``split_adj_close``가 없으면 raw/총수익으로 폴백하지 않고 해당 종목을 제외한다.
+    """
+    frames = []
+    for iso_code, group in assets.groupby("iso_code"):
+        history = read_price_data(
+            str(iso_code),
+            meta_ids=[int(value) for value in group["meta_id"]],
+            start_date=date.fromisoformat(RISK_HISTORY_START),
+            end_date=date.today(),
+        )
+        price_column = "split_adj_close" if iso_code == "US" else "adj_close"
+        if history.empty or price_column not in history.columns:
+            continue
+        if iso_code == "KR" and "return_basis" in history.columns:
+            history = history[
+                ~history["return_basis"].eq("raw_price_return_ex_cash_distributions")
+            ]
+        history = history[["trade_date", "ticker", price_column]].copy()
+        history = history.rename(columns={price_column: "risk_price"})
+        history["risk_price"] = pd.to_numeric(history["risk_price"], errors="coerce")
+        history.loc[history["risk_price"] <= 0, "risk_price"] = pd.NA
+        frames.append(history.dropna(subset=["risk_price"]))
+    if not frames:
+        return pd.DataFrame()
+    combined = pd.concat(frames, ignore_index=True)
+    if combined.duplicated(["trade_date", "ticker"]).any():
+        raise ValueError("위험 가격 패널에 중복 date/ticker가 있습니다")
+    out = combined.pivot(index="trade_date", columns="ticker", values="risk_price")
+    out.index = pd.to_datetime(out.index)
+    out = out.sort_index()
+    out.attrs["return_basis"] = "split_adjusted_price_return_ex_cash_distributions_krw"
+    return out
 
 
 @router.get("/risk")
@@ -542,25 +615,36 @@ def get_holdings_risk():
     if not mv or total <= 0:
         return {"empty": True, "reason": "평가 가능한 포지션 없음"}
     weights = {t: v / total for t, v in mv.items()}
+    original_weights = weights.copy()
 
     try:
-        prices = Backtest().data(
-            meta_id=[int(x) for x in df["meta_id"]], start_date=RISK_HISTORY_START
-        )
+        prices = _risk_price_history(df)
     except Exception:
         logger.warning("risk 가격 이력 로드 실패", exc_info=True)
         return {"empty": True, "reason": "가격 이력 로드 실패"}
     prices = prices[[c for c in prices.columns if c in weights]]
     missing = sorted(set(weights) - set(prices.columns))
     for t in missing:
-        warnings.append({"kind": "no_history", "ticker": t, "detail": "가격 이력 없음 — 제외"})
+        warnings.append(
+            {"kind": "no_history", "ticker": t, "detail": "가격 이력 없음 — 제외"}
+        )
         weights.pop(t)
     if not weights:
-        return {"empty": True, "reason": "가격 이력 있는 포지션 없음"}
+        return {
+            "empty": True,
+            "reason": "가격 이력 있는 포지션 없음",
+            "warnings": warnings,
+            "coverage": {
+                "n_assets": 0,
+                "total_assets": len(mv),
+                "weight": 0.0,
+            },
+        }
+    covered_weight = sum(original_weights[t] for t in weights)
     total_w = sum(weights.values())
     weights = {t: w / total_w for t, w in weights.items()}
 
-    if any(iso == "US" for iso in tickers_iso.values()):
+    if any(tickers_iso.get(t) == "US" for t in weights):
         try:
             prices = fx.to_krw(prices, tickers_iso)
         except Exception:
@@ -581,7 +665,14 @@ def get_holdings_risk():
                 return {
                     "empty": True,
                     "reason": "환율 조회 실패로 평가 가능한 포지션 없음",
+                    "warnings": warnings,
+                    "coverage": {
+                        "n_assets": 0,
+                        "total_assets": len(mv),
+                        "weight": 0.0,
+                    },
                 }
+            covered_weight = sum(original_weights[t] for t in weights)
             total_w = sum(weights.values())
             weights = {t: w / total_w for t, w in weights.items()}
 
@@ -600,7 +691,11 @@ def get_holdings_risk():
     kr = [t for t, iso in tickers_iso.items() if iso == "KR" and t in prices.columns]
     vol = _recent_kr_volume(kr)
     for t in kr:
-        if t in vol.columns and len(vol) >= HALT_ROWS and float(vol[t].tail(HALT_ROWS).sum()) == 0:
+        if (
+            t in vol.columns
+            and len(vol) >= HALT_ROWS
+            and float(vol[t].tail(HALT_ROWS).sum()) == 0
+        ):
             warnings.append(
                 {
                     "kind": "halted",
@@ -615,6 +710,11 @@ def get_holdings_risk():
             "insufficient": True,
             "overlap_days": report["overlap_days"],
             "warnings": warnings,
+            "coverage": {
+                "n_assets": len(weights),
+                "total_assets": len(mv),
+                "weight": _r(covered_weight, 4),
+            },
         }
     if report["overlap_days"] < 250:
         warnings.append(
@@ -641,13 +741,35 @@ def get_holdings_risk():
         "mdd_from": report["mdd_from"],
         "mdd_to": report["mdd_to"],
         "avg_pair_corr": _r(report["avg_pair_corr"], 2),
+        "diversification_ratio": _r(report["diversification_ratio"], 2),
+        "risk_contributions": [
+            {
+                **row,
+                "name": names.get(row["ticker"], row["ticker"]),
+                "weight": _r(row["weight"], 4),
+                "asset_ann_vol": _r(row["asset_ann_vol"], 1),
+                "risk_share": _r(row["risk_share"], 4),
+                "risk_contribution_pct": _r(row["risk_contribution_pct"], 1),
+            }
+            for row in report["risk_contributions"]
+        ],
         "corr": corr_payload,
-        "scenarios": [{**s, "ret_pct": _r(s["ret_pct"], 1)} for s in report["scenarios"]],
+        "scenarios": [
+            {**s, "ret_pct": _r(s["ret_pct"], 1)} for s in report["scenarios"]
+        ],
         "warnings": warnings,
+        "coverage": {
+            "n_assets": len(weights),
+            "total_assets": len(mv),
+            "weight": _r(covered_weight, 4),
+        },
         "basis": {
             "n_assets": len(weights),
+            "total_assets": len(mv),
+            "coverage_weight": _r(covered_weight, 4),
             "weights_as_of": date.today().isoformat(),
             "overlap_days": report["overlap_days"],
             "window": report["window"],
+            "return_basis": "split_adjusted_price_return_ex_cash_distributions_krw",
         },
     }

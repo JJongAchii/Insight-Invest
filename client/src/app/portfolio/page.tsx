@@ -28,6 +28,7 @@ import FactorExposureCard from "./FactorExposureCard";
 import HoldingModal from "./HoldingModal";
 import LedgerPanel from "./LedgerPanel";
 import PortfolioOnboarding from "./PortfolioOnboarding";
+import PortfolioXRay from "./PortfolioXRay";
 
 const PortfolioPage = () => {
   const { data, isLoading, error, refetch } = useFetchHoldingsQuery();
@@ -93,11 +94,11 @@ const PortfolioPage = () => {
           {/* Summary tiles */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <StatTile
-              label={summary.valuation_complete ? "총 평가액" : "확인된 평가액"}
+              label={summary.valuation_complete ? "Total Value" : "Priced Value"}
               value={summary.priced_positions > 0 ? fmtJo(summary.total_value_krw) : "—"}
             />
             <StatTile
-              label="총 손익"
+              label="Total P&L"
               helpKey="portfolio.pnl"
               value={
                 <span className={signClassNum(summary.total_pnl_krw)}>
@@ -108,13 +109,13 @@ const PortfolioPage = () => {
               deltaType={pnlDeltaType(summary.total_pnl_krw)}
             />
             <StatTile
-              label="일간 손익"
+              label="Day P&L"
               value={summary.priced_positions > 0 ? fmtSignedJo(summary.day_pnl_krw) : "—"}
               deltaType={pnlDeltaType(summary.day_pnl_krw)}
             />
-            <StatTile label="종목수" value={summary.n_positions} />
+            <StatTile label="Positions" value={summary.n_positions} />
             <StatTile
-              label="집중도"
+              label="Largest Weight"
               helpKey="portfolio.hhi"
               value={summary.top_weight == null ? "—" : `${(summary.top_weight * 100).toFixed(1)}%`}
               sub={summary.hhi == null ? undefined : <span className="num">HHI {summary.hhi.toFixed(2)}</span>}
@@ -127,6 +128,8 @@ const PortfolioPage = () => {
               투자자산 기준 100%가 되도록 확인하세요.
             </div>
           )}
+
+          <PortfolioXRay positions={positions} summary={summary} />
 
           {/* Holdings table */}
           <Card title="Holdings">

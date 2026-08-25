@@ -13,9 +13,77 @@ import app.routers.holdings as h
 
 def test_risk_empty_holdings(monkeypatch):
     monkeypatch.setattr(
-        h.holdings_store, "list_items", lambda: pd.DataFrame(columns=h.holdings_store._EMPTY)
+        h.holdings_store,
+        "list_items",
+        lambda: pd.DataFrame(columns=h.holdings_store._EMPTY),
     )
     assert h.get_holdings_risk() == {"empty": True}
+
+
+def test_risk_history_uses_split_adjusted_contract_without_total_return_fallback(
+    monkeypatch,
+):
+    assets = pd.DataFrame(
+        {
+            "meta_id": [1, 2],
+            "ticker": ["000001", "AAPL"],
+            "iso_code": ["KR", "US"],
+        }
+    )
+    dates = pd.to_datetime(["2026-08-20", "2026-08-21"])
+
+    def fake_prices(iso_code, **_kwargs):
+        if iso_code == "KR":
+            return pd.DataFrame(
+                {
+                    "trade_date": dates,
+                    "ticker": ["000001", "000001"],
+                    "adj_close": [100.0, 101.0],
+                    "return_basis": [
+                        "split_adjusted_price_return_ex_cash_distributions",
+                        "split_adjusted_price_return_ex_cash_distributions",
+                    ],
+                }
+            )
+        return pd.DataFrame(
+            {
+                "trade_date": dates,
+                "ticker": ["AAPL", "AAPL"],
+                "close": [200.0, 100.0],
+                "split_adj_close": [100.0, 100.0],
+                "adj_close": [95.0, 100.0],
+            }
+        )
+
+    monkeypatch.setattr(h, "read_price_data", fake_prices)
+
+    out = h._risk_price_history(assets)
+
+    assert out["000001"].tolist() == [100.0, 101.0]
+    assert out["AAPL"].tolist() == [100.0, 100.0]
+    assert out.attrs["return_basis"] == (
+        "split_adjusted_price_return_ex_cash_distributions_krw"
+    )
+
+
+def test_risk_history_does_not_use_us_total_return_when_split_series_is_missing(
+    monkeypatch,
+):
+    assets = pd.DataFrame({"meta_id": [2], "ticker": ["AAPL"], "iso_code": ["US"]})
+    monkeypatch.setattr(
+        h,
+        "read_price_data",
+        lambda *_args, **_kwargs: pd.DataFrame(
+            {
+                "trade_date": pd.to_datetime(["2026-08-20", "2026-08-21"]),
+                "ticker": ["AAPL", "AAPL"],
+                "close": [200.0, 100.0],
+                "adj_close": [95.0, 100.0],
+            }
+        ),
+    )
+
+    assert h._risk_price_history(assets).empty
 
 
 @pytest.fixture()
@@ -41,7 +109,9 @@ def two_holdings(monkeypatch):
     monkeypatch.setattr(h.holdings_store, "list_items", lambda: items)
     monkeypatch.setattr(h.meta, "meta_df", lambda: md)
     # 최신가: A 100원 × 10주 = 1000, B 50원 × 20주 = 1000 → 50:50
-    monkeypatch.setattr(h, "build_price_map", lambda df: {1: (100.0, 0.0), 2: (50.0, 0.0)})
+    monkeypatch.setattr(
+        h, "build_price_map", lambda df: {1: (100.0, 0.0), 2: (50.0, 0.0)}
+    )
     monkeypatch.setattr(h, "_usdkrw_latest", lambda: 1400.0)
 
     idx = pd.bdate_range("2023-01-02", periods=300)
@@ -53,11 +123,7 @@ def two_holdings(monkeypatch):
         index=idx,
     )
 
-    class FakeBT:
-        def data(self, meta_id=None, start_date=None, **kw):
-            return prices
-
-    monkeypatch.setattr(h, "Backtest", FakeBT)
+    monkeypatch.setattr(h, "_risk_price_history", lambda _df: prices.copy())
     monkeypatch.setattr(h.fx, "to_krw", lambda df, iso: df)  # KR만 — 환산 무변화
     monkeypatch.setattr(h, "_recent_kr_volume", lambda tickers: pd.DataFrame())
     return items
@@ -83,7 +149,9 @@ def test_risk_shape_and_weights(two_holdings):
 
 
 def test_risk_excludes_priceless_position(two_holdings, monkeypatch):
-    monkeypatch.setattr(h, "build_price_map", lambda df: {1: (100.0, 0.0), 2: (None, None)})
+    monkeypatch.setattr(
+        h, "build_price_map", lambda df: {1: (100.0, 0.0), 2: (None, None)}
+    )
     r = h.get_holdings_risk()
     assert r["basis"]["n_assets"] == 1
     assert r["corr"] is None  # 단일 종목 — 상관 생략
@@ -91,13 +159,12 @@ def test_risk_excludes_priceless_position(two_holdings, monkeypatch):
 
 
 def test_risk_history_load_failure_returns_empty(two_holdings, monkeypatch):
-    """Backtest 실패는 500 없이 empty 반환."""
+    """가격 이력 로드 실패는 500 없이 empty 반환."""
 
-    class FailingBT:
-        def data(self, meta_id=None, start_date=None, **kw):
-            raise RuntimeError("DB connection failed")
+    def failing_history(_df):
+        raise RuntimeError("price history failed")
 
-    monkeypatch.setattr(h, "Backtest", FailingBT)
+    monkeypatch.setattr(h, "_risk_price_history", failing_history)
     r = h.get_holdings_risk()
     assert r == {"empty": True, "reason": "가격 이력 로드 실패"}
 
@@ -124,7 +191,9 @@ def test_risk_fx_failure_drops_us_with_warning(monkeypatch):
     )
     monkeypatch.setattr(h.holdings_store, "list_items", lambda: items)
     monkeypatch.setattr(h.meta, "meta_df", lambda: md)
-    monkeypatch.setattr(h, "build_price_map", lambda df: {1: (100.0, 0.0), 2: (150.0, 0.0)})
+    monkeypatch.setattr(
+        h, "build_price_map", lambda df: {1: (100.0, 0.0), 2: (150.0, 0.0)}
+    )
     monkeypatch.setattr(h, "_usdkrw_latest", lambda: 1400.0)
 
     idx = pd.bdate_range("2023-01-02", periods=300)
@@ -136,11 +205,7 @@ def test_risk_fx_failure_drops_us_with_warning(monkeypatch):
         index=idx,
     )
 
-    class FakeBT:
-        def data(self, meta_id=None, start_date=None, **kw):
-            return prices
-
-    monkeypatch.setattr(h, "Backtest", FakeBT)
+    monkeypatch.setattr(h, "_risk_price_history", lambda _df: prices.copy())
 
     def failing_to_krw(df, iso_map):
         raise KeyError("USDKRW unavailable")
@@ -207,10 +272,6 @@ def test_risk_fx_success_path_affects_vol(monkeypatch):
         index=idx,
     )
 
-    class FakeBT:
-        def data(self, meta_id=None, start_date=None, **kw):
-            return prices
-
     def volatile_to_krw(df, iso):
         out = df.copy()
         # 교대 계수: 짝수일 1300, 홀수일 1500 — ±15% 일일 스윙 추가
@@ -225,9 +286,11 @@ def test_risk_fx_success_path_affects_vol(monkeypatch):
 
     monkeypatch.setattr(h.holdings_store, "list_items", lambda: items)
     monkeypatch.setattr(h.meta, "meta_df", lambda: md)
-    monkeypatch.setattr(h, "build_price_map", lambda df: {1: (100.0, 0.0), 2: (150.0, 0.0)})
+    monkeypatch.setattr(
+        h, "build_price_map", lambda df: {1: (100.0, 0.0), 2: (150.0, 0.0)}
+    )
     monkeypatch.setattr(h, "_usdkrw_latest", lambda: 1400.0)
-    monkeypatch.setattr(h, "Backtest", FakeBT)
+    monkeypatch.setattr(h, "_risk_price_history", lambda _df: prices.copy())
     monkeypatch.setattr(h, "_recent_kr_volume", lambda tickers: pd.DataFrame())
 
     # 1) identity 환율 (무변화)
@@ -271,7 +334,9 @@ def test_risk_no_history_drop_renormalizes(monkeypatch):
     )
     monkeypatch.setattr(h.holdings_store, "list_items", lambda: items)
     monkeypatch.setattr(h.meta, "meta_df", lambda: md)
-    monkeypatch.setattr(h, "build_price_map", lambda df: {1: (100.0, 0.0), 2: (50.0, 0.0)})
+    monkeypatch.setattr(
+        h, "build_price_map", lambda df: {1: (100.0, 0.0), 2: (50.0, 0.0)}
+    )
     monkeypatch.setattr(h, "_usdkrw_latest", lambda: 1400.0)
 
     idx = pd.bdate_range("2023-01-02", periods=300)
@@ -283,17 +348,16 @@ def test_risk_no_history_drop_renormalizes(monkeypatch):
         index=idx,
     )
 
-    class FakeBT:
-        def data(self, meta_id=None, start_date=None, **kw):
-            return prices
-
-    monkeypatch.setattr(h, "Backtest", FakeBT)
+    monkeypatch.setattr(h, "_risk_price_history", lambda _df: prices.copy())
     monkeypatch.setattr(h.fx, "to_krw", lambda df, iso: df)
     monkeypatch.setattr(h, "_recent_kr_volume", lambda tickers: pd.DataFrame())
 
     r = h.get_holdings_risk()
     assert "empty" not in r and "insufficient" not in r
     assert r["basis"]["n_assets"] == 1  # 000002 제외
+    assert r["coverage"] == {"n_assets": 1, "total_assets": 2, "weight": 0.5}
     assert r["corr"] is None  # 단일 종목
-    assert any(w["kind"] == "no_history" and w["ticker"] == "000002" for w in r["warnings"])
+    assert any(
+        w["kind"] == "no_history" and w["ticker"] == "000002" for w in r["warnings"]
+    )
     assert isinstance(r["ann_vol"], float)
