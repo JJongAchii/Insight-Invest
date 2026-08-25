@@ -7,7 +7,9 @@ from datetime import timedelta
 import pandas as pd
 import pytest
 
-_SCRIPTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "scripts"))
+_SCRIPTS_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "scripts")
+)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
@@ -30,7 +32,9 @@ def test_only_runs_selected_builder_and_records_status(monkeypatch):
         "BUILDERS",
         [("selected.parquet", selected, {}), ("unselected.parquet", unselected, {})],
     )
-    monkeypatch.setattr(bi.storage, "write_parquet", lambda df, *parts, **kwargs: "/tmp/out")
+    monkeypatch.setattr(
+        bi.storage, "write_parquet", lambda df, *parts, **kwargs: "/tmp/out"
+    )
     monkeypatch.setattr(bi, "_write_status", lambda rows: written.extend(rows))
 
     bi.main(["--only", "selected", "--require", "selected"])
@@ -151,3 +155,43 @@ def test_external_events_preserve_last_good_provider_rows(monkeypatch, tmp_path)
     assert out["event_key"].tolist() == [f"fred:10:{scheduled}"]
     assert statuses.loc["fred", "status"] == "preserved"
     assert statuses.loc["fred", "coverage"] == "이전 1건 보존"
+
+
+def test_external_events_marks_us_earnings_setup_required(monkeypatch, tmp_path):
+    today = pd.Timestamp.now(tz="Asia/Seoul").date()
+    assets = pd.DataFrame(
+        [
+            {
+                "meta_id": 1,
+                "ticker": "AAPL",
+                "name": "Apple",
+                "iso_code": "US",
+                "scope": "portfolio",
+            }
+        ]
+    )
+    empty = lambda *args, **kwargs: bi.external_events.ProviderResult(
+        bi.external_events.empty_events(), "none", today.isoformat()
+    )
+    monkeypatch.setenv("APP_DATA", str(tmp_path))
+    monkeypatch.delenv("FINNHUB_API_KEY", raising=False)
+    monkeypatch.setattr(bi, "_tracked_assets", lambda: assets)
+    monkeypatch.setattr(bi.qdata_settings, "lake_root", lambda: tmp_path)
+    monkeypatch.setattr(bi.qdata_settings, "fred_api_key", lambda: "key")
+    monkeypatch.setattr(bi.qdata_settings, "massive_api_key", lambda: "key")
+    monkeypatch.setattr(bi.external_events, "fetch_fred_events", empty)
+    monkeypatch.setattr(bi.external_events, "fetch_fomc_events", empty)
+    monkeypatch.setattr(bi.external_events, "fetch_sec_filings", empty)
+
+    def no_massive_access(*args, **kwargs):
+        raise bi.external_events.EntitlementRequired("paid entitlement")
+
+    monkeypatch.setattr(bi.external_events, "fetch_massive_earnings", no_massive_access)
+
+    bi.build_external_events()
+    statuses = bi.storage.read_parquet(
+        "insight", "external_event_sources.parquet"
+    ).set_index("provider")
+
+    assert statuses.loc["us_earnings", "status"] == "configuration_required"
+    assert "FINNHUB_API_KEY" in statuses.loc["us_earnings", "message"]

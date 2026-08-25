@@ -305,10 +305,15 @@ export interface HoldingsSummary {
   valuation_complete: boolean;
   sector_alloc: HoldingsSectorAlloc[];
   market_alloc: HoldingsMarketAlloc[];
+  asset_alloc: HoldingsMarketAlloc[];
   /** Largest single-position weight, fraction (0..1). */
   top_weight: number | null;
+  /** Sum of the three largest priced positions, fraction (0..1). */
+  top3_weight: number | null;
   /** Herfindahl index Σ(weight²), 0..1. */
   hhi: number | null;
+  /** 1 / HHI; equally weighted equivalent number of positions. */
+  effective_positions: number | null;
   /** Sum of configured target weights; null when no targets are set. */
   target_total: number | null;
 }
@@ -423,6 +428,19 @@ export interface RiskCorr {
   values: (number | null)[][];
 }
 
+export interface RiskContribution {
+  ticker: string;
+  name: string;
+  /** Current portfolio weight, fraction. */
+  weight: number;
+  /** Standalone annualized volatility, %. */
+  asset_ann_vol: number;
+  /** Component variance divided by portfolio variance, fraction. */
+  risk_share: number;
+  /** Contribution to annualized portfolio volatility, percentage points. */
+  risk_contribution_pct: number;
+}
+
 export interface HoldingsRiskResponse {
   empty?: boolean;
   reason?: string;
@@ -433,14 +451,24 @@ export interface HoldingsRiskResponse {
   mdd_from?: string;
   mdd_to?: string;
   avg_pair_corr?: number | null;
+  diversification_ratio?: number | null;
+  risk_contributions?: RiskContribution[];
   corr?: RiskCorr | null;
   scenarios?: RiskScenario[];
   warnings?: RiskWarning[];
+  coverage?: {
+    n_assets: number;
+    total_assets: number;
+    weight: number;
+  };
   basis?: {
     n_assets: number;
+    total_assets: number;
+    coverage_weight: number;
     weights_as_of: string;
     overlap_days: number;
     window: { start: string; end: string };
+    return_basis: "split_adjusted_price_return_ex_cash_distributions_krw";
   };
 }
 
@@ -591,7 +619,7 @@ export interface ActionItem {
 export interface ExternalEventSource {
   provider: string;
   label: string;
-  status: "ok" | "preserved" | "upgrade_required" | "unavailable";
+  status: "ok" | "preserved" | "configuration_required" | "upgrade_required" | "unavailable";
   data_as_of: string | null;
   available_at: string;
   coverage: string | null;
@@ -1581,6 +1609,10 @@ export const api = createApi({
           positions,
           summary: {
             ...response.summary,
+            asset_alloc: response.summary.asset_alloc ?? [],
+            top3_weight: response.summary.top3_weight ?? null,
+            effective_positions:
+              response.summary.effective_positions ?? null,
             priced_positions:
               response.summary.priced_positions ?? pricedPositions,
             unpriced_positions:

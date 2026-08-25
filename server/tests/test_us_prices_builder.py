@@ -11,7 +11,9 @@ import sys
 import pandas as pd
 import pytest
 
-_SCRIPTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "scripts"))
+_SCRIPTS_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "scripts")
+)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
@@ -42,7 +44,9 @@ def _no_reference(**kwargs):
     raise FileNotFoundError("clean/us_ticker_events.parquet 없음 (테스트 기본값)")
 
 
-def _fake_mirror(monkeypatch, bi, px_long, div_long, meta_df, events=None, details=None):
+def _fake_mirror(
+    monkeypatch, bi, px_long, div_long, meta_df, events=None, details=None
+):
     monkeypatch.setattr(
         bi.qdata_api,
         "load_us_prices",
@@ -115,7 +119,9 @@ def test_builder_sorts_by_meta_id_not_ticker(monkeypatch, bi, capsys):
             ),
         ]
     )
-    meta_df = pd.DataFrame({"meta_id": [20, 1], "ticker": ["AAA", "ZZZ"], "iso_code": ["US", "US"]})
+    meta_df = pd.DataFrame(
+        {"meta_id": [20, 1], "ticker": ["AAA", "ZZZ"], "iso_code": ["US", "US"]}
+    )
     _fake_mirror(
         monkeypatch,
         bi,
@@ -148,17 +154,21 @@ def test_builder_schema_and_meta_join(monkeypatch, bi, capsys):
         "trade_date",
         "ticker",
         "close",
+        "split_adj_close",
         "adj_close",
         "gross_return",
         "as_of",
     ]
     assert out["close"].tolist() == [500.0, 505.0, 500.0]
+    assert out["split_adj_close"].tolist() == [500.0, 505.0, 500.0]
     assert out["gross_return"].iloc[2] == pytest.approx((500.0 + 2.0) / 505.0 - 1)
     # 픽스처가 과거 날짜이므로 신선도 경고(§5)가 함께 발화해야 한다
     assert "미러 최종일" in capsys.readouterr().err
 
 
-def test_builder_guard_cuts_before_unresolved_jump_without_deleting_ticker(monkeypatch, bi, capsys):
+def test_builder_guard_cuts_before_unresolved_jump_without_deleting_ticker(
+    monkeypatch, bi, capsys
+):
     """오염 의심 경계 이전 이력만 버리고 현재 가격 세그먼트는 계속 제공한다."""
     dates = pd.bdate_range("2026-01-05", periods=4)
     px = pd.concat(
@@ -181,7 +191,9 @@ def test_builder_guard_cuts_before_unresolved_jump_without_deleting_ticker(monke
             ),
         ]
     )
-    meta_df = pd.DataFrame({"meta_id": [1, 2], "ticker": ["GOOD", "BAD"], "iso_code": ["US", "US"]})
+    meta_df = pd.DataFrame(
+        {"meta_id": [1, 2], "ticker": ["GOOD", "BAD"], "iso_code": ["US", "US"]}
+    )
     _fake_mirror(
         monkeypatch,
         bi,
@@ -210,8 +222,12 @@ def test_builder_verified_identity_keeps_legitimate_large_jump(monkeypatch, bi, 
         }
     )
     meta_df = pd.DataFrame({"meta_id": [8919], "ticker": ["CPSH"], "iso_code": ["US"]})
-    events = pd.DataFrame(columns=["ticker", "event_type", "event_date", "event_ticker"])
-    details = pd.DataFrame({"ticker": ["CPSH"], "list_date": [pd.Timestamp("1997-05-09")]})
+    events = pd.DataFrame(
+        columns=["ticker", "event_type", "event_date", "event_ticker"]
+    )
+    details = pd.DataFrame(
+        {"ticker": ["CPSH"], "list_date": [pd.Timestamp("1997-05-09")]}
+    )
     _fake_mirror(
         monkeypatch,
         bi,
@@ -244,7 +260,9 @@ def test_builder_returns_none_on_mirror_failure(monkeypatch, bi, capsys):
     assert "기존 파일 유지" in capsys.readouterr().err
 
 
-def test_builder_fails_closed_when_required_freshness_is_exceeded(monkeypatch, bi, capsys):
+def test_builder_fails_closed_when_required_freshness_is_exceeded(
+    monkeypatch, bi, capsys
+):
     dates = pd.bdate_range("2026-01-05", periods=3)
     px = pd.DataFrame(
         {
@@ -314,7 +332,9 @@ def test_dividend_load_floored_and_non_trading_ex_date_flagged(monkeypatch, bi, 
         }
     )
     weekend_ex_date = pd.Timestamp("2026-01-03")  # Saturday — dates 안에 없음
-    div = pd.DataFrame({"ticker": ["SPY"], "ex_date": [weekend_ex_date], "cash_amount": [1.5]})
+    div = pd.DataFrame(
+        {"ticker": ["SPY"], "ex_date": [weekend_ex_date], "cash_amount": [1.5]}
+    )
     meta_df = pd.DataFrame({"meta_id": [1], "ticker": ["SPY"], "iso_code": ["US"]})
 
     calls = []
@@ -347,7 +367,9 @@ def test_dividend_load_floored_and_non_trading_ex_date_flagged(monkeypatch, bi, 
 
 def test_builder_applies_entity_windows(monkeypatch, bi, capsys):
     """실체 경계 절단 엔드투엔드 — 개명 체인으로 이전 티커 병합 + 상장 전 남의 행 절단."""
-    d1, d2, d3, d4 = pd.to_datetime(["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08"])
+    d1, d2, d3, d4 = pd.to_datetime(
+        ["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08"]
+    )
     px = pd.concat(
         [
             pd.DataFrame(

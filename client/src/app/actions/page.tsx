@@ -47,6 +47,7 @@ const dateLabel = (value: string | null) => {
 const SOURCE_STATUS = {
   ok: { label: "Ready", style: "bg-gains/15 text-gains" },
   preserved: { label: "Last good", style: "bg-warning/15 text-warning" },
+  configuration_required: { label: "Setup required", style: "bg-warning/15 text-warning" },
   upgrade_required: { label: "Upgrade required", style: "bg-warning/15 text-warning" },
   unavailable: { label: "Unavailable", style: "bg-losses/15 text-losses" },
 } as const;

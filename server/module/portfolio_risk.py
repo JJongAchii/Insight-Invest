@@ -47,6 +47,48 @@ def portfolio_returns(prices: pd.DataFrame, weights: dict) -> pd.Series:
     return rets.mul(w, axis=1).sum(axis=1).iloc[1:]
 
 
+def risk_contributions(
+    prices: pd.DataFrame, weights: dict
+) -> tuple[list[dict], float | None]:
+    """공분산 기준 변동성 기여와 분산비율을 계산한다.
+
+    ``risk_share``는 합계가 1인 component variance 비율이며 음수가 될 수 있다.
+    ``risk_contribution_pct``는 각 기여를 연환산 변동성 %p로 표현해 합계가
+    포트폴리오 연환산 변동성과 같아진다.
+    """
+    rets = prices.pct_change(fill_method=None).iloc[1:]
+    if rets.empty:
+        return [], None
+    order = list(prices.columns)
+    w = pd.Series(weights, dtype="float64").reindex(order).fillna(0.0)
+    cov = rets.cov().reindex(index=order, columns=order)
+    if cov.isna().any().any():
+        return [], None
+    portfolio_variance = float(w @ cov @ w)
+    if not np.isfinite(portfolio_variance) or portfolio_variance <= 0:
+        return [], None
+
+    portfolio_daily_vol = float(np.sqrt(portfolio_variance))
+    component_variance = w * cov.dot(w)
+    asset_daily_vol = rets.std().reindex(order)
+    diversification_ratio = float((w * asset_daily_vol).sum() / portfolio_daily_vol)
+    annualizer = float(np.sqrt(252) * 100)
+    rows = [
+        {
+            "ticker": ticker,
+            "weight": float(w[ticker]),
+            "asset_ann_vol": float(asset_daily_vol[ticker] * annualizer),
+            "risk_share": float(component_variance[ticker] / portfolio_variance),
+            "risk_contribution_pct": float(
+                component_variance[ticker] / portfolio_daily_vol * annualizer
+            ),
+        }
+        for ticker in order
+    ]
+    rows.sort(key=lambda row: row["risk_contribution_pct"], reverse=True)
+    return rows, diversification_ratio
+
+
 def _scenario_row(key: str, sub: pd.Series) -> dict:
     return {
         "key": key,
@@ -91,7 +133,9 @@ def scenario_rows(rp: pd.Series) -> list:
     return rows
 
 
-def build_report(prices: pd.DataFrame, weights: dict, min_overlap: int = MIN_OVERLAP_DAYS) -> dict:
+def build_report(
+    prices: pd.DataFrame, weights: dict, min_overlap: int = MIN_OVERLAP_DAYS
+) -> dict:
     prices = clean_panel(prices)
     if len(prices) < min_overlap + 1:
         return {"insufficient": True, "overlap_days": int(len(prices))}
@@ -108,6 +152,8 @@ def build_report(prices: pd.DataFrame, weights: dict, min_overlap: int = MIN_OVE
         off = corr.where(~np.eye(len(corr), dtype=bool)).stack()
         avg_corr = float(off.mean()) if not off.empty else None
 
+    contributions, diversification_ratio = risk_contributions(prices, weights)
+
     return {
         "overlap_days": int(len(prices)),
         "ann_vol": float(rp.std() * np.sqrt(252) * 100),
@@ -116,6 +162,11 @@ def build_report(prices: pd.DataFrame, weights: dict, min_overlap: int = MIN_OVE
         "mdd_to": str(trough.date()),
         "avg_pair_corr": avg_corr,
         "corr": corr,
+        "risk_contributions": contributions,
+        "diversification_ratio": diversification_ratio,
         "scenarios": scenario_rows(rp),
-        "window": {"start": str(prices.index.min().date()), "end": str(prices.index.max().date())},
+        "window": {
+            "start": str(prices.index.min().date()),
+            "end": str(prices.index.max().date()),
+        },
     }

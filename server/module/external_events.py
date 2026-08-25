@@ -55,6 +55,10 @@ class EntitlementRequired(ProviderUnavailable):
     """API 키는 유효하지만 현재 구독에 데이터 권한이 없음."""
 
 
+class ConfigurationRequired(ProviderUnavailable):
+    """공급자 사용에 필요한 API 키가 없거나 유효하지 않음."""
+
+
 FRED_RELEASES = {
     9: ("US Retail Sales", "high"),
     10: ("US CPI", "high"),
@@ -110,11 +114,14 @@ def _request_json(
     *,
     params: dict,
     entitlement_name: str | None = None,
+    auth_name: str | None = None,
 ) -> dict:
     try:
         response = client.get(url, params=params)
     except httpx.HTTPError as exc:
         raise ProviderUnavailable(f"요청 실패: {type(exc).__name__}") from exc
+    if response.status_code in {401, 403} and auth_name:
+        raise ConfigurationRequired(f"{auth_name} API 키를 확인하세요")
     if response.status_code in {401, 402, 403} and entitlement_name:
         raise EntitlementRequired(f"{entitlement_name} 구독 권한이 필요합니다")
     try:
@@ -375,6 +382,168 @@ def fetch_massive_earnings(
         f"{len(us)} tracked US assets",
         available_at[:10],
         f"향후 {len(events)}건",
+    )
+
+
+def _number(value) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if pd.notna(number) else None
+
+
+def _money(value) -> str | None:
+    number = _number(value)
+    if number is None:
+        return None
+    absolute = abs(number)
+    if absolute >= 1_000_000_000:
+        return f"${number / 1_000_000_000:.2f}B"
+    if absolute >= 1_000_000:
+        return f"${number / 1_000_000:.1f}M"
+    return f"${number:,.0f}"
+
+
+def fetch_finnhub_earnings(
+    api_key: str,
+    assets: pd.DataFrame,
+    start: date,
+    end: date,
+    available_at: str,
+    *,
+    client: httpx.Client | None = None,
+) -> ProviderResult:
+    """Finnhub 공식 Calendar에서 추적 US 종목의 예정·발표 실적을 읽는다.
+
+    Finnhub 응답은 일정의 confirmed/projected 구분을 제공하지 않는다. 따라서
+    실제 EPS/매출이 도착한 과거 행만 ``observed``이고, 나머지는 보수적으로
+    ``projected``다. 미래 날짜를 과거 보고 패턴으로 직접 추정하지 않는다.
+    """
+    if not api_key.strip():
+        raise ConfigurationRequired("FINNHUB_API_KEY가 없습니다")
+    us = assets[assets["iso_code"].eq("US")].drop_duplicates("ticker")
+    if us.empty:
+        return ProviderResult(empty_events(), "0 tracked US assets", available_at[:10])
+
+    owns_client = client is None
+    client = client or httpx.Client(timeout=30, follow_redirects=True)
+    try:
+        payload = _request_json(
+            client,
+            "https://finnhub.io/api/v1/calendar/earnings",
+            params={
+                "token": api_key,
+                "from": start.isoformat(),
+                "to": end.isoformat(),
+                "international": "false",
+            },
+            auth_name="Finnhub",
+        )
+    finally:
+        if owns_client:
+            client.close()
+
+    items = payload.get("earningsCalendar")
+    if not isinstance(items, list):
+        raise ProviderUnavailable("Finnhub Earnings 응답 계약이 변경되었습니다")
+
+    by_ticker = {str(row.ticker).upper(): row for row in us.itertuples(index=False)}
+    retrieved_on = date.fromisoformat(available_at[:10])
+    rows: list[dict] = []
+    upcoming = 0
+    reported = 0
+    hour_labels = {
+        "bmo": "미국장 개장 전",
+        "amc": "미국장 마감 후",
+        "dmh": "미국장 거래 중",
+    }
+    for item in items:
+        ticker = str(item.get("symbol", "")).upper()
+        asset = by_ticker.get(ticker)
+        scheduled = str(item.get("date", ""))
+        if asset is None or not (start.isoformat() <= scheduled <= end.isoformat()):
+            continue
+        try:
+            scheduled_date = date.fromisoformat(scheduled)
+        except ValueError:
+            continue
+
+        eps_actual = _number(item.get("epsActual"))
+        eps_estimate = _number(item.get("epsEstimate"))
+        revenue_actual = _number(item.get("revenueActual"))
+        revenue_estimate = _number(item.get("revenueEstimate"))
+        has_actual = scheduled_date <= retrieved_on and (
+            eps_actual is not None or revenue_actual is not None
+        )
+        status = "observed" if has_actual else "projected"
+        if has_actual:
+            reported += 1
+        else:
+            upcoming += 1
+
+        period = " ".join(
+            str(value)
+            for value in (
+                item.get("year"),
+                f"Q{item.get('quarter')}" if item.get("quarter") else None,
+            )
+            if value not in {None, ""}
+        )
+        detail_parts = [f"{period} 실적" if period else "실적"]
+        if eps_actual is not None:
+            eps_text = f"EPS actual {eps_actual:g}"
+            if eps_estimate is not None:
+                eps_text += f" / estimate {eps_estimate:g}"
+                if eps_estimate != 0:
+                    surprise = (eps_actual - eps_estimate) / abs(eps_estimate) * 100
+                    eps_text += f" ({surprise:+.1f}%)"
+            detail_parts.append(eps_text)
+        elif eps_estimate is not None:
+            detail_parts.append(f"EPS estimate {eps_estimate:g}")
+
+        actual_money = _money(revenue_actual)
+        estimate_money = _money(revenue_estimate)
+        if actual_money:
+            revenue_text = f"Revenue actual {actual_money}"
+            if estimate_money:
+                revenue_text += f" / estimate {estimate_money}"
+            detail_parts.append(revenue_text)
+        elif estimate_money:
+            detail_parts.append(f"Revenue estimate {estimate_money}")
+        if item.get("hour") in hour_labels:
+            detail_parts.append(hour_labels[item["hour"]])
+        if not has_actual:
+            detail_parts.append("공급자가 확정 여부를 구분하지 않아 Projected로 표시")
+
+        rows.append(
+            {
+                "event_key": f"finnhub:earnings:{ticker}:{scheduled}",
+                "kind": "event",
+                "category": "earnings",
+                "market": "US",
+                "scope": asset.scope,
+                "severity": "high" if asset.scope == "portfolio" else "medium",
+                "title": f"{asset.name or ticker} Earnings",
+                "detail": " · ".join(detail_parts),
+                "link": f"/stock/{int(asset.meta_id)}",
+                "meta_id": int(asset.meta_id),
+                "ticker": ticker,
+                "name": asset.name,
+                "occurred_at": scheduled,
+                "available_at": available_at,
+                "data_as_of": available_at[:10],
+                "scheduled_for": scheduled,
+                "source": "finnhub_earnings",
+                "event_status": status,
+            }
+        )
+    events = _frame(rows).drop_duplicates("event_key")
+    return ProviderResult(
+        events,
+        f"{len(us)} tracked US assets",
+        available_at[:10],
+        f"Finnhub 공식 API · 예정 {upcoming}건 / 발표 {reported}건",
     )
 
 

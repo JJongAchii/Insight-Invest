@@ -61,6 +61,9 @@ def test_holdings_response_computes_target_drift(monkeypatch):
     assert by_id[1]["drift_pp"] == 10.0
     assert by_id[2]["drift_pp"] == -10.0
     assert out["summary"]["target_total"] == 1.0
+    assert out["summary"]["top3_weight"] == 1.0
+    assert out["summary"]["effective_positions"] == 2.0
+    assert out["summary"]["asset_alloc"] == [{"label": "Equity", "weight": 1.0}]
 
 
 def test_holdings_response_marks_missing_prices_without_fake_zero_weight(monkeypatch):
