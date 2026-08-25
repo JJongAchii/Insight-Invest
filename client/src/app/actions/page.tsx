@@ -51,9 +51,20 @@ const SOURCE_STATUS = {
   unavailable: { label: "Unavailable", style: "bg-losses/15 text-losses" },
 } as const;
 
+const TABS: Tab[] = ["inbox", "calendar", "alerts"];
+const FILTERS: Filter[] = ["all", "high", "portfolio", "research", "events"];
+
+const replaceViewInUrl = (tab: Tab, filter: Filter) => {
+  const url = new URL(window.location.href);
+  url.searchParams.set("tab", tab);
+  url.searchParams.set("filter", filter);
+  window.history.replaceState(window.history.state, "", url);
+};
+
 function ActionCard({ item }: { item: ActionItem }) {
   const router = useRouter();
   const [updateState, { isLoading }] = useUpdateActionStateMutation();
+  const externalLink = /^https?:\/\//i.test(item.link);
 
   const saveToJournal = () => {
     sessionStorage.setItem("ii-journal-prefill", JSON.stringify(item));
@@ -85,13 +96,25 @@ function ActionCard({ item }: { item: ActionItem }) {
           <h2 className="mt-2 font-semibold text-ink">{item.title}</h2>
           <p className="mt-1 text-sm leading-6 text-ink-secondary">{item.detail}</p>
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <Link
-              href={item.link}
-              className="btn-primary inline-flex items-center gap-1.5"
-              onClick={() => updateState({ event_id: item.event_id, state: "read" })}
-            >
-              Open <ChevronRight size={15} aria-hidden />
-            </Link>
+            {externalLink ? (
+              <a
+                href={item.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-primary inline-flex items-center gap-1.5"
+                onClick={() => updateState({ event_id: item.event_id, state: "read" })}
+              >
+                Open <ChevronRight size={15} aria-hidden />
+              </a>
+            ) : (
+              <Link
+                href={item.link}
+                className="btn-primary inline-flex items-center gap-1.5"
+                onClick={() => updateState({ event_id: item.event_id, state: "read" })}
+              >
+                Open <ChevronRight size={15} aria-hidden />
+              </Link>
+            )}
             {item.actions.includes("journal") && (
               <button type="button" className="btn-secondary inline-flex items-center gap-1.5" onClick={saveToJournal}>
                 <BookOpen size={15} aria-hidden /> Save to Journal
@@ -126,6 +149,14 @@ export default function ActionCenterPage() {
   const [filter, setFilter] = useState<Filter>("all");
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const savedTab = params.get("tab") as Tab | null;
+    const savedFilter = params.get("filter") as Filter | null;
+    if (savedTab && TABS.includes(savedTab)) setTab(savedTab);
+    if (savedFilter && FILTERS.includes(savedFilter)) setFilter(savedFilter);
+  }, []);
+
+  useEffect(() => {
     const nav = navigator as Navigator & { setAppBadge?: (count?: number) => Promise<void> };
     if (data && nav.setAppBadge) {
       nav.setAppBadge(data.counts.badge ?? data.counts.actionable).catch(() => undefined);
@@ -150,6 +181,16 @@ export default function ActionCenterPage() {
     }
     return [...grouped.entries()];
   }, [items, tab]);
+
+  const selectTab = (value: Tab) => {
+    setTab(value);
+    replaceViewInUrl(value, filter);
+  };
+
+  const selectFilter = (value: Filter) => {
+    setFilter(value);
+    replaceViewInUrl(tab, value);
+  };
 
   return (
     <div className="flex flex-col gap-6 pb-20">
@@ -184,7 +225,7 @@ export default function ActionCenterPage() {
           <button
             key={value}
             type="button"
-            onClick={() => setTab(value)}
+            onClick={() => selectTab(value)}
             className={`min-w-24 rounded-lg px-4 py-2 text-sm font-medium ${tab === value ? "bg-primary-500 text-white" : "text-ink-secondary hover:bg-raised"}`}
           >
             {label}
@@ -258,7 +299,7 @@ export default function ActionCenterPage() {
               <button
                 key={value}
                 type="button"
-                onClick={() => setFilter(value)}
+                onClick={() => selectFilter(value)}
                 className={`rounded-full border px-3 py-1.5 text-xs font-medium ${filter === value ? "border-primary-400 bg-primary-500/15 text-primary-400" : "border-edge text-ink-muted"}`}
               >
                 {label}
