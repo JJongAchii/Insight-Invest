@@ -428,25 +428,31 @@ def fetch_finnhub_earnings(
 
     owns_client = client is None
     client = client or httpx.Client(timeout=30, follow_redirects=True)
+    items: list[dict] = []
     try:
-        payload = _request_json(
-            client,
-            "https://finnhub.io/api/v1/calendar/earnings",
-            params={
-                "token": api_key,
-                "from": start.isoformat(),
-                "to": end.isoformat(),
-                "international": "false",
-            },
-            auth_name="Finnhub",
-        )
+        # 무심볼 달력 조회는 응답이 1,500건에서 잘릴 수 있다. 긴 범위를 한 번에
+        # 받아 사후 필터링하면 보유·관심 종목이 응답에 있어야 한다는 보장이 없다.
+        # 통합 마스터의 추적 티커를 하나씩 명시해 누락을 조용히 만들지 않는다.
+        for ticker in sorted(us["ticker"].astype(str).str.upper().unique()):
+            payload = _request_json(
+                client,
+                "https://finnhub.io/api/v1/calendar/earnings",
+                params={
+                    "token": api_key,
+                    "from": start.isoformat(),
+                    "to": end.isoformat(),
+                    "symbol": ticker,
+                    "international": "false",
+                },
+                auth_name="Finnhub",
+            )
+            ticker_items = payload.get("earningsCalendar")
+            if not isinstance(ticker_items, list):
+                raise ProviderUnavailable("Finnhub Earnings 응답 계약이 변경되었습니다")
+            items.extend(ticker_items)
     finally:
         if owns_client:
             client.close()
-
-    items = payload.get("earningsCalendar")
-    if not isinstance(items, list):
-        raise ProviderUnavailable("Finnhub Earnings 응답 계약이 변경되었습니다")
 
     by_ticker = {str(row.ticker).upper(): row for row in us.itertuples(index=False)}
     retrieved_on = date.fromisoformat(available_at[:10])

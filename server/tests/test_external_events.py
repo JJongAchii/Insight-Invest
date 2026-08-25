@@ -107,6 +107,7 @@ def test_finnhub_earnings_separates_projected_schedule_and_observed_result():
     def handler(request: httpx.Request):
         assert request.url.params["from"] == "2026-08-20"
         assert request.url.params["to"] == "2026-11-30"
+        assert request.url.params["symbol"] == "AAPL"
         return httpx.Response(
             200,
             json={
@@ -163,6 +164,59 @@ def test_finnhub_earnings_separates_projected_schedule_and_observed_result():
     assert "Revenue actual $95.00B / estimate $94.00B" in observed["detail"]
     assert "Projected" in projected["detail"]
     assert result.message == "Finnhub 공식 API · 예정 1건 / 발표 1건"
+
+
+def test_finnhub_earnings_queries_each_tracked_symbol_to_avoid_global_truncation():
+    assets = pd.DataFrame(
+        [
+            {
+                "meta_id": 1,
+                "ticker": "AAPL",
+                "name": "Apple",
+                "iso_code": "US",
+                "scope": "portfolio",
+            },
+            {
+                "meta_id": 2,
+                "ticker": "CPSH",
+                "name": "CPS Technologies",
+                "iso_code": "US",
+                "scope": "watchlist",
+            },
+        ]
+    )
+    requested: list[str] = []
+
+    def handler(request: httpx.Request):
+        symbol = request.url.params["symbol"]
+        requested.append(symbol)
+        return httpx.Response(
+            200,
+            json={
+                "earningsCalendar": [
+                    {
+                        "date": "2026-10-27" if symbol == "CPSH" else "2026-10-28",
+                        "epsEstimate": 1.0,
+                        "symbol": symbol,
+                    }
+                ]
+            },
+            request=request,
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        result = external_events.fetch_finnhub_earnings(
+            "key",
+            assets,
+            date(2026, 8, 20),
+            date(2026, 11, 30),
+            AVAILABLE_AT,
+            client=client,
+        )
+
+    assert requested == ["AAPL", "CPSH"]
+    assert set(result.events["ticker"]) == {"AAPL", "CPSH"}
+    assert result.coverage == "2 tracked US assets"
 
 
 def test_finnhub_earnings_requires_an_api_key():
