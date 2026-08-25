@@ -145,7 +145,8 @@ function ActionCard({ item }: { item: ActionItem }) {
 }
 
 export default function ActionCenterPage() {
-  const { data, isLoading, error, refetch } = useFetchActionsQuery({ horizonDays: 60 });
+  // 분기 실적은 약 90일 간격이라 60일 창에서는 정상 수집된 다음 일정도 숨을 수 있다.
+  const { data, isLoading, error, refetch } = useFetchActionsQuery({ horizonDays: 90 });
   const [tab, setTab] = useState<Tab>("inbox");
   const [filter, setFilter] = useState<Filter>("all");
 
