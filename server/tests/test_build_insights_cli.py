@@ -2,6 +2,7 @@
 
 import os
 import sys
+from datetime import timedelta
 
 import pandas as pd
 import pytest
@@ -91,3 +92,62 @@ def test_us_price_as_of_comes_from_us_panel(monkeypatch):
     out = bi.build_us_prices()
 
     assert set(out["as_of"]) == {"2026-08-17"}
+
+
+def test_external_events_preserve_last_good_provider_rows(monkeypatch, tmp_path):
+    today = pd.Timestamp.now(tz="Asia/Seoul").date()
+    scheduled = (today + timedelta(days=3)).isoformat()
+    previous = bi.external_events.empty_events()
+    previous.loc[0] = {
+        "event_key": f"fred:10:{scheduled}",
+        "kind": "event",
+        "category": "macro",
+        "market": "US",
+        "scope": "market",
+        "severity": "high",
+        "title": "US CPI",
+        "detail": "last good",
+        "link": "https://fred.stlouisfed.org/release?rid=10",
+        "meta_id": None,
+        "ticker": None,
+        "name": None,
+        "occurred_at": scheduled,
+        "available_at": f"{today.isoformat()}T10:00:00+09:00",
+        "data_as_of": scheduled,
+        "scheduled_for": scheduled,
+        "source": "fred",
+        "event_status": "confirmed",
+    }
+    previous["as_of"] = today.isoformat()
+    monkeypatch.setenv("APP_DATA", str(tmp_path))
+    bi.storage.write_parquet(previous, "insight", "external_events.parquet")
+    monkeypatch.setattr(
+        bi,
+        "_tracked_assets",
+        lambda: pd.DataFrame(
+            columns=["meta_id", "ticker", "name", "iso_code", "scope"]
+        ),
+    )
+    monkeypatch.setattr(bi.qdata_settings, "lake_root", lambda: tmp_path)
+    monkeypatch.setattr(bi.qdata_settings, "fred_api_key", lambda: "key")
+
+    def fred_failure(*args, **kwargs):
+        raise bi.external_events.ProviderUnavailable("temporary failure")
+
+    monkeypatch.setattr(bi.external_events, "fetch_fred_events", fred_failure)
+    monkeypatch.setattr(
+        bi.external_events,
+        "fetch_fomc_events",
+        lambda *args, **kwargs: bi.external_events.ProviderResult(
+            bi.external_events.empty_events(), "none", today.isoformat()
+        ),
+    )
+
+    out = bi.build_external_events()
+    statuses = bi.storage.read_parquet(
+        "insight", "external_event_sources.parquet"
+    ).set_index("provider")
+
+    assert out["event_key"].tolist() == [f"fred:10:{scheduled}"]
+    assert statuses.loc["fred", "status"] == "preserved"
+    assert statuses.loc["fred", "coverage"] == "이전 1건 보존"

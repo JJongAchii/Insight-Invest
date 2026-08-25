@@ -562,7 +562,7 @@ export interface AttentionResponse {
 }
 
 export type ActionState = "new" | "read" | "snoozed" | "dismissed";
-export type ActionKind = "attention" | "alert" | "review" | "rebalance" | "data" | "system";
+export type ActionKind = "attention" | "alert" | "review" | "rebalance" | "data" | "system" | "event";
 
 export interface ActionItem {
   event_id: string;
@@ -575,6 +575,9 @@ export interface ActionItem {
   meta_id: number | null;
   ticker: string | null;
   name: string | null;
+  market: string | null;
+  scope: "market" | "portfolio" | "watchlist" | null;
+  event_status: "confirmed" | "projected" | "observed" | null;
   occurred_at: string | null;
   available_at: string;
   data_as_of: string | null;
@@ -585,11 +588,22 @@ export interface ActionItem {
   snoozed_until: string | null;
 }
 
+export interface ExternalEventSource {
+  provider: string;
+  label: string;
+  status: "ok" | "preserved" | "upgrade_required" | "unavailable";
+  data_as_of: string | null;
+  available_at: string;
+  coverage: string | null;
+  message: string | null;
+}
+
 export interface ActionCenterResponse {
   generated_at: string;
   data_as_of: string | null;
   items: ActionItem[];
   calendar: ActionItem[];
+  sources: ExternalEventSource[];
   counts: {
     total: number;
     actionable: number;
@@ -597,6 +611,7 @@ export interface ActionCenterResponse {
     new: number;
     badge: number;
     scheduled: number;
+    external: number;
   };
 }
 

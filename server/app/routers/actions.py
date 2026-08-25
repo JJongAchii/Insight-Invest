@@ -13,13 +13,13 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
-
 from datastore import action_state, meta, portfolio, portfolio_ledger
+from datastore import external_events as external_events_store
 from datastore import holdings as holdings_store
 from datastore import journal as journal_store
 from datastore import watchlist as watchlist_store
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
 from . import attention, overview
 from . import watchlist as watchlist_api
@@ -43,6 +43,11 @@ def _iso(value) -> str | None:
     if isinstance(value, date) and not isinstance(value, datetime):
         return value.isoformat()
     return pd.Timestamp(value).isoformat()
+
+
+def _optional_text(row, name: str) -> str | None:
+    value = getattr(row, name, None)
+    return None if value is None or pd.isna(value) else str(value)
 
 
 def _event_id(source: str, key: str, occurred_at: str | None) -> str:
@@ -69,6 +74,9 @@ def _event(
     meta_id: int | None = None,
     ticker: str | None = None,
     name: str | None = None,
+    market: str | None = None,
+    scope: str | None = None,
+    event_status: str | None = None,
     actions: list[str] | None = None,
 ) -> dict:
     return {
@@ -82,6 +90,9 @@ def _event(
         "meta_id": meta_id,
         "ticker": ticker,
         "name": name,
+        "market": market,
+        "scope": scope,
+        "event_status": event_status,
         "occurred_at": occurred_at,
         "available_at": available_at,
         "data_as_of": data_as_of,
@@ -386,6 +397,64 @@ def _data_health_events(now: datetime) -> list[dict]:
     return out
 
 
+def _external_event_events(now: datetime, horizon_days: int) -> list[dict]:
+    """배치가 확정·관측한 외부 이벤트만 Event 계약으로 옮긴다."""
+    frame = external_events_store.list_events()
+    if frame.empty:
+        return []
+    required = {
+        "event_key",
+        "kind",
+        "category",
+        "severity",
+        "title",
+        "detail",
+        "link",
+        "occurred_at",
+        "available_at",
+        "data_as_of",
+        "scheduled_for",
+        "source",
+    }
+    missing = sorted(required - set(frame.columns))
+    if missing:
+        logger.warning("External events schema missing: %s", missing)
+        return []
+
+    first_day = now.date() - timedelta(days=7)
+    last_day = now.date() + timedelta(days=horizon_days)
+    scheduled = pd.to_datetime(frame["scheduled_for"], errors="coerce").dt.date
+    frame = frame[scheduled.between(first_day, last_day, inclusive="both")]
+    out = []
+    for row in frame.itertuples(index=False):
+        meta_id = getattr(row, "meta_id", None)
+        meta_id = int(meta_id) if meta_id is not None and not pd.isna(meta_id) else None
+
+        out.append(
+            _event(
+                source=str(row.source),
+                key=str(row.event_key),
+                kind=str(row.kind),
+                category=str(row.category),
+                severity=str(row.severity),
+                title=str(row.title),
+                detail=str(row.detail),
+                link=str(row.link),
+                occurred_at=_iso(row.occurred_at),
+                available_at=_iso(row.available_at) or now.isoformat(),
+                data_as_of=_iso(row.data_as_of),
+                scheduled_for=_iso(row.scheduled_for),
+                meta_id=meta_id,
+                ticker=_optional_text(row, "ticker"),
+                name=_optional_text(row, "name"),
+                market=_optional_text(row, "market"),
+                scope=_optional_text(row, "scope"),
+                event_status=_optional_text(row, "event_status"),
+            )
+        )
+    return out
+
+
 def _apply_states(
     items: list[dict], now: datetime, include_dismissed: bool
 ) -> list[dict]:
@@ -421,6 +490,7 @@ def build_actions(*, horizon_days: int = 30, include_dismissed: bool = False) ->
     items.extend(_review_events(now, horizon_days))
     items.extend(_rebal_events(now, horizon_days))
     items.extend(_data_health_events(now))
+    items.extend(_external_event_events(now, horizon_days))
 
     # 여러 소스가 같은 이벤트를 만들면 event_id 기준으로 한 번만 노출한다.
     deduped = {item["event_id"]: item for item in items}
@@ -440,11 +510,13 @@ def build_actions(*, horizon_days: int = 30, include_dismissed: bool = False) ->
         ),
     )
     actionable = [item for item in items if item["severity"] in {"high", "medium"}]
+    external = [item for item in items if item["kind"] == "event"]
     return {
         "generated_at": now.isoformat(),
         "data_as_of": data_as_of,
         "items": items,
         "calendar": calendar,
+        "sources": external_events_store.list_sources(),
         "counts": {
             "total": len(items),
             "actionable": len(actionable),
@@ -455,6 +527,7 @@ def build_actions(*, horizon_days: int = 30, include_dismissed: bool = False) ->
                 for item in items
             ),
             "scheduled": len(calendar),
+            "external": len(external),
         },
     }
 

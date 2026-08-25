@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock3,
+  Database,
   Inbox,
   X,
 } from "lucide-react";
@@ -26,7 +27,7 @@ import {
 import NotificationSettings from "./NotificationSettings";
 
 type Tab = "inbox" | "calendar" | "alerts";
-type Filter = "all" | "high" | "portfolio" | "research";
+type Filter = "all" | "high" | "portfolio" | "research" | "events";
 
 const SEVERITY_STYLE: Record<AttentionSeverity, string> = {
   high: "bg-losses",
@@ -42,6 +43,13 @@ const dateLabel = (value: string | null) => {
     weekday: "short",
   }).format(new Date(`${value.slice(0, 10)}T00:00:00`));
 };
+
+const SOURCE_STATUS = {
+  ok: { label: "Ready", style: "bg-gains/15 text-gains" },
+  preserved: { label: "Last good", style: "bg-warning/15 text-warning" },
+  upgrade_required: { label: "Upgrade required", style: "bg-warning/15 text-warning" },
+  unavailable: { label: "Unavailable", style: "bg-losses/15 text-losses" },
+} as const;
 
 function ActionCard({ item }: { item: ActionItem }) {
   const router = useRouter();
@@ -66,6 +74,10 @@ function ActionCard({ item }: { item: ActionItem }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
             <span className="badge-neutral">{item.category}</span>
+            {item.market && <span className="badge-neutral">{item.market}</span>}
+            {item.event_status && (
+              <span className="badge-neutral capitalize">{item.event_status}</span>
+            )}
             {(item.ticker || item.name) && <span>{item.ticker ?? item.name}</span>}
             {item.scheduled_for && <span>{dateLabel(item.scheduled_for)}</span>}
             {item.data_as_of && <span className="ml-auto">Data {item.data_as_of.slice(0, 10)}</span>}
@@ -123,8 +135,9 @@ export default function ActionCenterPage() {
   const items = useMemo(() => {
     const source = tab === "calendar" ? data?.calendar ?? [] : data?.items ?? [];
     if (filter === "high") return source.filter((item) => item.severity === "high");
-    if (filter === "portfolio") return source.filter((item) => ["holding", "strategy"].includes(item.category));
+    if (filter === "portfolio") return source.filter((item) => item.scope === "portfolio" || ["holding", "strategy"].includes(item.category));
     if (filter === "research") return source.filter((item) => ["watchlist", "journal", "signal"].includes(item.category));
+    if (filter === "events") return source.filter((item) => item.kind === "event");
     return source;
   }, [data, filter, tab]);
 
@@ -201,12 +214,46 @@ export default function ActionCenterPage() {
         <div className="card"><LoadingState label="Action을 정리하는 중..." /></div>
       ) : (
         <>
+          {tab === "calendar" && data?.sources && data.sources.length > 0 && (
+            <section className="rounded-2xl border border-edge bg-surface p-4">
+              <div className="flex items-center gap-2">
+                <Database size={17} className="text-primary-400" aria-hidden />
+                <h2 className="font-semibold text-ink">External Sources</h2>
+              </div>
+              <p className="mt-1 text-xs leading-5 text-ink-muted">
+                일정 제공 상태를 함께 표시합니다. 공시는 접수 후 Observed로만 추가됩니다.
+              </p>
+              <div className="mt-4 flex gap-3 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 sm:overflow-visible xl:grid-cols-3">
+                {data.sources.map((source) => {
+                  const status = SOURCE_STATUS[source.status] ?? SOURCE_STATUS.unavailable;
+                  return (
+                    <div key={source.provider} className="min-w-64 rounded-xl border border-edge bg-raised/50 p-3 sm:min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium text-ink">{source.label}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${status.style}`}>
+                          {status.label}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs text-ink-secondary">
+                        {source.coverage ?? source.message ?? "상태 정보 없음"}
+                      </p>
+                      {source.coverage && source.message && (
+                        <p className="mt-1 text-[11px] leading-4 text-ink-muted">{source.message}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
           <div className="flex gap-2 overflow-x-auto">
             {([
               ["all", "All"],
               ["high", "High"],
               ["portfolio", "Portfolio"],
               ["research", "Research"],
+              ["events", "Events"],
             ] as [Filter, string][]).map(([value, label]) => (
               <button
                 key={value}
