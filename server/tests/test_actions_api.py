@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta
 
 import pandas as pd
-
 from app.routers import actions
 
 
@@ -137,3 +136,70 @@ def test_price_rule_requires_crossing_not_only_being_above(monkeypatch):
     )
 
     assert actions._watchlist_alert_events(actions.datetime.now(actions.KST)) == []
+
+
+def test_external_events_include_timing_status_and_source_health(monkeypatch):
+    today = datetime.now(actions.KST).date()
+    monkeypatch.setattr(
+        actions.external_events_store,
+        "list_events",
+        lambda: pd.DataFrame(
+            [
+                {
+                    "event_key": f"fred:10:{today.isoformat()}",
+                    "kind": "event",
+                    "category": "macro",
+                    "severity": "high",
+                    "title": "US CPI",
+                    "detail": "공식 발표일",
+                    "link": "https://fred.stlouisfed.org/release?rid=10",
+                    "meta_id": None,
+                    "ticker": None,
+                    "name": None,
+                    "market": "US",
+                    "scope": "market",
+                    "occurred_at": today.isoformat(),
+                    "available_at": f"{today.isoformat()}T19:00:00+09:00",
+                    "data_as_of": today.isoformat(),
+                    "scheduled_for": today.isoformat(),
+                    "source": "fred",
+                    "event_status": "confirmed",
+                }
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        actions.external_events_store,
+        "list_sources",
+        lambda: [
+            {
+                "provider": "fred",
+                "label": "FRED Macro",
+                "status": "ok",
+                "data_as_of": today.isoformat(),
+                "available_at": f"{today.isoformat()}T19:00:00+09:00",
+                "coverage": "US high-impact releases",
+                "message": "향후 1건",
+            }
+        ],
+    )
+    monkeypatch.setattr(actions, "_attention_events", lambda now: ([], None))
+    monkeypatch.setattr(actions, "_watchlist_alert_events", lambda now: [])
+    monkeypatch.setattr(actions, "_review_events", lambda now, horizon: [])
+    monkeypatch.setattr(actions, "_rebal_events", lambda now, horizon: [])
+    monkeypatch.setattr(actions, "_data_health_events", lambda now: [])
+    monkeypatch.setattr(
+        actions.action_state,
+        "list_states",
+        lambda: _empty(actions.action_state.COLUMNS),
+    )
+
+    result = actions.build_actions(horizon_days=30)
+
+    event = result["items"][0]
+    assert event["kind"] == "event"
+    assert event["event_status"] == "confirmed"
+    assert event["market"] == "US"
+    assert event["available_at"] != event["data_as_of"]
+    assert result["counts"]["external"] == 1
+    assert result["sources"][0]["status"] == "ok"

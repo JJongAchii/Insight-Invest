@@ -30,6 +30,8 @@ krx_flows 전체 로드(수백 MB)는 로컬에서만 허용 — Lambda에서는
   as_of]로도 기록한다.
 - rebal_signals: active 전략의 리밸 전일 신호 — 다음 거래일이 새 주기면 목표 비중
   → {APP_DATA}/portfolio/rebal_signals.parquet.
+- external_events: FRED·Federal Reserve 공식 일정과 추적 종목의 Massive Earnings·
+  DART·SEC 실제 공시. 공급원별 실패는 상태표에 기록하고 마지막 정상 행만 보존한다.
 
 모든 테이블에 as_of(마지막 거래일 "YYYY-MM-DD") 컬럼 포함.
 
@@ -45,18 +47,28 @@ import os
 import sys
 import traceback
 import warnings
+from datetime import timedelta
 
 import numpy as np
 import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "server"))
 
-from qdata import api as qdata_api  # noqa: E402
-
-from datastore import fx, meta, portfolio, prices, storage  # noqa: E402
-from module import asset_master, regime, spotlight  # noqa: E402
+from datastore import (  # noqa: E402
+    fx,
+    holdings,
+    meta,
+    portfolio,
+    portfolio_ledger,
+    prices,
+    storage,
+    watchlist,
+)
+from module import asset_master, external_events, regime, spotlight  # noqa: E402
 from module.backtest import Backtest  # noqa: E402
 from module.util import backtest_result  # noqa: E402
+from qdata import api as qdata_api  # noqa: E402
+from qdata import settings as qdata_settings  # noqa: E402
 
 ETF_TICKERS = ["SPY", "QQQ", "TLT", "GLD", "DBC"]
 WINDOWS = {"1d": 1, "1w": 5, "1m": 21}  # 거래일 수
@@ -1608,6 +1620,209 @@ def build_asset_coverage() -> pd.DataFrame:
     return out
 
 
+def _tracked_assets() -> pd.DataFrame:
+    """보유·관심 종목을 통합 마스터에 연결한다.
+
+    두 목록에 모두 있는 종목은 portfolio scope를 우선한다.
+    """
+    scopes: dict[int, str] = {}
+    held = (
+        portfolio_ledger.current_positions()
+        if portfolio_ledger.has_events()
+        else holdings.list_items()
+    )
+    for value in held.get("meta_id", pd.Series(dtype="int64")).dropna():
+        scopes[int(value)] = "portfolio"
+    watched = watchlist.list_items()
+    for value in watched.get("meta_id", pd.Series(dtype="int64")).dropna():
+        scopes.setdefault(int(value), "watchlist")
+
+    columns = ["meta_id", "ticker", "name", "iso_code", "scope"]
+    if not scopes:
+        return pd.DataFrame(columns=columns)
+    master = meta.meta_df()[["meta_id", "ticker", "name", "iso_code"]].drop_duplicates(
+        "meta_id"
+    )
+    master = master[master["meta_id"].isin(scopes)].copy()
+    master["scope"] = master["meta_id"].map(scopes)
+    missing = sorted(set(scopes) - set(master["meta_id"].astype(int)))
+    if missing:
+        raise ValueError(
+            f"external_events 추적 meta_id가 통합 종목 마스터에 없음: {missing[:30]}"
+        )
+    return master.reindex(columns=columns)
+
+
+def _previous_external_events() -> pd.DataFrame:
+    try:
+        return storage.read_parquet("insight", "external_events.parquet")
+    except (FileNotFoundError, OSError):
+        return external_events.empty_events()
+
+
+def build_external_events() -> pd.DataFrame:
+    """외부 일정·실제 공시를 공급원별 fail-soft 계약으로 발행한다.
+
+    FRED와 FOMC는 공식 게시 일정만 미래 이벤트로 허용한다. DART와 SEC는 실제
+    접수일 이후의 observed 이벤트만 만든다. Massive 권한이 없으면 상태를
+    ``upgrade_required``로 기록하고 Earnings 날짜를 추정하지 않는다.
+    """
+    now = pd.Timestamp.now(tz="Asia/Seoul")
+    available_at = now.isoformat()
+    today = now.date()
+    macro_end = today + timedelta(days=180)
+    filing_start, filing_end = external_events.recent_window(today)
+    assets = _tracked_assets()
+    previous = _previous_external_events()
+
+    # qdata settings가 현재 작업 디렉터리의 quant-data/.env도 읽게 한다.
+    qdata_settings.lake_root()
+
+    def fred():
+        return external_events.fetch_fred_events(
+            qdata_settings.fred_api_key(), today, macro_end, available_at
+        )
+
+    def fomc():
+        return external_events.fetch_fomc_events(today, macro_end, available_at)
+
+    def earnings():
+        if assets[assets["iso_code"].eq("US")].empty:
+            return external_events.ProviderResult(
+                external_events.empty_events(), "0 tracked US assets", today.isoformat()
+            )
+        return external_events.fetch_massive_earnings(
+            qdata_settings.massive_api_key(), assets, today, macro_end, available_at
+        )
+
+    def dart():
+        if assets[assets["iso_code"].eq("KR")].empty:
+            return external_events.ProviderResult(
+                external_events.empty_events(), "0 tracked KR assets", today.isoformat()
+            )
+        key = os.environ.get("DART_API_KEY", "")
+        if not key:
+            raise external_events.ProviderUnavailable("DART_API_KEY가 없습니다")
+        return external_events.fetch_dart_filings(
+            key, assets, filing_start, filing_end, available_at
+        )
+
+    def sec():
+        if assets[assets["iso_code"].eq("US")].empty:
+            return external_events.ProviderResult(
+                external_events.empty_events(), "0 tracked US assets", today.isoformat()
+            )
+        return external_events.fetch_sec_filings(
+            qdata_settings.contact_email(),
+            assets,
+            qdata_api.load_us_tickers(active=True),
+            filing_start,
+            filing_end,
+            available_at,
+        )
+
+    specs = [
+        ("fred", "FRED Macro", {"fred"}, fred),
+        ("federal_reserve", "Federal Reserve", {"federal_reserve"}, fomc),
+        ("massive_earnings", "Massive Earnings", {"massive_earnings"}, earnings),
+        ("dart", "DART Filings", {"dart"}, dart),
+        ("sec", "SEC Filings", {"sec"}, sec),
+    ]
+    frames = []
+    statuses = []
+
+    def preserve(source_names: set[str]) -> pd.DataFrame:
+        if previous.empty or "source" not in previous.columns:
+            return external_events.empty_events()
+        kept = previous[previous["source"].isin(source_names)].copy()
+        if kept.empty or not {"scheduled_for", "occurred_at"}.issubset(kept.columns):
+            return external_events.empty_events()
+        dates = pd.to_datetime(
+            kept["scheduled_for"].fillna(kept["occurred_at"]), errors="coerce"
+        ).dt.date
+        kept = kept[dates.between(filing_start, macro_end, inclusive="both")]
+        if not kept.empty:
+            frames.append(kept.reindex(columns=external_events.EVENT_COLUMNS))
+        return kept
+
+    for provider, label, source_names, collect in specs:
+        try:
+            result = collect()
+            frames.append(result.events)
+            statuses.append(
+                {
+                    "provider": provider,
+                    "label": label,
+                    "status": "ok",
+                    "data_as_of": result.data_as_of,
+                    "available_at": available_at,
+                    "coverage": result.coverage,
+                    "message": result.message,
+                }
+            )
+        except external_events.ProviderUnavailable as exc:
+            preserved = preserve(source_names)
+            status = (
+                "upgrade_required"
+                if isinstance(exc, external_events.EntitlementRequired)
+                else "preserved"
+                if not preserved.empty
+                else "unavailable"
+            )
+            statuses.append(
+                {
+                    "provider": provider,
+                    "label": label,
+                    "status": status,
+                    "data_as_of": (
+                        str(preserved.get("as_of", pd.Series([None])).iloc[0])
+                        if not preserved.empty
+                        else None
+                    ),
+                    "available_at": available_at,
+                    "coverage": f"이전 {len(preserved)}건 보존" if len(preserved) else None,
+                    "message": str(exc),
+                }
+            )
+            print(f"[warn] external_events {provider}: {exc}", file=sys.stderr)
+        # 공급원 하나의 예상 밖 장애가 전체 캘린더를 지우면 안 된다.
+        except Exception as exc:  # noqa: BLE001
+            preserved = preserve(source_names)
+            statuses.append(
+                {
+                    "provider": provider,
+                    "label": label,
+                    "status": "preserved" if not preserved.empty else "unavailable",
+                    "data_as_of": (
+                        str(preserved.get("as_of", pd.Series([None])).iloc[0])
+                        if not preserved.empty
+                        else None
+                    ),
+                    "available_at": available_at,
+                    "coverage": f"이전 {len(preserved)}건 보존" if len(preserved) else None,
+                    "message": f"{type(exc).__name__}: 갱신 실패",
+                }
+            )
+            print(f"[warn] external_events {provider}: unexpected failure", file=sys.stderr)
+            traceback.print_exc()
+
+    status_frame = pd.DataFrame(statuses)
+    storage.write_parquet(status_frame, "insight", "external_event_sources.parquet")
+    nonempty = [frame for frame in frames if not frame.empty]
+    if nonempty:
+        out = pd.concat(nonempty, ignore_index=True).reindex(
+            columns=external_events.EVENT_COLUMNS
+        )
+        out = out.drop_duplicates("event_key", keep="last")
+        out = out.sort_values(["scheduled_for", "severity", "event_key"]).reset_index(
+            drop=True
+        )
+    else:
+        out = external_events.empty_events()
+    out["as_of"] = today.isoformat()
+    return out
+
+
 # ---------------------------------------------------------------- 실행
 
 
@@ -1632,6 +1847,7 @@ BUILDERS = [
         {},
     ),  # 브리프 재료 + Lambda 부담 경감
     ("insight/spotlight.parquet", build_spotlight, {}),  # 오늘의 신호 종목 (전시장 스캔)
+    ("insight/external_events.parquet", build_external_events, {}),  # 외부 이벤트 Calendar
     ("portfolio/live_nav.parquet", build_track_strategies, {}),  # 전략 실전 추적 (P7)
     ("portfolio/rebal_signals.parquet", build_rebal_signals, {}),  # active 전략 리밸 전일 신호
     ("asset_coverage.parquet", build_asset_coverage, {}),  # 모든 링크·사용자 상태 무결성
