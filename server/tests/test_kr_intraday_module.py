@@ -114,8 +114,8 @@ def test_is_open_kst():
 
 def test_snapshot_active():
     open_now = datetime(2026, 8, 11, 11, 0, tzinfo=ki.KST)
-    assert ki.snapshot_active("2026-08-11", "2026-08-11 10:35", open_now)
-    assert not ki.snapshot_active("2026-08-11", "2026-08-11 09:35", open_now)  # 장중 85분 스테일
+    assert ki.snapshot_active("2026-08-11", "2026-08-11 10:40", open_now)  # 경계값 20분은 유효
+    assert not ki.snapshot_active("2026-08-11", "2026-08-11 10:39", open_now)  # 21분 스테일
     evening = datetime(2026, 8, 11, 20, 0, tzinfo=ki.KST)
     assert ki.snapshot_active("2026-08-11", "2026-08-11 15:35", evening)       # 마감 현황 유지
     monday = datetime(2026, 8, 10, 8, 0, tzinfo=ki.KST)

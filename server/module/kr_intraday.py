@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 KST = timezone(timedelta(hours=9))
-STALE_MINUTES = 40      # 30분 폴 주기 + 여유 10분
+STALE_MINUTES = 20      # 10분 폴 주기 + 여유 10분
 MOVER_MIN_CAP = 1e11    # 급등락 순위: 시총 1,000억 이상
 MOVER_MIN_VALUE = 3e9   # 급등락 순위: 당일 거래대금 30억 이상
 TOP_N = 10
@@ -104,7 +104,7 @@ def is_open_kst(now: datetime) -> bool:
 
 
 def snapshot_active(trade_date: str, as_of: str, now: datetime) -> bool:
-    """서빙 강등 판정. 장중 40분 스테일 또는 2영업일 이상 낡음 → False."""
+    """서빙 강등 판정. 장중 20분 스테일 또는 2영업일 이상 낡음 → False."""
     t = now.astimezone(KST)
     if int(np.busday_count(trade_date, t.strftime("%Y-%m-%d"))) >= 2:
         return False

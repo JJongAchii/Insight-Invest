@@ -177,16 +177,27 @@ Resources:
           KRX_ID: !Ref KrxId
           KRX_PW: !Ref KrxPw
 
-  # 09:05~15:35 KST 30분 간격 (UTC 00:05~06:35) — 15:35 폴이 마감치 캡처
+  # 09:05~14:55 KST 10분 간격 (UTC 00:05~05:55)
   IntradayPollerSchedule:
     Type: AWS::Events::Rule
     Properties:
       Name: insight-invest-intraday-poll
-      ScheduleExpression: cron(5,35 0-6 ? * MON-FRI *)
+      ScheduleExpression: cron(5,15,25,35,45,55 0-5 ? * MON-FRI *)
       State: ENABLED
       Targets:
         - Arn: !GetAtt IntradayPollerFunction.Arn
           Id: intraday-poller
+
+  # 15:05~15:35 KST 10분 간격 (UTC 06:05~06:35) — 15:35 폴이 마감치 캡처
+  IntradayPollerCloseSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: insight-invest-intraday-poll-close
+      ScheduleExpression: cron(5,15,25,35 6 ? * MON-FRI *)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt IntradayPollerFunction.Arn
+          Id: intraday-poller-close
 
   IntradayPollerInvokePermission:
     Type: AWS::Lambda::Permission
@@ -195,6 +206,14 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt IntradayPollerSchedule.Arn
+
+  IntradayPollerCloseInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref IntradayPollerFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt IntradayPollerCloseSchedule.Arn
 
   NewsPollerRole:
     Type: AWS::IAM::Role
