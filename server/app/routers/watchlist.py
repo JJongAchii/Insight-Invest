@@ -1,6 +1,6 @@
 """관심종목 API — {APP_DATA}/watchlist.parquet CRUD + 시세·수급 enrich.
 
-GET은 meta 조인 후 KR은 qdata KRX 패널(최근 종가·등락률)과
+GET은 meta 조인 후 KR은 자산 유형에 맞는 qdata KRX 종목/ETF 패널(최근 종가·등락률)과
 insight/flows_signals.parquet(20일 수급), US는 datastore 가격 최근 2점으로 채운다.
 enrich 소스가 없어도 항목은 None으로 응답한다.
 """
@@ -51,27 +51,40 @@ def _none_if_na(v):
         return v
 
 
-def _kr_latest_prices(tickers: list[str]) -> dict:
-    """{ticker: (close, previous_close, chg_pct, as_of)} — KRX 최근 2점."""
+def _kr_latest_prices(meta_ids: list[int]) -> dict:
+    """{meta_id: (close, previous_close, chg_pct, as_of)} — KRX 최근 2점.
+
+    ``read_price_data``가 통합 마스터의 ``security_type``으로 일반 종목과 ETF를
+    각 qdata 패널에 라우팅한다. 모든 KR ticker를 종목 패널로 보내면 ETF가 조용히
+    누락되므로 여기서 별도 소스를 직접 선택하지 않는다.
+    """
     out: dict = {}
     try:
-        from qdata import api as qdata_api
-
         start = (datetime.now(KST).date() - timedelta(days=14)).isoformat()
-        px = qdata_api.load_krx_prices(start=start, tickers=tickers, columns=["close", "chg_pct"])
+        px = read_price_data("KR", meta_ids=meta_ids, start_date=start)
         if px.empty:
             return out
-        for ticker, group in px.sort_values("date").groupby("ticker"):
+        for meta_id, group in px.sort_values("trade_date").groupby("meta_id"):
             rows = group.dropna(subset=["close"])
             if rows.empty:
                 continue
             last = rows.iloc[-1]
             previous = float(rows.iloc[-2]["close"]) if len(rows) >= 2 else None
-            out[ticker] = (
+            latest_return = last.get("gross_return")
+            chg_pct = (
+                float(latest_return) * 100.0
+                if pd.notna(latest_return)
+                else (
+                    (float(last["close"]) / previous - 1.0) * 100.0
+                    if previous not in (None, 0.0)
+                    else None
+                )
+            )
+            out[int(meta_id)] = (
                 float(last["close"]),
                 previous,
-                float(last["chg_pct"]) if pd.notna(last["chg_pct"]) else None,
-                pd.Timestamp(last["date"]).strftime("%Y-%m-%d"),
+                chg_pct,
+                pd.Timestamp(last["trade_date"]).strftime("%Y-%m-%d"),
             )
     except Exception:
         logger.warning("watchlist KR price enrich 실패", exc_info=True)
@@ -150,8 +163,15 @@ def get_watchlist():
 
     kr = df[df["iso_code"] == "KR"]
     us = df[df["iso_code"] == "US"]
-    kr_px = _kr_latest_prices(kr["ticker"].dropna().tolist()) if not kr.empty else {}
-    kr_fl = _kr_flows(kr["ticker"].dropna().tolist()) if not kr.empty else {}
+    kr_px = _kr_latest_prices([int(x) for x in kr["meta_id"]]) if not kr.empty else {}
+    kr_stocks = kr[
+        ~kr["security_type"].astype(str).str.upper().eq("ETF")
+    ]
+    kr_fl = (
+        _kr_flows(kr_stocks["ticker"].dropna().tolist())
+        if not kr_stocks.empty
+        else {}
+    )
     us_px = _us_latest_prices([int(x) for x in us["meta_id"]]) if not us.empty else {}
 
     out = []
@@ -159,7 +179,7 @@ def get_watchlist():
         latest_price = previous_price = chg_pct = price_as_of = frgn = inst = None
         if r.iso_code == "KR":
             latest_price, previous_price, chg_pct, price_as_of = kr_px.get(
-                r.ticker, (None, None, None, None)
+                int(r.meta_id), (None, None, None, None)
             )
             flows = kr_fl.get(r.ticker, {})
             frgn, inst = flows.get("frgn"), flows.get("inst")

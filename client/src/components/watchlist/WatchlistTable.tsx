@@ -58,6 +58,7 @@ const WatchlistTable: React.FC<WatchlistTableProps> = ({
         <tbody>
           {items.map((item) => {
             const isKr = item.iso_code === "KR";
+            const isKrEtf = isKr && item.security_type?.toUpperCase() === "ETF";
             const live = isKr ? liveChg?.get(item.meta_id) : undefined;
             return (
               <tr
@@ -98,13 +99,19 @@ const WatchlistTable: React.FC<WatchlistTableProps> = ({
                   </span>
                 </td>
                 <td className="table-cell text-right">
-                  <span className={signClass(item.frgn_net_20d)}>
-                    {fmtEok(item.frgn_net_20d)}
+                  <span
+                    className={isKrEtf ? "text-ink-muted" : signClass(item.frgn_net_20d)}
+                    title={isKrEtf ? "KR ETF에는 외국인 20일 수급 데이터가 제공되지 않습니다." : undefined}
+                  >
+                    {isKrEtf ? "N/A" : fmtEok(item.frgn_net_20d)}
                   </span>
                 </td>
                 <td className="table-cell text-right">
-                  <span className={signClass(item.inst_net_20d)}>
-                    {fmtEok(item.inst_net_20d)}
+                  <span
+                    className={isKrEtf ? "text-ink-muted" : signClass(item.inst_net_20d)}
+                    title={isKrEtf ? "KR ETF에는 기관 20일 수급 데이터가 제공되지 않습니다." : undefined}
+                  >
+                    {isKrEtf ? "N/A" : fmtEok(item.inst_net_20d)}
                   </span>
                 </td>
                 {showAdded && (
