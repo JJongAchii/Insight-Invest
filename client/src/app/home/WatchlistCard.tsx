@@ -19,13 +19,13 @@ const WatchlistCard: React.FC = () => {
   });
   const items = data?.items ?? [];
 
-  // KR 장중 등락률 오버라이드 — meta_id → chg_pct (스펙 D4, active일 때만).
-  const liveChg = useMemo(() => {
+  // KR 장중 가격·등락률 오버라이드 (일반 종목 + ETF, active일 때만).
+  const liveQuotes = useMemo(() => {
     if (!intraday?.active) return undefined;
-    const out = new Map<number, number>();
+    const out = new Map<number, { close: number | null; chgPct: number | null }>();
     for (const row of intraday.my?.watchlist ?? []) {
-      if (row.meta_id != null && row.chg_pct != null) {
-        out.set(row.meta_id, row.chg_pct);
+      if (row.meta_id != null && (row.close != null || row.chg_pct != null)) {
+        out.set(row.meta_id, { close: row.close, chgPct: row.chg_pct });
       }
     }
     return out;
@@ -61,7 +61,7 @@ const WatchlistCard: React.FC = () => {
           }
         />
       ) : (
-        <WatchlistTable items={items} showAdded={false} liveChg={liveChg} />
+        <WatchlistTable items={items} showAdded={false} liveQuotes={liveQuotes} />
       )}
     </Card>
   );

@@ -21,11 +21,12 @@ logger = logging.getLogger(__name__)
 
 INDICES = {"KOSPI": "1001", "KOSDAQ": "2001"}
 LATEST_KEY = "kr_intraday_latest.parquet"
+ETF_LATEST_KEY = "kr_intraday_etf_latest.parquet"
 TIMELINE_KEY = "kr_intraday_timeline.parquet"
 
 
 def _fetch_krx(today: str):
-    """pykrx 4호출. KRX_ID/KRX_PW는 Lambda env — pykrx가 import 시점에 로그인하고
+    """pykrx 5호출. KRX_ID/KRX_PW는 Lambda env — pykrx가 import 시점에 로그인하고
     세션 만료(1h)는 pykrx 1.2+ get_auth_session이 자동 재로그인한다."""
     from pykrx import stock  # lazy: env 자격증명 로그인 선행
 
@@ -36,7 +37,12 @@ def _fetch_krx(today: str):
         idx = stock.get_index_ohlcv_by_date(today, today, code)
         if not idx.empty:
             levels[key] = float(idx["종가"].iloc[-1])
-    return frames, levels
+    try:
+        etfs = stock.get_etf_price_change_by_ticker(today, today)
+    except Exception:  # ETF 실패가 주식 시장 전체 스냅샷을 중단하지 않게 격리
+        logger.warning("ETF 장중 조회 실패 — ETF 직전 스냅샷 유지", exc_info=True)
+        etfs = pd.DataFrame()
+    return frames, levels, etfs
 
 
 def _sector_map() -> pd.DataFrame:
@@ -77,7 +83,7 @@ def _prev_index_closes(trade_date: str) -> dict[str, float]:
 def handler(event, context):
     now = datetime.now(ki.KST)
     today = now.strftime("%Y%m%d")
-    frames, levels = _fetch_krx(today)
+    frames, levels, etfs = _fetch_krx(today)
     if not levels:
         logger.info("지수 당일 행 없음 — 휴장 no-op")
         return {"status": "holiday-noop"}
@@ -86,6 +92,7 @@ def handler(event, context):
     as_of = now.strftime("%Y-%m-%d %H:%M")
     latest = ki.normalize_snapshot(frames, as_of, trade_date)
     latest = ki.with_sector(latest, _sector_map())
+    etf_latest = ki.normalize_etf_snapshot(etfs, as_of, trade_date)
 
     rows = pd.concat([
         ki.index_rows(levels, _prev_index_closes(trade_date), as_of, trade_date),
@@ -98,5 +105,15 @@ def handler(event, context):
 
     storage.write_parquet(latest, LATEST_KEY)
     storage.write_parquet(timeline, TIMELINE_KEY)
+    etf_status = "degraded"
+    if not etf_latest.empty:
+        try:
+            storage.write_parquet(etf_latest, ETF_LATEST_KEY)
+            etf_status = "ok"
+        except Exception:  # 핵심 주식 스냅샷은 이미 정상 발행됐으므로 ETF만 격리
+            logger.warning("ETF 장중 스냅샷 저장 실패 — 직전 파일 유지", exc_info=True)
+    else:
+        logger.warning("ETF 장중 응답이 비어 있음 — 직전 스냅샷 유지")
     return {"status": "ok", "tickers": len(latest),
+            "etfs": len(etf_latest), "etf_status": etf_status,
             "polls": int(timeline["as_of"].nunique())}

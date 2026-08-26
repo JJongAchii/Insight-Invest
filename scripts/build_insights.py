@@ -1606,6 +1606,7 @@ def build_asset_coverage() -> pd.DataFrame:
         ("flows_signals", ("insight", "flows_signals.parquet")),
         ("spotlight", ("insight", "spotlight.parquet")),
         ("intraday", ("kr_intraday_latest.parquet",)),
+        ("intraday_etf", ("kr_intraday_etf_latest.parquet",)),
     ):
         if storage.exists(*parts):
             df = storage.read_parquet(*parts, columns=["ticker"])

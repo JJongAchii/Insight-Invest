@@ -153,10 +153,11 @@ Resources:
                   - !Sub arn:aws:s3:::${DataBucket}
                   - !Sub arn:aws:s3:::${DataBucket}/qdata/*
                   - !Sub arn:aws:s3:::${DataBucket}/app/*
-              - Effect: Allow  # 장중 스냅샷 2파일만 쓰기 (스펙 불변식 1)
+              - Effect: Allow  # 장중 스냅샷 3파일만 쓰기 (스펙 불변식 1)
                 Action: [s3:PutObject]
                 Resource:
                   - !Sub arn:aws:s3:::${DataBucket}/app/kr_intraday_latest.parquet
+                  - !Sub arn:aws:s3:::${DataBucket}/app/kr_intraday_etf_latest.parquet
                   - !Sub arn:aws:s3:::${DataBucket}/app/kr_intraday_timeline.parquet
 
   IntradayPollerFunction:
