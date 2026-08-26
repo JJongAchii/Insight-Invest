@@ -8,8 +8,9 @@ import {
   Clock3,
   Database,
   ExternalLink,
-  FileText,
   History,
+  Search,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -20,6 +21,7 @@ import LoadingState from "@/components/ui/LoadingState";
 import PageHeader from "@/components/ui/PageHeader";
 import {
   EarningsEvent,
+  EarningsDisplayStatus,
   EarningsResultSignal,
   EarningsScope,
   useFetchEarningsQuery,
@@ -39,6 +41,18 @@ const SCOPES: { value: EarningsScope; label: string }[] = [
   { value: "leaders", label: "Market Leaders" },
 ];
 
+const CALENDAR_WINDOWS = [
+  { value: 30, label: "Next 30D" },
+  { value: 90, label: "Next 90D" },
+  { value: 180, label: "Next 180D" },
+];
+
+const RESULT_WINDOWS = [
+  { value: 120, label: "Last 120D" },
+  { value: 365, label: "Last 1Y" },
+  { value: 1098, label: "Last 3Y" },
+];
+
 const TIMING: Record<string, { label: string; hint: string }> = {
   bmo: { label: "Before Market Open", hint: "미국장 개장 전" },
   amc: { label: "After Market Close", hint: "미국장 마감 후 · 한국은 통상 다음날 새벽" },
@@ -51,6 +65,13 @@ const SIGNAL: Record<Exclude<EarningsResultSignal, null>, { label: string; style
   miss: { label: "Miss", style: "bg-losses/15 text-losses" },
   mixed: { label: "Mixed", style: "bg-warning/15 text-warning" },
   in_line: { label: "In Line", style: "bg-raised text-ink-secondary" },
+};
+
+const DISPLAY_STATUS: Record<EarningsDisplayStatus, { label: string; style: string }> = {
+  upcoming: { label: "Estimated", style: "bg-raised text-ink-secondary" },
+  awaiting_results: { label: "Awaiting Results", style: "bg-warning/15 text-warning" },
+  result_unavailable: { label: "Result Unavailable", style: "bg-losses/15 text-losses" },
+  reported: { label: "Reported", style: "bg-gains/15 text-gains" },
 };
 
 const dateLabel = (value: string) =>
@@ -77,6 +98,17 @@ const moneyLabel = (value: number | null) => {
 
 const surpriseLabel = (value: number | null) =>
   value == null ? "—" : `${value > 0 ? "+" : ""}${value.toFixed(1)}%`;
+
+const dateTimeLabel = (value?: string | null) => {
+  if (!value) return null;
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Seoul",
+  }).format(new Date(value));
+};
 
 function MetricBlock({
   title,
@@ -118,6 +150,8 @@ function MetricBlock({
 function EarningsCard({ item }: { item: EarningsEvent }) {
   const router = useRouter();
   const timing = TIMING[item.release_timing] ?? TIMING.tbd;
+  const displayStatus = DISPLAY_STATUS[item.display_status]
+    ?? DISPLAY_STATUS[item.lifecycle === "reported" ? "reported" : "upcoming"];
   const period = [item.fiscal_year, item.fiscal_quarter ? `Q${item.fiscal_quarter}` : null]
     .filter(Boolean)
     .join(" ");
@@ -153,7 +187,7 @@ function EarningsCard({ item }: { item: EarningsEvent }) {
   };
 
   return (
-    <article className="rounded-2xl border border-edge bg-surface p-4 sm:p-5">
+    <article className={`rounded-2xl border bg-surface p-4 sm:p-5 ${item.display_status === "awaiting_results" ? "border-warning/40" : "border-edge"}`}>
       <div className="flex flex-col gap-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -161,14 +195,14 @@ function EarningsCard({ item }: { item: EarningsEvent }) {
               {item.is_market_leader && <span className="badge-neutral">Market #{item.marketcap_rank}</span>}
               {item.scope === "portfolio" && <span className="badge-neutral">Portfolio</span>}
               {item.scope === "watchlist" && <span className="badge-neutral">Watchlist</span>}
-              <span className="badge-neutral">{item.lifecycle === "reported" ? "Reported" : "Estimated"}</span>
+              <span className={`rounded-full px-2 py-0.5 font-medium ${displayStatus.style}`}>{displayStatus.label}</span>
               {signal && <span className={`rounded-full px-2 py-0.5 font-semibold ${signal.style}`}>{signal.label}</span>}
             </div>
             <h2 className="mt-2 truncate text-lg font-semibold text-ink">
               {item.ticker} <span className="font-normal text-ink-secondary">{item.name}</span>
             </h2>
             <p className="mt-1 text-sm text-ink-secondary">
-              {period || "Fiscal period unavailable"} · {dateLabel(item.release_date)}
+              {period || "Fiscal period unavailable"} · {dateLabel(item.release_date)} (US)
             </p>
           </div>
           <CalendarDays className="mt-1 shrink-0 text-primary-400" size={22} aria-hidden />
@@ -178,7 +212,13 @@ function EarningsCard({ item }: { item: EarningsEvent }) {
           <Clock3 size={16} className="mt-0.5 shrink-0 text-ink-muted" aria-hidden />
           <div>
             <p className="font-medium text-ink">{timing.label}</p>
-            <p className="text-xs text-ink-muted">{timing.hint}</p>
+            <p className="text-xs text-ink-muted">
+              {item.display_status === "awaiting_results"
+                ? "발표 구간이 지났으며 공급자의 실제치 반영을 기다리는 중입니다."
+                : item.display_status === "result_unavailable"
+                  ? "발표 구간은 지났지만 현재 공급자에서 실제치를 확인하지 못했습니다."
+                  : timing.hint}
+            </p>
           </div>
         </div>
 
@@ -229,7 +269,19 @@ function EarningsCard({ item }: { item: EarningsEvent }) {
   );
 }
 
-function Section({ title, description, items }: { title: string; description: string; items: EarningsEvent[] }) {
+function Section({
+  title,
+  description,
+  items,
+  emptyTitle = "이 범위에는 확인된 Earnings가 없습니다",
+  emptyHint = "범위를 All Coverage로 바꾸거나 다음 데이터 업데이트 후 다시 확인해 보세요.",
+}: {
+  title: string;
+  description: string;
+  items: EarningsEvent[];
+  emptyTitle?: string;
+  emptyHint?: string;
+}) {
   return (
     <section className="space-y-3">
       <div>
@@ -242,7 +294,7 @@ function Section({ title, description, items }: { title: string; description: st
         </div>
       ) : (
         <div className="card">
-          <EmptyState icon={<CalendarDays size={28} aria-hidden />} title="이 범위에는 확인된 Earnings가 없습니다" hint="범위를 All Coverage로 바꾸거나 다음 일일 업데이트 후 다시 확인해 보세요." />
+          <EmptyState icon={<CalendarDays size={28} aria-hidden />} title={emptyTitle} hint={emptyHint} />
         </div>
       )}
     </section>
@@ -252,26 +304,81 @@ function Section({ title, description, items }: { title: string; description: st
 export default function EarningsPage() {
   const [tab, setTab] = useState<Tab>("overview");
   const [scope, setScope] = useState<EarningsScope>("all");
-  const { data, isLoading, error, refetch } = useFetchEarningsQuery({ scope, days: 90, resultsDays: 120 });
+  const [calendarDays, setCalendarDays] = useState(90);
+  const [resultsDays, setResultsDays] = useState(365);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const initialTab = params.get("tab") as Tab | null;
     const initialScope = params.get("scope") as EarningsScope | null;
+    const initialCalendarDays = Number(params.get("days"));
+    const initialResultsDays = Number(params.get("resultsDays"));
     if (initialTab && TABS.some((item) => item.value === initialTab)) setTab(initialTab);
     if (initialScope && SCOPES.some((item) => item.value === initialScope)) setScope(initialScope);
+    if (CALENDAR_WINDOWS.some((item) => item.value === initialCalendarDays)) setCalendarDays(initialCalendarDays);
+    if (RESULT_WINDOWS.some((item) => item.value === initialResultsDays)) setResultsDays(initialResultsDays);
+    setSearch(params.get("q") ?? "");
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    if (!hydrated) return;
     const url = new URL(window.location.href);
     url.searchParams.set("tab", tab);
     url.searchParams.set("scope", scope);
+    url.searchParams.set("days", String(calendarDays));
+    url.searchParams.set("resultsDays", String(resultsDays));
+    if (search.trim()) url.searchParams.set("q", search.trim());
+    else url.searchParams.delete("q");
     window.history.replaceState(window.history.state, "", url);
-  }, [scope, tab]);
+  }, [calendarDays, hydrated, resultsDays, scope, search, tab]);
 
-  const upcoming = useMemo(() => tab === "overview" ? (data?.upcoming ?? []).slice(0, 6) : data?.upcoming ?? [], [data, tab]);
-  const results = useMemo(() => tab === "overview" ? (data?.recent_results ?? []).slice(0, 6) : data?.recent_results ?? [], [data, tab]);
+  const { data, isLoading, isFetching, error, refetch } = useFetchEarningsQuery({
+    scope,
+    days: calendarDays,
+    resultsDays,
+    query: debouncedSearch,
+  });
+
+  const compactOverview = tab === "overview" && !debouncedSearch;
+  const upcoming = useMemo(
+    () => compactOverview ? (data?.upcoming ?? []).slice(0, 6) : data?.upcoming ?? [],
+    [compactOverview, data],
+  );
+  const pending = useMemo(
+    () => compactOverview ? (data?.pending_results ?? []).slice(0, 6) : data?.pending_results ?? [],
+    [compactOverview, data],
+  );
+  const results = useMemo(
+    () => compactOverview ? (data?.recent_results ?? []).slice(0, 6) : data?.recent_results ?? [],
+    [compactOverview, data],
+  );
   const sourceReady = data?.source?.status === "ok";
+  const lastUpdated = dateTimeLabel(data?.source?.available_at);
+  const hasVisibleEvents = tab === "calendar"
+    ? upcoming.length > 0
+    : tab === "results"
+      ? pending.length + results.length > 0
+      : upcoming.length + pending.length + results.length > 0;
+  const hasActiveFilters = Boolean(search.trim()) || scope !== "all" || calendarDays !== 90 || resultsDays !== 365;
+  const emptyTitle = debouncedSearch
+    ? `“${debouncedSearch}” Earnings를 찾지 못했습니다`
+    : "선택한 범위에는 Earnings가 없습니다";
+
+  const resetFilters = () => {
+    setSearch("");
+    setScope("all");
+    setCalendarDays(90);
+    setResultsDays(365);
+  };
 
   return (
     <div className="flex flex-col gap-6 pb-20">
@@ -282,35 +389,82 @@ export default function EarningsPage() {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
-          ["This Week", data?.summary.this_week ?? 0, CalendarDays],
-          ["Upcoming", data?.summary.upcoming ?? 0, Clock3],
-          ["Recent Results", data?.summary.reported_recently ?? 0, BarChart3],
-          ["My Coverage", data?.summary.my_coverage ?? 0, FileText],
-        ].map(([label, value, Icon]) => {
+          ["This Week", data?.summary.this_week ?? 0, CalendarDays, "calendar"],
+          ["Upcoming", data?.summary.upcoming ?? 0, Clock3, "calendar"],
+          ["Awaiting Results", data?.summary.awaiting_results ?? 0, History, "results"],
+          ["Recent Results", data?.summary.reported_recently ?? 0, BarChart3, "results"],
+        ].map(([label, value, Icon, target]) => {
           const MetricIcon = Icon as typeof CalendarDays;
           return (
-            <div key={String(label)} className="rounded-2xl border border-edge bg-surface p-4">
+            <button
+              key={String(label)}
+              type="button"
+              onClick={() => setTab(target as Tab)}
+              className="rounded-2xl border border-edge bg-surface p-4 text-left transition-colors hover:border-edge-strong hover:bg-raised"
+            >
               <div className="flex items-center gap-2 text-xs text-ink-muted"><MetricIcon size={15} />{String(label)}</div>
-              <p className="mt-2 text-2xl font-semibold text-ink num">{Number(value)}</p>
-            </div>
+              <p className={`mt-2 text-2xl font-semibold num ${label === "Awaiting Results" && Number(value) > 0 ? "text-warning" : "text-ink"}`}>{Number(value)}</p>
+            </button>
           );
         })}
       </div>
 
-      <div className="flex flex-col gap-3 rounded-2xl border border-edge bg-surface p-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex gap-1 overflow-x-auto">
-          {TABS.map((item) => (
-            <button key={item.value} type="button" onClick={() => setTab(item.value)} className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium ${tab === item.value ? "bg-primary-500 text-white" : "text-ink-secondary hover:bg-raised hover:text-ink"}`}>
-              {item.label}
-            </button>
-          ))}
+      <div className="space-y-3 rounded-2xl border border-edge bg-surface p-3 sm:p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex gap-1 overflow-x-auto" aria-label="Earnings views">
+            {TABS.map((item) => (
+              <button key={item.value} type="button" onClick={() => setTab(item.value)} className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium ${tab === item.value ? "bg-primary-500 text-white" : "text-ink-secondary hover:bg-raised hover:text-ink"}`}>
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-1 overflow-x-auto" aria-label="Coverage filters">
+            {SCOPES.map((item) => (
+              <button key={item.value} type="button" onClick={() => setScope(item.value)} className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium ${scope === item.value ? "border-primary-400 bg-primary-400/15 text-primary-400" : "border-edge text-ink-muted hover:text-ink"}`}>
+                {item.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="flex gap-1 overflow-x-auto">
-          {SCOPES.map((item) => (
-            <button key={item.value} type="button" onClick={() => setScope(item.value)} className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium ${scope === item.value ? "border-primary-400 bg-primary-400/15 text-primary-400" : "border-edge text-ink-muted hover:text-ink"}`}>
-              {item.label}
-            </button>
-          ))}
+
+        <div className="grid gap-2 border-t border-edge pt-3 md:grid-cols-[minmax(240px,1fr)_150px_150px_auto]">
+          <label className="relative block">
+            <span className="sr-only">Search earnings</span>
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" size={17} aria-hidden />
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="input h-11 pl-10 pr-10"
+              placeholder="Ticker or company · 예: NVDA, Nvidia"
+              autoComplete="off"
+            />
+            {search && (
+              <button type="button" onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 text-ink-muted hover:bg-overlay hover:text-ink" aria-label="Clear search">
+                <X size={15} aria-hidden />
+              </button>
+            )}
+          </label>
+          <label>
+            <span className="sr-only">Calendar window</span>
+            <select className="input h-11" value={calendarDays} onChange={(event) => setCalendarDays(Number(event.target.value))}>
+              {CALENDAR_WINDOWS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">Results history</span>
+            <select className="input h-11" value={resultsDays} onChange={(event) => setResultsDays(Number(event.target.value))}>
+              {RESULT_WINDOWS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+            </select>
+          </label>
+          {hasActiveFilters && (
+            <button type="button" className="btn-secondary h-11 whitespace-nowrap" onClick={resetFilters}>Reset</button>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
+          <span>검색 범위: Market Leaders + My Coverage</span>
+          {debouncedSearch && data && <span className="text-ink-secondary">매칭 이벤트 {data.coverage.filtered_events}건</span>}
+          {isFetching && !isLoading && <span className="ml-auto text-primary-400" role="status">Updating…</span>}
         </div>
       </div>
 
@@ -322,8 +476,9 @@ export default function EarningsPage() {
               <p className="font-medium text-ink">{sourceReady ? "Earnings Data Ready" : "Earnings Data Needs Attention"}</p>
               <p className="mt-0.5 text-xs leading-5 text-ink-secondary">
                 {data.source?.message ?? "아직 발행된 Earnings 데이터가 없습니다."}
-                {data.data_as_of && ` · Data ${data.data_as_of}`}
+                {lastUpdated && ` · Last updated ${lastUpdated} KST`}
               </p>
+              <p className="mt-1 text-xs leading-5 text-ink-muted">정기 원본 갱신은 09:00·19:00 KST 배치 후 반영됩니다. 발표 후 실제치가 오기 전까지 해당 종목은 Awaiting Results에 유지됩니다.</p>
               <details className="mt-2 text-xs text-ink-muted">
                 <summary className="cursor-pointer">Data Coverage</summary>
                 <p className="mt-2 leading-5">
@@ -338,6 +493,13 @@ export default function EarningsPage() {
         </div>
       )}
 
+      {data && data.summary.awaiting_results > 0 && (
+        <div className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm">
+          <p className="font-medium text-ink">Awaiting Results · {data.summary.awaiting_results}건</p>
+          <p className="mt-1 text-xs leading-5 text-ink-secondary">발표 구간은 지났지만 Finnhub 실제치가 아직 도착하지 않은 이벤트입니다. Results에서 사라지지 않고 실제치가 들어오면 자동으로 Reported로 전환됩니다.</p>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="card"><LoadingState label="Earnings 일정과 결과를 불러오는 중..." /></div>
       ) : error ? (
@@ -347,11 +509,31 @@ export default function EarningsPage() {
         </div>
       ) : (
         <>
-          {(tab === "overview" || tab === "calendar") && (
-            <Section title="Upcoming Earnings" description="향후 90일의 공급자 발표 일정입니다. Estimated는 회사 확정 일정이라는 뜻이 아닙니다." items={upcoming} />
+          {tab === "overview" && upcoming.length > 0 && (
+            <Section title="Upcoming Earnings" description={`향후 ${calendarDays}일의 공급자 발표 일정입니다. Estimated는 회사 확정 일정이라는 뜻이 아닙니다.`} items={upcoming} />
           )}
-          {(tab === "overview" || tab === "results") && (
-            <Section title="Recent Results" description="최근 120일 발표치와 컨센서스 차이입니다. Beat/Miss는 EPS와 매출을 함께 비교합니다." items={results} />
+          {(tab === "overview" || tab === "results") && pending.length > 0 && (
+            <Section title="Awaiting Results" description="미국 현지 발표 구간은 지났지만 실제치가 아직 공급자에 반영되지 않은 이벤트입니다." items={pending} />
+          )}
+          {tab === "overview" && results.length > 0 && (
+            <Section title="Recent Results" description={`최근 ${resultsDays}일 발표치와 컨센서스 차이입니다. Beat/Miss는 EPS와 매출을 함께 비교합니다.`} items={results} />
+          )}
+          {tab === "calendar" && (
+            <Section
+              title="Upcoming Earnings"
+              description={`향후 ${calendarDays}일의 공급자 발표 일정입니다. Estimated는 회사 확정 일정이라는 뜻이 아닙니다.`}
+              items={upcoming}
+              emptyTitle={emptyTitle}
+            />
+          )}
+          {tab === "results" && results.length > 0 && (
+            <Section title="Reported Results" description={`최근 ${resultsDays}일 발표치와 컨센서스 차이입니다. Beat/Miss는 EPS와 매출을 함께 비교합니다.`} items={results} />
+          )}
+          {!hasVisibleEvents && tab !== "calendar" && (
+            <div className="card text-center">
+              <EmptyState icon={<Search size={28} aria-hidden />} title={emptyTitle} hint="티커·회사명을 확인하거나 Coverage와 기간을 넓혀 보세요." />
+              {hasActiveFilters && <button type="button" className="btn-secondary -mt-8" onClick={resetFilters}>Reset Filters</button>}
+            </div>
           )}
           {tab === "overview" && data && data.revisions.length > 0 && (
             <section className="card">

@@ -645,6 +645,11 @@ export interface ActionCenterResponse {
 
 export type EarningsScope = "all" | "mine" | "portfolio" | "watchlist" | "leaders";
 export type EarningsResultSignal = "beat" | "miss" | "mixed" | "in_line" | null;
+export type EarningsDisplayStatus =
+  | "upcoming"
+  | "awaiting_results"
+  | "result_unavailable"
+  | "reported";
 
 export interface EarningsEvent {
   event_id: string;
@@ -675,6 +680,8 @@ export interface EarningsEvent {
   call_time: string | null;
   webcast_url: string | null;
   transcript_status: "not_available" | "available";
+  release_window_at: string;
+  display_status: EarningsDisplayStatus;
   first_seen_at: string;
   available_at: string;
   data_as_of: string;
@@ -697,9 +704,11 @@ export interface EarningsResponse {
   generated_at: string;
   data_as_of: string | null;
   scope: EarningsScope;
+  query: string;
   summary: {
     this_week: number;
     upcoming: number;
+    awaiting_results: number;
     reported_recently: number;
     my_coverage: number;
   };
@@ -715,6 +724,7 @@ export interface EarningsResponse {
     results_days?: number;
   };
   upcoming: EarningsEvent[];
+  pending_results: EarningsEvent[];
   recent_results: EarningsEvent[];
   revisions: EarningsRevision[];
   source: {
@@ -1805,13 +1815,14 @@ export const api = createApi({
     }),
     fetchEarnings: builder.query<
       EarningsResponse,
-      { scope?: EarningsScope; days?: number; resultsDays?: number } | void
+      { scope?: EarningsScope; days?: number; resultsDays?: number; query?: string } | void
     >({
       query: (params) => {
         const query = new URLSearchParams();
         if (params?.scope) query.set("scope", params.scope);
         if (params?.days) query.set("days", String(params.days));
         if (params?.resultsDays) query.set("results_days", String(params.resultsDays));
+        if (params?.query?.trim()) query.set("q", params.query.trim());
         const suffix = query.toString();
         return `/earnings${suffix ? `?${suffix}` : ""}`;
       },
