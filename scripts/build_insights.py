@@ -30,6 +30,7 @@ krx_flows 전체 로드(수백 MB)는 로컬에서만 허용 — Lambda에서는
   as_of]로도 기록한다.
 - rebal_signals: active 전략의 리밸 전일 신호 — 다음 거래일이 새 주기면 목표 비중
   → {APP_DATA}/portfolio/rebal_signals.parquet.
+- earnings_events: 주요 US 기업 50개 + 내 종목의 Finnhub 일정·실적 누적 이력.
 - external_events: FRED·Federal Reserve 공식 일정과 추적 종목의 Finnhub/Massive
   Earnings·DART·SEC 실제 공시. 공급원별 실패는 상태표에 기록하고 마지막 정상
   행만 보존한다.
@@ -65,7 +66,7 @@ from datastore import (  # noqa: E402
     storage,
     watchlist,
 )
-from module import asset_master, external_events, regime, spotlight  # noqa: E402
+from module import asset_master, earnings, external_events, regime, spotlight  # noqa: E402
 from module.backtest import Backtest  # noqa: E402
 from module.util import backtest_result  # noqa: E402
 from qdata import api as qdata_api  # noqa: E402
@@ -1673,6 +1674,232 @@ def _previous_external_events() -> pd.DataFrame:
         return external_events.empty_events()
 
 
+def _read_or_empty(parts: tuple[str, ...], columns: list[str]) -> pd.DataFrame:
+    try:
+        return storage.read_parquet(*parts)
+    except (FileNotFoundError, OSError):
+        return pd.DataFrame(columns=columns)
+
+
+def build_earnings_hub() -> pd.DataFrame | None:
+    """주요 기업 + 내 종목 Earnings 일정·실적을 누적 발행한다.
+
+    유니버스는 통합 앱 마스터의 현재 시총과 qdata 활성 US 보통주·ADR 참조축을
+    정확히 조인한다. 공급원 실패 시 현재 유니버스·상태표는 갱신하지만 마지막
+    정상 이벤트 파일은 보존한다.
+    """
+    now = pd.Timestamp.now(tz="Asia/Seoul")
+    available_at = now.isoformat()
+    today = now.date()
+    qdata_settings.lake_root()
+
+    universe, universe_coverage = earnings.build_universe(
+        meta.meta_df(),
+        qdata_api.load_us_tickers(active=True),
+        _tracked_assets(),
+        leader_count=50,
+    )
+    storage.write_parquet(universe, "insight", "earnings_universe.parquet")
+
+    history_path = ("insight", "earnings_universe_history.parquet")
+    universe_history = _read_or_empty(history_path, earnings.UNIVERSE_COLUMNS)
+    snapshot = universe.copy()
+    snapshot["snapshot_date"] = today.isoformat()
+    snapshot["snapshot_at"] = available_at
+    if not universe_history.empty and "snapshot_date" not in universe_history.columns:
+        universe_history["snapshot_date"] = None
+        universe_history["snapshot_at"] = None
+    universe_history = (
+        snapshot.copy()
+        if universe_history.empty
+        else pd.concat([universe_history, snapshot], ignore_index=True)
+    )
+    universe_history = universe_history.drop_duplicates(
+        ["snapshot_date", "meta_id"], keep="last"
+    ).sort_values(["snapshot_date", "marketcap_rank"])
+    storage.write_parquet(
+        universe_history, "insight", "earnings_universe_history.parquet"
+    )
+
+    previous = _read_or_empty(
+        ("insight", "earnings_events.parquet"), earnings.EVENT_COLUMNS
+    )
+    previous_revisions = _read_or_empty(
+        ("insight", "earnings_revisions.parquet"), earnings.REVISION_COLUMNS
+    )
+    source_path = ("insight", "earnings_source.parquet")
+
+    def write_source(status: str, message: str, fetch_coverage: dict | None = None):
+        row = {
+            "provider": "finnhub",
+            "label": "Finnhub Earnings",
+            "status": status,
+            "data_as_of": today.isoformat() if status == "ok" else None,
+            "available_at": available_at,
+            "coverage": json.dumps(
+                {"universe": universe_coverage, "fetch": fetch_coverage or {}},
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+            "message": message,
+            "universe_total": universe_coverage["universe_total"],
+            "market_leaders": universe_coverage["market_leaders"],
+            "tracked_us": universe_coverage["requested_tracked_us"],
+            "matched_tracked_us": universe_coverage["matched_tracked_us"],
+            "reference_match_pct": universe_coverage["reference_match_pct"],
+            "cik_coverage_pct": universe_coverage["cik_coverage_pct"],
+        }
+        storage.write_parquet(pd.DataFrame([row]), *source_path)
+
+    api_key = os.environ.get("FINNHUB_API_KEY", "").strip()
+    if not api_key:
+        write_source(
+            "configuration_required",
+            "FINNHUB_API_KEY가 없어 마지막 정상 Earnings 데이터를 보존했습니다.",
+        )
+        return None
+    try:
+        current, fetch_coverage = earnings.fetch_finnhub_calendar(
+            api_key,
+            universe,
+            today - timedelta(days=31),
+            today + timedelta(days=180),
+            available_at,
+        )
+        merged, revisions = earnings.merge_history(
+            previous,
+            current,
+            previous_revisions,
+            available_at=available_at,
+        )
+        storage.write_parquet(revisions, "insight", "earnings_revisions.parquet")
+        write_source(
+            "ok",
+            f"주요 기업·내 종목 {len(universe)}개 중 현재 창 이벤트 {len(current)}건",
+            fetch_coverage,
+        )
+        return merged
+    except external_events.ProviderUnavailable as exc:
+        write_source(
+            "preserved" if not previous.empty else "unavailable",
+            f"{exc} — 마지막 정상 Earnings 데이터를 보존했습니다.",
+        )
+        print(f"[warn] earnings_events: {exc}", file=sys.stderr)
+        return None
+    except Exception as exc:  # noqa: BLE001
+        write_source(
+            "preserved" if not previous.empty else "unavailable",
+            f"{type(exc).__name__}: 갱신 실패 — 마지막 정상 Earnings 데이터를 보존했습니다.",
+        )
+        print("[warn] earnings_events: unexpected failure", file=sys.stderr)
+        traceback.print_exc()
+        return None
+
+
+def _earnings_hub_action_events(
+    assets: pd.DataFrame, start, end
+) -> external_events.ProviderResult | None:
+    """정상 발행된 Hub를 Action Center의 내 종목 이벤트로 투영한다."""
+    try:
+        source = storage.read_parquet("insight", "earnings_source.parquet")
+        hub = storage.read_parquet("insight", "earnings_events.parquet")
+    except (FileNotFoundError, OSError):
+        return None
+    if source.empty or str(source.iloc[-1].get("status")) != "ok":
+        return None
+
+    tracked_ids = set(
+        assets.loc[assets["iso_code"].eq("US"), "meta_id"].dropna().astype(int)
+    )
+    data_as_of = str(source.iloc[-1].get("data_as_of"))
+    if not tracked_ids:
+        return external_events.ProviderResult(
+            external_events.empty_events(), "0 tracked US assets", data_as_of
+        )
+    if hub.empty:
+        return external_events.ProviderResult(
+            external_events.empty_events(),
+            f"{len(tracked_ids)} tracked US assets",
+            data_as_of,
+            "Finnhub 공식 API · 현재 창 이벤트 0건",
+        )
+
+    selected = hub[hub["meta_id"].isin(tracked_ids)].copy()
+    dates = pd.to_datetime(selected["release_date"], errors="coerce").dt.date
+    selected = selected[dates.between(start, end, inclusive="both")]
+    rows = []
+    upcoming = reported = 0
+    timing_labels = {
+        "bmo": "미국장 개장 전",
+        "amc": "미국장 마감 후",
+        "dmh": "미국장 거래 중",
+        "tbd": "발표 시각 미정",
+    }
+    for row in selected.itertuples(index=False):
+        is_reported = row.lifecycle == "reported"
+        reported += int(is_reported)
+        upcoming += int(not is_reported)
+        period = " ".join(
+            part
+            for part in (
+                str(int(row.fiscal_year)) if pd.notna(row.fiscal_year) else "",
+                f"Q{int(row.fiscal_quarter)}" if pd.notna(row.fiscal_quarter) else "",
+            )
+            if part
+        )
+        detail = [f"{period} 실적" if period else "실적"]
+        if pd.notna(row.eps_actual):
+            eps = f"EPS actual {float(row.eps_actual):g}"
+            if pd.notna(row.eps_estimate):
+                eps += f" / estimate {float(row.eps_estimate):g}"
+                if pd.notna(row.eps_surprise_pct):
+                    eps += f" ({float(row.eps_surprise_pct):+.1f}%)"
+            detail.append(eps)
+        elif pd.notna(row.eps_estimate):
+            detail.append(f"EPS estimate {float(row.eps_estimate):g}")
+        actual_money = external_events._money(row.revenue_actual)
+        estimate_money = external_events._money(row.revenue_estimate)
+        if actual_money:
+            revenue = f"Revenue actual {actual_money}"
+            if estimate_money:
+                revenue += f" / estimate {estimate_money}"
+            detail.append(revenue)
+        elif estimate_money:
+            detail.append(f"Revenue estimate {estimate_money}")
+        detail.append(timing_labels.get(str(row.release_timing), "발표 시각 미정"))
+        if not is_reported:
+            detail.append("공급자가 회사 확정 여부를 구분하지 않아 Projected로 표시")
+        rows.append(
+            {
+                "event_key": f"finnhub:earnings:{row.ticker}:{row.release_date}",
+                "kind": "event",
+                "category": "earnings",
+                "market": "US",
+                "scope": row.scope,
+                "severity": "high" if row.scope == "portfolio" else "medium",
+                "title": f"{row.name or row.ticker} Earnings",
+                "detail": " · ".join(detail),
+                "link": row.stock_link,
+                "meta_id": int(row.meta_id),
+                "ticker": row.ticker,
+                "name": row.name,
+                "occurred_at": row.release_date,
+                "available_at": row.available_at,
+                "data_as_of": row.data_as_of,
+                "scheduled_for": row.release_date,
+                "source": "finnhub_earnings",
+                "event_status": "observed" if is_reported else "projected",
+            }
+        )
+    events = pd.DataFrame(rows).reindex(columns=external_events.EVENT_COLUMNS)
+    return external_events.ProviderResult(
+        events,
+        f"{len(tracked_ids)} tracked US assets",
+        data_as_of,
+        f"Finnhub 공식 API · 예정 {upcoming}건 / 발표 {reported}건",
+    )
+
+
 def build_external_events() -> pd.DataFrame:
     """외부 일정·실제 공시를 공급원별 fail-soft 계약으로 발행한다.
 
@@ -1705,6 +1932,9 @@ def build_external_events() -> pd.DataFrame:
             return external_events.ProviderResult(
                 external_events.empty_events(), "0 tracked US assets", today.isoformat()
             )
+        hub_result = _earnings_hub_action_events(assets, filing_start, macro_end)
+        if hub_result is not None:
+            return hub_result
         finnhub_key = os.environ.get("FINNHUB_API_KEY", "").strip()
         if finnhub_key:
             return external_events.fetch_finnhub_earnings(
@@ -1882,6 +2112,7 @@ BUILDERS = [
         {},
     ),  # 브리프 재료 + Lambda 부담 경감
     ("insight/spotlight.parquet", build_spotlight, {}),  # 오늘의 신호 종목 (전시장 스캔)
+    ("insight/earnings_events.parquet", build_earnings_hub, {}),  # US Earnings Hub
     ("insight/external_events.parquet", build_external_events, {}),  # 외부 이벤트 Calendar
     ("portfolio/live_nav.parquet", build_track_strategies, {}),  # 전략 실전 추적 (P7)
     ("portfolio/rebal_signals.parquet", build_rebal_signals, {}),  # active 전략 리밸 전일 신호

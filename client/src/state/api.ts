@@ -643,6 +643,96 @@ export interface ActionCenterResponse {
   };
 }
 
+export type EarningsScope = "all" | "mine" | "portfolio" | "watchlist" | "leaders";
+export type EarningsResultSignal = "beat" | "miss" | "mixed" | "in_line" | null;
+
+export interface EarningsEvent {
+  event_id: string;
+  identity_quality: "fiscal_period" | "release_date";
+  meta_id: number;
+  ticker: string;
+  name: string | null;
+  cik: string | null;
+  scope: "market" | "portfolio" | "watchlist";
+  is_market_leader: boolean;
+  marketcap_rank: number;
+  fiscal_year: number | null;
+  fiscal_quarter: number | null;
+  release_date: string;
+  release_timing: "bmo" | "amc" | "dmh" | "tbd" | string;
+  schedule_status: "estimated";
+  lifecycle: "scheduled" | "reported";
+  eps_actual: number | null;
+  eps_estimate: number | null;
+  eps_surprise_pct: number | null;
+  revenue_actual: number | null;
+  revenue_estimate: number | null;
+  revenue_surprise_pct: number | null;
+  result_signal: EarningsResultSignal;
+  source: "finnhub";
+  source_url: string | null;
+  stock_link: string;
+  call_time: string | null;
+  webcast_url: string | null;
+  transcript_status: "not_available" | "available";
+  first_seen_at: string;
+  available_at: string;
+  data_as_of: string;
+  universe_as_of: string;
+}
+
+export interface EarningsRevision {
+  revision_id: string;
+  event_id: string;
+  ticker: string;
+  fiscal_year: number | null;
+  fiscal_quarter: number | null;
+  previous_release_date: string;
+  release_date: string;
+  observed_at: string;
+  source: string;
+}
+
+export interface EarningsResponse {
+  generated_at: string;
+  data_as_of: string | null;
+  scope: EarningsScope;
+  summary: {
+    this_week: number;
+    upcoming: number;
+    reported_recently: number;
+    my_coverage: number;
+  };
+  coverage: {
+    universe_total: number;
+    market_leaders?: number;
+    filtered_universe: number;
+    events_total: number;
+    filtered_events: number;
+    invalid_release_dates?: number;
+    history_start: string | null;
+    forward_days?: number;
+    results_days?: number;
+  };
+  upcoming: EarningsEvent[];
+  recent_results: EarningsEvent[];
+  revisions: EarningsRevision[];
+  source: {
+    provider: string;
+    label?: string;
+    status: "ok" | "preserved" | "configuration_required" | "unavailable";
+    data_as_of?: string | null;
+    available_at?: string;
+    message?: string | null;
+    universe_total?: number;
+    market_leaders?: number;
+    tracked_us?: number;
+    matched_tracked_us?: number;
+    reference_match_pct?: number;
+    cik_coverage_pct?: number;
+  } | null;
+}
+
 export interface NotificationConfigResponse {
   enabled: boolean;
   public_key: string | null;
@@ -1452,6 +1542,7 @@ export const api = createApi({
     "Actions",
     "Journal",
     "Notifications",
+    "Earnings",
     "PortfolioLedger",
   ],
   endpoints: (builder) => ({
@@ -1712,6 +1803,20 @@ export const api = createApi({
       },
       providesTags: ["Actions"],
     }),
+    fetchEarnings: builder.query<
+      EarningsResponse,
+      { scope?: EarningsScope; days?: number; resultsDays?: number } | void
+    >({
+      query: (params) => {
+        const query = new URLSearchParams();
+        if (params?.scope) query.set("scope", params.scope);
+        if (params?.days) query.set("days", String(params.days));
+        if (params?.resultsDays) query.set("results_days", String(params.resultsDays));
+        const suffix = query.toString();
+        return `/earnings${suffix ? `?${suffix}` : ""}`;
+      },
+      providesTags: ["Earnings"],
+    }),
     updateActionState: builder.mutation<
       { event_id: string; state: ActionState; snoozed_until: string | null },
       { event_id: string; state: ActionState; snoozed_until?: string }
@@ -1967,6 +2072,7 @@ export const {
   // Attention hook
   useFetchAttentionQuery,
   useFetchActionsQuery,
+  useFetchEarningsQuery,
   useUpdateActionStateMutation,
   useFetchNotificationConfigQuery,
   useSubscribeNotificationsMutation,

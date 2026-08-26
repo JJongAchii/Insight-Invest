@@ -9,6 +9,11 @@
 공통 Event 계약으로 묶는다. 가격 기준 교차, Thesis 검토일, 리밸런싱, 데이터 이상을
 한 Inbox/Calendar에 표시하고 판단 근거를 Decision Journal 초안으로 넘길 수 있다.
 
+`Earnings Hub`는 시가총액 상위 미국 기업 50개와 내 보유·관심 종목의 일정·EPS·매출
+컨센서스와 발표 결과를 누적한다. 같은 기업의 복수 클래스는 CIK로 축약하고, 미래
+일정은 공급자가 회사 확정 여부를 주지 않으므로 Estimated로 표시한다. 정확한 어닝콜
+시각·웹캐스트·전문은 검증된 공급원이 없을 때 추정하지 않는다.
+
 ## 아키텍처 (2026-07 재구조)
 
 **"무거운 일은 배치로, 서빙은 요청 시에만"** — 상시 가동 자원이 0개다.
@@ -72,7 +77,7 @@ EventBridge의 `insight-invest-action-poller`가 데이터 배치 뒤 09:45·20:
 | US 종목·ETF (앱 meta 등록분, 2008~) | qdata Massive 전종목 가격 + 분할·배당 | 매일 09:00·19:00 KST 배치 → `app/us_prices.parquet` |
 | FRED 매크로 (레짐 대시보드) | qdata FRED 단일 원천(필요 시계열 1980~ 직접 수집) | 매일 |
 | 통합 종목 마스터 | qdata KRX 주식·ETF + Massive 티커 참조 → `app/asset_master.parquet` | 매일 |
-| US 실적 일정·발표 | Finnhub Earnings Calendar 우선, Massive Benzinga 권한 경로 유지 | 매일 · 추적 종목만 |
+| US 실적 일정·발표 | Finnhub Earnings Calendar + qdata 활성 US 종목 참조 + SEC 공식 제출 페이지 | 평일 저녁 배치 · 주요 기업 50개 + 내 종목, 과거 결과 누적 |
 | 앱 자산 ID / 포트폴리오 | `app/asset_id_registry.parquet` / `app/portfolio/` | 신규 상장·앱 저장 시 |
 | 뉴스 | Google News RSS 실시간 | 요청 시 |
 
@@ -134,7 +139,7 @@ server/
 ├── Dockerfile             # Lambda 베이스 이미지 (BuildKit secret으로 qdata 설치)
 ├── requirements.txt       # 런타임 / requirements-dev.txt 개발 전용(pytest)
 scripts/
-├── build_insights.py      # 파생 인사이트 15종 빌더 (배치 EC2에서 실행)
+├── build_insights.py      # 파생 인사이트·Earnings Hub 빌더 (배치 EC2에서 실행)
 └── send_briefing.py       # 텔레그램 시황 보고 (배치 EC2에서 실행)
 infra/template.yaml        # Lambda + Function URL + IAM (서빙 스택 전부)
 .isort.cfg                 # known_first_party 고정 — isort 결과의 cwd 의존성 제거
