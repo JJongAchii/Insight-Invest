@@ -25,9 +25,19 @@ def _snap(chg: float) -> pd.DataFrame:
     return df
 
 
-def test_handler_writes_both_files(app_data, monkeypatch):
+def _etf_snap(chg: float = -2.03) -> pd.DataFrame:
+    df = pd.DataFrame(
+        {"시가": [1032], "종가": [1011], "변동폭": [-21], "등락률": [chg],
+         "거래량": [688072177], "거래대금": [706209042605]},
+        index=["114800"],
+    )
+    df.index.name = "티커"
+    return df
+
+
+def test_handler_writes_stock_etf_and_timeline_files(app_data, monkeypatch):
     monkeypatch.setattr(poller, "_fetch_krx",
-        lambda today: ({"KOSPI": _snap(5.0)}, {"KOSPI": 6300.0}))
+        lambda today: ({"KOSPI": _snap(5.0)}, {"KOSPI": 6300.0}, _etf_snap()))
     monkeypatch.setattr(poller, "_sector_map",
         lambda: pd.DataFrame({"ticker": ["005930"], "sector": ["전기전자"], "name": ["삼성전자"]}))
     monkeypatch.setattr(poller, "_prev_index_closes", lambda trade_date: {"KOSPI": 6000.0})
@@ -37,6 +47,11 @@ def test_handler_writes_both_files(app_data, monkeypatch):
     latest = storage.read_parquet("kr_intraday_latest.parquet")
     assert latest.iloc[0]["chg_pct"] == 5.0
     assert latest.iloc[0]["sector"] == "전기전자"
+    etfs = storage.read_parquet("kr_intraday_etf_latest.parquet")
+    assert etfs.iloc[0]["ticker"] == "114800"
+    assert etfs.iloc[0]["close"] == 1011
+    assert etfs.iloc[0]["chg_pct"] == pytest.approx(-2.03)
+    assert out["etf_status"] == "ok"
     tl = storage.read_parquet("kr_intraday_timeline.parquet")
     assert set(tl["kind"]) == {"index", "breadth", "sector"}
 
@@ -47,7 +62,7 @@ def test_handler_writes_both_files(app_data, monkeypatch):
 
 
 def test_handler_holiday_noop(app_data, monkeypatch):
-    monkeypatch.setattr(poller, "_fetch_krx", lambda today: ({}, {}))
+    monkeypatch.setattr(poller, "_fetch_krx", lambda today: ({}, {}, pd.DataFrame()))
     out = poller.handler({}, None)
     assert out["status"] == "holiday-noop"
     assert not storage.exists("kr_intraday_latest.parquet")
@@ -68,7 +83,7 @@ def test_handler_stale_mirror_omits_index_chg_pct(app_data, tmp_path, monkeypatc
     핸들러는 성공하되 그 지수의 chg_pct는 NaN으로 빠져야 한다 — 며칠 전 종가
     대비 등락률을 '오늘 것'으로 거짓 서빙하면 안 된다."""
     monkeypatch.setattr(poller, "_fetch_krx",
-        lambda today: ({"KOSPI": _snap(5.0)}, {"KOSPI": 6300.0}))
+        lambda today: ({"KOSPI": _snap(5.0)}, {"KOSPI": 6300.0}, _etf_snap()))
     monkeypatch.setattr(poller, "_sector_map",
         lambda: pd.DataFrame({"ticker": ["005930"], "sector": ["전기전자"], "name": ["삼성전자"]}))
 
@@ -86,7 +101,7 @@ def test_handler_stale_mirror_omits_index_chg_pct(app_data, tmp_path, monkeypatc
 def test_handler_fresh_mirror_keeps_index_chg_pct(app_data, tmp_path, monkeypatch):
     """미러 최신 행이 정확히 전영업일 종가면 기존처럼 계산값을 유지해야 한다."""
     monkeypatch.setattr(poller, "_fetch_krx",
-        lambda today: ({"KOSPI": _snap(5.0)}, {"KOSPI": 6300.0}))
+        lambda today: ({"KOSPI": _snap(5.0)}, {"KOSPI": 6300.0}, _etf_snap()))
     monkeypatch.setattr(poller, "_sector_map",
         lambda: pd.DataFrame({"ticker": ["005930"], "sector": ["전기전자"], "name": ["삼성전자"]}))
 

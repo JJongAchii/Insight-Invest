@@ -51,6 +51,20 @@ def _write_snapshot(chg=4.0, cap=4e11, value=5e9, as_of=None, trade_date=None):
     storage.write_parquet(tl, "kr_intraday_timeline.parquet")
 
 
+def _write_etf_snapshot(as_of=None, trade_date=None):
+    now = _now_kst()
+    as_of = as_of or now.strftime("%Y-%m-%d %H:%M")
+    trade_date = trade_date or now.strftime("%Y-%m-%d")
+    storage.write_parquet(
+        pd.DataFrame({
+            "ticker": ["114800"], "close": [1011], "volume": [688072177],
+            "value": [706209042605], "chg_pct": [-2.03],
+            "as_of": [as_of], "trade_date": [trade_date],
+        }),
+        "kr_intraday_etf_latest.parquet",
+    )
+
+
 def test_missing_files_inactive(app_data):
     r = client.get("/intraday/market")
     assert r.status_code == 200
@@ -74,6 +88,74 @@ def test_assembled_response(app_data):
     assert body["top_value"][0]["value"] == pytest.approx(5e9)
     # 급등락 필터: 035720은 cap 미달로 down에 없어야 한다
     assert all(m["ticker"] != "035720" for m in body["top_movers"]["down"])
+
+
+def test_fresh_etf_is_added_only_to_my_rows(app_data, monkeypatch):
+    _write_snapshot()
+    _write_etf_snapshot()
+    import app.routers.intraday as intraday_mod
+
+    monkeypatch.setattr(
+        intraday_mod.watchlist_store,
+        "list_items",
+        lambda: pd.DataFrame({"meta_id": [1014800]}),
+    )
+    monkeypatch.setattr(
+        intraday_mod.holdings_store,
+        "list_items",
+        lambda: pd.DataFrame(columns=["meta_id"]),
+    )
+    monkeypatch.setattr(
+        intraday_mod.meta_store,
+        "meta_df",
+        lambda: pd.DataFrame({
+            "meta_id": [1014800], "ticker": ["114800"],
+            "name": ["KODEX 인버스"], "iso_code": ["KR"],
+        }),
+    )
+
+    body = client.get("/intraday/market").json()
+
+    assert body["active"] is True
+    assert body["my"]["watchlist"] == [{
+        "meta_id": 1014800, "ticker": "114800", "name": "KODEX 인버스",
+        "close": 1011.0, "chg_pct": -2.03,
+    }]
+    assert all(row["ticker"] != "114800" for row in body["top_value"])
+    assert body["breadth"] == {"advancers": 1, "decliners": 1, "unchanged": 0}
+
+
+def test_etf_snapshot_lagging_stock_by_more_than_stale_limit_is_not_joined(
+    app_data, monkeypatch
+):
+    _write_snapshot()
+    old = _now_kst() - timedelta(minutes=ki.STALE_MINUTES + 1)
+    _write_etf_snapshot(as_of=old.strftime("%Y-%m-%d %H:%M"))
+    import app.routers.intraday as intraday_mod
+
+    monkeypatch.setattr(
+        intraday_mod.watchlist_store,
+        "list_items",
+        lambda: pd.DataFrame({"meta_id": [1014800]}),
+    )
+    monkeypatch.setattr(
+        intraday_mod.holdings_store,
+        "list_items",
+        lambda: pd.DataFrame(columns=["meta_id"]),
+    )
+    monkeypatch.setattr(
+        intraday_mod.meta_store,
+        "meta_df",
+        lambda: pd.DataFrame({
+            "meta_id": [1014800], "ticker": ["114800"],
+            "name": ["KODEX 인버스"], "iso_code": ["KR"],
+        }),
+    )
+
+    body = client.get("/intraday/market").json()
+
+    assert body["active"] is True
+    assert body["my"]["watchlist"] == []
 
 
 def test_missing_chg_pct_serializes_as_null_not_nan(app_data):

@@ -40,6 +40,32 @@ def test_normalize_snapshot(latest):
     assert (latest["market"] == "KOSDAQ").sum() == 1
 
 
+def test_normalize_etf_snapshot_preserves_krx_change_rate():
+    frame = pd.DataFrame(
+        {"시가": [1032], "종가": [1011], "변동폭": [-21], "등락률": [-2.03],
+         "거래량": [688072177], "거래대금": [706209042605]},
+        index=["114800"],
+    )
+    frame.index.name = "티커"
+
+    out = ki.normalize_etf_snapshot(frame, "2026-08-26 14:05", "2026-08-26")
+
+    assert out.to_dict("records") == [{
+        "ticker": "114800", "close": 1011, "volume": 688072177,
+        "value": 706209042605, "chg_pct": -2.03,
+        "as_of": "2026-08-26 14:05", "trade_date": "2026-08-26",
+    }]
+
+
+def test_normalize_etf_snapshot_rejects_silent_schema_drop():
+    with pytest.raises(ValueError, match="ETF 장중 필수 열 누락"):
+        ki.normalize_etf_snapshot(
+            pd.DataFrame({"종가": [1011]}, index=["114800"]),
+            "2026-08-26 14:05",
+            "2026-08-26",
+        )
+
+
 def test_with_sector_fills_unknown(latest):
     smap = pd.DataFrame({"ticker": ["005930"], "sector": ["전기전자"], "name": ["삼성전자"]})
     d = ki.with_sector(latest, smap)

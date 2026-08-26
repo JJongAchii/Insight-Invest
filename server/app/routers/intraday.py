@@ -2,7 +2,7 @@
 
 import logging
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 import pandas as pd
@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/intraday", tags=["intraday"])
 
 _STOCK_COLS = ["ticker", "name", "close", "chg_pct", "value"]
+ETF_LATEST_KEY = "kr_intraday_etf_latest.parquet"
 
 
 def _r(x, nd: int = 2) -> Optional[float]:
@@ -73,6 +74,32 @@ def _my_block(latest: pd.DataFrame) -> dict:
     except Exception as e:  # noqa: BLE001 — my 섹션 격리, 나머지는 살려둔다
         logger.warning(f"intraday my 섹션 조립 실패 — my만 격리 강등: {e}")
         return {"watchlist": [], "holdings": []}
+
+
+def _with_fresh_etfs(
+    latest: pd.DataFrame, trade_date: str, as_of: str, now: datetime
+) -> pd.DataFrame:
+    """주식 시장 통계에는 손대지 않고 my 조인에만 신선한 ETF 스냅샷을 더한다."""
+    if not storage.exists(ETF_LATEST_KEY):
+        return latest
+    try:
+        etfs = storage.read_parquet(ETF_LATEST_KEY)
+        if etfs.empty:
+            return latest
+        etf_trade_date = str(etfs["trade_date"].iloc[0])
+        etf_as_of = str(etfs["as_of"].iloc[0])
+        if etf_trade_date != trade_date or not ki.snapshot_active(
+            etf_trade_date, etf_as_of, now
+        ):
+            return latest
+        anchor_dt = datetime.strptime(as_of, "%Y-%m-%d %H:%M")
+        etf_dt = datetime.strptime(etf_as_of, "%Y-%m-%d %H:%M")
+        if abs(anchor_dt - etf_dt) > timedelta(minutes=ki.STALE_MINUTES):
+            return latest
+        return pd.concat([latest, etfs], ignore_index=True, sort=False)
+    except Exception:  # ETF 파일 실패는 기존 주식 장중 화면과 my 주식 행을 보존
+        logger.warning("ETF 장중 스냅샷 조립 실패 — ETF만 제외", exc_info=True)
+        return latest
 
 
 @router.get("/market")
@@ -144,5 +171,5 @@ def _build():
         "indices": indices, "breadth": breadth, "sectors": sectors,
         "top_value": _stock_rows(ki.top_value(latest)),
         "top_movers": {"up": _stock_rows(up), "down": _stock_rows(down)},
-        "my": _my_block(latest),
+        "my": _my_block(_with_fresh_etfs(latest, trade_date, as_of, now)),
     }

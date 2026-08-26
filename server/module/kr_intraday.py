@@ -21,6 +21,8 @@ TOP_N = 10
 _SNAP_COLS = {"시가": "open", "고가": "high", "저가": "low", "종가": "close",
               "거래량": "volume", "거래대금": "value", "등락률": "chg_pct",
               "시가총액": "cap"}
+_ETF_SNAP_COLS = {"종가": "close", "거래량": "volume", "거래대금": "value",
+                  "등락률": "chg_pct"}
 
 
 def normalize_snapshot(
@@ -39,6 +41,30 @@ def normalize_snapshot(
     out["as_of"] = as_of
     out["trade_date"] = trade_date
     return out
+
+
+def normalize_etf_snapshot(
+    frame: pd.DataFrame, as_of: str, trade_date: str
+) -> pd.DataFrame:
+    """pykrx ETF 전종목 등락률 → 내 종목 표시 전용 장중 스냅샷.
+
+    ETF는 일반 주식의 시총·업종 집계에 섞지 않는다. 등락률은 가격비로 다시
+    계산하지 않고 KRX ``FLUC_RT``를 pykrx가 변환한 값을 그대로 보존한다.
+    """
+    columns = ["ticker", *list(_ETF_SNAP_COLS.values()), "as_of", "trade_date"]
+    if frame.empty:
+        return pd.DataFrame(columns=columns)
+    missing = set(_ETF_SNAP_COLS) - set(frame.columns)
+    if missing:
+        raise ValueError(f"ETF 장중 필수 열 누락: {sorted(missing)}")
+    out = frame.rename(columns=_ETF_SNAP_COLS)[list(_ETF_SNAP_COLS.values())].copy()
+    out.index.name = "ticker"
+    out = out.reset_index()
+    out["ticker"] = out["ticker"].astype(str).str.zfill(6)
+    out = out[out["close"] > 0].reset_index(drop=True)
+    out["as_of"] = as_of
+    out["trade_date"] = trade_date
+    return out[columns]
 
 
 def with_sector(latest: pd.DataFrame, sector_map: pd.DataFrame) -> pd.DataFrame:

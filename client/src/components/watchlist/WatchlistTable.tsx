@@ -17,10 +17,10 @@ interface WatchlistTableProps {
   /** Show the "Added" date column (default true). */
   showAdded?: boolean;
   /**
-   * KR 장중 등락률 오버라이드 — meta_id → intraday chg_pct. 값이 있는 KR 행에
-   * 한해 Chg 셀을 🔴 접두 장중 값으로 교체한다 (홈 대시보드 전용, 스펙 D4).
+   * KR 장중 시세 오버라이드 — meta_id → intraday close/chg_pct. 값이 있는 KR 행에
+   * 한해 Price·Chg 셀을 장중 값으로 교체한다 (홈 대시보드 전용, 스펙 D4).
    */
-  liveChg?: Map<number, number>;
+  liveQuotes?: Map<number, { close: number | null; chgPct: number | null }>;
 }
 
 /**
@@ -30,7 +30,7 @@ interface WatchlistTableProps {
 const WatchlistTable: React.FC<WatchlistTableProps> = ({
   items,
   showAdded = true,
-  liveChg,
+  liveQuotes,
 }) => {
   const router = useRouter();
   const [editing, setEditing] = useState<WatchlistItem | null>(null);
@@ -59,7 +59,7 @@ const WatchlistTable: React.FC<WatchlistTableProps> = ({
           {items.map((item) => {
             const isKr = item.iso_code === "KR";
             const isKrEtf = isKr && item.security_type?.toUpperCase() === "ETF";
-            const live = isKr ? liveChg?.get(item.meta_id) : undefined;
+            const live = isKr ? liveQuotes?.get(item.meta_id) : undefined;
             return (
               <tr
                 key={item.meta_id}
@@ -90,12 +90,12 @@ const WatchlistTable: React.FC<WatchlistTableProps> = ({
                 </td>
                 <td className="table-cell text-right">
                   <span className="num text-ink">
-                    {formatPrice(item.latest_price, item.iso_code)}
+                    {formatPrice(live?.close ?? item.latest_price, item.iso_code)}
                   </span>
                 </td>
                 <td className="table-cell text-right">
-                  <span className={signClass(live ?? item.chg_pct)}>
-                    {live != null ? `🔴 ${fmtPct(live)}` : fmtPct(item.chg_pct)}
+                  <span className={signClass(live?.chgPct ?? item.chg_pct)}>
+                    {live?.chgPct != null ? `🔴 ${fmtPct(live.chgPct)}` : fmtPct(item.chg_pct)}
                   </span>
                 </td>
                 <td className="table-cell text-right">
