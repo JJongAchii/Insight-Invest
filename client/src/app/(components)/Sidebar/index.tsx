@@ -15,6 +15,7 @@ import {
   IoDocumentText,
   IoShieldCheckmark,
   IoNotifications,
+  IoCalendar,
 } from "react-icons/io5";
 import { FaRunning, FaList } from "react-icons/fa";
 import { IconType } from "react-icons";
@@ -167,6 +168,13 @@ const Sidebar = ({
           href="/actions"
           icon={IoNotifications}
           label="Action Center"
+          isCollapsed={isSidebarCollapsed}
+          onClick={onMobileClose}
+        />
+        <SidebarLink
+          href="/earnings"
+          icon={IoCalendar}
+          label="Earnings Hub"
           isCollapsed={isSidebarCollapsed}
           onClick={onMobileClose}
         />

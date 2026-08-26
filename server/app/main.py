@@ -22,6 +22,7 @@ from .routers import (
     actions,
     attention,
     backtest,
+    earnings,
     holdings,
     insight,
     intraday,
@@ -79,6 +80,7 @@ async def require_api_token(request: Request, call_next):
 app.include_router(meta.router)
 app.include_router(price.router)
 app.include_router(backtest.router)
+app.include_router(earnings.router)
 app.include_router(regime.router)
 app.include_router(insight.router)
 app.include_router(news.router)

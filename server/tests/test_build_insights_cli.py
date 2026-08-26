@@ -195,3 +195,58 @@ def test_external_events_marks_us_earnings_setup_required(monkeypatch, tmp_path)
 
     assert statuses.loc["us_earnings", "status"] == "configuration_required"
     assert "FINNHUB_API_KEY" in statuses.loc["us_earnings", "message"]
+
+
+def test_action_center_projects_tracked_rows_from_ready_earnings_hub(monkeypatch, tmp_path):
+    today = pd.Timestamp.now(tz="Asia/Seoul").date()
+    release = (today + timedelta(days=20)).isoformat()
+    monkeypatch.setenv("APP_DATA", str(tmp_path))
+    bi.storage.write_parquet(
+        pd.DataFrame([{"status": "ok", "data_as_of": today.isoformat()}]),
+        "insight",
+        "earnings_source.parquet",
+    )
+    row = {column: None for column in bi.earnings.EVENT_COLUMNS}
+    row.update(
+        {
+            "event_id": "earnings:1:2026:q3",
+            "meta_id": 1,
+            "ticker": "AAPL",
+            "name": "Apple",
+            "scope": "portfolio",
+            "release_date": release,
+            "release_timing": "amc",
+            "lifecycle": "scheduled",
+            "eps_estimate": 2.1,
+            "revenue_estimate": 100_000_000_000,
+            "stock_link": "/stock/1",
+            "available_at": f"{today.isoformat()}T10:00:00+09:00",
+            "data_as_of": today.isoformat(),
+            "fiscal_year": 2026,
+            "fiscal_quarter": 3,
+        }
+    )
+    bi.storage.write_parquet(
+        pd.DataFrame([row]), "insight", "earnings_events.parquet"
+    )
+    assets = pd.DataFrame(
+        [
+            {
+                "meta_id": 1,
+                "ticker": "AAPL",
+                "name": "Apple",
+                "iso_code": "US",
+                "scope": "portfolio",
+            }
+        ]
+    )
+
+    result = bi._earnings_hub_action_events(
+        assets, today - timedelta(days=7), today + timedelta(days=180)
+    )
+
+    assert result is not None
+    assert result.events["event_key"].tolist() == [f"finnhub:earnings:AAPL:{release}"]
+    assert result.events["event_status"].tolist() == ["projected"]
+    assert result.events["severity"].tolist() == ["high"]
+    assert "Revenue estimate $100.00B" in result.events.iloc[0]["detail"]
