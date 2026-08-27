@@ -161,7 +161,16 @@ export interface StockDetailMeta {
   sector: string | null;
   iso_code: string;
   security_type: string | null;
+  security_subtype?: string | null;
   marketcap: number | null;
+  marketcap_source?: string | null;
+  marketcap_as_of?: string | null;
+  shares_outstanding?: number | null;
+  weighted_shares_outstanding?: number | null;
+  fund_size?: number | null;
+  fund_size_source?: string | null;
+  fund_size_as_of?: string | null;
+  reference_as_of?: string | null;
 }
 
 /** Current holding attached to a stock detail response (null when not held). */

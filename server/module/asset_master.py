@@ -15,10 +15,19 @@ MASTER_COLUMNS = [
     "name",
     "isin",
     "security_type",
+    "security_subtype",
     "asset_class",
     "sector",
     "iso_code",
     "marketcap",
+    "marketcap_source",
+    "marketcap_as_of",
+    "shares_outstanding",
+    "weighted_shares_outstanding",
+    "fund_size",
+    "fund_size_source",
+    "fund_size_as_of",
+    "reference_as_of",
     "fee",
     "remark",
     "min_date",
@@ -40,6 +49,10 @@ def _integer(series: pd.Series) -> pd.Series:
     return pd.to_numeric(series, errors="coerce").round().astype("Int64")
 
 
+def _empty_integer(index) -> pd.Series:
+    return pd.Series(pd.NA, index=index, dtype="Int64")
+
+
 def kr_stock_rows(master: pd.DataFrame) -> pd.DataFrame:
     """qdata 최신 KRX 마스터를 앱 공통 스키마로 정규화한다."""
     if master.empty:
@@ -54,10 +67,21 @@ def kr_stock_rows(master: pd.DataFrame) -> pd.DataFrame:
             "name": _text(rows["name"]),
             "isin": None,
             "security_type": "STOCK",
+            "security_subtype": "STOCK",
             "asset_class": "EQUITY",
             "sector": _text(rows["sector"]),
             "iso_code": "KR",
             "marketcap": _integer(rows["mktcap"]),
+            "marketcap_source": "krx_stock_master",
+            "marketcap_as_of": latest.strftime("%Y-%m-%d"),
+            "shares_outstanding": (
+                _integer(rows["shares"]) if "shares" in rows else _empty_integer(rows.index)
+            ),
+            "weighted_shares_outstanding": _empty_integer(rows.index),
+            "fund_size": _empty_integer(rows.index),
+            "fund_size_source": None,
+            "fund_size_as_of": None,
+            "reference_as_of": latest.strftime("%Y-%m-%d"),
             "fee": None,
             "remark": None,
             "min_date": None,
@@ -79,10 +103,21 @@ def kr_etf_rows(meta: pd.DataFrame) -> pd.DataFrame:
             "name": _text(rows["name"]),
             "isin": None,
             "security_type": "ETF",
+            "security_subtype": "ETF",
             "asset_class": "FUND",
             "sector": _text(rows["index_name"]),
             "iso_code": "KR",
             "marketcap": _integer(rows["mktcap"]),
+            "marketcap_source": "krx_etf_meta",
+            "marketcap_as_of": latest.strftime("%Y-%m-%d"),
+            "shares_outstanding": (
+                _integer(rows["shares"]) if "shares" in rows else _empty_integer(rows.index)
+            ),
+            "weighted_shares_outstanding": _empty_integer(rows.index),
+            "fund_size": _integer(rows["aum"]) if "aum" in rows else _empty_integer(rows.index),
+            "fund_size_source": "krx_reported_aum",
+            "fund_size_as_of": latest.strftime("%Y-%m-%d"),
+            "reference_as_of": latest.strftime("%Y-%m-%d"),
             "fee": None,
             "remark": None,
             "min_date": None,
@@ -92,7 +127,9 @@ def kr_etf_rows(meta: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def us_rows(tickers: pd.DataFrame, details: pd.DataFrame) -> pd.DataFrame:
+def us_rows(
+    tickers: pd.DataFrame, details: pd.DataFrame, prices: pd.DataFrame | None = None
+) -> pd.DataFrame:
     """Massive 최신 활성 보통주·ADR·상장 펀드를 앱 공통 스키마로 정규화한다."""
     if tickers.empty:
         raise ValueError("US 티커 마스터가 비어 있다")
@@ -102,27 +139,93 @@ def us_rows(tickers: pd.DataFrame, details: pd.DataFrame) -> pd.DataFrame:
     if not details.empty:
         keep = [
             c
-            for c in ("ticker", "market_cap", "sic_description", "list_date")
+            for c in (
+                "ticker",
+                "asof",
+                "market_cap",
+                "shares_outstanding",
+                "weighted_shares_outstanding",
+                "sic_description",
+                "list_date",
+            )
             if c in details.columns
         ]
-        detail = details[keep].drop_duplicates("ticker", keep="last")
+        detail = (
+            details[keep]
+            .drop_duplicates("ticker", keep="last")
+            .rename(columns={"asof": "detail_asof"})
+        )
         rows = rows.merge(detail, on="ticker", how="left", validate="one_to_one")
-    for column in ("market_cap", "sic_description", "list_date"):
+    for column in (
+        "market_cap",
+        "shares_outstanding",
+        "weighted_shares_outstanding",
+        "sic_description",
+        "list_date",
+        "detail_asof",
+    ):
         if column not in rows:
-            rows[column] = None
+            rows[column] = pd.NA
+    if prices is not None and not prices.empty:
+        latest_price = prices[["ticker", "date", "close"]].copy()
+        latest_price["date"] = pd.to_datetime(latest_price["date"], errors="coerce")
+        latest_price["close"] = pd.to_numeric(latest_price["close"], errors="coerce")
+        latest_price = (
+            latest_price.dropna(subset=["ticker", "date"])
+            .sort_values(["ticker", "date"])
+            .drop_duplicates("ticker", keep="last")
+            .rename(columns={"date": "price_asof", "close": "latest_close"})
+        )
+        rows = rows.merge(latest_price, on="ticker", how="left", validate="one_to_one")
+    else:
+        rows["price_asof"] = pd.NaT
+        rows["latest_close"] = pd.NA
+
     as_of = pd.Timestamp(rows["asof"].max())
     security_type = rows["type"].map(lambda value: "STOCK" if value in US_STOCK_TYPES else "ETF")
     listing = pd.to_datetime(rows["list_date"], errors="coerce")
+    detail_asof = pd.to_datetime(rows["detail_asof"], errors="coerce")
+    price_asof = pd.to_datetime(rows["price_asof"], errors="coerce")
+    vendor_cap = pd.to_numeric(rows["market_cap"], errors="coerce")
+    shares = pd.to_numeric(rows["shares_outstanding"], errors="coerce")
+    weighted = pd.to_numeric(rows["weighted_shares_outstanding"], errors="coerce")
+    close = pd.to_numeric(rows["latest_close"], errors="coerce")
+
+    computed_cap = close * weighted
+    use_computed_cap = security_type.eq("STOCK") & computed_cap.gt(0)
+    marketcap = vendor_cap.copy()
+    marketcap.loc[use_computed_cap] = computed_cap.loc[use_computed_cap]
+    marketcap_source = pd.Series(pd.NA, index=rows.index, dtype="string")
+    marketcap_source.loc[vendor_cap.gt(0)] = "massive_ticker_details"
+    marketcap_source.loc[use_computed_cap] = "massive_close_x_weighted_shares"
+    marketcap_asof = detail_asof.dt.strftime("%Y-%m-%d").where(vendor_cap.gt(0)).copy()
+    marketcap_asof.loc[use_computed_cap] = price_asof.loc[use_computed_cap].dt.strftime("%Y-%m-%d")
+
+    fund_size = close * shares
+    use_fund_size = security_type.eq("ETF") & fund_size.gt(0)
+    fund_size = fund_size.where(use_fund_size)
+    fund_size_source = pd.Series(pd.NA, index=rows.index, dtype="string")
+    fund_size_source.loc[use_fund_size] = "estimate_close_x_share_class_shares"
+    fund_size_asof = price_asof.dt.strftime("%Y-%m-%d").where(use_fund_size)
     return pd.DataFrame(
         {
             "ticker": _text(rows["ticker"]),
             "name": _text(rows["name"]),
             "isin": None,
             "security_type": security_type,
+            "security_subtype": _text(rows["type"]),
             "asset_class": security_type.map({"STOCK": "EQUITY", "ETF": "FUND"}),
             "sector": _text(rows["sic_description"]),
             "iso_code": "US",
-            "marketcap": _integer(rows["market_cap"]),
+            "marketcap": _integer(marketcap),
+            "marketcap_source": marketcap_source,
+            "marketcap_as_of": marketcap_asof,
+            "shares_outstanding": _integer(shares),
+            "weighted_shares_outstanding": _integer(weighted),
+            "fund_size": _integer(fund_size),
+            "fund_size_source": fund_size_source,
+            "fund_size_as_of": fund_size_asof,
+            "reference_as_of": detail_asof.dt.strftime("%Y-%m-%d"),
             "fee": None,
             "remark": None,
             "min_date": listing.dt.strftime("%Y-%m-%d"),
@@ -137,6 +240,13 @@ def compose_source_master(*parts: pd.DataFrame) -> pd.DataFrame:
     source["ticker"] = _text(source["ticker"])
     source["iso_code"] = _text(source["iso_code"]).str.upper()
     source["name"] = _text(source["name"])
+    for column in (
+        "marketcap",
+        "shares_outstanding",
+        "weighted_shares_outstanding",
+        "fund_size",
+    ):
+        source[column] = _integer(source[column])
     bad_name = source["name"].isna() | source["name"].eq("")
     if bad_name.any():
         sample = source.loc[bad_name, ["iso_code", "ticker"]].head(20)

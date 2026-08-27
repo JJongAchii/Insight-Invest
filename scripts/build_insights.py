@@ -150,11 +150,16 @@ def build_asset_master() -> pd.DataFrame:
         )
     except FileNotFoundError:
         us_details = pd.DataFrame()
+    try:
+        us_price_start = (pd.Timestamp.today() - pd.Timedelta(days=14)).strftime("%Y-%m-%d")
+        us_prices = qdata_api.load_us_prices(start=us_price_start, columns=["close"])
+    except FileNotFoundError:
+        us_prices = pd.DataFrame()
 
     source = asset_master.compose_source_master(
         asset_master.kr_stock_rows(kr),
         asset_master.kr_etf_rows(kr_etf),
-        asset_master.us_rows(us_tickers, us_details),
+        asset_master.us_rows(us_tickers, us_details, us_prices),
     )
     registry = storage.read_parquet("asset_id_registry.parquet")
     now = pd.Timestamp.now(tz="Asia/Seoul").isoformat()

@@ -32,11 +32,26 @@ interface MetaTableProps {
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
+const sizeOf = (row: MetaRow): number | null => {
+  if (row.security_type?.toLowerCase() !== "etf") {
+    return row.marketcap ?? null;
+  }
+  // During a rolling deploy the old API omits fund_size entirely. Preserve
+  // its former market-cap display, but do not turn a new explicit null into AUM.
+  return row.fund_size === undefined ? (row.marketcap ?? null) : row.fund_size;
+};
+
 /** AND across whitespace-separated terms; a term matches ticker/name/sector/market. */
 const matchesQuickFilter = (row: MetaRow, query: string): boolean => {
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (terms.length === 0) return true;
-  const haystack = [row.ticker, row.name, row.sector ?? "", row.iso_code]
+  const haystack = [
+    row.ticker,
+    row.name,
+    row.sector ?? "",
+    row.iso_code,
+    row.security_subtype ?? "",
+  ]
     .join(" ")
     .toLowerCase();
   return terms.every((term) => haystack.includes(term));
@@ -99,8 +114,8 @@ const MetaTable: React.FC<MetaTableProps> = ({
         return false;
       }
       if (filters.cap !== "all") {
-        if (!row.marketcap) return false;
-        const cap = row.marketcap;
+        const cap = sizeOf(row);
+        if (!cap) return false;
         const thresholds = CAP_THRESHOLDS[row.iso_code === "KR" ? "KR" : "US"];
         if (filters.cap === "large" && cap < thresholds.large) return false;
         if (
@@ -144,28 +159,29 @@ const MetaTable: React.FC<MetaTableProps> = ({
       },
       {
         accessorKey: "ticker",
-        header: "티커",
+        header: "Ticker",
         cell: ({ getValue }) => (
           <span className="num font-medium">{getValue<string>()}</span>
         ),
       },
       {
         accessorKey: "name",
-        header: "종목명",
+        header: "Name",
         cell: ({ getValue }) => getValue<string>() || "—",
       },
       {
         accessorKey: "sector",
-        header: "섹터",
+        header: "Sector",
         cell: ({ getValue }) => getValue<string | null>() || "—",
       },
       {
         accessorKey: "iso_code",
-        header: "시장",
+        header: "Market",
       },
       {
-        accessorKey: "marketcap",
-        header: "시가총액",
+        id: "size",
+        accessorFn: sizeOf,
+        header: "Size",
         sortUndefined: "last",
         cell: ({ getValue, row }) => (
           <span className="num">
@@ -175,7 +191,7 @@ const MetaTable: React.FC<MetaTableProps> = ({
       },
       {
         id: "sparkline",
-        header: "30일 추이",
+        header: "30D Trend",
         enableSorting: false,
         cell: ({ row }) => {
           const sparkline =
@@ -185,9 +201,10 @@ const MetaTable: React.FC<MetaTableProps> = ({
       },
       {
         accessorKey: "security_type",
-        header: "유형",
-        cell: ({ getValue }) => {
+        header: "Type",
+        cell: ({ getValue, row }) => {
           const type = getValue<string>() ?? "";
+          const subtype = row.original.security_subtype;
           if (type.toLowerCase() === "etf") {
             return (
               <span
@@ -198,11 +215,17 @@ const MetaTable: React.FC<MetaTableProps> = ({
                     "color-mix(in srgb, var(--secondary) 12%, transparent)",
                 }}
               >
-                ETF
+                {subtype && subtype !== "ETF" ? `ETF · ${subtype}` : "ETF"}
               </span>
             );
           }
-          return <span className="text-ink-secondary">{type || "—"}</span>;
+          return (
+            <span className="text-ink-secondary">
+              {subtype && subtype.toUpperCase() !== type.toUpperCase()
+                ? `${type} · ${subtype}`
+                : type || "—"}
+            </span>
+          );
         },
       },
     ],
