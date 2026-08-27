@@ -674,6 +674,12 @@ export interface EarningsEvent {
   revenue_estimate: number | null;
   revenue_surprise_pct: number | null;
   result_signal: EarningsResultSignal;
+  official_result_status: "filed" | null;
+  official_result_source: "sec" | null;
+  official_result_form: string | null;
+  official_result_url: string | null;
+  official_result_filed_at: string | null;
+  official_result_detected_at: string | null;
   source: "finnhub";
   source_url: string | null;
   stock_link: string;
@@ -709,6 +715,7 @@ export interface EarningsResponse {
     this_week: number;
     upcoming: number;
     awaiting_results: number;
+    official_results_available: number;
     reported_recently: number;
     my_coverage: number;
   };

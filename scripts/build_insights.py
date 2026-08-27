@@ -1733,7 +1733,8 @@ def build_earnings_hub() -> pd.DataFrame | None:
     def write_source(status: str, message: str, fetch_coverage: dict | None = None):
         row = {
             "provider": "finnhub",
-            "label": "Finnhub Earnings",
+            "label": "Finnhub Earnings + SEC Results",
+            "official_provider": "sec",
             "status": status,
             "data_as_of": today.isoformat() if status == "ok" else None,
             "available_at": available_at,
@@ -1760,7 +1761,7 @@ def build_earnings_hub() -> pd.DataFrame | None:
         )
         return None
     try:
-        current, fetch_coverage = earnings.fetch_finnhub_calendar(
+        current, finnhub_coverage = earnings.fetch_finnhub_calendar(
             api_key,
             universe,
             today - timedelta(days=31),
@@ -1773,11 +1774,29 @@ def build_earnings_hub() -> pd.DataFrame | None:
             previous_revisions,
             available_at=available_at,
         )
+        try:
+            merged, sec_coverage = earnings.enrich_sec_result_filings(
+                merged,
+                qdata_settings.contact_email(),
+                today - timedelta(days=31),
+                today,
+                available_at,
+            )
+            sec_message = f" · SEC 공식 결과 {sec_coverage['events_enriched']}건 연결"
+        except (external_events.ProviderUnavailable, RuntimeError) as exc:
+            sec_coverage = {
+                "status": "unavailable",
+                "error": f"{type(exc).__name__}: {exc}",
+            }
+            sec_message = " · SEC 공식 결과 확인 실패(기존 링크 보존)"
         storage.write_parquet(revisions, "insight", "earnings_revisions.parquet")
         write_source(
             "ok",
-            f"주요 기업·내 종목 {len(universe)}개 중 현재 창 이벤트 {len(current)}건",
-            fetch_coverage,
+            (
+                f"주요 기업·내 종목 {len(universe)}개 중 현재 창 이벤트 "
+                f"{len(current)}건{sec_message}"
+            ),
+            {"finnhub": finnhub_coverage, "sec_results": sec_coverage},
         )
         return merged
     except external_events.ProviderUnavailable as exc:

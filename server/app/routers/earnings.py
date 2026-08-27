@@ -71,9 +71,7 @@ def _search(frame: pd.DataFrame, query: str) -> pd.DataFrame:
 
 def _release_window_at(release_day: date, release_timing: object) -> datetime:
     timing = (
-        "tbd"
-        if release_timing is None or pd.isna(release_timing)
-        else str(release_timing).lower()
+        "tbd" if release_timing is None or pd.isna(release_timing) else str(release_timing).lower()
     )
     anchor = RELEASE_WINDOW_ET.get(timing, RELEASE_WINDOW_ET["tbd"])
     return datetime.combine(release_day, anchor, tzinfo=US_EASTERN).astimezone(KST)
@@ -115,6 +113,7 @@ def get_earnings(
                 "this_week": 0,
                 "upcoming": 0,
                 "awaiting_results": 0,
+                "official_results_available": 0,
                 "reported_recently": 0,
                 "my_coverage": int(
                     universe.get("scope", pd.Series(dtype="object"))
@@ -173,6 +172,12 @@ def get_earnings(
         filtered["display_status"].isin(["awaiting_results", "result_unavailable"])
         & filtered["release_day"].ge(result_floor)
     ].sort_values(["release_window_datetime", "marketcap_rank"], ascending=[False, True])
+    official_results_available = int(
+        pending.get("official_result_status", pd.Series("", index=pending.index))
+        .fillna("")
+        .eq("filed")
+        .sum()
+    )
     results = filtered[
         filtered["display_status"].eq("reported")
         & filtered["release_day"].between(result_floor, today, inclusive="both")
@@ -212,6 +217,7 @@ def get_earnings(
             "this_week": int(upcoming["release_window_datetime"].le(week_end_at).sum()),
             "upcoming": int(len(upcoming)),
             "awaiting_results": int(len(pending)),
+            "official_results_available": official_results_available,
             "reported_recently": int(len(results)),
             "my_coverage": my_coverage,
         },

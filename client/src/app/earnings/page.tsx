@@ -156,6 +156,7 @@ function EarningsCard({ item }: { item: EarningsEvent }) {
     .filter(Boolean)
     .join(" ");
   const signal = item.result_signal ? SIGNAL[item.result_signal] : null;
+  const officialResultFiled = item.official_result_status === "filed";
 
   const saveToJournal = () => {
     const result = item.lifecycle === "reported"
@@ -196,6 +197,7 @@ function EarningsCard({ item }: { item: EarningsEvent }) {
               {item.scope === "portfolio" && <span className="badge-neutral">Portfolio</span>}
               {item.scope === "watchlist" && <span className="badge-neutral">Watchlist</span>}
               <span className={`rounded-full px-2 py-0.5 font-medium ${displayStatus.style}`}>{displayStatus.label}</span>
+              {officialResultFiled && <span className="rounded-full bg-primary-400/15 px-2 py-0.5 font-semibold text-primary-400">Official Result Filed</span>}
               {signal && <span className={`rounded-full px-2 py-0.5 font-semibold ${signal.style}`}>{signal.label}</span>}
             </div>
             <h2 className="mt-2 truncate text-lg font-semibold text-ink">
@@ -214,9 +216,13 @@ function EarningsCard({ item }: { item: EarningsEvent }) {
             <p className="font-medium text-ink">{timing.label}</p>
             <p className="text-xs text-ink-muted">
               {item.display_status === "awaiting_results"
-                ? "발표 구간이 지났으며 공급자의 실제치 반영을 기다리는 중입니다."
+                ? officialResultFiled
+                  ? "SEC 공식 실적 공시는 확인됐습니다. Finnhub 표준 Actual 반영을 기다리는 중입니다."
+                  : "발표 구간이 지났으며 공급자의 실제치 반영을 기다리는 중입니다."
                 : item.display_status === "result_unavailable"
-                  ? "발표 구간은 지났지만 현재 공급자에서 실제치를 확인하지 못했습니다."
+                  ? officialResultFiled
+                    ? "SEC 공식 실적 공시는 확인됐지만 Finnhub 표준 Actual은 아직 확인되지 않았습니다."
+                    : "발표 구간은 지났지만 현재 공급자에서 실제치를 확인하지 못했습니다."
                   : timing.hint}
             </p>
           </div>
@@ -246,7 +252,10 @@ function EarningsCard({ item }: { item: EarningsEvent }) {
             ) : (
               <p>현재 소스는 정확한 어닝콜 시각·웹캐스트·전문을 제공하지 않습니다. 발표 시각을 어닝콜 시각으로 추정하지 않습니다.</p>
             )}
-            <p>일정과 컨센서스는 Finnhub, 공식 제출 문서는 SEC에서 확인합니다. 미래 일정은 회사 확정 여부를 구분할 수 없어 Estimated로 표시합니다.</p>
+            {officialResultFiled && (
+              <p>SEC {item.official_result_form ?? "filing"}에서 공식 결과 발표를 확인했습니다. 공시의 GAAP 수치를 Finnhub 조정 실적 컨센서스와 직접 비교하지 않습니다.</p>
+            )}
+            <p>일정·컨센서스·표준 Actual은 Finnhub, 공식 결과 접수 여부와 제출 문서는 SEC에서 확인합니다. Beat/Miss는 Finnhub Actual이 들어온 뒤에만 계산합니다.</p>
           </div>
         </details>
 
@@ -254,6 +263,11 @@ function EarningsCard({ item }: { item: EarningsEvent }) {
           <Link href={item.stock_link} className="btn-primary inline-flex items-center gap-1.5">
             Open Stock <ChevronRight size={15} aria-hidden />
           </Link>
+          {item.official_result_url && (
+            <a href={item.official_result_url} target="_blank" rel="noopener noreferrer" className="btn-secondary inline-flex items-center gap-1.5">
+              Official Filing <ExternalLink size={14} aria-hidden />
+            </a>
+          )}
           {item.source_url && (
             <a href={item.source_url} target="_blank" rel="noopener noreferrer" className="btn-secondary inline-flex items-center gap-1.5">
               SEC Filings <ExternalLink size={14} aria-hidden />
@@ -496,7 +510,11 @@ export default function EarningsPage() {
       {data && data.summary.awaiting_results > 0 && (
         <div className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm">
           <p className="font-medium text-ink">Awaiting Results · {data.summary.awaiting_results}건</p>
-          <p className="mt-1 text-xs leading-5 text-ink-secondary">발표 구간은 지났지만 Finnhub 실제치가 아직 도착하지 않은 이벤트입니다. Results에서 사라지지 않고 실제치가 들어오면 자동으로 Reported로 전환됩니다.</p>
+          <p className="mt-1 text-xs leading-5 text-ink-secondary">
+            {data.summary.official_results_available > 0
+              ? `이 중 ${data.summary.official_results_available}건은 SEC 공식 결과 공시가 확인됐습니다. 표준 Actual과 Beat/Miss는 Finnhub 값이 들어오면 자동으로 Reported로 전환됩니다.`
+              : "발표 구간은 지났지만 Finnhub 실제치가 아직 도착하지 않은 이벤트입니다. Results에서 사라지지 않고 실제치가 들어오면 자동으로 Reported로 전환됩니다."}
+          </p>
         </div>
       )}
 
@@ -513,7 +531,7 @@ export default function EarningsPage() {
             <Section title="Upcoming Earnings" description={`향후 ${calendarDays}일의 공급자 발표 일정입니다. Estimated는 회사 확정 일정이라는 뜻이 아닙니다.`} items={upcoming} />
           )}
           {(tab === "overview" || tab === "results") && pending.length > 0 && (
-            <Section title="Awaiting Results" description="미국 현지 발표 구간은 지났지만 실제치가 아직 공급자에 반영되지 않은 이벤트입니다." items={pending} />
+            <Section title="Awaiting Results" description="발표 후 표준 Actual을 기다리는 이벤트입니다. SEC 공식 공시가 먼저 확인되면 카드에 별도로 표시합니다." items={pending} />
           )}
           {tab === "overview" && results.length > 0 && (
             <Section title="Recent Results" description={`최근 ${resultsDays}일 발표치와 컨센서스 차이입니다. Beat/Miss는 EPS와 매출을 함께 비교합니다.`} items={results} />
