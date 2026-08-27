@@ -1,5 +1,6 @@
 """인사이트 배치 선택 실행·필수 산출물 실패 계약."""
 
+import json
 import os
 import sys
 from datetime import timedelta
@@ -7,9 +8,7 @@ from datetime import timedelta
 import pandas as pd
 import pytest
 
-_SCRIPTS_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "scripts")
-)
+_SCRIPTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "scripts"))
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
@@ -32,9 +31,7 @@ def test_only_runs_selected_builder_and_records_status(monkeypatch):
         "BUILDERS",
         [("selected.parquet", selected, {}), ("unselected.parquet", unselected, {})],
     )
-    monkeypatch.setattr(
-        bi.storage, "write_parquet", lambda df, *parts, **kwargs: "/tmp/out"
-    )
+    monkeypatch.setattr(bi.storage, "write_parquet", lambda df, *parts, **kwargs: "/tmp/out")
     monkeypatch.setattr(bi, "_write_status", lambda rows: written.extend(rows))
 
     bi.main(["--only", "selected", "--require", "selected"])
@@ -128,9 +125,7 @@ def test_external_events_preserve_last_good_provider_rows(monkeypatch, tmp_path)
     monkeypatch.setattr(
         bi,
         "_tracked_assets",
-        lambda: pd.DataFrame(
-            columns=["meta_id", "ticker", "name", "iso_code", "scope"]
-        ),
+        lambda: pd.DataFrame(columns=["meta_id", "ticker", "name", "iso_code", "scope"]),
     )
     monkeypatch.setattr(bi.qdata_settings, "lake_root", lambda: tmp_path)
     monkeypatch.setattr(bi.qdata_settings, "fred_api_key", lambda: "key")
@@ -148,9 +143,9 @@ def test_external_events_preserve_last_good_provider_rows(monkeypatch, tmp_path)
     )
 
     out = bi.build_external_events()
-    statuses = bi.storage.read_parquet(
-        "insight", "external_event_sources.parquet"
-    ).set_index("provider")
+    statuses = bi.storage.read_parquet("insight", "external_event_sources.parquet").set_index(
+        "provider"
+    )
 
     assert out["event_key"].tolist() == [f"fred:10:{scheduled}"]
     assert statuses.loc["fred", "status"] == "preserved"
@@ -189,12 +184,80 @@ def test_external_events_marks_us_earnings_setup_required(monkeypatch, tmp_path)
     monkeypatch.setattr(bi.external_events, "fetch_massive_earnings", no_massive_access)
 
     bi.build_external_events()
-    statuses = bi.storage.read_parquet(
-        "insight", "external_event_sources.parquet"
-    ).set_index("provider")
+    statuses = bi.storage.read_parquet("insight", "external_event_sources.parquet").set_index(
+        "provider"
+    )
 
     assert statuses.loc["us_earnings", "status"] == "configuration_required"
     assert "FINNHUB_API_KEY" in statuses.loc["us_earnings", "message"]
+
+
+def test_earnings_hub_adds_sec_result_signal_without_filling_actuals(monkeypatch, tmp_path):
+    today = pd.Timestamp.now(tz="Asia/Seoul").date()
+    master = pd.DataFrame(
+        [
+            {
+                "meta_id": 1,
+                "ticker": "AAPL",
+                "name": "Apple",
+                "iso_code": "US",
+                "security_type": "STOCK",
+                "marketcap": 100,
+                "as_of": today.isoformat(),
+            }
+        ]
+    )
+    reference = pd.DataFrame([{"ticker": "AAPL", "cik": "320193", "type": "CS"}])
+    monkeypatch.setenv("APP_DATA", str(tmp_path))
+    monkeypatch.setenv("FINNHUB_API_KEY", "key")
+    monkeypatch.setattr(bi.qdata_settings, "lake_root", lambda: tmp_path)
+    monkeypatch.setattr(bi.qdata_settings, "contact_email", lambda: "research@example.com")
+    monkeypatch.setattr(bi.meta, "meta_df", lambda: master)
+    monkeypatch.setattr(bi.qdata_api, "load_us_tickers", lambda active=True: reference)
+    monkeypatch.setattr(bi, "_tracked_assets", lambda: pd.DataFrame())
+
+    def finnhub(api_key, universe, start, end, available_at):
+        events = bi.earnings.normalize_calendar(
+            [
+                {
+                    "symbol": "AAPL",
+                    "date": today.isoformat(),
+                    "year": today.year,
+                    "quarter": 3,
+                    "epsActual": None,
+                    "epsEstimate": 2.0,
+                }
+            ],
+            universe,
+            available_at,
+        )
+        return events, {"calendar_calls": 1}
+
+    def sec(events, contact, start, end, available_at):
+        assert contact == "research@example.com"
+        out = events.copy()
+        values = {
+            "official_result_status": "filed",
+            "official_result_source": "sec",
+            "official_result_form": "8-K",
+            "official_result_url": "https://www.sec.gov/example",
+        }
+        for column, value in values.items():
+            out[column] = pd.Series(value, index=out.index, dtype="object")
+        return out, {"status": "ok", "events_enriched": 1}
+
+    monkeypatch.setattr(bi.earnings, "fetch_finnhub_calendar", finnhub)
+    monkeypatch.setattr(bi.earnings, "enrich_sec_result_filings", sec)
+
+    result = bi.build_earnings_hub()
+    source = bi.storage.read_parquet("insight", "earnings_source.parquet").iloc[0]
+    coverage = json.loads(source["coverage"])
+
+    assert result.iloc[0]["official_result_status"] == "filed"
+    assert pd.isna(result.iloc[0]["eps_actual"])
+    assert result.iloc[0]["lifecycle"] == "scheduled"
+    assert source["label"] == "Finnhub Earnings + SEC Results"
+    assert coverage["fetch"]["sec_results"]["events_enriched"] == 1
 
 
 def test_action_center_projects_tracked_rows_from_ready_earnings_hub(monkeypatch, tmp_path):
@@ -226,9 +289,7 @@ def test_action_center_projects_tracked_rows_from_ready_earnings_hub(monkeypatch
             "fiscal_quarter": 3,
         }
     )
-    bi.storage.write_parquet(
-        pd.DataFrame([row]), "insight", "earnings_events.parquet"
-    )
+    bi.storage.write_parquet(pd.DataFrame([row]), "insight", "earnings_events.parquet")
     assets = pd.DataFrame(
         [
             {

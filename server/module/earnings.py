@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import hashlib
+import time
 from datetime import date, timedelta
 
 import httpx
@@ -26,6 +27,15 @@ UNIVERSE_COLUMNS = [
     "marketcap_rank",
     "marketcap",
     "universe_as_of",
+]
+
+OFFICIAL_RESULT_COLUMNS = [
+    "official_result_status",
+    "official_result_source",
+    "official_result_form",
+    "official_result_url",
+    "official_result_filed_at",
+    "official_result_detected_at",
 ]
 
 EVENT_COLUMNS = [
@@ -51,6 +61,7 @@ EVENT_COLUMNS = [
     "revenue_estimate",
     "revenue_surprise_pct",
     "result_signal",
+    *OFFICIAL_RESULT_COLUMNS,
     "source",
     "source_url",
     "stock_link",
@@ -76,6 +87,18 @@ REVISION_COLUMNS = [
     "source",
     "as_of",
 ]
+
+SEC_RESULT_8K_FORMS = {"8-K", "8-K/A"}
+SEC_PERIODIC_RESULT_FORMS = {
+    "10-Q",
+    "10-Q/A",
+    "10-K",
+    "10-K/A",
+    "20-F",
+    "20-F/A",
+    "40-F",
+    "40-F/A",
+}
 
 
 def empty_universe() -> pd.DataFrame:
@@ -380,6 +403,8 @@ def normalize_calendar(
     if not rows:
         return empty_events()
     frame = pd.DataFrame(rows).reindex(columns=EVENT_COLUMNS)
+    for column in OFFICIAL_RESULT_COLUMNS:
+        frame[column] = frame[column].astype("object")
     # 심볼별 보강 호출과 전역 호출이 같은 이벤트를 돌려준다. 실제치가 더 많이
     # 채워진 행을 우선해 안정 식별자당 한 행만 남긴다.
     frame["richness"] = (
@@ -447,6 +472,186 @@ def fetch_finnhub_calendar(
         "matched_events": len(events),
         "companies_with_events": len(covered),
         "universe_without_window_event": len(universe) - len(covered),
+        "window_start": start.isoformat(),
+        "window_end": end.isoformat(),
+    }
+
+
+def _sec_result_filing(form: object, items: object) -> bool:
+    form_name = str(form or "").upper()
+    if form_name in SEC_PERIODIC_RESULT_FORMS:
+        return True
+    if form_name not in SEC_RESULT_8K_FORMS:
+        return False
+    item_codes = {part.strip() for part in str(items or "").split(",")}
+    return "2.02" in item_codes
+
+
+def _sec_filing_url(cik: str, accession: str) -> str:
+    accession_path = accession.replace("-", "")
+    return (
+        "https://www.sec.gov/Archives/edgar/data/"
+        f"{int(cik)}/{accession_path}/{accession}-index.html"
+    )
+
+
+def enrich_sec_result_filings(
+    events: pd.DataFrame,
+    contact: str,
+    start: date,
+    end: date,
+    available_at: str,
+    *,
+    client: httpx.Client | None = None,
+    max_match_days: int = 3,
+    request_interval_seconds: float = 0.11,
+) -> tuple[pd.DataFrame, dict]:
+    """최근 Earnings에 SEC 공식 결과 접수 신호와 filing 링크를 붙인다.
+
+    8-K는 Item 2.02가 명시된 경우만 실적 결과로 인정한다. 10-Q·10-K 등
+    정기보고서는 그 자체를 공식 결과 문서로 인정하되, GAAP 공시값을 Finnhub의
+    조정 실적 컨센서스와 비교하거나 actual 필드에 복사하지 않는다.
+    """
+    if not contact.strip():
+        raise external_events.ConfigurationRequired("SEC 요청용 연락처가 없습니다")
+    if events.empty:
+        return empty_events(), {
+            "status": "ok",
+            "companies_queried": 0,
+            "filings_scanned": 0,
+            "result_filings": 0,
+            "events_enriched": 0,
+            "window_start": start.isoformat(),
+            "window_end": end.isoformat(),
+        }
+
+    enriched = events.reindex(columns=EVENT_COLUMNS).copy()
+    for column in OFFICIAL_RESULT_COLUMNS:
+        enriched[column] = enriched[column].astype("object")
+    release_days = pd.to_datetime(enriched["release_date"], errors="coerce").dt.date
+    candidates = enriched[
+        release_days.between(start, end, inclusive="both") & enriched["cik"].notna()
+    ].copy()
+    if candidates.empty:
+        return enriched, {
+            "status": "ok",
+            "companies_queried": 0,
+            "filings_scanned": 0,
+            "result_filings": 0,
+            "events_enriched": 0,
+            "window_start": start.isoformat(),
+            "window_end": end.isoformat(),
+        }
+    candidates["release_day"] = pd.to_datetime(candidates["release_date"], errors="coerce").dt.date
+
+    owns_client = client is None
+    client = client or httpx.Client(
+        timeout=20,
+        follow_redirects=True,
+        headers={
+            "User-Agent": f"Insight-Invest {contact}",
+            "Accept-Encoding": "gzip, deflate",
+        },
+    )
+    filings_scanned = 0
+    result_filings = 0
+    matches: dict[str, tuple[int, str, dict]] = {}
+    ciks = sorted({_cik(value) for value in candidates["cik"] if _cik(value)})
+    try:
+        previous_request_at: float | None = None
+        for cik in ciks:
+            if previous_request_at is not None and request_interval_seconds > 0:
+                elapsed = time.monotonic() - previous_request_at
+                if elapsed < request_interval_seconds:
+                    time.sleep(request_interval_seconds - elapsed)
+            payload = external_events._request_json(
+                client,
+                f"https://data.sec.gov/submissions/CIK{cik}.json",
+                params={},
+            )
+            previous_request_at = time.monotonic()
+            recent = payload.get("filings", {}).get("recent", {})
+            required_keys = [
+                "accessionNumber",
+                "filingDate",
+                "acceptanceDateTime",
+                "reportDate",
+                "form",
+            ]
+            length = min((len(recent.get(key, [])) for key in required_keys), default=0)
+            items = recent.get("items", [])
+            company_events = candidates[candidates["cik"].map(_cik).eq(cik)]
+            for index in range(length):
+                filing_date_text = str(recent["filingDate"][index] or "")
+                try:
+                    filing_day = date.fromisoformat(filing_date_text)
+                except ValueError:
+                    continue
+                if not (
+                    start - timedelta(days=max_match_days)
+                    <= filing_day
+                    <= end + timedelta(days=max_match_days)
+                ):
+                    continue
+                filings_scanned += 1
+                form = str(recent["form"][index] or "").upper()
+                item_codes = items[index] if index < len(items) else ""
+                if not _sec_result_filing(form, item_codes):
+                    continue
+                result_filings += 1
+
+                anchor_days = [filing_day]
+                if form in SEC_RESULT_8K_FORMS:
+                    try:
+                        report_day = date.fromisoformat(str(recent["reportDate"][index]))
+                        anchor_days.insert(0, report_day)
+                    except ValueError:
+                        pass
+                event_index = None
+                match_distance = max_match_days + 1
+                for anchor_day in anchor_days:
+                    distances = company_events["release_day"].map(
+                        lambda release_day: abs((release_day - anchor_day).days)
+                    )
+                    if not distances.empty and int(distances.min()) < match_distance:
+                        event_index = distances.idxmin()
+                        match_distance = int(distances.min())
+                if event_index is None or match_distance > max_match_days:
+                    continue
+                event = company_events.loc[event_index]
+                accession = str(recent["accessionNumber"][index])
+                accepted = str(recent["acceptanceDateTime"][index] or filing_date_text)
+                priority = 0 if form in SEC_RESULT_8K_FORMS else 1
+                match = {
+                    "official_result_status": "filed",
+                    "official_result_source": "sec",
+                    "official_result_form": form,
+                    "official_result_url": _sec_filing_url(cik, accession),
+                    "official_result_filed_at": accepted,
+                    "official_result_detected_at": available_at,
+                }
+                current = matches.get(str(event["event_id"]))
+                rank = (priority, accepted)
+                if (
+                    current is None
+                    or priority < current[0]
+                    or (priority == current[0] and accepted > current[1])
+                ):
+                    matches[str(event["event_id"])] = (rank[0], rank[1], match)
+    finally:
+        if owns_client:
+            client.close()
+
+    for event_id, (_, _, match) in matches.items():
+        mask = enriched["event_id"].astype(str).eq(event_id)
+        for key, value in match.items():
+            enriched.loc[mask, key] = value
+    return enriched, {
+        "status": "ok",
+        "companies_queried": len(ciks),
+        "filings_scanned": filings_scanned,
+        "result_filings": result_filings,
+        "events_enriched": len(matches),
         "window_start": start.isoformat(),
         "window_end": end.isoformat(),
     }

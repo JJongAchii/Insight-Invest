@@ -9,12 +9,18 @@ def test_release_window_uses_us_market_date_instead_of_kst_midnight():
     release_at = earnings._release_window_at(date(2026, 8, 26), "amc")
 
     assert release_at.isoformat() == "2026-08-27T05:00:00+09:00"
-    assert earnings._display_status(
-        "scheduled", release_at, datetime(2026, 8, 27, 0, 30, tzinfo=earnings.KST)
-    ) == "upcoming"
-    assert earnings._display_status(
-        "scheduled", release_at, datetime(2026, 8, 27, 7, 0, tzinfo=earnings.KST)
-    ) == "awaiting_results"
+    assert (
+        earnings._display_status(
+            "scheduled", release_at, datetime(2026, 8, 27, 0, 30, tzinfo=earnings.KST)
+        )
+        == "upcoming"
+    )
+    assert (
+        earnings._display_status(
+            "scheduled", release_at, datetime(2026, 8, 27, 7, 0, tzinfo=earnings.KST)
+        )
+        == "awaiting_results"
+    )
 
 
 def test_missing_post_release_actual_stays_visible_and_is_searchable(monkeypatch):
@@ -32,6 +38,8 @@ def test_missing_post_release_actual_stays_visible_and_is_searchable(monkeypatch
             "release_date": release,
             "release_timing": "amc",
             "lifecycle": "scheduled",
+            "official_result_status": "filed",
+            "official_result_url": "https://www.sec.gov/example",
             "data_as_of": release,
             "as_of": release,
         },
@@ -91,6 +99,8 @@ def test_missing_post_release_actual_stays_visible_and_is_searchable(monkeypatch
     }
     assert result["recent_results"] == []
     assert result["summary"]["awaiting_results"] == 1
+    assert result["summary"]["official_results_available"] == 1
+    assert result["pending_results"][0]["official_result_url"] == ("https://www.sec.gov/example")
     assert result["coverage"]["filtered_universe"] == 1
     assert result["coverage"]["filtered_events"] == 1
 
