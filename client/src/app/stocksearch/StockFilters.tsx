@@ -91,7 +91,7 @@ const StockFilters: React.FC<StockFiltersProps> = ({
       <select
         value={filters.sector}
         onChange={handleSectorChange}
-        className="px-3 py-2 text-sm border border-edge rounded-lg bg-surface
+        className="w-full min-w-0 sm:w-auto sm:max-w-xs px-3 py-2 text-sm border border-edge rounded-lg bg-surface
                    focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
       >
         <option value="">전체 섹터</option>

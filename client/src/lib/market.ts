@@ -32,6 +32,29 @@ export const formatMarketCap = (
   return `$${value.toLocaleString("en-US")}`;
 };
 
+export const formatShares = (value: number | null | undefined): string => {
+  if (typeof value !== "number" || Number.isNaN(value)) return "—";
+  return new Intl.NumberFormat("en-US", {
+    notation: "compact",
+    maximumFractionDigits: 2,
+  }).format(value);
+};
+
+const REFERENCE_SOURCE_LABELS: Record<string, string> = {
+  krx_stock_master: "KRX Stock Master",
+  krx_etf_meta: "KRX ETF Meta",
+  krx_reported_aum: "KRX Reported AUM",
+  massive_ticker_details: "Massive Ticker Details",
+  massive_close_x_weighted_shares: "Massive Close × Weighted Shares",
+  estimate_close_x_share_class_shares:
+    "Massive Close × Share-class Shares (estimate)",
+};
+
+export const formatReferenceSource = (value?: string | null): string => {
+  if (!value) return "—";
+  return REFERENCE_SOURCE_LABELS[value] ?? value.replaceAll("_", " ");
+};
+
 export const formatDate = (value?: string | null): string => {
   if (!value) return "—";
   const dateOnly = value.slice(0, 10);

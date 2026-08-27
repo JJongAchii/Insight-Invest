@@ -22,6 +22,8 @@ import {
   formatDate,
   formatMarketCap,
   formatPrice,
+  formatReferenceSource,
+  formatShares,
 } from "@/lib/market";
 
 interface StockDetailPanelProps {
@@ -95,7 +97,25 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
   const isLoading = priceLoading || summaryLoading;
   const metrics = summaryData?.metrics;
   const isKr = stock.iso_code === "KR";
+  const isEtf = stock.security_type?.toLowerCase() === "etf";
   const mktcap = summaryData?.mktcap ?? stock.marketcap ?? null;
+  const hasFundSizeContract = stock.fund_size !== undefined;
+  const size = isEtf && hasFundSizeContract ? (stock.fund_size ?? null) : mktcap;
+  let sizeLabel = "Market Cap";
+  if (isEtf && hasFundSizeContract) {
+    sizeLabel =
+      stock.fund_size_source === "estimate_close_x_share_class_shares"
+        ? "Fund Size (est.)"
+        : "Fund Size";
+  }
+  const sizeSource = isEtf
+    ? stock.fund_size_source
+    : stock.marketcap_source;
+  const typeLabel =
+    stock.security_subtype &&
+    stock.security_subtype.toUpperCase() !== stock.security_type.toUpperCase()
+      ? `${stock.security_type} · ${stock.security_subtype}`
+      : stock.security_type;
   const flows = summaryData?.flows_recent ?? null;
 
   return (
@@ -151,11 +171,11 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
         {/* Top meta tiles: market cap & traded value */}
         <div className="grid grid-cols-2 gap-3">
           <MetricCard
-            label="시가총액"
-            value={isKr ? fmtJo(mktcap) : formatMarketCap(mktcap, stock.iso_code)}
+            label={sizeLabel}
+            value={isKr ? fmtJo(size) : formatMarketCap(size, stock.iso_code)}
           />
           <MetricCard
-            label={isKr ? "거래대금" : "최근 가격"}
+            label={isKr ? "Trading Value" : "Latest Price"}
             value={isKr
               ? summaryData?.value != null
                 ? fmtJo(summaryData.value)
@@ -346,26 +366,67 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
           </div>
         )}
 
-        {/* Stock Info */}
+        {/* Reference data */}
         <div>
           <h3 className="text-sm font-medium text-ink-secondary mb-3">
-            종목 정보
+            Reference Data
           </h3>
           <div className="space-y-2 text-sm">
-            <InfoRow label="섹터" value={stock.sector || "—"} />
-            <InfoRow label="시장" value={stock.iso_code} />
-            <InfoRow label="유형" value={stock.security_type} />
-            <InfoRow label="시가총액" value={formatMarketCap(stock.marketcap, stock.iso_code)} />
+            <InfoRow label="Sector" value={stock.sector || "—"} />
+            <InfoRow label="Market" value={stock.iso_code} />
+            <InfoRow
+              label="Type"
+              value={typeLabel}
+            />
+            <InfoRow
+              label={sizeLabel}
+              value={formatMarketCap(size, stock.iso_code)}
+            />
+            <InfoRow
+              label="Shares Outstanding"
+              value={formatShares(stock.shares_outstanding)}
+            />
+            {stock.weighted_shares_outstanding != null && (
+              <InfoRow
+                label="Weighted Shares"
+                value={formatShares(stock.weighted_shares_outstanding)}
+              />
+            )}
+            {sizeSource && (
+              <InfoRow
+                label="Size Source"
+                value={formatReferenceSource(sizeSource)}
+              />
+            )}
+            {(stock.marketcap_as_of || stock.fund_size_as_of) && (
+              <InfoRow
+                label="Size as of"
+                value={formatDate(isEtf ? stock.fund_size_as_of : stock.marketcap_as_of)}
+              />
+            )}
+            {stock.reference_as_of && (
+              <InfoRow label="Reference as of" value={formatDate(stock.reference_as_of)} />
+            )}
             {summaryData?.latest_price && (
               <InfoRow
-                label="최근 가격"
+                label="Latest Price"
                 value={formatPrice(summaryData.latest_price, stock.iso_code)}
               />
             )}
             {summaryData?.latest_date && (
-              <InfoRow label="가격 기준일" value={formatDate(summaryData.latest_date)} />
+              <InfoRow label="Price as of" value={formatDate(summaryData.latest_date)} />
             )}
           </div>
+          {stock.fund_size_source === "estimate_close_x_share_class_shares" && (
+            <p className="mt-3 text-xs leading-5 text-ink-muted">
+              Fund Size는 최근 종가×발행좌수 추정치이며, 운용사가 보고한 AUM은 아닙니다.
+            </p>
+          )}
+          {stock.marketcap_source === "massive_close_x_weighted_shares" && (
+            <p className="mt-3 text-xs leading-5 text-ink-muted">
+              Market Cap은 최근 종가와 Massive 가중 발행주식수로 계산했습니다.
+            </p>
+          )}
         </div>
       </div>
 
@@ -409,9 +470,9 @@ interface InfoRowProps {
 }
 
 const InfoRow: React.FC<InfoRowProps> = ({ label, value }) => (
-  <div className="flex justify-between">
-    <span className="text-ink-muted">{label}</span>
-    <span className="text-ink font-medium">{value}</span>
+  <div className="flex justify-between gap-4">
+    <span className="shrink-0 text-ink-muted">{label}</span>
+    <span className="min-w-0 text-right text-ink font-medium">{value}</span>
   </div>
 );
 

@@ -23,7 +23,13 @@ import FactorBars from "@/components/charts/FactorBars";
 import { fmtEok, fmtJo, Segmented } from "../../insight/format";
 import StockPriceFlowsChart from "./StockPriceFlowsChart";
 import FundamentalsCard from "./FundamentalsCard";
-import { formatDate, formatMarketCap, formatPrice } from "@/lib/market";
+import {
+  formatDate,
+  formatMarketCap,
+  formatPrice,
+  formatReferenceSource,
+  formatShares,
+} from "@/lib/market";
 
 type Period = "3m" | "6m" | "1y" | "3y" | "all";
 type FlowMode = "frgn" | "inst" | "both";
@@ -144,6 +150,21 @@ const StockDetailPage = () => {
   const metrics = summary.metrics;
   const flows = summary.flows_recent;
   const mktcap = summary.mktcap ?? meta.marketcap;
+  const hasFundSizeContract = meta.fund_size !== undefined;
+  const size = isEtf && hasFundSizeContract ? (meta.fund_size ?? null) : mktcap;
+  let sizeLabel = "Market Cap";
+  if (isEtf && hasFundSizeContract) {
+    sizeLabel =
+      meta.fund_size_source === "estimate_close_x_share_class_shares"
+        ? "Fund Size (est.)"
+        : "Fund Size";
+  }
+  const sizeSource = isEtf ? meta.fund_size_source : meta.marketcap_source;
+  const referenceTypeLabel =
+    meta.security_subtype &&
+    meta.security_subtype.toUpperCase() !== meta.security_type?.toUpperCase()
+      ? `${meta.security_type ?? "—"} · ${meta.security_subtype}`
+      : (meta.security_type ?? "—");
   const tradingViewSymbol = isKr ? `KRX-${meta.ticker}` : meta.ticker;
   const showFrgn = flowMode === "frgn" || flowMode === "both";
   const showInst = flowMode === "inst" || flowMode === "both";
@@ -204,7 +225,9 @@ const StockDetailPage = () => {
                       "color-mix(in srgb, var(--secondary) 12%, transparent)",
                   }}
                 >
-                  ETF
+                  {meta.security_subtype && meta.security_subtype !== "ETF"
+                    ? `ETF · ${meta.security_subtype}`
+                    : "ETF"}
                 </span>
               )}
             </div>
@@ -258,9 +281,12 @@ const StockDetailPage = () => {
       {/* Stat tiles */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <StatTile
-          label="Market Cap"
-          value={isKr ? fmtJo(mktcap) : formatMarketCap(mktcap, meta.iso_code)}
+          label={sizeLabel}
+          value={isKr ? fmtJo(size) : formatMarketCap(size, meta.iso_code)}
         />
+        {!isKr && meta.shares_outstanding != null && (
+          <StatTile label="Shares Outstanding" value={formatShares(meta.shares_outstanding)} />
+        )}
         {isKr && <StatTile
           label="Trading Value"
           value={summary.value != null ? fmtJo(summary.value) : "—"}
@@ -299,6 +325,43 @@ const StockDetailPage = () => {
           deltaType={metrics.mdd != null && metrics.mdd < 0 ? "loss" : "neutral"}
         />
       </div>
+
+      {!isKr && (
+        <div className="rounded-xl border border-edge bg-raised px-4 py-3 text-xs text-ink-secondary">
+          <p>
+            <span className="font-semibold text-ink">Reference Data</span>
+            {meta.reference_as_of
+              ? ` · 기준 ${formatDate(meta.reference_as_of)}`
+              : " · 기준일 없음"}
+          </p>
+          <p className="mt-1 text-ink-muted">
+            Type {referenceTypeLabel}
+            {meta.shares_outstanding != null
+              ? ` · Shares ${formatShares(meta.shares_outstanding)}`
+              : ""}
+            {meta.weighted_shares_outstanding != null
+              ? ` · Weighted ${formatShares(meta.weighted_shares_outstanding)}`
+              : ""}
+          </p>
+          {sizeSource && (
+            <p className="mt-1 text-ink-muted">
+              Size Source {formatReferenceSource(sizeSource)}
+            </p>
+          )}
+          {meta.fund_size_source === "estimate_close_x_share_class_shares" && (
+            <p className="mt-1 text-ink-muted">
+              Fund Size는 최근 종가×발행좌수 추정치이며 운용사가 보고한 AUM은 아닙니다.
+              {meta.fund_size_as_of ? ` 가격 기준 ${formatDate(meta.fund_size_as_of)}` : ""}
+            </p>
+          )}
+          {meta.marketcap_source === "massive_close_x_weighted_shares" && (
+            <p className="mt-1 text-ink-muted">
+              Market Cap은 최근 종가와 Massive 가중 발행주식수로 계산했습니다.
+              {meta.marketcap_as_of ? ` 가격 기준 ${formatDate(meta.marketcap_as_of)}` : ""}
+            </p>
+          )}
+        </div>
+      )}
 
       {isKr && !isEtf && summary.valuation && (
         <div className="rounded-xl border border-edge bg-raised px-4 py-3 text-xs text-ink-secondary">

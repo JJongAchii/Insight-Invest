@@ -72,10 +72,19 @@ class Meta(BaseModel):
     name: Optional[str] = None
     isin: Optional[str] = None
     security_type: str
+    security_subtype: Optional[str] = None
     asset_class: Optional[str] = None
     sector: Optional[str] = None
     iso_code: str
     marketcap: Optional[int] = None
+    marketcap_source: Optional[str] = None
+    marketcap_as_of: Optional[str] = None
+    shares_outstanding: Optional[int] = None
+    weighted_shares_outstanding: Optional[int] = None
+    fund_size: Optional[int] = None
+    fund_size_source: Optional[str] = None
+    fund_size_as_of: Optional[str] = None
+    reference_as_of: Optional[str] = None
     fee: Optional[float] = None
     remark: Optional[str] = None
 

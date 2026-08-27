@@ -1019,7 +1019,22 @@ def get_stock_detail(meta_id: int):
             "sector": _na(row["sector"]),
             "iso_code": row["iso_code"],
             "security_type": _na(row["security_type"]),
+            "security_subtype": _na(row.get("security_subtype")),
             "marketcap": int(row["marketcap"]) if pd.notna(row["marketcap"]) else None,
+            "marketcap_source": _na(row.get("marketcap_source")),
+            "marketcap_as_of": _na(row.get("marketcap_as_of")),
+            "shares_outstanding": (
+                int(row["shares_outstanding"]) if pd.notna(row.get("shares_outstanding")) else None
+            ),
+            "weighted_shares_outstanding": (
+                int(row["weighted_shares_outstanding"])
+                if pd.notna(row.get("weighted_shares_outstanding"))
+                else None
+            ),
+            "fund_size": int(row["fund_size"]) if pd.notna(row.get("fund_size")) else None,
+            "fund_size_source": _na(row.get("fund_size_source")),
+            "fund_size_as_of": _na(row.get("fund_size_as_of")),
+            "reference_as_of": _na(row.get("reference_as_of")),
         },
         "summary": _build_summary(meta_id, row),
         "in_watchlist": in_watchlist,

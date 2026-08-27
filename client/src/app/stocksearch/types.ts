@@ -6,10 +6,19 @@ export interface MetaRow {
   name: string;
   isin: string;
   security_type: string;
+  security_subtype?: string | null;
   asset_class: string | null;
   sector: string | null;
   iso_code: string;
-  marketcap: number;
+  marketcap: number | null;
+  marketcap_source?: string | null;
+  marketcap_as_of?: string | null;
+  shares_outstanding?: number | null;
+  weighted_shares_outstanding?: number | null;
+  fund_size?: number | null;
+  fund_size_source?: string | null;
+  fund_size_as_of?: string | null;
+  reference_as_of?: string | null;
   fee: number | null;
 }
 

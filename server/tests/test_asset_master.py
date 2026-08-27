@@ -22,6 +22,8 @@ def _source_parts():
             "name": ["KODEX 200"],
             "index_name": ["코스피 200"],
             "mktcap": [10_000],
+            "aum": [9_500],
+            "shares": [100],
         }
     )
     us = pd.DataFrame(
@@ -36,21 +38,43 @@ def _source_parts():
     details = pd.DataFrame(
         {
             "ticker": ["AAPL", "SPY"],
+            "asof": pd.to_datetime(["2026-08-18", "2026-08-19"]),
             "market_cap": [3_000_000, None],
+            "shares_outstanding": [15_000, 1_000],
+            "weighted_shares_outstanding": [14_000, None],
             "sic_description": ["Technology", None],
             "list_date": pd.to_datetime(["1980-12-12", "1993-01-22"]),
+        }
+    )
+    prices = pd.DataFrame(
+        {
+            "date": pd.to_datetime(["2026-08-20", "2026-08-20"]),
+            "ticker": ["AAPL", "SPY"],
+            "close": [200.0, 500.0],
         }
     )
     return (
         am.kr_stock_rows(kr_master),
         am.kr_etf_rows(etf),
-        am.us_rows(us, details),
+        am.us_rows(us, details, prices),
     )
 
 
 def test_reconcile_preserves_ids_and_adds_new_listing_stably():
     source = am.compose_source_master(*_source_parts())
     assert str(source["marketcap"].dtype) == "Int64"
+    assert str(source["shares_outstanding"].dtype) == "Int64"
+    assert str(source["fund_size"].dtype) == "Int64"
+    aapl = source[source["ticker"].eq("AAPL")].iloc[0]
+    spy = source[source["ticker"].eq("SPY")].iloc[0]
+    assert aapl["security_subtype"] == "CS"
+    assert aapl["marketcap"] == 2_800_000
+    assert aapl["marketcap_source"] == "massive_close_x_weighted_shares"
+    assert aapl["marketcap_as_of"] == "2026-08-20"
+    assert aapl["reference_as_of"] == "2026-08-18"
+    assert pd.isna(spy["marketcap"])
+    assert spy["fund_size"] == 500_000
+    assert spy["fund_size_source"] == "estimate_close_x_share_class_shares"
     registry = pd.DataFrame(
         [
             {"meta_id": 2951, "iso_code": "KR", "ticker": "005930", "created_at": "old"},
