@@ -12,7 +12,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-import { useFetchPriceHistoryQuery, useFetchPriceSummaryQuery } from "@/state/api";
+import { useFetchPriceHistoryQuery, useFetchStockDetailQuery } from "@/state/api";
 import { MetaRow } from "./types";
 import InfoTip from "@/components/ui/InfoTip";
 import WatchlistStar from "@/components/ui/WatchlistStar";
@@ -79,9 +79,10 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
     { skip: !stock }
   );
 
-  // Fetch summary metrics
-  const { data: summaryData, isLoading: summaryLoading } =
-    useFetchPriceSummaryQuery(stock?.meta_id || 0, { skip: !stock });
+  // 목록 응답은 가볍게 유지하고, 패널을 열었을 때만 출처·기준일·주식수를 받는다.
+  const { data: detailData, isLoading: detailLoading } =
+    useFetchStockDetailQuery(stock?.meta_id || 0, { skip: !stock });
+  const summaryData = detailData?.summary;
 
   // Format chart data
   const chartData = useMemo(() => {
@@ -94,33 +95,40 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
 
   if (!stock) return null;
 
-  const isLoading = priceLoading || summaryLoading;
+  const isLoading = priceLoading || detailLoading;
   const metrics = summaryData?.metrics;
-  const isKr = stock.iso_code === "KR";
-  const isEtf = stock.security_type?.toLowerCase() === "etf";
-  const mktcap = summaryData?.mktcap ?? stock.marketcap ?? null;
-  const hasFundSizeContract = stock.fund_size !== undefined;
-  const size = isEtf && hasFundSizeContract ? (stock.fund_size ?? null) : mktcap;
+  const displayedStock = {
+    ...stock,
+    ...(detailData?.meta ?? {}),
+    security_type: detailData?.meta.security_type ?? stock.security_type,
+  };
+  const isKr = displayedStock.iso_code === "KR";
+  const isEtf = displayedStock.security_type?.toLowerCase() === "etf";
+  const mktcap = summaryData?.mktcap ?? displayedStock.marketcap ?? null;
+  const hasFundSizeContract = displayedStock.fund_size !== undefined;
+  const size =
+    isEtf && hasFundSizeContract ? (displayedStock.fund_size ?? null) : mktcap;
   let sizeLabel = "Market Cap";
   if (isEtf && hasFundSizeContract) {
     sizeLabel =
-      stock.fund_size_source === "estimate_close_x_share_class_shares"
+      displayedStock.fund_size_source === "estimate_close_x_share_class_shares"
         ? "Fund Size (est.)"
         : "Fund Size";
   }
   const sizeSource = isEtf
-    ? stock.fund_size_source
-    : stock.marketcap_source;
+    ? displayedStock.fund_size_source
+    : displayedStock.marketcap_source;
   const typeLabel =
-    stock.security_subtype &&
-    stock.security_subtype.toUpperCase() !== stock.security_type.toUpperCase()
-      ? `${stock.security_type} · ${stock.security_subtype}`
-      : stock.security_type;
+    displayedStock.security_subtype &&
+    displayedStock.security_subtype.toUpperCase() !==
+      displayedStock.security_type.toUpperCase()
+      ? `${displayedStock.security_type} · ${displayedStock.security_subtype}`
+      : displayedStock.security_type;
   const flows = summaryData?.flows_recent ?? null;
 
   return (
     <aside
-      aria-label={`${stock.name || stock.ticker} 상세 정보`}
+      aria-label={`${displayedStock.name || displayedStock.ticker} 상세 정보`}
       className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[400px] flex-col bg-surface shadow-2xl"
     >
       {/* Header */}
@@ -128,15 +136,15 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
         <div className="flex items-center gap-1">
           <div>
             <h2 className="text-lg font-semibold text-ink">
-              {stock.ticker}
+              {displayedStock.ticker}
             </h2>
-            <p className="text-sm text-ink-muted">{stock.name}</p>
+            <p className="text-sm text-ink-muted">{displayedStock.name}</p>
           </div>
-          <WatchlistStar metaId={stock.meta_id} size={18} />
+          <WatchlistStar metaId={displayedStock.meta_id} size={18} />
         </div>
         <div className="flex items-center gap-1">
           <Link
-            href={`/stock/${stock.meta_id}`}
+            href={`/stock/${displayedStock.meta_id}`}
             className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium
                        rounded-lg bg-raised text-ink-secondary hover:bg-overlay
                        hover:text-ink transition-colors"
@@ -172,7 +180,7 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
         <div className="grid grid-cols-2 gap-3">
           <MetricCard
             label={sizeLabel}
-            value={isKr ? fmtJo(size) : formatMarketCap(size, stock.iso_code)}
+            value={isKr ? fmtJo(size) : formatMarketCap(size, displayedStock.iso_code)}
           />
           <MetricCard
             label={isKr ? "Trading Value" : "Latest Price"}
@@ -180,7 +188,7 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
               ? summaryData?.value != null
                 ? fmtJo(summaryData.value)
                 : "—"
-              : formatPrice(summaryData?.latest_price, stock.iso_code)}
+              : formatPrice(summaryData?.latest_price, displayedStock.iso_code)}
           />
         </div>
 
@@ -241,7 +249,7 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
                     labelStyle={{ color: "var(--text-secondary)" }}
                     formatter={(value) => [
                       typeof value === "number"
-                        ? formatPrice(value, stock.iso_code)
+                        ? formatPrice(value, displayedStock.iso_code)
                         : String(value ?? "—"),
                       "가격",
                     ]}
@@ -372,24 +380,24 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
             Reference Data
           </h3>
           <div className="space-y-2 text-sm">
-            <InfoRow label="Sector" value={stock.sector || "—"} />
-            <InfoRow label="Market" value={stock.iso_code} />
+            <InfoRow label="Sector" value={displayedStock.sector || "—"} />
+            <InfoRow label="Market" value={displayedStock.iso_code} />
             <InfoRow
               label="Type"
               value={typeLabel}
             />
             <InfoRow
               label={sizeLabel}
-              value={formatMarketCap(size, stock.iso_code)}
+              value={formatMarketCap(size, displayedStock.iso_code)}
             />
             <InfoRow
               label="Shares Outstanding"
-              value={formatShares(stock.shares_outstanding)}
+              value={formatShares(displayedStock.shares_outstanding)}
             />
-            {stock.weighted_shares_outstanding != null && (
+            {displayedStock.weighted_shares_outstanding != null && (
               <InfoRow
                 label="Weighted Shares"
-                value={formatShares(stock.weighted_shares_outstanding)}
+                value={formatShares(displayedStock.weighted_shares_outstanding)}
               />
             )}
             {sizeSource && (
@@ -398,31 +406,38 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
                 value={formatReferenceSource(sizeSource)}
               />
             )}
-            {(stock.marketcap_as_of || stock.fund_size_as_of) && (
+            {(displayedStock.marketcap_as_of || displayedStock.fund_size_as_of) && (
               <InfoRow
                 label="Size as of"
-                value={formatDate(isEtf ? stock.fund_size_as_of : stock.marketcap_as_of)}
+                value={formatDate(
+                  isEtf
+                    ? displayedStock.fund_size_as_of
+                    : displayedStock.marketcap_as_of
+                )}
               />
             )}
-            {stock.reference_as_of && (
-              <InfoRow label="Reference as of" value={formatDate(stock.reference_as_of)} />
+            {displayedStock.reference_as_of && (
+              <InfoRow
+                label="Reference as of"
+                value={formatDate(displayedStock.reference_as_of)}
+              />
             )}
             {summaryData?.latest_price && (
               <InfoRow
                 label="Latest Price"
-                value={formatPrice(summaryData.latest_price, stock.iso_code)}
+                value={formatPrice(summaryData.latest_price, displayedStock.iso_code)}
               />
             )}
             {summaryData?.latest_date && (
               <InfoRow label="Price as of" value={formatDate(summaryData.latest_date)} />
             )}
           </div>
-          {stock.fund_size_source === "estimate_close_x_share_class_shares" && (
+          {displayedStock.fund_size_source === "estimate_close_x_share_class_shares" && (
             <p className="mt-3 text-xs leading-5 text-ink-muted">
               Fund Size는 최근 종가×발행좌수 추정치이며, 운용사가 보고한 AUM은 아닙니다.
             </p>
           )}
-          {stock.marketcap_source === "massive_close_x_weighted_shares" && (
+          {displayedStock.marketcap_source === "massive_close_x_weighted_shares" && (
             <p className="mt-3 text-xs leading-5 text-ink-muted">
               Market Cap은 최근 종가와 Massive 가중 발행주식수로 계산했습니다.
             </p>
@@ -433,7 +448,7 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
       {/* Actions */}
       <div className="p-4 border-t border-edge space-y-2">
         <button
-          onClick={() => onAddToCompare(stock.meta_id)}
+          onClick={() => onAddToCompare(displayedStock.meta_id)}
           className="w-full py-2 px-4 bg-primary-500 text-white font-medium rounded-lg
                      hover:bg-primary-600 transition-colors"
         >
