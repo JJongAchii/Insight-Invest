@@ -24,6 +24,7 @@ RELEASE_WINDOW_ET = {
     "tbd": time(23, 59),
 }
 RESULT_UNAVAILABLE_AFTER = timedelta(hours=72)
+SOURCE_REFRESH_GRACE_HOUR_KST = 10
 
 
 def _finite(value):
@@ -87,6 +88,45 @@ def _display_status(lifecycle: object, release_window_at: datetime, now: datetim
     return "result_unavailable"
 
 
+def _expected_source_day(now: datetime) -> date:
+    """09:00 배치 완료 유예 뒤에는 오늘, 그 전에는 직전 평일을 기대한다."""
+    expected = now.date()
+    if expected.weekday() >= 5 or now.hour < SOURCE_REFRESH_GRACE_HOUR_KST:
+        expected -= timedelta(days=1)
+    while expected.weekday() >= 5:
+        expected -= timedelta(days=1)
+    return expected
+
+
+def _source_with_freshness(source: dict | None, now: datetime) -> dict | None:
+    if source is None:
+        return None
+    out = dict(source)
+    expected = _expected_source_day(now)
+    parsed = pd.to_datetime(source.get("data_as_of"), errors="coerce")
+    observed = None if pd.isna(parsed) else parsed.date()
+    age_sessions = None
+    if observed is not None:
+        age_sessions = max(
+            0,
+            len(pd.bdate_range(observed + timedelta(days=1), expected)),
+        )
+    if str(source.get("status")) != "ok":
+        freshness = "attention"
+    elif observed is None or observed < expected:
+        freshness = "stale"
+    else:
+        freshness = "ready"
+    out.update(
+        {
+            "freshness": freshness,
+            "expected_as_of": expected.isoformat(),
+            "age_sessions": age_sessions,
+        }
+    )
+    return out
+
+
 @router.get("")
 def get_earnings(
     scope: str = Query("all", pattern="^(all|mine|portfolio|watchlist|leaders)$"),
@@ -100,7 +140,7 @@ def get_earnings(
     events = earnings_store.list_events()
     universe = earnings_store.list_universe()
     revisions = earnings_store.list_revisions()
-    source = earnings_store.source_status()
+    source = _source_with_freshness(earnings_store.source_status(), now)
 
     if events.empty:
         visible_universe = _search(_scope(universe, scope), q)

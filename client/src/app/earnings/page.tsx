@@ -375,7 +375,19 @@ export default function EarningsPage() {
     () => compactOverview ? (data?.recent_results ?? []).slice(0, 6) : data?.recent_results ?? [],
     [compactOverview, data],
   );
-  const sourceReady = data?.source?.status === "ok";
+  const sourceStale = data?.source?.freshness === "stale";
+  const sourceReady = data?.source?.status === "ok" && !sourceStale;
+  const sourceTitle = sourceStale
+    ? "Earnings Data Stale"
+    : sourceReady
+      ? "Earnings Data Ready"
+      : "Earnings Data Needs Attention";
+  const sourceMessage = sourceStale
+    ? `원본이 기대 기준일 ${data?.source?.expected_as_of ?? "—"}보다 오래됐습니다. 이 상태의 Actual 결측은 공급자 지연으로 해석하지 않습니다.`
+    : data?.source?.message ?? "아직 발행된 Earnings 데이터가 없습니다.";
+  const awaitingDescription = sourceStale
+    ? "원본 갱신이 지연되어 Actual 도착 여부를 아직 판정할 수 없습니다. 배치 복구 후 자동으로 다시 분류됩니다."
+    : "발표 후 표준 Actual을 기다리는 이벤트입니다. SEC 공식 공시가 먼저 확인되면 카드에 별도로 표시합니다.";
   const lastUpdated = dateTimeLabel(data?.source?.available_at);
   const hasVisibleEvents = tab === "calendar"
     ? upcoming.length > 0
@@ -487,12 +499,16 @@ export default function EarningsPage() {
           <div className="flex items-start gap-2">
             <Database size={17} className={sourceReady ? "text-gains" : "text-warning"} aria-hidden />
             <div className="min-w-0 flex-1">
-              <p className="font-medium text-ink">{sourceReady ? "Earnings Data Ready" : "Earnings Data Needs Attention"}</p>
+              <p className="font-medium text-ink">{sourceTitle}</p>
               <p className="mt-0.5 text-xs leading-5 text-ink-secondary">
-                {data.source?.message ?? "아직 발행된 Earnings 데이터가 없습니다."}
+                {sourceMessage}
                 {lastUpdated && ` · Last updated ${lastUpdated} KST`}
               </p>
-              <p className="mt-1 text-xs leading-5 text-ink-muted">정기 원본 갱신은 09:00·19:00 KST 배치 후 반영됩니다. 발표 후 실제치가 오기 전까지 해당 종목은 Awaiting Results에 유지됩니다.</p>
+              <p className="mt-1 text-xs leading-5 text-ink-muted">
+                {sourceStale
+                  ? "정기 원본 갱신이 지연됐습니다. 복구 전에는 Actual 결측을 공급자 지연으로 판단하지 않습니다."
+                  : "정기 원본 갱신은 09:00·19:00 KST 배치 후 반영됩니다. 발표 후 실제치가 오기 전까지 해당 종목은 Awaiting Results에 유지됩니다."}
+              </p>
               <details className="mt-2 text-xs text-ink-muted">
                 <summary className="cursor-pointer">Data Coverage</summary>
                 <p className="mt-2 leading-5">
@@ -511,7 +527,9 @@ export default function EarningsPage() {
         <div className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm">
           <p className="font-medium text-ink">Awaiting Results · {data.summary.awaiting_results}건</p>
           <p className="mt-1 text-xs leading-5 text-ink-secondary">
-            {data.summary.official_results_available > 0
+            {sourceStale
+              ? awaitingDescription
+              : data.summary.official_results_available > 0
               ? `이 중 ${data.summary.official_results_available}건은 SEC 공식 결과 공시가 확인됐습니다. 표준 Actual과 Beat/Miss는 Finnhub 값이 들어오면 자동으로 Reported로 전환됩니다.`
               : "발표 구간은 지났지만 Finnhub 실제치가 아직 도착하지 않은 이벤트입니다. Results에서 사라지지 않고 실제치가 들어오면 자동으로 Reported로 전환됩니다."}
           </p>
@@ -531,7 +549,7 @@ export default function EarningsPage() {
             <Section title="Upcoming Earnings" description={`향후 ${calendarDays}일의 공급자 발표 일정입니다. Estimated는 회사 확정 일정이라는 뜻이 아닙니다.`} items={upcoming} />
           )}
           {(tab === "overview" || tab === "results") && pending.length > 0 && (
-            <Section title="Awaiting Results" description="발표 후 표준 Actual을 기다리는 이벤트입니다. SEC 공식 공시가 먼저 확인되면 카드에 별도로 표시합니다." items={pending} />
+            <Section title="Awaiting Results" description={awaitingDescription} items={pending} />
           )}
           {tab === "overview" && results.length > 0 && (
             <Section title="Recent Results" description={`최근 ${resultsDays}일 발표치와 컨센서스 차이입니다. Beat/Miss는 EPS와 매출을 함께 비교합니다.`} items={results} />

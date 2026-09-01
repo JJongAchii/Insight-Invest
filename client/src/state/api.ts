@@ -747,6 +747,9 @@ export interface EarningsResponse {
     provider: string;
     label?: string;
     status: "ok" | "preserved" | "configuration_required" | "unavailable";
+    freshness?: "ready" | "stale" | "attention";
+    expected_as_of?: string | null;
+    age_sessions?: number | null;
     data_as_of?: string | null;
     available_at?: string;
     message?: string | null;
