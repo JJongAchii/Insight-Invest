@@ -23,6 +23,43 @@ def test_release_window_uses_us_market_date_instead_of_kst_midnight():
     )
 
 
+def test_source_freshness_is_stale_after_the_morning_refresh_window():
+    source = {
+        "provider": "finnhub",
+        "status": "ok",
+        "data_as_of": "2026-08-27",
+        "available_at": "2026-08-27T10:04:15+09:00",
+    }
+
+    result = earnings._source_with_freshness(
+        source,
+        datetime(2026, 9, 1, 15, 0, tzinfo=earnings.KST),
+    )
+
+    assert result["status"] == "ok"
+    assert result["freshness"] == "stale"
+    assert result["expected_as_of"] == "2026-09-01"
+    assert result["age_sessions"] == 3
+
+
+def test_source_freshness_uses_previous_weekday_before_morning_grace():
+    source = {
+        "provider": "finnhub",
+        "status": "ok",
+        "data_as_of": "2026-09-04",
+        "available_at": "2026-09-04T19:10:00+09:00",
+    }
+
+    result = earnings._source_with_freshness(
+        source,
+        datetime(2026, 9, 7, 9, 30, tzinfo=earnings.KST),
+    )
+
+    assert result["freshness"] == "ready"
+    assert result["expected_as_of"] == "2026-09-04"
+    assert result["age_sessions"] == 0
+
+
 def test_missing_post_release_actual_stays_visible_and_is_searchable(monkeypatch):
     today = datetime.now(earnings.KST).date()
     release = (today - timedelta(days=2)).isoformat()
