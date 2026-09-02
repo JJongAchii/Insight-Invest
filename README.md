@@ -14,9 +14,10 @@
 일정은 공급자가 회사 확정 여부를 주지 않으므로 Estimated로 표시한다. 정확한 어닝콜
 시각·웹캐스트·전문은 검증된 공급원이 없을 때 추정하지 않는다.
 
-`Research Radar`는 승인된 공개 출처의 퀀트 논문·자료를 별도 피드로 투영한다.
-출처·미열람 필터와 기기간 중복 방지 Web Push를 제공하며, 원문 열람 상태만
-앱에 저장하고 수집기의 canonical record는 변경하지 않는다.
+`Research Radar`는 승인된 공개 출처의 퀀트 논문·자료를 개인 서재로 투영한다.
+전체·안 읽음·읽음·보관함 보기, 제목·요약·저자·출처 검색, 모두 읽음과 기기간 중복
+방지 Web Push를 제공한다. 읽음·보관 상태만 앱에 저장하고 수집기의 canonical record는
+변경하지 않는다.
 
 ## 아키텍처 (2026-07 재구조)
 
@@ -60,7 +61,7 @@ Insight-Invest 쪽 변경은 pull 이후 서브프로세스로 새로 호출되�
 | 배포 | GitHub Actions → ECR → CloudFormation (`infra/template.yaml`) | 서빙 스택. 배치 EC2는 CFN 밖 (콘솔 생성) |
 | 배치 | EC2 `qdata-collector` + EventBridge Scheduler 2개 | 코드 갱신은 `git pull` — 배포 절차 없음 |
 | 프론트 | Next.js 16 (Vercel) | PWA·iOS Home Screen·Web Push |
-| 리서치 피드 | Research Radar canonical S3 → 10분 투영 Lambda → `app/research_feed.json` | 원문은 공개 URL, 읽음 상태만 별도 저장 |
+| 리서치 피드 | Research Radar canonical S3 → 10분 투영 Lambda → `app/research_feed.json` | 원문은 공개 URL, 읽음·보관 상태만 별도 저장 |
 
 ### Web Push
 

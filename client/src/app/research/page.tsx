@@ -1,13 +1,17 @@
 "use client";
 
 import {
+  Bookmark,
   BookOpen,
   Check,
+  CheckCheck,
   CheckCircle2,
   Clock3,
   ExternalLink,
-  RadioTower,
+  LibraryBig,
   RefreshCw,
+  Search,
+  X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -17,9 +21,24 @@ import LoadingState from "@/components/ui/LoadingState";
 import PageHeader from "@/components/ui/PageHeader";
 import {
   ResearchEntry,
+  ResearchView,
   useFetchResearchQuery,
+  useMarkAllResearchReadMutation,
   useUpdateResearchReadStateMutation,
+  useUpdateResearchSavedStateMutation,
 } from "@/state/api";
+
+const VIEW_OPTIONS = [
+  { value: "all", label: "전체", icon: LibraryBig },
+  { value: "unread", label: "안 읽음", icon: BookOpen },
+  { value: "read", label: "읽음", icon: CheckCircle2 },
+  { value: "saved", label: "보관함", icon: Bookmark },
+] as const;
+
+const parseView = (value: string | null): ResearchView => {
+  if (VIEW_OPTIONS.some((option) => option.value === value)) return value as ResearchView;
+  return "all";
+};
 
 const formatDate = (value: string) => {
   if (!value) return "날짜 미상";
@@ -43,22 +62,56 @@ const formatDateTime = (value: string) => {
   }).format(date);
 };
 
-const replaceFiltersInUrl = (sourceId: string, unreadOnly: boolean) => {
+const replaceLibraryUrl = (sourceId: string, view: ResearchView, query: string) => {
   const url = new URL(window.location.href);
   if (sourceId) url.searchParams.set("source", sourceId);
   else url.searchParams.delete("source");
-  if (unreadOnly) url.searchParams.set("filter", "unread");
-  else url.searchParams.delete("filter");
+  if (view !== "all") url.searchParams.set("view", view);
+  else url.searchParams.delete("view");
+  if (query) url.searchParams.set("q", query);
+  else url.searchParams.delete("q");
+  url.searchParams.delete("filter");
   url.searchParams.delete("entry");
   window.history.replaceState(window.history.state, "", url);
 };
 
-function ResearchCard({ item, selected }: { item: ResearchEntry; selected: boolean }) {
-  const [updateReadState, { isLoading }] = useUpdateResearchReadStateMutation();
+function ResearchCard({
+  item,
+  selected,
+  onError,
+}: {
+  item: ResearchEntry;
+  selected: boolean;
+  onError: (message: string) => void;
+}) {
+  const [updateReadState, { isLoading: isUpdatingRead }] =
+    useUpdateResearchReadStateMutation();
+  const [updateSavedState, { isLoading: isUpdatingSaved }] =
+    useUpdateResearchSavedStateMutation();
   const authors = item.authors.filter(Boolean).join(", ");
 
-  const markRead = () => {
-    if (!item.is_read) void updateReadState({ entryId: item.entry_id, read: true });
+  const toggleRead = async () => {
+    try {
+      await updateReadState({ entryId: item.entry_id, read: !item.is_read }).unwrap();
+    } catch {
+      onError("읽음 상태를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    }
+  };
+
+  const toggleSaved = async () => {
+    try {
+      await updateSavedState({ entryId: item.entry_id, saved: !item.is_saved }).unwrap();
+    } catch {
+      onError("보관 상태를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    }
+  };
+
+  const markReadOnOpen = () => {
+    if (!item.is_read) {
+      void updateReadState({ entryId: item.entry_id, read: true })
+        .unwrap()
+        .catch(() => onError("원문은 열었지만 읽음 상태를 저장하지 못했습니다."));
+    }
   };
 
   return (
@@ -83,6 +136,11 @@ function ResearchCard({ item, selected }: { item: ResearchEntry; selected: boole
                 New
               </span>
             )}
+            {item.is_saved && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary-500/15 px-2 py-0.5 font-medium text-primary-300">
+                <Bookmark size={11} fill="currentColor" aria-hidden /> 보관됨
+              </span>
+            )}
             <span className="inline-flex items-center gap-1 sm:ml-auto">
               <Clock3 size={13} aria-hidden />
               {formatDate(item.published_at || item.discovered_at)}
@@ -103,20 +161,30 @@ function ResearchCard({ item, selected }: { item: ResearchEntry; selected: boole
               target="_blank"
               rel="noopener noreferrer"
               className="btn-primary inline-flex items-center gap-1.5"
-              onClick={markRead}
+              onClick={markReadOnOpen}
             >
               원문 열기 <ExternalLink size={15} aria-hidden />
             </a>
             <button
               type="button"
               className="btn-secondary inline-flex items-center gap-1.5"
-              onClick={() =>
-                updateReadState({ entryId: item.entry_id, read: !item.is_read })
-              }
-              disabled={isLoading}
+              onClick={() => void toggleRead()}
+              disabled={isUpdatingRead}
             >
               {item.is_read ? <BookOpen size={15} /> : <Check size={15} />}
-              {item.is_read ? "읽지 않음으로" : "읽음 표시"}
+              {item.is_read ? "안 읽음으로" : "읽음 표시"}
+            </button>
+            <button
+              type="button"
+              aria-pressed={item.is_saved}
+              className={`btn-secondary inline-flex items-center gap-1.5 ${
+                item.is_saved ? "text-primary-300" : ""
+              }`}
+              onClick={() => void toggleSaved()}
+              disabled={isUpdatingSaved}
+            >
+              <Bookmark size={15} fill={item.is_saved ? "currentColor" : "none"} />
+              {item.is_saved ? "보관 해제" : "보관"}
             </button>
           </div>
         </div>
@@ -127,22 +195,49 @@ function ResearchCard({ item, selected }: { item: ResearchEntry; selected: boole
 
 export default function ResearchPage() {
   const [sourceId, setSourceId] = useState("");
-  const [unreadOnly, setUnreadOnly] = useState(false);
+  const [view, setView] = useState<ResearchView>("all");
+  const [searchInput, setSearchInput] = useState("");
+  const [query, setQuery] = useState("");
   const [entryId, setEntryId] = useState("");
   const [initialized, setInitialized] = useState(false);
+  const [notice, setNotice] = useState<{ kind: "success" | "error"; message: string } | null>(
+    null,
+  );
+  const [markAllRead, { isLoading: isMarkingAllRead }] = useMarkAllResearchReadMutation();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const initialView = params.get("filter") === "unread" ? "unread" : parseView(params.get("view"));
+    const initialQuery = params.get("q")?.trim() ?? "";
     setSourceId(params.get("source") ?? "");
-    setUnreadOnly(params.get("filter") === "unread");
+    setView(initialView);
+    setSearchInput(initialQuery);
+    setQuery(initialQuery);
     setEntryId(params.get("entry") ?? "");
     setInitialized(true);
   }, []);
 
+  useEffect(() => {
+    if (!initialized) return;
+    if (searchInput.trim() === query) return;
+    const timer = window.setTimeout(() => {
+      const nextQuery = searchInput.trim();
+      setQuery(nextQuery);
+      setEntryId("");
+      const url = new URL(window.location.href);
+      if (nextQuery) url.searchParams.set("q", nextQuery);
+      else url.searchParams.delete("q");
+      url.searchParams.delete("entry");
+      window.history.replaceState(window.history.state, "", url);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [initialized, query, searchInput]);
+
   const { data, isLoading, error, refetch, isFetching } = useFetchResearchQuery(
     {
       sourceId: sourceId || undefined,
-      unreadOnly,
+      view,
+      query: query || undefined,
       entryId: entryId || undefined,
       limit: 500,
     },
@@ -172,61 +267,170 @@ export default function ResearchPage() {
   const selectSource = (value: string) => {
     setSourceId(value);
     setEntryId("");
-    replaceFiltersInUrl(value, unreadOnly);
+    replaceLibraryUrl(value, view, query);
   };
 
-  const selectUnread = (value: boolean) => {
-    setUnreadOnly(value);
+  const selectView = (value: ResearchView) => {
+    setView(value);
     setEntryId("");
-    replaceFiltersInUrl(sourceId, value);
+    replaceLibraryUrl(sourceId, value, query);
   };
+
+  const clearSearch = () => {
+    setSearchInput("");
+    setQuery("");
+    setEntryId("");
+    replaceLibraryUrl(sourceId, view, "");
+  };
+
+  const markEverythingRead = async () => {
+    const unread = data?.unread ?? 0;
+    if (!unread) return;
+    if (!window.confirm(`읽지 않은 자료 ${unread}건을 모두 읽음으로 표시할까요?`)) return;
+    try {
+      const result = await markAllRead().unwrap();
+      setView("all");
+      setEntryId("");
+      replaceLibraryUrl(sourceId, "all", query);
+      setNotice({
+        kind: "success",
+        message: `${result.updated}건을 읽음으로 표시했습니다. 자료는 전체와 읽음에서 계속 볼 수 있습니다.`,
+      });
+    } catch {
+      setNotice({
+        kind: "error",
+        message: "모두 읽음 처리를 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      });
+    }
+  };
+
+  const counts: Record<ResearchView, number> = {
+    all: (data?.unread ?? 0) + (data?.read ?? 0),
+    unread: data?.unread ?? 0,
+    read: data?.read ?? 0,
+    saved: data?.saved ?? 0,
+  };
+
+  const emptyTitle = query
+    ? `“${query}” 검색 결과가 없습니다`
+    : view === "saved"
+      ? "보관한 자료가 없습니다"
+      : view === "read"
+        ? "읽은 자료가 없습니다"
+        : view === "unread"
+          ? "읽지 않은 자료가 없습니다"
+          : "조건에 맞는 자료가 없습니다";
 
   return (
     <div className="flex flex-col gap-6 pb-20">
       <PageHeader
-        title="Research Radar"
-        description="검증된 공개 출처에서 새로 발견한 퀀트 논문과 자료를 한곳에서 확인합니다"
+        title="Research Library"
+        description="새 자료를 발견하고, 읽고, 다시 찾을 자료를 보관하는 개인 퀀트 리서치 서재"
         actions={
-          <button
-            type="button"
-            className="btn-secondary inline-flex items-center gap-1.5"
-            onClick={() => refetch()}
-            disabled={!initialized || isFetching}
-          >
-            <RefreshCw size={15} className={isFetching ? "animate-spin" : ""} />
-            새로고침
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="btn-secondary inline-flex items-center gap-1.5"
+              onClick={() => void markEverythingRead()}
+              disabled={!data?.unread || isMarkingAllRead}
+            >
+              <CheckCheck size={15} />
+              {isMarkingAllRead ? "처리 중…" : "모두 읽음"}
+            </button>
+            <button
+              type="button"
+              className="btn-secondary inline-flex items-center gap-1.5"
+              onClick={() => refetch()}
+              disabled={!initialized || isFetching}
+            >
+              <RefreshCw size={15} className={isFetching ? "animate-spin" : ""} />
+              새로고침
+            </button>
+          </div>
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-        <div className="rounded-2xl border border-edge bg-surface p-4">
-          <div className="flex items-center gap-2 text-xs text-ink-muted">
-            <RadioTower size={15} /> 현재 목록
-          </div>
-          <p className="mt-2 text-2xl font-semibold text-ink num">{data?.total ?? 0}</p>
+      {notice && (
+        <div
+          role={notice.kind === "error" ? "alert" : "status"}
+          className={`flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm ${
+            notice.kind === "error"
+              ? "border-red-500/30 bg-red-500/10 text-red-300"
+              : "border-primary-500/30 bg-primary-500/10 text-primary-300"
+          }`}
+        >
+          <span>{notice.message}</span>
+          <button type="button" onClick={() => setNotice(null)} aria-label="알림 닫기">
+            <X size={16} />
+          </button>
         </div>
-        <div className="rounded-2xl border border-edge bg-surface p-4">
-          <div className="flex items-center gap-2 text-xs text-ink-muted">
-            <BookOpen size={15} /> 읽지 않음
-          </div>
-          <p className="mt-2 text-2xl font-semibold text-ink num">{data?.unread ?? 0}</p>
-        </div>
-        <div className="col-span-2 rounded-2xl border border-edge bg-surface p-4 lg:col-span-1">
-          <div className="flex items-center gap-2 text-xs text-ink-muted">
-            <Clock3 size={15} /> 마지막 신규 반영
-          </div>
-          <p className="mt-2 text-sm font-medium text-ink">
-            {data?.generated_at ? formatDateTime(data.generated_at) : "준비 중"}
-          </p>
-        </div>
-      </div>
+      )}
 
       {entryId && (
         <div className="rounded-xl border border-primary-500/30 bg-primary-500/10 px-4 py-3 text-sm text-primary-300">
-          알림에서 선택한 자료를 표시하고 있습니다.
+          알림에서 선택한 자료를 표시하고 있습니다. 읽은 뒤에도 전체·읽음·보관함에서 다시 찾을
+          수 있습니다.
         </div>
       )}
+
+      <section className="space-y-3 rounded-2xl border border-edge bg-surface p-4 sm:p-5">
+        <label className="relative block">
+          <span className="sr-only">리서치 검색</span>
+          <Search
+            size={18}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted"
+            aria-hidden
+          />
+          <input
+            type="search"
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            className="input w-full pl-10 pr-10"
+            placeholder="제목, 요약, 저자, 출처 검색"
+            maxLength={200}
+          />
+          {searchInput && (
+            <button
+              type="button"
+              onClick={clearSearch}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink"
+              aria-label="검색어 지우기"
+            >
+              <X size={17} />
+            </button>
+          )}
+        </label>
+
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="리서치 보기 방식">
+          {VIEW_OPTIONS.map((option) => {
+            const Icon = option.icon;
+            const active = view === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={active}
+                onClick={() => selectView(option.value)}
+                className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-3 text-sm transition-colors ${
+                  active
+                    ? "border-primary-500 bg-primary-500/15 text-primary-300"
+                    : "border-edge bg-surface-raised text-ink-secondary hover:text-ink"
+                }`}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Icon size={16} /> {option.label}
+                </span>
+                <span className="num text-xs">{counts[option.value]}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <p className="text-xs leading-5 text-ink-muted">
+          읽음은 삭제가 아닙니다. 전체 또는 읽음에서 언제든 다시 보고, 중요한 자료는 보관함에
+          따로 남길 수 있습니다.
+        </p>
+      </section>
 
       <section className="flex flex-col gap-3 rounded-2xl border border-edge bg-surface p-4 sm:flex-row sm:items-end">
         <label className="flex min-w-0 flex-1 flex-col gap-1.5 text-xs font-medium text-ink-muted">
@@ -244,36 +448,45 @@ export default function ResearchPage() {
             ))}
           </select>
         </label>
-        <button
-          type="button"
-          aria-pressed={unreadOnly}
-          className={unreadOnly ? "btn-primary" : "btn-secondary"}
-          onClick={() => selectUnread(!unreadOnly)}
-        >
-          읽지 않은 자료만
-        </button>
+        <div className="flex min-w-44 flex-col gap-1 text-xs text-ink-muted sm:text-right">
+          <span>
+            결과 <strong className="font-semibold text-ink">{data?.total ?? 0}</strong>건
+          </span>
+          <span>
+            마지막 반영 {data?.generated_at ? formatDateTime(data.generated_at) : "준비 중"}
+          </span>
+        </div>
       </section>
 
       {error ? (
         <div className="card">
-          <ErrorState message="Research 피드를 불러오지 못했습니다." onRetry={refetch} />
+          <ErrorState message="Research Library를 불러오지 못했습니다." onRetry={refetch} />
         </div>
       ) : isLoading || !initialized ? (
         <div className="card">
-          <LoadingState label="Research 피드를 불러오는 중..." />
+          <LoadingState label="Research Library를 불러오는 중..." />
         </div>
       ) : !data?.items.length ? (
         <div className="card">
           <EmptyState
-            icon={<CheckCircle2 size={28} />}
-            title={entryId ? "선택한 자료를 찾지 못했습니다" : "조건에 맞는 자료가 없습니다"}
-            hint="출처 또는 읽음 필터를 바꾸거나 잠시 후 다시 확인해 주세요."
+            icon={view === "saved" ? <Bookmark size={28} /> : <CheckCircle2 size={28} />}
+            title={entryId ? "선택한 자료를 찾지 못했습니다" : emptyTitle}
+            hint={
+              view === "saved"
+                ? "자료 카드의 보관 버튼을 누르면 여기에 계속 남습니다."
+                : "검색어·출처·보기 방식을 바꾸거나 잠시 후 다시 확인해 주세요."
+            }
           />
         </div>
       ) : (
         <div className="space-y-3">
           {data.items.map((item) => (
-            <ResearchCard key={item.entry_id} item={item} selected={item.entry_id === entryId} />
+            <ResearchCard
+              key={item.entry_id}
+              item={item}
+              selected={item.entry_id === entryId}
+              onError={(message) => setNotice({ kind: "error", message })}
+            />
           ))}
         </div>
       )}

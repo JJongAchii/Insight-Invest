@@ -87,4 +87,16 @@ jobs:
             "$URL/meta" >/dev/null
           curl -sf -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
             -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
-            "$URL/research?limit=1" | jq -e '.total > 0 and (.items | length) == 1'
+            "$URL/research?limit=1" | jq -e \
+              '.total > 0 and (.items | length) == 1 and .read >= 0 and .saved >= 0
+               and .view == "all" and (.items[0].is_saved | type) == "boolean"'
+          curl -sf -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
+            -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
+            "$URL/research?view=saved&q=__deployment_smoke_no_match__&limit=1" | jq -e \
+              '.view == "saved" and .query == "__deployment_smoke_no_match__"
+               and (.items | length) == 0'
+          curl -sf -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
+            -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
+            "$URL/openapi.json" | jq -e \
+              '.paths["/research/{entry_id}/saved"].put
+               and .paths["/research/read/all"].put'
