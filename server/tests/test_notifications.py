@@ -42,3 +42,45 @@ def test_subscription_roundtrip_and_delivery_receipt(monkeypatch, tmp_path):
     )
     assert result["unsubscribed"] is True
     assert notifications.list_subscriptions().empty
+
+
+def test_dispatch_supports_research_digest_payload(monkeypatch, tmp_path):
+    monkeypatch.setenv("APP_DATA", str(tmp_path))
+    monkeypatch.setenv("WEB_PUSH_PUBLIC_KEY", "public")
+    monkeypatch.setenv("WEB_PUSH_PRIVATE_KEY", "private")
+    notifications.upsert_subscription("https://push.example.test/research", "p" * 32, "a" * 16)
+    captured = []
+    monkeypatch.setattr(
+        action_push,
+        "send_to_subscription",
+        lambda _subscription, payload: captured.append(payload),
+    )
+    events = [
+        {
+            "event_id": f"research:{entry_id}",
+            "severity": "medium",
+            "state": "new",
+            "title": title,
+            "link": f"/research?entry={entry_id}",
+        }
+        for entry_id, title in [("a" * 64, "First paper"), ("b" * 64, "Second paper")]
+    ]
+
+    result = action_push.dispatch(
+        events,
+        notification_title="Research Radar",
+        digest_url="/research?filter=unread",
+        tag_prefix="insight-research",
+    )
+
+    assert result["sent"] == 1
+    assert captured == [
+        {
+            "title": "Research Radar",
+            "body": "First paper 외 1건",
+            "tag": "insight-research-digest",
+            "url": "/research?filter=unread",
+            "event_id": f"research:{'a' * 64}",
+            "badge": 2,
+        }
+    ]

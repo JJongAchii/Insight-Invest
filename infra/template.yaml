@@ -85,6 +85,7 @@ Resources:
                   - !Sub arn:aws:s3:::${DataBucket}/app/action_states.parquet
                   - !Sub arn:aws:s3:::${DataBucket}/app/notification_subscriptions.parquet
                   - !Sub arn:aws:s3:::${DataBucket}/app/notification_deliveries.parquet
+                  - !Sub arn:aws:s3:::${DataBucket}/app/research_read_state.parquet
                   - !Sub arn:aws:s3:::${DataBucket}/app/decision_journal.parquet
                   - !Sub arn:aws:s3:::${DataBucket}/app/decision_journal_reviews.parquet
 
@@ -374,6 +375,103 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt ActionPollerScheduleEvening.Arn
+
+  ResearchPollerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: research-feed-and-notifications
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ListResearchAndAppPrefixes
+                Effect: Allow
+                Action: [s3:ListBucket]
+                Resource: !Sub arn:aws:s3:::${DataBucket}
+                Condition:
+                  StringLike:
+                    s3:prefix:
+                      - research-radar/public/records/*
+                      - research-radar/realtime/pending/*
+                      - app/*
+              - Sid: ReadResearchAndNotificationState
+                Effect: Allow
+                Action: [s3:GetObject]
+                Resource:
+                  - !Sub arn:aws:s3:::${DataBucket}/research-radar/public/records/*
+                  - !Sub arn:aws:s3:::${DataBucket}/research-radar/realtime/pending/*
+                  - !Sub arn:aws:s3:::${DataBucket}/app/research_feed.json
+                  - !Sub arn:aws:s3:::${DataBucket}/app/notification_subscriptions.parquet
+                  - !Sub arn:aws:s3:::${DataBucket}/app/notification_deliveries.parquet
+              - Sid: WriteProjectionAndNotificationState
+                Effect: Allow
+                Action: [s3:PutObject]
+                Resource:
+                  - !Sub arn:aws:s3:::${DataBucket}/app/research_feed.json
+                  - !Sub arn:aws:s3:::${DataBucket}/app/notification_subscriptions.parquet
+                  - !Sub arn:aws:s3:::${DataBucket}/app/notification_deliveries.parquet
+              - Sid: SettlePendingResearchDelivery
+                Effect: Allow
+                Action: [s3:DeleteObject]
+                Resource:
+                  - !Sub arn:aws:s3:::${DataBucket}/research-radar/realtime/pending/*
+
+  ResearchPollerLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: /aws/lambda/insight-invest-research-poller
+      RetentionInDays: 14
+
+  ResearchPollerFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: ResearchPollerLogGroup
+    Properties:
+      FunctionName: insight-invest-research-poller
+      PackageType: Image
+      Code: { ImageUri: !Ref ImageUri }
+      ImageConfig: { Command: ["app.research_poller.handler"] }
+      Role: !GetAtt ResearchPollerRole.Arn
+      Architectures: [x86_64]
+      MemorySize: 1024
+      Timeout: 120
+      ReservedConcurrentExecutions: 1
+      Environment:
+        Variables:
+          APP_DATA: !Sub s3://${DataBucket}/app
+          RADAR_BUCKET: !Ref DataBucket
+          RADAR_RECORD_PREFIX: research-radar/public/records/
+          RADAR_PENDING_PREFIX: research-radar/realtime/pending/
+          WEB_PUSH_PUBLIC_KEY: !Ref WebPushPublicKey
+          WEB_PUSH_PRIVATE_KEY: !Ref WebPushPrivateKey
+          WEB_PUSH_SUBJECT: !Ref WebPushSubject
+
+  # Radar collector가 :07/:17/...에 실행되므로 5분 뒤 투영·발행한다.
+  ResearchPollerSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: insight-invest-research-poll
+      ScheduleExpression: cron(2/10 * * * ? *)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ResearchPollerFunction.Arn
+          Id: research-poller
+
+  ResearchPollerInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ResearchPollerFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ResearchPollerSchedule.Arn
 
 Outputs:
   FunctionUrl:

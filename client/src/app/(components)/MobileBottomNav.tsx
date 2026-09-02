@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BellRing, BriefcaseBusiness, Home, Search } from "lucide-react";
+import { BellRing, BriefcaseBusiness, Home, LibraryBig, Search } from "lucide-react";
 
 const items = [
   { href: "/home", label: "Home", icon: Home },
   { href: "/actions", label: "Actions", icon: BellRing },
+  { href: "/research", label: "Research", icon: LibraryBig },
   { href: "/stocksearch", label: "Search", icon: Search },
   { href: "/portfolio", label: "Portfolio", icon: BriefcaseBusiness },
 ];
@@ -17,7 +18,7 @@ export default function MobileBottomNav() {
   return (
     <nav
       aria-label="Primary navigation"
-      className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-edge bg-surface/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-edge bg-surface/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
     >
       {items.map(({ href, label, icon: Icon }) => {
         const active = pathname === href || pathname.startsWith(`${href}/`);

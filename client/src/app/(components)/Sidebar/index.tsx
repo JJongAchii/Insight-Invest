@@ -16,6 +16,7 @@ import {
   IoShieldCheckmark,
   IoNotifications,
   IoCalendar,
+  IoLibrary,
 } from "react-icons/io5";
 import { FaRunning, FaList } from "react-icons/fa";
 import { IconType } from "react-icons";
@@ -221,6 +222,13 @@ const Sidebar = ({
 
         {/* Research Lab: 투자 화면과 연구 도구를 시각적으로 분리한다. */}
         <SectionHeader label="Research Lab" isCollapsed={isSidebarCollapsed} />
+        <SidebarLink
+          href="/research"
+          icon={IoLibrary}
+          label="Research Feed"
+          isCollapsed={isSidebarCollapsed}
+          onClick={onMobileClose}
+        />
         <SidebarLink
           href="/backtest/simulation"
           icon={FaRunning}

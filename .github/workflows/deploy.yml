@@ -75,9 +75,16 @@ jobs:
 
       - name: Smoke test
         run: |
+          aws lambda invoke --function-name insight-invest-research-poller \
+            /tmp/research-poller.json >/dev/null
+          jq -e '.ok == true and .delivery_ready == true and (.projection.records > 0)' \
+            /tmp/research-poller.json
           URL=$(aws cloudformation describe-stacks --stack-name insight-invest-api \
             --query 'Stacks[0].Outputs[?OutputKey==`FunctionUrl`].OutputValue' --output text)
           curl -sf "$URL/health" | grep healthy
           curl -sf -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
             -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
             "$URL/meta" >/dev/null
+          curl -sf -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
+            -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
+            "$URL/research?limit=1" | jq -e '.total > 0 and (.items | length) == 1'
