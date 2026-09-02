@@ -663,6 +663,7 @@ export interface ResearchEntry {
   published_at: string;
   discovered_at: string;
   is_read: boolean;
+  is_saved: boolean;
 }
 
 export interface ResearchSource {
@@ -676,15 +677,22 @@ export interface ResearchFeedResponse {
   generated_at: string | null;
   total: number;
   unread: number;
+  read: number;
+  saved: number;
+  view: ResearchView;
+  query: string;
   offset: number;
   limit: number;
   sources: ResearchSource[];
   items: ResearchEntry[];
 }
 
+export type ResearchView = "all" | "unread" | "read" | "saved";
+
 export interface ResearchFeedParams {
   sourceId?: string;
-  unreadOnly?: boolean;
+  view?: ResearchView;
+  query?: string;
   entryId?: string;
   offset?: number;
   limit?: number;
@@ -1875,7 +1883,8 @@ export const api = createApi({
       query: (params) => {
         const query = new URLSearchParams();
         if (params?.sourceId) query.set("source_id", params.sourceId);
-        if (params?.unreadOnly) query.set("unread_only", "true");
+        if (params?.view && params.view !== "all") query.set("view", params.view);
+        if (params?.query?.trim()) query.set("q", params.query.trim());
         if (params?.entryId) query.set("entry_id", params.entryId);
         if (params?.offset) query.set("offset", String(params.offset));
         if (params?.limit) query.set("limit", String(params.limit));
@@ -1892,6 +1901,27 @@ export const api = createApi({
         url: `/research/${entryId}/read`,
         method: "PUT",
         body: { read },
+      }),
+      invalidatesTags: ["Research"],
+    }),
+    updateResearchSavedState: builder.mutation<
+      { entry_id: string; is_saved: boolean },
+      { entryId: string; saved: boolean }
+    >({
+      query: ({ entryId, saved }) => ({
+        url: `/research/${entryId}/saved`,
+        method: "PUT",
+        body: { saved },
+      }),
+      invalidatesTags: ["Research"],
+    }),
+    markAllResearchRead: builder.mutation<
+      { updated: number; total: number; unread: number },
+      void
+    >({
+      query: () => ({
+        url: "/research/read/all",
+        method: "PUT",
       }),
       invalidatesTags: ["Research"],
     }),
@@ -2167,6 +2197,8 @@ export const {
   useFetchActionsQuery,
   useFetchResearchQuery,
   useUpdateResearchReadStateMutation,
+  useUpdateResearchSavedStateMutation,
+  useMarkAllResearchReadMutation,
   useFetchEarningsQuery,
   useUpdateActionStateMutation,
   useFetchNotificationConfigQuery,

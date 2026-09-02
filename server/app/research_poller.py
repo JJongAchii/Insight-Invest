@@ -31,7 +31,7 @@ def run(*, s3: Any | None = None) -> dict:
     push = action_push.dispatch(
         [_event(record) for _, record in pending],
         notification_title="Research Radar",
-        digest_url="/research?filter=unread",
+        digest_url="/research?view=unread",
         tag_prefix="insight-research",
     )
     enabled = bool(push.get("enabled"))

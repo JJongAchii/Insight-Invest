@@ -51,7 +51,7 @@ def test_poller_batches_research_push_and_deletes_settled_pending(monkeypatch):
     assert captured["events"][0]["link"] == f"/research?entry={'a' * 64}"
     assert captured["dispatch_kwargs"] == {
         "notification_title": "Research Radar",
-        "digest_url": "/research?filter=unread",
+        "digest_url": "/research?view=unread",
         "tag_prefix": "insight-research",
     }
 
