@@ -2,6 +2,7 @@
 
 import re
 import unicodedata
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -20,6 +21,10 @@ class ResearchReadRequest(BaseModel):
 
 class ResearchSavedRequest(BaseModel):
     saved: bool = True
+
+
+class ResearchSeenRequest(BaseModel):
+    through: datetime
 
 
 def _validate_entry_id(entry_id: str) -> None:
@@ -41,6 +46,35 @@ def _matches_query(item: dict, query: str) -> bool:
     ]
     searchable = _normalise_search(" ".join(str(value) for value in values))
     return all(token in searchable for token in _normalise_search(query).split())
+
+
+def _research_status(feed: dict, seen_through: datetime | None) -> dict:
+    return {
+        "schema_version": 1,
+        "initialized": seen_through is not None,
+        "unseen": research_store.unseen_entry_count(feed["items"], seen_through),
+        "generated_at": feed.get("generated_at"),
+        "seen_through": seen_through.isoformat() if seen_through else None,
+    }
+
+
+@router.get("/status")
+def get_research_status():
+    feed = research_store.load_feed()
+    return _research_status(feed, research_store.load_seen_through())
+
+
+@router.put("/seen")
+def acknowledge_research_feed(request: ResearchSeenRequest):
+    if request.through.tzinfo is None:
+        raise HTTPException(status_code=422, detail="research seen timestamp requires timezone")
+    feed = research_store.load_feed()
+    generated_at = research_store.parse_timestamp(feed.get("generated_at"))
+    if generated_at is None:
+        return _research_status(feed, research_store.load_seen_through())
+    requested = request.through.astimezone(timezone.utc)
+    seen_through = research_store.save_seen_through(min(requested, generated_at))
+    return _research_status(feed, seen_through)
 
 
 @router.get("")

@@ -14,7 +14,7 @@ client = TestClient(app)
 def _feed(first_id, second_id):
     return {
         "schema_version": 1,
-        "generated_at": "2026-09-02T00:00:00+00:00",
+        "generated_at": "2026-09-02T00:10:00+00:00",
         "items": [
             {
                 "entry_id": first_id,
@@ -23,6 +23,7 @@ def _feed(first_id, second_id):
                 "title": "First paper",
                 "summary": "Robust portfolio construction",
                 "authors": ["Alice Quant"],
+                "discovered_at": "2026-09-02T00:01:00+00:00",
             },
             {
                 "entry_id": second_id,
@@ -31,6 +32,7 @@ def _feed(first_id, second_id):
                 "title": "Second paper",
                 "summary": "Volatility forecasting",
                 "authors": ["Bob Risk"],
+                "discovered_at": "2026-09-02T00:02:00+00:00",
             },
         ],
     }
@@ -186,3 +188,94 @@ def test_mark_all_read_static_route_is_not_captured_as_entry_id(monkeypatch, tmp
 
     assert response.status_code == 200
     assert response.json() == {"updated": 2, "total": 2, "unread": 0}
+
+
+def test_research_status_baselines_existing_feed_then_counts_only_new_entries(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("APP_DATA", str(tmp_path))
+    first_id = "a" * 64
+    second_id = "b" * 64
+    feed = _feed(first_id, second_id)
+    research_store.save_feed(feed)
+
+    initial = research.get_research_status()
+    assert initial == {
+        "schema_version": 1,
+        "initialized": False,
+        "unseen": 0,
+        "generated_at": "2026-09-02T00:10:00+00:00",
+        "seen_through": None,
+    }
+
+    baseline = research.acknowledge_research_feed(
+        research.ResearchSeenRequest(through="2026-09-02T00:10:00+00:00")
+    )
+    assert baseline["initialized"] is True
+    assert baseline["unseen"] == 0
+    assert baseline["seen_through"] == "2026-09-02T00:10:00+00:00"
+
+    feed["generated_at"] = "2026-09-02T00:12:00+00:00"
+    feed["items"].append(
+        {
+            "entry_id": "c" * 64,
+            "source_id": "gamma",
+            "source_name": "Gamma Research",
+            "title": "Third paper",
+            "summary": "New evidence",
+            "authors": ["Carol Signal"],
+            "discovered_at": "2026-09-02T00:11:00+00:00",
+        }
+    )
+    research_store.save_feed(feed)
+
+    assert research.get_research_status()["unseen"] == 1
+
+    stale_ack = research.acknowledge_research_feed(
+        research.ResearchSeenRequest(through="2026-09-02T00:10:00+00:00")
+    )
+    assert stale_ack["unseen"] == 1
+    assert stale_ack["seen_through"] == "2026-09-02T00:10:00+00:00"
+
+    current_ack = research.acknowledge_research_feed(
+        research.ResearchSeenRequest(through="2026-09-02T00:12:00+00:00")
+    )
+    assert current_ack["unseen"] == 0
+    assert current_ack["seen_through"] == "2026-09-02T00:12:00+00:00"
+
+
+def test_research_seen_watermark_is_monotonic_and_capped_at_current_feed(monkeypatch, tmp_path):
+    monkeypatch.setenv("APP_DATA", str(tmp_path))
+    research_store.save_feed(_feed("a" * 64, "b" * 64))
+
+    future = research.acknowledge_research_feed(
+        research.ResearchSeenRequest(through="2099-01-01T00:00:00+00:00")
+    )
+    assert future["seen_through"] == "2026-09-02T00:10:00+00:00"
+
+    older = research.acknowledge_research_feed(
+        research.ResearchSeenRequest(through="2026-09-01T00:00:00+00:00")
+    )
+    assert older["seen_through"] == "2026-09-02T00:10:00+00:00"
+
+    with pytest.raises(HTTPException) as naive:
+        research.acknowledge_research_feed(
+            research.ResearchSeenRequest(through="2026-09-02T00:10:00")
+        )
+    assert naive.value.status_code == 422
+
+
+def test_research_status_and_seen_routes_are_deployed_as_static_paths(monkeypatch, tmp_path):
+    monkeypatch.setenv("APP_DATA", str(tmp_path))
+    research_store.save_feed(_feed("a" * 64, "b" * 64))
+
+    status = client.get("/research/status")
+    acknowledged = client.put(
+        "/research/seen",
+        json={"through": "2026-09-02T00:10:00+00:00"},
+    )
+
+    assert status.status_code == 200
+    assert status.json()["initialized"] is False
+    assert acknowledged.status_code == 200
+    assert acknowledged.json()["initialized"] is True

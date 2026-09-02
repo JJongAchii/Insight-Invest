@@ -21,6 +21,7 @@ import {
 import { FaRunning, FaList } from "react-icons/fa";
 import { IconType } from "react-icons";
 import Image from "next/image";
+import ResearchUnseenBadge from "../ResearchUnseenBadge";
 
 interface SidebarLinkProps {
   href: string;
@@ -30,6 +31,7 @@ interface SidebarLinkProps {
   isDropdown?: boolean;
   onClick?: () => void;
   activePrefixes?: string[];
+  badgeCount?: number;
 }
 
 const SidebarLink = ({
@@ -40,6 +42,7 @@ const SidebarLink = ({
   isDropdown = false,
   onClick,
   activePrefixes = [],
+  badgeCount = 0,
 }: SidebarLinkProps) => {
   const pathname = usePathname();
   const isActive =
@@ -54,7 +57,7 @@ const SidebarLink = ({
       onClick={onClick}
       aria-current={isActive ? "page" : undefined}
       className={`
-          flex items-center gap-3 cursor-pointer
+          relative flex items-center gap-3 cursor-pointer
           ${isCollapsed ? "md:justify-center md:py-3 md:mx-2" : "md:px-4 md:py-2.5 md:mx-3"}
           max-md:px-4 max-md:py-2.5 max-md:mx-3
           ${isDropdown ? "ml-10" : ""}
@@ -76,6 +79,11 @@ const SidebarLink = ({
       >
         {label}
       </span>
+      <ResearchUnseenBadge
+        count={badgeCount}
+        className="ml-auto"
+        collapsedOnDesktop={isCollapsed}
+      />
     </Link>
   );
 };
@@ -98,9 +106,11 @@ const SectionHeader = ({
 const Sidebar = ({
   isMobileOpen,
   onMobileClose,
+  researchUnseenCount,
 }: {
   isMobileOpen: boolean;
   onMobileClose: () => void;
+  researchUnseenCount: number;
 }) => {
   const isSidebarCollapsed = useAppSelector(
     (state) => state.global.isSidebarCollapsed
@@ -228,6 +238,7 @@ const Sidebar = ({
           label="Research Feed"
           isCollapsed={isSidebarCollapsed}
           onClick={onMobileClose}
+          badgeCount={researchUnseenCount}
         />
         <SidebarLink
           href="/backtest/simulation"

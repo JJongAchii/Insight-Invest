@@ -687,6 +687,14 @@ export interface ResearchFeedResponse {
   items: ResearchEntry[];
 }
 
+export interface ResearchStatusResponse {
+  schema_version: 1;
+  initialized: boolean;
+  unseen: number;
+  generated_at: string | null;
+  seen_through: string | null;
+}
+
 export type ResearchView = "all" | "unread" | "read" | "saved";
 
 export interface ResearchFeedParams {
@@ -1618,6 +1626,7 @@ export const api = createApi({
     "Journal",
     "Notifications",
     "Research",
+    "ResearchStatus",
     "Earnings",
     "PortfolioLedger",
   ],
@@ -1892,6 +1901,21 @@ export const api = createApi({
         return `/research${suffix ? `?${suffix}` : ""}`;
       },
       providesTags: ["Research"],
+    }),
+    fetchResearchStatus: builder.query<ResearchStatusResponse, void>({
+      query: () => "/research/status",
+      providesTags: ["ResearchStatus"],
+    }),
+    acknowledgeResearchSeen: builder.mutation<
+      ResearchStatusResponse,
+      { through: string }
+    >({
+      query: (body) => ({
+        url: "/research/seen",
+        method: "PUT",
+        body,
+      }),
+      invalidatesTags: ["ResearchStatus"],
     }),
     updateResearchReadState: builder.mutation<
       { entry_id: string; is_read: boolean },
@@ -2196,6 +2220,8 @@ export const {
   useFetchAttentionQuery,
   useFetchActionsQuery,
   useFetchResearchQuery,
+  useFetchResearchStatusQuery,
+  useAcknowledgeResearchSeenMutation,
   useUpdateResearchReadStateMutation,
   useUpdateResearchSavedStateMutation,
   useMarkAllResearchReadMutation,
