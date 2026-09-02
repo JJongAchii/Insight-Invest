@@ -22,6 +22,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import {
   ResearchEntry,
   ResearchView,
+  useAcknowledgeResearchSeenMutation,
   useFetchResearchQuery,
   useMarkAllResearchReadMutation,
   useUpdateResearchReadStateMutation,
@@ -204,6 +205,7 @@ export default function ResearchPage() {
     null,
   );
   const [markAllRead, { isLoading: isMarkingAllRead }] = useMarkAllResearchReadMutation();
+  const [acknowledgeResearchSeen] = useAcknowledgeResearchSeenMutation();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -263,6 +265,11 @@ export default function ResearchPage() {
       nav.clearAppBadge().catch(() => undefined);
     }
   }, [data]);
+
+  useEffect(() => {
+    if (!data?.generated_at) return;
+    void acknowledgeResearchSeen({ through: data.generated_at });
+  }, [acknowledgeResearchSeen, data?.generated_at]);
 
   const selectSource = (value: string) => {
     setSourceId(value);

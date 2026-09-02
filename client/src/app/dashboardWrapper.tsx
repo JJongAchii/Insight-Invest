@@ -8,6 +8,10 @@ import PwaManager from "./(components)/PwaManager";
 import PullToRefresh from "./(components)/PullToRefresh";
 import StoreProvider, { useAppSelector } from "./redux";
 import { usePathname } from "next/navigation";
+import {
+  useAcknowledgeResearchSeenMutation,
+  useFetchResearchStatusQuery,
+} from "@/state/api";
 
 const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   const isSidebarCollapsed = useAppSelector(
@@ -15,6 +19,20 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   );
   const isDarkMode = useAppSelector((state) => state.global.isDarkMode);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const { data: researchStatus } = useFetchResearchStatusQuery(undefined, {
+    pollingInterval: 120_000,
+    skipPollingIfUnfocused: true,
+    refetchOnFocus: true,
+    refetchOnReconnect: true,
+  });
+  const [acknowledgeResearchSeen] = useAcknowledgeResearchSeenMutation();
+
+  useEffect(() => {
+    if (researchStatus?.initialized !== false || !researchStatus.generated_at) return;
+    void acknowledgeResearchSeen({ through: researchStatus.generated_at });
+  }, [acknowledgeResearchSeen, researchStatus?.generated_at, researchStatus?.initialized]);
+
+  const researchUnseenCount = researchStatus?.unseen ?? 0;
 
   useEffect(() => {
     if (isDarkMode) {
@@ -42,6 +60,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
       <Sidebar
         isMobileOpen={isMobileSidebarOpen}
         onMobileClose={() => setIsMobileSidebarOpen(false)}
+        researchUnseenCount={researchUnseenCount}
       />
       {isMobileSidebarOpen && (
         <button
@@ -61,7 +80,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
         <Navbar onMobileMenuOpen={() => setIsMobileSidebarOpen(true)} />
         <div className="flex-grow">{children}</div>
       </main>
-      <MobileBottomNav />
+      <MobileBottomNav researchUnseenCount={researchUnseenCount} />
       {!isMobileSidebarOpen && <PullToRefresh />}
       <PwaManager />
     </div>

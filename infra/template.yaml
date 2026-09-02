@@ -86,6 +86,7 @@ Resources:
                   - !Sub arn:aws:s3:::${DataBucket}/app/notification_subscriptions.parquet
                   - !Sub arn:aws:s3:::${DataBucket}/app/notification_deliveries.parquet
                   - !Sub arn:aws:s3:::${DataBucket}/app/research_read_state.parquet
+                  - !Sub arn:aws:s3:::${DataBucket}/app/research_seen_state.json
                   - !Sub arn:aws:s3:::${DataBucket}/app/decision_journal.parquet
                   - !Sub arn:aws:s3:::${DataBucket}/app/decision_journal_reviews.parquet
 

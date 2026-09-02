@@ -8,6 +8,7 @@ from datastore import storage
 
 FEED_FILE = "research_feed.json"
 READ_STATE_FILE = "research_read_state.parquet"
+SEEN_STATE_FILE = "research_seen_state.json"
 READ_STATE_COLUMNS = ["entry_id", "read_at", "saved_at"]
 
 
@@ -28,6 +29,56 @@ def save_feed(payload: dict) -> str:
     if payload.get("schema_version") != 1 or not isinstance(payload.get("items"), list):
         raise ValueError("research feed schema가 유효하지 않다")
     return storage.write_json(payload, FEED_FILE)
+
+
+def parse_timestamp(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc)
+
+
+def load_seen_through() -> datetime | None:
+    if not storage.exists(SEEN_STATE_FILE):
+        return None
+    payload = storage.read_json(SEEN_STATE_FILE)
+    if payload.get("schema_version") != 1:
+        raise ValueError("research_seen_state.json schema가 유효하지 않다")
+    seen_through = parse_timestamp(payload.get("seen_through"))
+    if seen_through is None:
+        raise ValueError("research_seen_state.json timestamp가 유효하지 않다")
+    return seen_through
+
+
+def save_seen_through(through: datetime) -> datetime:
+    if through.tzinfo is None:
+        raise ValueError("research seen timestamp에는 timezone이 필요하다")
+    requested = through.astimezone(timezone.utc)
+    current = load_seen_through()
+    effective = max(current, requested) if current else requested
+    if current != effective:
+        storage.write_json(
+            {
+                "schema_version": 1,
+                "seen_through": effective.isoformat(),
+            },
+            SEEN_STATE_FILE,
+        )
+    return effective
+
+
+def unseen_entry_count(items: list[dict], seen_through: datetime | None) -> int:
+    if seen_through is None:
+        return 0
+    return sum(
+        discovered_at is not None and discovered_at > seen_through
+        for discovered_at in (parse_timestamp(item.get("discovered_at")) for item in items)
+    )
 
 
 def list_read_state() -> pd.DataFrame:

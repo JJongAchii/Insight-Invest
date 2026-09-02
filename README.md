@@ -16,8 +16,9 @@
 
 `Research Radar`는 승인된 공개 출처의 퀀트 논문·자료를 개인 서재로 투영한다.
 전체·안 읽음·읽음·보관함 보기, 제목·요약·저자·출처 검색, 모두 읽음과 기기간 중복
-방지 Web Push를 제공한다. 읽음·보관 상태만 앱에 저장하고 수집기의 canonical record는
-변경하지 않는다.
+방지 Web Push를 제공한다. 새 자료는 Research를 확인할 때까지 데스크톱 Sidebar와 iPhone
+하단 탐색에 빨간 미확인 배지로 남는다. 읽음·보관·미확인 상태만 앱에 저장하고 수집기의
+canonical record는 변경하지 않는다.
 
 ## 아키텍처 (2026-07 재구조)
 
@@ -61,7 +62,7 @@ Insight-Invest 쪽 변경은 pull 이후 서브프로세스로 새로 호출되�
 | 배포 | GitHub Actions → ECR → CloudFormation (`infra/template.yaml`) | 서빙 스택. 배치 EC2는 CFN 밖 (콘솔 생성) |
 | 배치 | EC2 `qdata-collector` + EventBridge Scheduler 2개 | 코드 갱신은 `git pull` — 배포 절차 없음 |
 | 프론트 | Next.js 16 (Vercel) | PWA·iOS Home Screen·Web Push |
-| 리서치 피드 | Research Radar canonical S3 → 10분 투영 Lambda → `app/research_feed.json` | 원문은 공개 URL, 읽음·보관 상태만 별도 저장 |
+| 리서치 피드 | Research Radar canonical S3 → 10분 투영 Lambda → `app/research_feed.json` | 원문은 공개 URL, 읽음·보관·미확인 상태만 별도 저장 |
 
 ### Web Push
 
@@ -171,6 +172,8 @@ docs/superpowers/          # 설계·구현계획 기록 (폐기된 것 포함)
 
 ## 이력
 
+- **v3.4 (2026-09-02)**: Research Library의 전체·읽음·보관함·검색과 기기간 공유되는
+  미확인 신규 탐색 배지 추가.
 - **v3.3 (2026-09-02)**: Research Radar 전용 PWA 피드·읽음 상태·iPhone Web Push와
   10분 투영 Lambda 추가. Telegram 대신 durable S3 handoff를 소비하도록 이관.
 - **v3.1 (2026-07-27)**: 배치를 맥 launchd에서 EC2 `qdata-collector` + EventBridge로 이관

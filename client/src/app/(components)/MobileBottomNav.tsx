@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BellRing, BriefcaseBusiness, Home, LibraryBig, Search } from "lucide-react";
+import ResearchUnseenBadge from "./ResearchUnseenBadge";
 
 const items = [
   { href: "/home", label: "Home", icon: Home },
@@ -12,7 +13,11 @@ const items = [
   { href: "/portfolio", label: "Portfolio", icon: BriefcaseBusiness },
 ];
 
-export default function MobileBottomNav() {
+export default function MobileBottomNav({
+  researchUnseenCount,
+}: {
+  researchUnseenCount: number;
+}) {
   const pathname = usePathname();
 
   return (
@@ -31,7 +36,15 @@ export default function MobileBottomNav() {
               active ? "text-primary-400" : "text-ink-muted"
             }`}
           >
-            <Icon size={19} aria-hidden />
+            <span className="relative">
+              <Icon size={19} aria-hidden />
+              {href === "/research" && (
+                <ResearchUnseenBadge
+                  count={researchUnseenCount}
+                  className="absolute -right-4 -top-2"
+                />
+              )}
+            </span>
             {label}
           </Link>
         );

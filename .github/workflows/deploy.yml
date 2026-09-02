@@ -97,6 +97,13 @@ jobs:
                and (.items | length) == 0'
           curl -sf -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
             -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
+            "$URL/research/status" | jq -e \
+              '(.initialized | type) == "boolean" and .unseen >= 0
+               and (.generated_at | type) == "string"'
+          curl -sf -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
+            -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
             "$URL/openapi.json" | jq -e \
               '.paths["/research/{entry_id}/saved"].put
-               and .paths["/research/read/all"].put'
+               and .paths["/research/read/all"].put
+               and .paths["/research/status"].get
+               and .paths["/research/seen"].put'

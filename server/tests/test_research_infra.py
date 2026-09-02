@@ -25,6 +25,7 @@ def test_research_poller_role_is_prefix_scoped():
     assert "research-radar/realtime/pending/*" in body
     assert "app/research_feed.json" in body
     assert "app/research_read_state.parquet" in body
+    assert "app/research_seen_state.json" in body
     assert "app/notification_subscriptions.parquet" in body
     assert "app/notification_deliveries.parquet" in body
     assert "s3:*" not in body
@@ -37,3 +38,5 @@ def test_release_smoke_requires_projection_api_and_active_push():
     assert ".delivery_ready == true" in body
     assert "(.projection.records > 0)" in body
     assert '"$URL/research?limit=1"' in body
+    assert '"$URL/research/status"' in body
+    assert '.paths["/research/seen"].put' in body
