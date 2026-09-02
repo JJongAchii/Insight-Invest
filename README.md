@@ -14,6 +14,10 @@
 일정은 공급자가 회사 확정 여부를 주지 않으므로 Estimated로 표시한다. 정확한 어닝콜
 시각·웹캐스트·전문은 검증된 공급원이 없을 때 추정하지 않는다.
 
+`Research Radar`는 승인된 공개 출처의 퀀트 논문·자료를 별도 피드로 투영한다.
+출처·미열람 필터와 기기간 중복 방지 Web Push를 제공하며, 원문 열람 상태만
+앱에 저장하고 수집기의 canonical record는 변경하지 않는다.
+
 ## 아키텍처 (2026-07 재구조)
 
 **"무거운 일은 배치로, 서빙은 요청 시에만"** — 상시 가동 자원이 0개다.
@@ -56,6 +60,7 @@ Insight-Invest 쪽 변경은 pull 이후 서브프로세스로 새로 호출되�
 | 배포 | GitHub Actions → ECR → CloudFormation (`infra/template.yaml`) | 서빙 스택. 배치 EC2는 CFN 밖 (콘솔 생성) |
 | 배치 | EC2 `qdata-collector` + EventBridge Scheduler 2개 | 코드 갱신은 `git pull` — 배포 절차 없음 |
 | 프론트 | Next.js 16 (Vercel) | PWA·iOS Home Screen·Web Push |
+| 리서치 피드 | Research Radar canonical S3 → 10분 투영 Lambda → `app/research_feed.json` | 원문은 공개 URL, 읽음 상태만 별도 저장 |
 
 ### Web Push
 
@@ -69,6 +74,11 @@ EventBridge의 `insight-invest-action-poller`가 데이터 배치 뒤 09:45·20:
 동일 event/subscription 조합은 delivery receipt로 한 번만 보내며, 여러 건은 한 알림으로
 묶어 과도한 알림을 방지한다.
 
+`insight-invest-research-poller`는 UTC `:02/:12/...`에 Research 피드를 갱신하고
+durable pending을 같은 delivery receipt로 발행한다. 일시 실패는 pending을 남겨 해당
+기기만 재시도하고, 404/410 구독은 비활성화한다. 활성 구독이 없을 때는 피드만
+갱신하며 나중에 과거 알림을 몰아 보내지 않는다.
+
 ### 데이터 소스
 
 | 데이터 | 소스 | 갱신 |
@@ -80,6 +90,7 @@ EventBridge의 `insight-invest-action-poller`가 데이터 배치 뒤 09:45·20:
 | US 실적 일정·발표 | Finnhub Earnings Calendar + qdata 활성 US 종목 참조 + SEC 공식 제출 페이지 | 평일 09:00·19:00 KST 우선 배치 · 주요 기업 50개 + 내 종목, 과거 결과 누적 |
 | 앱 자산 ID / 포트폴리오 | `app/asset_id_registry.parquet` / `app/portfolio/` | 신규 상장·앱 저장 시 |
 | 뉴스 | Google News RSS 실시간 | 요청 시 |
+| 퀀트 문헌 피드 | qdata Research Radar 공개 출처 watchlist | 수집 10분, 앱 투영 최대 약 5분 후 |
 
 ## 로컬 개발
 
@@ -104,7 +115,8 @@ npm run dev                 # http://localhost:3000
 ## 배포
 
 `main`에 `server/**`·`infra/**` 변경이 푸시되면 GitHub Actions(`deploy-api`)가
-이미지 빌드 → ECR 푸시 → CloudFormation 배포 → 스모크 테스트까지 수행한다.
+이미지 빌드 → ECR 푸시 → CloudFormation 배포 → Research 투영·Push 준비·API 스모크
+테스트까지 수행한다.
 
 필요한 repo secrets:
 
@@ -135,6 +147,7 @@ server/
 │   ├── watchlist.py       #   관심종목 / holdings.py 보유종목
 │   └── fx.py              #   환율
 ├── module/                # 백테스트·최적화·지표·레짐·뉴스 엔진
+│   └── research_feed.py  # Radar canonical → 앱 투영
 ├── tests/                 # pytest (conftest가 server/를 import 루트로 설정)
 ├── Dockerfile             # Lambda 베이스 이미지 (BuildKit secret으로 qdata 설치)
 ├── requirements.txt       # 런타임 / requirements-dev.txt 개발 전용(pytest)
@@ -143,13 +156,15 @@ scripts/
 └── send_briefing.py       # 텔레그램 시황 보고 (배치 EC2에서 실행)
 infra/template.yaml        # Lambda + Function URL + IAM (서빙 스택 전부)
 .isort.cfg                 # known_first_party 고정 — isort 결과의 cwd 의존성 제거
-client/                    # Next.js 14 + RTK Query
+client/                    # Next.js 16 + RTK Query
 docs/archive/              # 구 ECS/Copilot 시절 문서 (참고용)
 docs/superpowers/          # 설계·구현계획 기록 (폐기된 것 포함)
 ```
 
 ## 이력
 
+- **v3.3 (2026-09-02)**: Research Radar 전용 PWA 피드·읽음 상태·iPhone Web Push와
+  10분 투영 Lambda 추가. Telegram 대신 durable S3 handoff를 소비하도록 이관.
 - **v3.1 (2026-07-27)**: 배치를 맥 launchd에서 EC2 `qdata-collector` + EventBridge로 이관
   (README가 이관 전 구조를 그대로 담고 있던 것을 이때 정정). 종목별 팩터 백분위
   parquet 영속화 — `/factor-exposure`가 콜드스타트마다 520일치 전종목을 로드하던 것을 대체.

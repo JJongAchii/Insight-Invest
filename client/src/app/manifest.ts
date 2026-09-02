@@ -27,6 +27,13 @@ export default function manifest(): MetadataRoute.Manifest {
         url: "/portfolio?source=shortcut",
         icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }],
       },
+      {
+        name: "Research Radar",
+        short_name: "Research",
+        description: "새로 발견한 퀀트 논문과 자료",
+        url: "/research?from=shortcut",
+        icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }],
+      },
     ],
     icons: [
       {

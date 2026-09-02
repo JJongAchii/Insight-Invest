@@ -34,6 +34,7 @@ from .routers import (
     overview,
     portfolio_ledger,
     price,
+    research,
     regime,
     watchlist,
 )
@@ -90,6 +91,7 @@ app.include_router(holdings.router)
 app.include_router(attention.router)
 app.include_router(actions.router)
 app.include_router(notifications.router)
+app.include_router(research.router)
 app.include_router(overview.router)
 app.include_router(price.stock_router)
 app.include_router(intraday.router)

@@ -39,7 +39,14 @@ def send_to_subscription(subscription: dict, payload: dict) -> None:
     )
 
 
-def dispatch(events: list[dict], *, test: bool = False) -> dict:
+def dispatch(
+    events: list[dict],
+    *,
+    test: bool = False,
+    notification_title: str = "Insight Invest",
+    digest_url: str = "/actions",
+    tag_prefix: str = "insight-action",
+) -> dict:
     cfg = config()
     subscriptions = notifications.list_subscriptions(active_only=True)
     if not cfg["enabled"]:
@@ -78,10 +85,12 @@ def dispatch(events: list[dict], *, test: bool = False) -> dict:
         if len(pending) > 1:
             body = f"{body} 외 {len(pending) - 1}건"
         payload = {
-            "title": "Insight Invest",
+            "title": notification_title,
             "body": body,
-            "tag": "insight-action-digest" if len(pending) > 1 else f"insight-{lead['event_id']}",
-            "url": "/actions" if len(pending) > 1 else lead.get("link") or "/actions",
+            "tag": (
+                f"{tag_prefix}-digest" if len(pending) > 1 else f"{tag_prefix}-{lead['event_id']}"
+            ),
+            "url": digest_url if len(pending) > 1 else lead.get("link") or digest_url,
             "event_id": lead["event_id"],
             "badge": len(pending),
         }

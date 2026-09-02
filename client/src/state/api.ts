@@ -652,6 +652,44 @@ export interface ActionCenterResponse {
   };
 }
 
+export interface ResearchEntry {
+  entry_id: string;
+  source_id: string;
+  source_name: string;
+  title: string;
+  summary: string;
+  authors: string[];
+  url: string;
+  published_at: string;
+  discovered_at: string;
+  is_read: boolean;
+}
+
+export interface ResearchSource {
+  source_id: string;
+  source_name: string;
+  count: number;
+}
+
+export interface ResearchFeedResponse {
+  schema_version: 1;
+  generated_at: string | null;
+  total: number;
+  unread: number;
+  offset: number;
+  limit: number;
+  sources: ResearchSource[];
+  items: ResearchEntry[];
+}
+
+export interface ResearchFeedParams {
+  sourceId?: string;
+  unreadOnly?: boolean;
+  entryId?: string;
+  offset?: number;
+  limit?: number;
+}
+
 export type EarningsScope = "all" | "mine" | "portfolio" | "watchlist" | "leaders";
 export type EarningsResultSignal = "beat" | "miss" | "mixed" | "in_line" | null;
 export type EarningsDisplayStatus =
@@ -1571,6 +1609,7 @@ export const api = createApi({
     "Actions",
     "Journal",
     "Notifications",
+    "Research",
     "Earnings",
     "PortfolioLedger",
   ],
@@ -1831,6 +1870,30 @@ export const api = createApi({
         return `/actions${suffix ? `?${suffix}` : ""}`;
       },
       providesTags: ["Actions"],
+    }),
+    fetchResearch: builder.query<ResearchFeedResponse, ResearchFeedParams | void>({
+      query: (params) => {
+        const query = new URLSearchParams();
+        if (params?.sourceId) query.set("source_id", params.sourceId);
+        if (params?.unreadOnly) query.set("unread_only", "true");
+        if (params?.entryId) query.set("entry_id", params.entryId);
+        if (params?.offset) query.set("offset", String(params.offset));
+        if (params?.limit) query.set("limit", String(params.limit));
+        const suffix = query.toString();
+        return `/research${suffix ? `?${suffix}` : ""}`;
+      },
+      providesTags: ["Research"],
+    }),
+    updateResearchReadState: builder.mutation<
+      { entry_id: string; is_read: boolean },
+      { entryId: string; read: boolean }
+    >({
+      query: ({ entryId, read }) => ({
+        url: `/research/${entryId}/read`,
+        method: "PUT",
+        body: { read },
+      }),
+      invalidatesTags: ["Research"],
     }),
     fetchEarnings: builder.query<
       EarningsResponse,
@@ -2102,6 +2165,8 @@ export const {
   // Attention hook
   useFetchAttentionQuery,
   useFetchActionsQuery,
+  useFetchResearchQuery,
+  useUpdateResearchReadStateMutation,
   useFetchEarningsQuery,
   useUpdateActionStateMutation,
   useFetchNotificationConfigQuery,
