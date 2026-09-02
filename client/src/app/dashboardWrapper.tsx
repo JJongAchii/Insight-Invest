@@ -5,6 +5,7 @@ import Navbar from "./(components)/Navbar";
 import Sidebar from "./(components)/Sidebar";
 import MobileBottomNav from "./(components)/MobileBottomNav";
 import PwaManager from "./(components)/PwaManager";
+import PullToRefresh from "./(components)/PullToRefresh";
 import StoreProvider, { useAppSelector } from "./redux";
 import { usePathname } from "next/navigation";
 
@@ -61,6 +62,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
         <div className="flex-grow">{children}</div>
       </main>
       <MobileBottomNav />
+      {!isMobileSidebarOpen && <PullToRefresh />}
       <PwaManager />
     </div>
   );
