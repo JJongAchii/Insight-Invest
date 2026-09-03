@@ -129,9 +129,11 @@ def _error_code(exc: Exception) -> str:
     return str(error.get("Code", "")) if isinstance(error, dict) else ""
 
 
-def _validate_request(payload: dict, *, expected_entry_id: str | None = None) -> dict:
+def validate_request(payload: dict, *, expected_entry_id: str | None = None) -> dict:
     if payload.get("schema_version") != SCHEMA_VERSION:
         raise ValueError("unsupported research job schema_version")
+    if payload.get("workflow") != WORKFLOW or not isinstance(payload.get("created_at"), str):
+        raise ValueError("invalid research job envelope")
     entry_id = payload.get("job_id")
     if not isinstance(entry_id, str) or not ENTRY_ID.fullmatch(entry_id):
         raise ValueError("invalid research job id")
@@ -140,9 +142,34 @@ def _validate_request(payload: dict, *, expected_entry_id: str | None = None) ->
     snapshot = payload.get("input")
     if not isinstance(snapshot, dict) or snapshot.get("entry_id") != entry_id:
         raise ValueError("invalid research job input")
+    if _input_snapshot(snapshot) != snapshot:
+        raise ValueError("research job input is not canonical")
     digest = hashlib.sha256(_canonical_bytes(snapshot)).hexdigest()
     if payload.get("input_digest_sha256") != digest:
         raise ValueError("research job input digest mismatch")
+    policy = payload.get("execution_policy")
+    if not isinstance(policy, dict):
+        raise ValueError("invalid research job execution policy")
+    if (
+        policy.get("max_concurrency") != 1
+        or policy.get("human_curation_required") is not True
+        or policy.get("human_prereg_required") is not True
+    ):
+        raise ValueError("invalid research job execution policy")
+    status = payload.get("status")
+    enabled = policy.get("billable_execution_enabled")
+    budget = policy.get("monthly_budget_usd")
+    if status == "awaiting_activation" and (enabled is not False or budget is not None):
+        raise ValueError("disabled research job policy is inconsistent")
+    if status == "requested":
+        if (
+            enabled is not True
+            or not isinstance(budget, str)
+            or _normalize_budget(budget) != budget
+        ):
+            raise ValueError("enabled research job policy is inconsistent")
+    elif status != "awaiting_activation":
+        raise ValueError("invalid research job status")
     return payload
 
 
@@ -159,7 +186,7 @@ def get_request(
     key = request_key(entry_id, prefix=prefix)
     body = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
     payload = json.load(io.BytesIO(body))
-    return _validate_request(payload, expected_entry_id=entry_id)
+    return validate_request(payload, expected_entry_id=entry_id)
 
 
 def ensure_request(

@@ -145,3 +145,27 @@ def test_existing_request_with_different_input_fails_closed():
 
     with pytest.raises(ValueError, match="different input digest"):
         research_jobs.ensure_request(changed, s3=s3, bucket="bucket", enabled=False)
+
+
+def test_request_validation_rejects_noncanonical_input_and_inconsistent_activation():
+    request = research_jobs._request_payload(
+        _record(),
+        now=datetime(2026, 9, 3, 1, 0, tzinfo=UTC),
+        enabled=False,
+        monthly_budget_usd=None,
+    )
+    extra_input = {**request, "input": {**request["input"], "unexpected": "field"}}
+    inconsistent = {
+        **request,
+        "status": "requested",
+        "execution_policy": {
+            **request["execution_policy"],
+            "billable_execution_enabled": True,
+            "monthly_budget_usd": None,
+        },
+    }
+
+    with pytest.raises(ValueError, match="not canonical"):
+        research_jobs.validate_request(extra_input)
+    with pytest.raises(ValueError, match="policy is inconsistent"):
+        research_jobs.validate_request(inconsistent)
