@@ -48,9 +48,10 @@ const PhasePerformance: React.FC = () => {
 
   return (
     <Card
+      className="min-h-[18rem]"
       title={
         <span className="inline-flex items-center gap-1.5">
-          Phase Performance
+          국면별 자산 반응
           <InfoTip helpKey="regime.performance" />
         </span>
       }
@@ -62,15 +63,15 @@ const PhasePerformance: React.FC = () => {
     >
       {error ? (
         <ErrorState
-          message="Failed to load phase performance"
+          message="국면별 자산 반응을 불러오지 못했습니다"
           onRetry={refetch}
         />
       ) : isLoading || !data ? (
-        <LoadingState label="Loading phase performance..." />
+        <LoadingState label="국면별 성과 표본을 불러오는 중..." />
       ) : availablePhases.length === 0 ? (
         <EmptyState
-          title="No phase performance data"
-          hint="Performance by regime phase will appear once computed"
+          title="국면별 성과 표본이 없습니다"
+          hint="계산이 완료되면 국면별 월 수익률과 표본 수가 표시됩니다"
         />
       ) : (
         <div className="flex flex-col gap-4">
@@ -113,12 +114,12 @@ const PhasePerformance: React.FC = () => {
                 <thead>
                   <tr className="table-header">
                     <th className="py-2.5 px-4 text-left rounded-l-lg">
-                      Ticker
+                      자산
                     </th>
-                    <th className="py-2.5 px-4 text-right">Avg Monthly %</th>
-                    <th className="py-2.5 px-4 text-right">Ann %</th>
-                    <th className="py-2.5 px-4 text-right">Hit Rate %</th>
-                    <th className="py-2.5 px-4 text-right rounded-r-lg">N</th>
+                    <th className="py-2.5 px-4 text-right">월평균</th>
+                    <th className="py-2.5 px-4 text-right">연환산</th>
+                    <th className="py-2.5 px-4 text-right">상승 월 비율</th>
+                    <th className="py-2.5 px-4 text-right rounded-r-lg">표본 월</th>
                   </tr>
                 </thead>
                 <tbody>

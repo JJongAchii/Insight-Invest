@@ -23,10 +23,6 @@ const RiskContributionChart: React.FC<RiskContributionChartProps> = ({
     "from-blue-400 to-blue-500",
     "from-cyan-400 to-cyan-500",
     "from-emerald-400 to-emerald-500",
-    "from-amber-400 to-amber-500",
-    "from-rose-400 to-rose-500",
-    "from-purple-400 to-purple-500",
-    "from-indigo-400 to-indigo-500",
   ];
 
   return (
@@ -36,13 +32,13 @@ const RiskContributionChart: React.FC<RiskContributionChartProps> = ({
       {/* Summary */}
       <div className="flex gap-4 mb-5 text-sm">
         <div className="px-3 py-2 bg-raised rounded-lg">
-          <span className="text-ink-muted">Total Risk: </span>
+          <span className="text-ink-muted">총 위험: </span>
           <span className="font-medium text-ink">
             {(total * 100).toFixed(2)}%
           </span>
         </div>
         <div className="px-3 py-2 bg-raised rounded-lg">
-          <span className="text-ink-muted">Assets: </span>
+          <span className="text-ink-muted">자산 수: </span>
           <span className="font-medium text-ink">{sortedData.length}</span>
         </div>
       </div>
@@ -79,9 +75,9 @@ const RiskContributionChart: React.FC<RiskContributionChartProps> = ({
       {/* Equal distribution indicator for Risk Parity */}
       <div className="mt-4 pt-4 border-t border-edge">
         <div className="flex items-center justify-between text-xs text-ink-muted">
-          <span>Equal contribution target:</span>
+          <span>균등 기여 목표:</span>
           <span className="font-medium">
-            {((total / sortedData.length) * 100).toFixed(3)}% each
+            자산당 {((total / sortedData.length) * 100).toFixed(3)}%
           </span>
         </div>
       </div>

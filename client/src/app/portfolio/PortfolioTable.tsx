@@ -60,7 +60,7 @@ const PortfolioTable: React.FC<PortfolioTableProps> = ({
       {
         id: "name",
         accessorKey: "name",
-        header: "Name",
+        header: "종목과 논거",
         cell: ({ row }) => {
           const p = row.original;
           return (
@@ -80,7 +80,7 @@ const PortfolioTable: React.FC<PortfolioTableProps> = ({
       {
         id: "market",
         accessorKey: "iso_code",
-        header: "Mkt",
+        header: "시장",
         cell: ({ row }) => <MarketPill iso={row.original.iso_code} />,
       },
       {
@@ -273,21 +273,21 @@ const PortfolioTable: React.FC<PortfolioTableProps> = ({
   ]);
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+    <div className="-mx-5 overflow-x-auto md:-mx-6">
+      <table className="min-w-[980px] w-full text-sm">
         <thead>
           {table.getHeaderGroups().map((hg) => (
             <tr key={hg.id} className="table-header">
               {hg.headers.map((header) => (
                 <th
                   key={header.id}
-                  className={`py-2.5 px-4 whitespace-nowrap first:rounded-l-lg last:rounded-r-lg ${
+                  className={`whitespace-nowrap px-4 py-3 ${
                     alignRight.has(header.column.id) ? "text-right" : "text-left"
                   } ${
                     header.column.getCanSort()
                       ? "cursor-pointer select-none"
                       : ""
-                  }`}
+                  } ${header.column.id === "name" ? "sticky left-0 z-10 bg-raised pl-5 md:pl-6" : ""}`}
                   onClick={header.column.getToggleSortingHandler()}
                 >
                   <span
@@ -312,7 +312,7 @@ const PortfolioTable: React.FC<PortfolioTableProps> = ({
           {table.getRowModel().rows.map((row) => (
             <tr
               key={row.id}
-              className="table-row cursor-pointer"
+              className="table-row group cursor-pointer"
               onClick={() => router.push(`/stock/${row.original.meta_id}`)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
@@ -327,7 +327,7 @@ const PortfolioTable: React.FC<PortfolioTableProps> = ({
                   key={cell.id}
                   className={`table-cell whitespace-nowrap ${
                     alignRight.has(cell.column.id) ? "text-right" : ""
-                  }`}
+                  } ${cell.column.id === "name" ? "sticky left-0 z-[1] bg-surface pl-5 transition-colors group-hover:bg-raised md:pl-6" : ""}`}
                 >
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </td>

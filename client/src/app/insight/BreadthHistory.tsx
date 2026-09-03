@@ -47,12 +47,12 @@ const BreadthHistory: React.FC<BreadthHistoryProps> = ({
 
   return (
     <Card
-      title={`Breadth History — ${market}`}
+      title={`시장 참여 폭 추이 · ${market}`}
       action={
         <div className="flex items-center gap-3">
           {data?.as_of && (
             <span className="text-xs text-ink-muted num">
-              as of {data.as_of}
+              기준 {data.as_of}
             </span>
           )}
           <Segmented
@@ -64,11 +64,11 @@ const BreadthHistory: React.FC<BreadthHistoryProps> = ({
       }
     >
       {error ? (
-        <ErrorState message="Failed to load breadth history" onRetry={refetch} />
+        <ErrorState message="시장폭 추이를 불러오지 못했습니다" onRetry={refetch} />
       ) : isLoading || !data ? (
-        <LoadingState label="Loading breadth history..." />
+        <LoadingState label="시장폭 추이를 불러오는 중..." />
       ) : maData.length === 0 ? (
-        <EmptyState title="No breadth history" />
+        <EmptyState title="시장폭 이력이 없습니다" />
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>

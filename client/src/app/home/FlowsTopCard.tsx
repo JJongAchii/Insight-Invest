@@ -46,7 +46,7 @@ const FlowsTopCard: React.FC = () => {
 
   return (
     <Card
-      title="Top Foreign Net Buys"
+      title="외국인 순매수 상위"
       action={
         <div className="flex items-center gap-3">
           {data?.as_of && (

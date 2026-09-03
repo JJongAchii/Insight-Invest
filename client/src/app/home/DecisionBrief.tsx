@@ -1,29 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import React from "react";
 
-import Card from "@/components/ui/Card";
 import ErrorState from "@/components/ui/ErrorState";
 import LoadingState from "@/components/ui/LoadingState";
 import {
   DataHealthLevel,
   EvidenceTone,
   OverviewTone,
-  useFetchHoldingsQuery,
+  useFetchActionsQuery,
   useFetchOverviewQuery,
 } from "@/state/api";
+import styles from "./DecisionBrief.module.css";
 
-const TONE_STYLE: Record<OverviewTone, { color: string; bg: string }> = {
-  risk_on: { color: "var(--gains)", bg: "color-mix(in srgb, var(--gains) 10%, transparent)" },
-  risk_off: { color: "var(--losses)", bg: "color-mix(in srgb, var(--losses) 10%, transparent)" },
-  mixed: { color: "var(--chart-4)", bg: "color-mix(in srgb, var(--chart-4) 12%, transparent)" },
-};
-
-const EVIDENCE_DOT: Record<EvidenceTone, string> = {
-  positive: "var(--gains)",
-  negative: "var(--losses)",
-  neutral: "var(--text-muted)",
+const THESIS: Record<OverviewTone, { lead: string; accent: string }> = {
+  risk_on: {
+    lead: "시장 환경은 개선되고 있습니다.",
+    accent: "내 자산의 예외는 따로 확인하세요.",
+  },
+  risk_off: {
+    lead: "방어가 필요한 구간입니다.",
+    accent: "노출과 판단 근거부터 다시 확인하세요.",
+  },
+  mixed: {
+    lead: "단기 흐름은 움직였지만,",
+    accent: "시간축별 신호는 아직 엇갈립니다.",
+  },
 };
 
 const TONE_LABEL: Record<EvidenceTone, string> = {
@@ -32,135 +34,246 @@ const TONE_LABEL: Record<EvidenceTone, string> = {
   neutral: "중립",
 };
 
-const HEALTH_DOT: Record<DataHealthLevel, string> = {
+const TONE_COLOR: Record<EvidenceTone, string> = {
+  positive: "var(--gains)",
+  negative: "var(--losses)",
+  neutral: "var(--text-muted)",
+};
+
+const HEALTH_COLOR: Record<DataHealthLevel, string> = {
   ok: "var(--gains)",
-  warn: "var(--chart-4)",
+  warn: "var(--warning)",
   error: "var(--losses)",
   unknown: "var(--text-muted)",
 };
 
-/** 시간축을 섞지 않는 시장 환경 요약과 사용자의 포트폴리오 확인점. */
-const DecisionBrief: React.FC = () => {
-  const { data, isLoading, error, refetch } = useFetchOverviewQuery();
-  const { data: holdings } = useFetchHoldingsQuery();
-
-  if (error) {
-    return <ErrorState message="판단 요약을 불러오지 못했습니다" onRetry={refetch} />;
-  }
-  if (isLoading || !data) return <LoadingState label="시간축별 시장 근거를 정리하는 중..." />;
-
-  const summary = holdings?.summary;
-  const portfolioChecks: string[] = [];
-  if ((summary?.unpriced_positions ?? 0) > 0) {
-    portfolioChecks.push(`가격 미확인 ${summary?.unpriced_positions}개`);
-  }
-  if (summary?.top_weight != null && summary.top_weight >= 0.25) {
-    portfolioChecks.push(`최대 종목 비중 ${(summary.top_weight * 100).toFixed(1)}%`);
-  }
-  if (summary?.hhi != null && summary.hhi >= 0.18) {
-    portfolioChecks.push(`집중도 HHI ${summary.hhi.toFixed(2)}`);
-  }
-  const largestDrift = [...(holdings?.positions ?? [])]
-    .filter((position) => position.drift_pp != null)
-    .sort((a, b) => Math.abs(b.drift_pp ?? 0) - Math.abs(a.drift_pp ?? 0))[0];
-  if (largestDrift?.drift_pp != null && Math.abs(largestDrift.drift_pp) >= 5) {
-    portfolioChecks.push(
-      `${largestDrift.name ?? largestDrift.ticker} 목표 괴리 ${largestDrift.drift_pp >= 0 ? "+" : ""}${largestDrift.drift_pp.toFixed(1)}%p`
-    );
-  }
-
-  const toneStyle = TONE_STYLE[data.tone];
-  const unhealthy = data.data_status.filter((item) => item.level !== "ok");
-
-  return (
-    <Card
-      title="Market Context by Horizon"
-      action={<span className="text-xs text-ink-muted">서로 다른 기간의 근거를 합산하지 않습니다</span>}
-    >
-      <div className="space-y-5">
-        <div className="flex flex-wrap items-center gap-3">
-          <span
-            className="px-3 py-1.5 rounded-lg text-sm font-semibold"
-            style={{ color: toneStyle.color, backgroundColor: toneStyle.bg }}
-          >
-            {data.tone_label}
-          </span>
-          <span className="text-xs text-ink-muted">{data.method}</span>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-          {data.horizons.map((horizon) => (
-            <section key={horizon.key} className="rounded-xl border border-edge p-4">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <p className="text-sm font-semibold text-ink">{horizon.label}</p>
-                  <p className="text-xs text-ink-muted">{horizon.window}</p>
-                </div>
-                <span className="badge-neutral text-right text-[10px] sm:text-xs">{TONE_LABEL[horizon.tone]} · {horizon.summary}</span>
-              </div>
-              <div className="mt-3 space-y-3">
-                {horizon.evidence.length === 0 ? (
-                  <p className="text-sm text-ink-muted">가용 근거 없음</p>
-                ) : horizon.evidence.map((item) => (
-                  <Link key={item.key} href={item.link} className="block rounded-lg bg-raised p-3 hover:bg-overlay">
-                    <div className="flex items-start gap-2">
-                      <span
-                        className="mt-1 h-2 w-2 shrink-0 rounded-full"
-                        style={{ backgroundColor: EVIDENCE_DOT[item.tone] }}
-                        aria-hidden
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-ink">
-                          <span className="sr-only">{TONE_LABEL[item.tone]}: </span>
-                          {item.title}
-                        </p>
-                        <p className="mt-1 text-xs text-ink-secondary">{item.detail}</p>
-                        {item.as_of && (
-                          <p className="mt-1 text-xs text-ink-muted num">기준 {item.as_of.slice(0, 10)}</p>
-                        )}
-                      </div>
-                      {item.changed && <span className="badge-neutral">변화</span>}
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
-
-        {(data.conflicts.length > 0 || portfolioChecks.length > 0) && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {data.conflicts.length > 0 && (
-              <div className="rounded-xl bg-raised p-3">
-                <p className="text-xs font-semibold text-ink-secondary mb-1">엇갈리는 근거</p>
-                {data.conflicts.map((text) => <p key={text} className="text-sm text-ink">{text}</p>)}
-              </div>
-            )}
-            {portfolioChecks.length > 0 && (
-              <Link href="/portfolio" className="rounded-xl bg-raised p-3 hover:bg-overlay">
-                <p className="text-xs font-semibold text-ink-secondary mb-1">내 포트폴리오 확인점</p>
-                <p className="text-sm text-ink">{portfolioChecks.join(" · ")}</p>
-              </Link>
-            )}
-          </div>
-        )}
-
-        <Link href="/data-trust" className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-edge pt-3">
-          <span className="text-xs font-semibold text-ink-secondary">데이터 신뢰도</span>
-          {data.data_status.length === 0 ? (
-            <span className="text-xs text-ink-muted">배치 상태표 미발행</span>
-          ) : data.data_status.map((item) => (
-            <span key={item.dataset} className="inline-flex items-center gap-1.5 text-xs text-ink-muted">
-              <span className="sr-only">{item.level}: </span>
-              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: HEALTH_DOT[item.level] }} aria-hidden />
-              {item.label} {item.as_of ?? item.detail}
-            </span>
-          ))}
-          {unhealthy.length > 0 && <span className="text-xs text-losses">{unhealthy.length}개 확인 필요</span>}
-        </Link>
-      </div>
-    </Card>
-  );
+const severityColor = (severity: "high" | "medium" | "low") => {
+  if (severity === "high") return "var(--losses)";
+  if (severity === "medium") return "var(--primary)";
+  return "var(--text-muted)";
 };
 
-export default DecisionBrief;
+const compactTimestamp = (value: string) =>
+  value.slice(0, 16).replace("T", " ");
+
+const BriefBoundary = ({
+  failed = false,
+  onRetry,
+}: {
+  failed?: boolean;
+  onRetry?: () => void;
+}) => (
+  <section className={styles.workspace} aria-labelledby="decision-thesis">
+    <header className={styles.hero}>
+      <div className={styles.heroCopy}>
+        <p className={styles.eyebrow}>Decision brief · {failed ? "interrupted" : "synchronizing"}</p>
+        <h1 id="decision-thesis" className={styles.thesis}>
+          오늘의 판단 근거를
+          <br />
+          <span className={styles.accent}>{failed ? "불러오지 못했습니다." : "시간축별로 정리하고 있습니다."}</span>
+        </h1>
+      </div>
+      <div className={styles.heroMeta}>
+        <p className={styles.generated}>{failed ? "REQUEST FAILED" : "EVIDENCE SYNC"}</p>
+        <p className={styles.method}>가격·수급·경기 근거를 서로 다른 시간축으로 분리합니다.</p>
+      </div>
+    </header>
+    <div className={`${styles.grid} ${styles.boundaryGrid}`}>
+      <div className={styles.boundaryState}>
+        {failed ? (
+          <ErrorState message="판단 브리핑을 불러오지 못했습니다" onRetry={onRetry} />
+        ) : (
+          <LoadingState label="시간축별 판단 근거를 정리하는 중..." />
+        )}
+      </div>
+    </div>
+  </section>
+);
+
+/** 오늘의 시장 근거와 사용자 검토 큐를 한 의사결정 표면에 묶는다. */
+export default function DecisionBrief() {
+  const {
+    data,
+    isLoading,
+    error,
+    refetch,
+  } = useFetchOverviewQuery();
+  const {
+    data: actionData,
+    isLoading: actionsLoading,
+    error: actionsError,
+  } = useFetchActionsQuery({ horizonDays: 30 });
+
+  if (error) {
+    return <BriefBoundary failed onRetry={refetch} />;
+  }
+
+  if (isLoading || !data) {
+    return <BriefBoundary />;
+  }
+
+  const thesis = THESIS[data.tone];
+  const importantActions = (actionData?.items ?? []).filter(
+    (item) => item.severity !== "low"
+  );
+  const reviewItems = (
+    importantActions.length > 0 ? importantActions : actionData?.items ?? []
+  ).slice(0, 3);
+  const reviewCount = actionData?.counts.actionable ?? reviewItems.length;
+  const unhealthyCount = data.data_status.filter(
+    (item) => item.level !== "ok"
+  ).length;
+
+  return (
+    <section className={styles.workspace} aria-labelledby="decision-thesis">
+      <header className={styles.hero}>
+        <div className={styles.heroCopy}>
+          <p className={styles.eyebrow}>Decision brief · {data.tone_label}</p>
+          <h1 id="decision-thesis" className={styles.thesis}>
+            {thesis.lead}
+            <br />
+            <span className={styles.accent}>{thesis.accent}</span>
+          </h1>
+        </div>
+        <div className={styles.heroMeta}>
+          <time className={styles.generated} dateTime={data.generated_at}>
+            Updated {compactTimestamp(data.generated_at)}
+          </time>
+          <p className={styles.method}>{data.method}</p>
+        </div>
+      </header>
+
+      <div className={styles.grid}>
+        <section className={styles.evidence} aria-labelledby="evidence-title">
+          <header className={styles.panelHeader}>
+            <div>
+              <h2 id="evidence-title">시간축별 판단 근거</h2>
+              <p>서로 다른 기간의 신호를 한 점수로 합산하지 않습니다.</p>
+            </div>
+            <Link href="/insight" className={styles.panelLink}>
+              시장 전체 보기 →
+            </Link>
+          </header>
+
+          <div className={styles.spine}>
+            {data.horizons.map((horizon) => {
+              const primaryEvidence = horizon.evidence[0];
+              const additionalCount = Math.max(horizon.evidence.length - 1, 0);
+
+              return (
+                <article key={horizon.key} className={styles.evidenceRow}>
+                  <div className={styles.horizon}>
+                    <strong>{horizon.label}</strong>
+                    <span>{horizon.window}</span>
+                  </div>
+                  <span className={styles.node} aria-hidden />
+                  <div className={styles.evidenceCopy}>
+                    {primaryEvidence ? (
+                      <Link href={primaryEvidence.link} className={styles.evidenceTitle}>
+                        {primaryEvidence.title}
+                        {primaryEvidence.changed && (
+                          <span className={styles.changed}>변화</span>
+                        )}
+                      </Link>
+                    ) : (
+                      <span className={styles.evidenceTitle}>{horizon.summary}</span>
+                    )}
+                    <p>
+                      {primaryEvidence?.detail ?? "이 시간축에서 사용할 수 있는 근거가 없습니다."}
+                    </p>
+                  </div>
+                  <div className={styles.evidenceMeta}>
+                    <span className={styles.tone}>
+                      <span
+                        className={styles.toneDot}
+                        style={{ backgroundColor: TONE_COLOR[horizon.tone] }}
+                        aria-hidden
+                      />
+                      {TONE_LABEL[horizon.tone]}
+                    </span>
+                    <small>
+                      {horizon.summary}
+                      {additionalCount > 0 && <><br />추가 근거 {additionalCount}개</>}
+                    </small>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          {data.conflicts.length > 0 && (
+            <div className={styles.conflict}>
+              <strong>엇갈림</strong>
+              <p>{data.conflicts[0]}</p>
+            </div>
+          )}
+
+          <Link href="/data-trust" className={styles.dataHealth}>
+            <strong>데이터 신뢰도</strong>
+            {data.data_status.length === 0 ? (
+              <span>상태표 미발행</span>
+            ) : (
+              data.data_status.slice(0, 4).map((item) => (
+                <span key={item.dataset} className={styles.healthItem}>
+                  <span
+                    className={styles.healthDot}
+                    style={{ backgroundColor: HEALTH_COLOR[item.level] }}
+                    aria-hidden
+                  />
+                  {item.label} {item.as_of?.slice(0, 10) ?? item.level}
+                </span>
+              ))
+            )}
+            {unhealthyCount > 0 && <span>{unhealthyCount}개 확인 필요</span>}
+          </Link>
+        </section>
+
+        <section className={styles.review} aria-labelledby="review-title">
+          <header className={styles.panelHeader}>
+            <div>
+              <h2 id="review-title">지금 검토할 일</h2>
+              <p>내 자산과 연결된 중요한 항목부터 표시합니다.</p>
+            </div>
+            <div className={styles.count} aria-label={`검토할 항목 ${reviewCount}개`}>
+              <strong>{reviewCount}</strong>
+              <span>건</span>
+            </div>
+          </header>
+
+          {actionsLoading ? (
+            <LoadingState label="검토할 항목을 정리하는 중..." className="py-10" />
+          ) : actionsError ? (
+            <p className={styles.emptyReview}>검토 큐를 불러오지 못했습니다.</p>
+          ) : reviewItems.length === 0 ? (
+            <p className={styles.emptyReview}>
+              지금 새로 확인할 중요 항목이 없습니다.
+            </p>
+          ) : (
+            <div className={styles.reviewList}>
+              {reviewItems.map((item) => (
+                <Link key={item.event_id} href={item.link} className={styles.reviewItem}>
+                  <div className={styles.reviewMeta}>
+                    <span
+                      className={styles.severity}
+                      style={{ backgroundColor: severityColor(item.severity) }}
+                      aria-hidden
+                    />
+                    <span>{item.category}</span>
+                    <span>·</span>
+                    <span>{item.ticker ?? item.scope ?? item.event_status ?? "확인"}</span>
+                  </div>
+                  <h3>{item.title}</h3>
+                  <p>{item.detail}</p>
+                </Link>
+              ))}
+            </div>
+          )}
+
+          <Link href="/actions" className={styles.primaryAction}>
+            검토 시작
+          </Link>
+        </section>
+      </div>
+    </section>
+  );
+}

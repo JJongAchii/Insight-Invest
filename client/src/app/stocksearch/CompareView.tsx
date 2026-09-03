@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import { ArrowLeft, FlaskConical, GitCompareArrows, X } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -13,6 +14,9 @@ import {
 import { useRouter } from "next/navigation";
 
 import { useFetchCompareDataQuery, useFetchMetaDataQuery } from "@/state/api";
+import LoadingState from "@/components/ui/LoadingState";
+import ErrorState from "@/components/ui/ErrorState";
+import EmptyState from "@/components/ui/EmptyState";
 
 interface CompareViewProps {
   selectedIds: number[];
@@ -57,7 +61,7 @@ const CompareView: React.FC<CompareViewProps> = ({
 
   // Fetch comparison data
   const metaIdsString = selectedIds.join(",");
-  const { data: compareData, isLoading } = useFetchCompareDataQuery(
+  const { data: compareData, isLoading, isError, refetch } = useFetchCompareDataQuery(
     { metaIds: metaIdsString, period },
     { skip: selectedIds.length === 0 }
   );
@@ -87,54 +91,41 @@ const CompareView: React.FC<CompareViewProps> = ({
 
   if (selectedIds.length === 0) {
     return (
-      <div className="card text-center py-12">
-        <p className="text-ink-muted">Select stocks to compare</p>
-        <button
-          onClick={onBack}
-          className="mt-4 text-primary-500 hover:underline"
-        >
-          Back to list
-        </button>
+      <div className="card">
+        <EmptyState
+          icon={<GitCompareArrows size={28} aria-hidden />}
+          title="비교할 종목이 없습니다"
+          hint={<button type="button" onClick={onBack} className="mt-3 text-primary-300 underline-offset-4 hover:underline">유니버스로 돌아가기</button>}
+        />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <header className="grid gap-4 border-b border-edge pb-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+        <div>
           <button
+            type="button"
             onClick={onBack}
-            className="flex items-center gap-2 text-ink-secondary hover:text-ink"
+            className="mb-3 inline-flex items-center gap-2 text-xs text-ink-muted transition-colors hover:text-ink"
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-            Back
+            <ArrowLeft size={14} aria-hidden />
+            유니버스로 돌아가기
           </button>
-          <h2 className="text-xl font-semibold text-ink">
-            Compare Stocks
-          </h2>
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary-300">Comparison bench</p>
+          <h2 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-ink">같은 기준으로 비교</h2>
+          <p className="mt-1 text-sm text-ink-muted">가격은 100으로 정규화하고 위험·수익 지표의 산출 기간을 통일합니다.</p>
         </div>
         <button
+          type="button"
           onClick={handleRunBacktest}
-          className="px-4 py-2 bg-primary-500 text-white font-medium rounded-lg
-                     hover:bg-primary-600 transition-colors"
+          className="btn-primary inline-flex items-center justify-center gap-2 text-sm"
         >
-          Run Backtest
+          <FlaskConical size={16} aria-hidden />
+          이 종목들로 백테스트
         </button>
-      </div>
+      </header>
 
       {/* Selected Stocks Chips */}
       <div className="flex flex-wrap gap-2">
@@ -152,6 +143,7 @@ const CompareView: React.FC<CompareViewProps> = ({
               style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
             />
             <button
+              type="button"
               onClick={() => router.push(`/stock/${id}`)}
               className="hover:underline"
               title="종목 상세 보기"
@@ -159,33 +151,30 @@ const CompareView: React.FC<CompareViewProps> = ({
               {tickerMap[id] || `ID:${id}`}
             </button>
             <button
+              type="button"
               onClick={() => onRemove(id)}
-              className="hover:opacity-70"
+              className="rounded-full p-0.5 hover:bg-black/10 hover:opacity-70"
+              aria-label={`${tickerMap[id] || `ID ${id}`} 비교에서 제거`}
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X size={14} aria-hidden />
             </button>
           </div>
         ))}
       </div>
 
-      {/* Normalized Price Chart */}
       <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-semibold text-ink">
-            Normalized Price (Base = 100)
-          </h3>
-          <div className="flex gap-1">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink-muted">Path comparison</p>
+            <h3 className="mt-1 text-base font-semibold text-ink">정규화 가격 · 시작값 100</h3>
+          </div>
+          <div className="segmented-control" aria-label="비교 기간">
             {PERIOD_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
+                type="button"
                 onClick={() => setPeriod(opt.value)}
-                className={`px-3 py-1.5 text-sm font-medium rounded ${
-                  period === opt.value
-                    ? "bg-primary-500 text-white"
-                    : "bg-raised text-ink-secondary hover:bg-overlay"
-                }`}
+                aria-pressed={period === opt.value}
               >
                 {opt.label}
               </button>
@@ -194,10 +183,10 @@ const CompareView: React.FC<CompareViewProps> = ({
         </div>
 
         <div className="h-80">
-          {isLoading ? (
-            <div className="h-full flex items-center justify-center text-ink-muted">
-              Loading...
-            </div>
+          {isError ? (
+            <ErrorState message="비교 가격을 불러오지 못했습니다" onRetry={refetch} />
+          ) : isLoading ? (
+            <LoadingState label="가격 경로를 정규화하는 중..." className="h-full py-0" />
           ) : compareData?.normalized_prices &&
             compareData.normalized_prices.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
@@ -250,21 +239,19 @@ const CompareView: React.FC<CompareViewProps> = ({
               </LineChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-full flex items-center justify-center text-ink-muted">
-              No price data available
-            </div>
+            <EmptyState title="비교할 가격 경로가 없습니다" />
           )}
         </div>
       </div>
 
-      {/* Metrics Comparison Table */}
       <div className="card">
-        <h3 className="text-base font-semibold text-ink mb-4">
-          Performance Comparison
-        </h3>
+        <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink-muted">Risk / return evidence</p>
+        <h3 className="mb-4 mt-1 text-base font-semibold text-ink">성과 지표 비교</h3>
 
-        {isLoading ? (
-          <div className="py-8 text-center text-ink-muted">Loading...</div>
+        {isError ? (
+          <ErrorState message="비교 지표를 불러오지 못했습니다" onRetry={refetch} />
+        ) : isLoading ? (
+          <LoadingState label="비교 지표를 계산하는 중..." />
         ) : compareData?.stocks && compareData.stocks.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -280,6 +267,7 @@ const CompareView: React.FC<CompareViewProps> = ({
                       style={{ color: CHART_COLORS[index % CHART_COLORS.length] }}
                     >
                       <button
+                        type="button"
                         onClick={() => router.push(`/stock/${stock.meta_id}`)}
                         className="hover:underline"
                         title="종목 상세 보기"
@@ -292,37 +280,37 @@ const CompareView: React.FC<CompareViewProps> = ({
               </thead>
               <tbody>
                 <MetricRow
-                  label="1Y Return"
+                  label="1년 수익률"
                   values={compareData.stocks.map((s) => s.metrics.return_1y)}
                   format={formatPercent}
                   highlight="max"
                 />
                 <MetricRow
-                  label="YTD Return"
+                  label="연초 이후"
                   values={compareData.stocks.map((s) => s.metrics.ytd_return)}
                   format={formatPercent}
                   highlight="max"
                 />
                 <MetricRow
-                  label="3M Return"
+                  label="3개월 수익률"
                   values={compareData.stocks.map((s) => s.metrics.return_3m)}
                   format={formatPercent}
                   highlight="max"
                 />
                 <MetricRow
-                  label="Volatility"
+                  label="변동성"
                   values={compareData.stocks.map((s) => s.metrics.volatility)}
                   format={formatPercent}
                   highlight="min"
                 />
                 <MetricRow
-                  label="Sharpe Ratio"
+                  label="샤프 비율"
                   values={compareData.stocks.map((s) => s.metrics.sharpe)}
                   format={(v) => (v === null ? "—" : v.toFixed(2))}
                   highlight="max"
                 />
                 <MetricRow
-                  label="Max Drawdown"
+                  label="최대 낙폭"
                   values={compareData.stocks.map((s) => s.metrics.mdd)}
                   format={formatPercent}
                   highlight="max" // Less negative is better
@@ -331,9 +319,7 @@ const CompareView: React.FC<CompareViewProps> = ({
             </table>
           </div>
         ) : (
-          <div className="py-8 text-center text-ink-muted">
-            No data available
-          </div>
+          <EmptyState title="비교할 성과 지표가 없습니다" />
         )}
       </div>
     </div>

@@ -212,12 +212,12 @@ const SignalsSection: React.FC = () => {
 
   return (
     <Card
-      title="Flow Signals"
+      title="수급 신호"
       action={
         <div className="flex flex-wrap items-center gap-3">
           {data?.as_of && (
             <span className="text-xs text-ink-muted num">
-              as of {data.as_of}
+              기준 {data.as_of}
             </span>
           )}
           <Segmented
@@ -230,12 +230,12 @@ const SignalsSection: React.FC = () => {
       }
     >
       {error ? (
-        <ErrorState message="Failed to load flow signals" onRetry={refetch} />
+        <ErrorState message="수급 신호를 불러오지 못했습니다" onRetry={refetch} />
       ) : isLoading || !data ? (
-        <LoadingState label="Loading flow signals..." />
+        <LoadingState label="수급 신호를 불러오는 중..." />
       ) : rows.length === 0 ? (
         <EmptyState
-          title="No signals"
+          title="조건에 맞는 신호가 없습니다"
           hint="조건을 충족하는 종목이 없습니다"
         />
       ) : (

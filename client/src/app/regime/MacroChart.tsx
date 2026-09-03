@@ -73,12 +73,12 @@ const MacroChart: React.FC<MacroChartProps> = ({
     <div className="card">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h4 className="text-base font-semibold text-ink">
+          <h3 className="text-base font-semibold text-ink">
             <span className="inline-flex items-center gap-1.5">
               {title}
               {helpKey && <InfoTip helpKey={helpKey} />}
             </span>
-          </h4>
+          </h3>
           <p className="text-xs text-ink-muted mt-0.5">
             {subtitle ?? `${primaryLabel} · shaded: ${recessionLabel}`}
           </p>

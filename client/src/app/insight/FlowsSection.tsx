@@ -26,8 +26,8 @@ import {
 } from "./format";
 
 const INVESTOR_OPTIONS: { id: InsightInvestor; label: string }[] = [
-  { id: "frgn", label: "Foreign" },
-  { id: "inst", label: "Institution" },
+  { id: "frgn", label: "외국인" },
+  { id: "inst", label: "기관" },
 ];
 
 const WINDOW_OPTIONS: { id: InsightWindow; label: string }[] = [
@@ -167,7 +167,7 @@ const FlowsSection: React.FC = () => {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-3">
-        <h2 className="text-lg font-semibold text-ink">Investor Flows</h2>
+        <h2 className="text-lg font-semibold text-ink">투자자 수급</h2>
         <Segmented
           options={INVESTOR_OPTIONS}
           value={investor}
@@ -178,23 +178,23 @@ const FlowsSection: React.FC = () => {
       <Card
         title={
           <span className="inline-flex items-center gap-1.5">
-            {`Cumulative Net Buying — ${investorLabel}`}
+            {`${investorLabel} 누적 순매수`}
             <InfoTip helpKey="flows.cumulative" />
           </span>
         }
         action={
-          <span className="text-xs text-ink-muted">12M · KOSPI vs KOSDAQ</span>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-ink-muted">12개월 · KOSPI / KOSDAQ</span>
         }
       >
         {marketError ? (
           <ErrorState
-            message="Failed to load market flows"
+            message="시장 수급을 불러오지 못했습니다"
             onRetry={refetchMarket}
           />
         ) : marketLoading || !marketData ? (
-          <LoadingState label="Loading market flows..." />
+          <LoadingState label="시장 수급을 불러오는 중..." />
         ) : cumulativeData.length === 0 ? (
-          <EmptyState title="No market flow data" />
+          <EmptyState title="시장 수급 데이터가 없습니다" />
         ) : (
           <TimeSeriesChart
             data={cumulativeData}
@@ -212,7 +212,7 @@ const FlowsSection: React.FC = () => {
       <Card
         title={
           <span className="inline-flex items-center gap-1.5">
-            {`Top Net Buys / Sells — ${investorLabel}`}
+            {`${investorLabel} 순매수·순매도 상위`}
             <InfoTip helpKey="flows.top" />
           </span>
         }
@@ -220,7 +220,7 @@ const FlowsSection: React.FC = () => {
           <div className="flex items-center gap-3">
             {topData?.as_of && (
               <span className="text-xs text-ink-muted num">
-                as of {topData.as_of}
+                기준 {topData.as_of}
               </span>
             )}
             <Segmented
@@ -232,18 +232,18 @@ const FlowsSection: React.FC = () => {
         }
       >
         {topError ? (
-          <ErrorState message="Failed to load top flows" onRetry={refetchTop} />
+          <ErrorState message="종목별 수급을 불러오지 못했습니다" onRetry={refetchTop} />
         ) : topLoading || !topData ? (
-          <LoadingState label="Loading top flows..." />
+          <LoadingState label="종목별 수급을 불러오는 중..." />
         ) : (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <FlowsTopTable
-              title="Top Buys"
+              title="순매수 상위"
               rows={topData.buys}
               onRowClick={goToStock}
             />
             <FlowsTopTable
-              title="Top Sells"
+              title="순매도 상위"
               rows={topData.sells}
               onRowClick={goToStock}
             />

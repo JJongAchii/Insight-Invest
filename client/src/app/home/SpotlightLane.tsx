@@ -89,7 +89,7 @@ const SpotlightLane: React.FC = () => {
   return (
     <div>
       <h2 className="text-sm font-semibold text-ink-secondary mb-3">
-        Today’s Signal Candidates
+        오늘의 신호 후보
       </h2>
       <div className="flex flex-col gap-4">
         {groups.map((g) => (

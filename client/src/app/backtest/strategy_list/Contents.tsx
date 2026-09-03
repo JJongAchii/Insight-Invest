@@ -1,5 +1,6 @@
 import React from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { ArrowUpRight, CalendarRange, FlaskConical } from "lucide-react";
 import SparklineChart from "@/components/charts/SparklineChart";
 import EmptyState from "@/components/ui/EmptyState";
 import LiveBadge from "@/components/LiveBadge";
@@ -33,24 +34,29 @@ const Contents = ({
   strategyNav,
 }: {
   strategyList: Strategy[];
-  strategyNav: StrategyNav[];
+  strategyNav?: StrategyNav[];
 }) => {
-  const router = useRouter();
-  const handleGridClick = (port_id: number) => {
-    router.push(`/backtest/strategy_list/${port_id}`);
-  };
-
   if (!strategyList || strategyList.length === 0) {
     return (
-      <EmptyState
-        title="저장된 연구 전략이 없습니다"
-        hint="백테스트를 실행하고 저장하면 이곳에서 전제와 기간을 함께 비교할 수 있습니다"
-      />
+      <div className="px-5 md:px-6">
+        <EmptyState
+          icon={<FlaskConical size={28} aria-hidden />}
+          title="조건에 맞는 연구 전략이 없습니다"
+          hint="검색어를 지우거나 새 백테스트를 저장해 보세요"
+        />
+      </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
+    <div>
+      <div className="hidden grid-cols-[minmax(220px,1.3fr)_minmax(260px,1fr)_170px_minmax(260px,1fr)_28px] gap-5 border-b border-edge bg-raised/60 px-6 py-3 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-muted xl:grid">
+        <span>Strategy record</span>
+        <span>Research evidence</span>
+        <span>Track</span>
+        <span>Test contract</span>
+        <span aria-hidden />
+      </div>
       {strategyList?.map((strategy) => {
         const navValues =
           strategyNav
@@ -58,90 +64,69 @@ const Contents = ({
             .map((nav) => nav.value) ?? [];
 
         return (
-          <div
+          <Link
             key={strategy.port_id}
-            className="card-interactive flex p-5"
-            onClick={() => handleGridClick(strategy.port_id)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                handleGridClick(strategy.port_id);
-              }
-            }}
-            role="link"
-            tabIndex={0}
+            href={`/backtest/strategy_list/${strategy.port_id}`}
+            className="group relative grid gap-5 border-b border-edge px-5 py-5 transition-colors last:border-b-0 hover:bg-raised/55 md:px-6 xl:grid-cols-[minmax(220px,1.3fr)_minmax(260px,1fr)_170px_minmax(260px,1fr)_28px] xl:items-center"
           >
-            <div className="w-3/5 pr-4">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="font-semibold text-ink">
+            <span
+              aria-hidden
+              className="absolute bottom-3 left-0 top-3 w-px origin-center scale-y-0 bg-gradient-to-b from-primary-400 to-secondary-400 transition-transform group-hover:scale-y-100"
+            />
+            <div className="min-w-0">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <span className="font-semibold tracking-[-0.015em] text-ink">
                   {strategy.port_name}
-                </div>
+                </span>
                 {strategy.status === "active" && (
-                  <span className="badge-neutral" style={{ color: "var(--gains)" }}>
-                    ACTIVE
+                  <span className="badge-success font-mono text-[9px] tracking-[0.1em]">
+                    TRACKING
                   </span>
                 )}
-                <span className="badge-neutral text-[10px]">미검증</span>
+                <span className="badge-neutral font-mono text-[9px] tracking-[0.08em] text-warning">
+                  UNVERIFIED
+                </span>
               </div>
-              <div className="text-ink-muted text-xs mb-3">
+              <p className="truncate text-xs text-ink-muted">
                 {strategy.strategy_name}
-              </div>
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-ink-muted">Return</span>
-                  <span
-                    className={
-                      strategy.ann_ret >= 0
-                        ? "metric-positive text-sm"
-                        : "metric-negative text-sm"
-                    }
-                  >
+              </p>
+              <p className="mt-3 flex items-center gap-1.5 font-mono text-[10px] text-ink-muted">
+                <CalendarRange size={12} aria-hidden />
+                저장 {formatDate(strategy.created_at)}
+              </p>
+            </div>
+
+            <dl className="grid grid-cols-3 overflow-hidden rounded-xl border border-edge bg-canvas/25">
+              <div className="border-r border-edge px-3 py-3">
+                <dt className="text-[10px] uppercase tracking-wider text-ink-muted">CAGR</dt>
+                <dd
+                  className={
+                    strategy.ann_ret >= 0
+                      ? "metric-positive mt-1 text-sm"
+                      : "metric-negative mt-1 text-sm"
+                  }
+                >
                     {strategy.ann_ret >= 0 ? "+" : ""}
                     {strategy.ann_ret}%
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-ink-muted">Volatility</span>
-                  <span className="num text-sm font-medium text-ink-secondary">
-                    {strategy.ann_vol}%
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-ink-muted">Sharpe</span>
-                  <span className="num text-sm font-medium text-ink-secondary">
-                    {strategy.sharpe}
-                  </span>
-                </div>
+                </dd>
               </div>
-              <dl className="mt-3 space-y-1 border-t border-edge pt-3 text-[11px] text-ink-muted">
-                <div className="flex justify-between gap-2">
-                  <dt>실험 구간</dt>
-                  <dd className="text-right num text-ink-secondary">
-                    {strategy.bt_start ?? "—"} ~ {strategy.bt_end ?? "—"}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <dt>전제</dt>
-                  <dd className="text-right text-ink-secondary">
-                    {strategy.benchmark ?? "BM 미기록"} · {strategy.currency ?? "통화 미기록"} · 비용 {strategy.cost_bps ?? "—"}bps
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <dt>저장일</dt>
-                  <dd className="text-right text-ink-secondary">
-                    {formatDate(strategy.created_at)}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-            <div className="w-2/5 flex flex-col items-center justify-center gap-1.5">
+              <div className="border-r border-edge px-3 py-3">
+                <dt className="text-[10px] uppercase tracking-wider text-ink-muted">Vol</dt>
+                <dd className="num mt-1 text-sm font-medium text-ink-secondary">{strategy.ann_vol}%</dd>
+              </div>
+              <div className="px-3 py-3">
+                <dt className="text-[10px] uppercase tracking-wider text-ink-muted">Sharpe</dt>
+                <dd className="num mt-1 text-sm font-medium text-ink-secondary">{strategy.sharpe}</dd>
+              </div>
+            </dl>
+
+            <div className="flex min-h-16 items-center gap-3 xl:flex-col xl:justify-center xl:gap-1">
               <SparklineChart
                 data={navValues}
-                width={140}
-                height={60}
+                width={132}
+                height={48}
                 color="var(--chart-1)"
               />
-              {/* Live (post-save) track — hidden until tracking data exists */}
               <LiveBadge
                 portId={strategy.port_id}
                 showSparkline
@@ -149,7 +134,28 @@ const Contents = ({
                 sparkHeight={20}
               />
             </div>
-          </div>
+
+            <dl className="grid gap-2 text-[11px] sm:grid-cols-2 xl:grid-cols-1">
+              <div className="flex justify-between gap-3">
+                <dt className="text-ink-muted">실험 구간</dt>
+                <dd className="num text-right text-ink-secondary">
+                  {strategy.bt_start ?? "—"} → {strategy.bt_end ?? "—"}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-ink-muted">산출 전제</dt>
+                <dd className="text-right text-ink-secondary">
+                  {strategy.benchmark ?? "BM 미기록"} · {strategy.currency ?? "통화 미기록"} · {strategy.cost_bps ?? "—"}bps
+                </dd>
+              </div>
+            </dl>
+
+            <ArrowUpRight
+              size={18}
+              aria-hidden
+              className="hidden text-ink-muted transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary-300 xl:block"
+            />
+          </Link>
         );
       })}
     </div>

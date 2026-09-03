@@ -37,30 +37,40 @@ const InsightPage = () => {
   return (
     <div className="flex flex-col gap-6 pb-16">
       <PageHeader
-        title="KR Market Insight"
-        description="수급·시장폭·신호 — KRX 전 종목 데이터 기반"
+        eyebrow="Market tape"
+        title="한국 시장"
+        description="지수 방향과 시장 참여를 분리해 보고, 수급·섹터·팩터·밸류에이션 근거를 순서대로 확인합니다."
+        meta={
+          <>
+            <span>KRX 전 종목</span>
+            <span>·</span>
+            <span>{intraday?.as_of ? `장중 기준 ${intraday.as_of}` : "정산 데이터"}</span>
+          </>
+        }
       />
 
       <MarketReadout />
 
       {active && (
-        <div className="flex gap-1 border-b border-edge">
+        <div className="segmented-control self-start" aria-label="시장 데이터 시점">
           {(
             [
-              ["live", intraday?.is_open ? "🔴 Live" : "Today’s Close"],
-              ["settled", "Settled Insight"],
+              ["live", intraday?.is_open ? "장중 흐름" : "오늘 종가"],
+              ["settled", "정산 인사이트"],
             ] as [Tab, string][]
           ).map(([key, label]) => (
             <button
               key={key}
+              type="button"
               onClick={() => setTab(key)}
-              className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors ${
-                tab === key
-                  ? "border-ink text-ink"
-                  : "border-transparent text-ink-muted hover:text-ink"
-              }`}
+              aria-pressed={tab === key}
             >
-              {label}
+              <span className="inline-flex items-center gap-2">
+                {key === "live" && intraday?.is_open && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-losses shadow-[0_0_8px_var(--losses)]" aria-hidden />
+                )}
+                {label}
+              </span>
             </button>
           ))}
         </div>

@@ -50,76 +50,74 @@ const StockFilters: React.FC<StockFiltersProps> = ({
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-4">
-      {/* Market Tabs */}
-      <div className="flex rounded-lg bg-raised p-1">
+    <div className="grid gap-4 xl:grid-cols-[auto_auto_minmax(180px,1fr)_minmax(150px,auto)] xl:items-end">
+      <fieldset className="min-w-0">
+        <legend className="mb-2 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-ink-muted">Market</legend>
+        <div className="segmented-control bg-canvas/25">
         {MARKET_OPTIONS.map((option) => (
           <button
             key={option.value}
+            type="button"
             onClick={() => handleMarketChange(option.value)}
-            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
-              filters.market === option.value
-                ? "bg-overlay text-ink shadow-sm"
-                : "text-ink-secondary hover:text-ink"
-            }`}
             aria-pressed={filters.market === option.value}
           >
             {option.label}
           </button>
         ))}
-      </div>
+        </div>
+      </fieldset>
 
-      {/* Security Type Tabs */}
-      <div className="flex rounded-lg bg-raised p-1">
+      <fieldset className="min-w-0">
+        <legend className="mb-2 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-ink-muted">Instrument</legend>
+        <div className="segmented-control bg-canvas/25">
         {TYPE_OPTIONS.map((option) => (
           <button
             key={option.value}
+            type="button"
             onClick={() => handleTypeChange(option.value)}
-            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
-              filters.type === option.value
-                ? "bg-overlay text-ink shadow-sm"
-                : "text-ink-secondary hover:text-ink"
-            }`}
             aria-pressed={filters.type === option.value}
           >
             {option.label}
           </button>
         ))}
-      </div>
+        </div>
+      </fieldset>
 
-      {/* Sector Dropdown */}
-      <select
-        value={filters.sector}
-        onChange={handleSectorChange}
-        className="w-full min-w-0 sm:w-auto sm:max-w-xs px-3 py-2 text-sm border border-edge rounded-lg bg-surface
-                   focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
-      >
-        <option value="">전체 섹터</option>
-        {sectors.map((sector) => (
-          <option key={sector} value={sector}>
-            {sector}
-          </option>
-        ))}
-      </select>
+      <label className="block min-w-0">
+        <span className="mb-2 block font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-ink-muted">Sector</span>
+        <select
+          value={filters.sector}
+          onChange={handleSectorChange}
+          className="input h-[42px] py-2 text-sm"
+        >
+          <option value="">전체 섹터</option>
+          {sectors.map((sector) => (
+            <option key={sector} value={sector}>
+              {sector}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="block min-w-0">
+        <span className="mb-2 block font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-ink-muted">Size</span>
+        <select
+          value={filters.cap}
+          onChange={handleCapChange}
+          className="input h-[42px] py-2 text-sm"
+        >
+          {CAP_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
       {filters.cap !== "all" && (
-        <p className="basis-full text-xs text-ink-muted">
-          대형/중형 기준: 미국 $10B/$2B · 한국 10조원/1조원 (원천 통화 기준)
+        <p className="text-xs leading-5 text-ink-muted xl:col-span-4">
+          규모 기준 · 미국 $10B / $2B · 한국 10조원 / 1조원, 원천 통화 기준
         </p>
       )}
-
-      {/* Market Cap Dropdown */}
-      <select
-        value={filters.cap}
-        onChange={handleCapChange}
-        className="px-3 py-2 text-sm border border-edge rounded-lg bg-surface
-                   focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
-      >
-        {CAP_OPTIONS.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
     </div>
   );
 };

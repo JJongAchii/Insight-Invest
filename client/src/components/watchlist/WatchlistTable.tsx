@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Pencil, X } from "lucide-react";
 
 import {
@@ -52,7 +53,9 @@ const WatchlistTable: React.FC<WatchlistTableProps> = ({
             <th className="py-2.5 px-3 text-right">외국인 20D</th>
             <th className="py-2.5 px-3 text-right">기관 20D</th>
             {showAdded && <th className="py-2.5 px-3 text-right">추가일</th>}
-            <th className="py-2.5 px-3 text-right rounded-r-lg" />
+            <th className="py-2.5 px-3 text-right rounded-r-lg">
+              <span className="sr-only">작업</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -65,19 +68,15 @@ const WatchlistTable: React.FC<WatchlistTableProps> = ({
                 key={item.meta_id}
                 className="table-row cursor-pointer"
                 onClick={() => router.push(`/stock/${item.meta_id}`)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    router.push(`/stock/${item.meta_id}`);
-                  }
-                }}
-                tabIndex={0}
-                role="button"
               >
                 <td className="table-cell">
-                  <span className="font-medium text-ink">
+                  <Link
+                    href={`/stock/${item.meta_id}`}
+                    onClick={(event) => event.stopPropagation()}
+                    className="font-medium text-ink underline-offset-4 hover:text-primary-300 hover:underline"
+                  >
                     {item.name ?? item.ticker}
-                  </span>
+                  </Link>
                   <span className="ml-1.5 text-xs text-ink-muted num">
                     {item.ticker}
                   </span>
@@ -124,6 +123,7 @@ const WatchlistTable: React.FC<WatchlistTableProps> = ({
                 <td className="table-cell text-right">
                   <div className="flex justify-end gap-1">
                     <button
+                      type="button"
                       onClick={(event) => { event.stopPropagation(); setEditing(item); }}
                       aria-label={`${item.name ?? item.ticker} 관심 논거 편집`}
                       className="p-1.5 rounded-lg text-ink-muted hover:text-primary-400 hover:bg-raised"
@@ -131,6 +131,7 @@ const WatchlistTable: React.FC<WatchlistTableProps> = ({
                       <Pencil size={14} aria-hidden />
                     </button>
                     <button
+                      type="button"
                       onClick={(e) => handleRemove(e, item)}
                       aria-label={`${item.name ?? item.ticker} 관심종목에서 제거`}
                       className="p-1.5 rounded-lg text-ink-muted hover:text-losses hover:bg-raised transition-colors"

@@ -39,6 +39,7 @@ const GaugeArc: React.FC<{ score: number }> = ({ score }) => {
 
   return (
     <svg viewBox="0 0 200 112" className="w-full max-w-[280px] mx-auto">
+      <title>시장 위험 점수 {Math.round(clamped)}점</title>
       {/* Track */}
       <path
         d={`M ${ARC_CX - ARC_R} ${ARC_CY} A ${ARC_R} ${ARC_R} 0 0 1 ${ARC_CX + ARC_R} ${ARC_CY}`}
@@ -99,7 +100,7 @@ const RiskGauge: React.FC<{ className?: string }> = ({ className = "" }) => {
     <Card
       title={
         <span className="inline-flex items-center gap-1.5">
-          Market Risk Score
+          위험 압력
           <InfoTip helpKey="regime.gauge" />
         </span>
       }
@@ -111,7 +112,15 @@ const RiskGauge: React.FC<{ className?: string }> = ({ className = "" }) => {
         <LoadingState label="시장 위험도를 계산하는 중..." />
       ) : (
         <div className="flex flex-col gap-4">
-          <div className="relative">
+          <div
+            className="relative"
+            role="meter"
+            aria-label="시장 위험 압력"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(data.score)}
+            aria-valuetext={`${scoreLabel(data.score)}, ${Math.round(data.score)}점`}
+          >
             <GaugeArc score={data.score} />
             <div className="absolute inset-x-0 bottom-0 text-center pointer-events-none">
               <p
@@ -120,6 +129,7 @@ const RiskGauge: React.FC<{ className?: string }> = ({ className = "" }) => {
               >
                 {Math.round(data.score)}
               </p>
+              <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.16em] text-ink-muted">risk pressure</p>
             </div>
           </div>
           <div className="flex items-center justify-center gap-2 -mt-1">

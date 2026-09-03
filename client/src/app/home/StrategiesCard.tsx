@@ -41,7 +41,7 @@ const StrategiesCard: React.FC = () => {
 
   return (
     <Card
-      title="My Strategies"
+      title="저장한 전략"
       action={
         <Link
           href="/backtest/strategy_list"

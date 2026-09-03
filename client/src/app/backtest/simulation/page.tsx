@@ -9,6 +9,7 @@ import TimeSeriesChart from "@/components/charts/TimeSeriesChart";
 import PeriodBarChart from "@/components/charts/PeriodBarChart";
 import EmptyState from "@/components/ui/EmptyState";
 import InfoTip from "@/components/ui/InfoTip";
+import PageHeader from "@/components/ui/PageHeader";
 import {
   useRunBacktestMutation,
   BacktestPayload,
@@ -25,12 +26,12 @@ type TabKey =
   | "stress";
 
 const TABS: { key: TabKey; label: string }[] = [
-  { key: "performance", label: "Performance" },
-  { key: "drawdown", label: "Drawdown" },
-  { key: "rolling", label: "Rolling Sharpe" },
-  { key: "returns", label: "Returns" },
-  { key: "contribution", label: "Contribution" },
-  { key: "stress", label: "Stress" },
+  { key: "performance", label: "성과" },
+  { key: "drawdown", label: "낙폭" },
+  { key: "rolling", label: "롤링 샤프" },
+  { key: "returns", label: "기간 수익" },
+  { key: "contribution", label: "기여도" },
+  { key: "stress", label: "위기 구간" },
 ];
 
 /** localStorage에 남은 v1 결과(문자열 필드)는 무시하고 v2 형태만 복원 */
@@ -51,6 +52,9 @@ const loadStoredResult = (): BacktestRunResult | null => {
 
 const formatPct = (v: number | null | undefined) =>
   typeof v === "number" ? `${v.toFixed(2)}%` : "—";
+
+const formatNumber = (v: number | null | undefined) =>
+  typeof v === "number" ? v.toFixed(2) : "—";
 
 const apiErrorMessage = (error: unknown): string => {
   if (typeof error === "object" && error !== null && "data" in error) {
@@ -155,40 +159,33 @@ const Simulation = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="card-elevated max-w-md mx-4">
             <h3 className="text-lg font-semibold text-ink mb-2">
-              Clear All Strategies?
+              모든 실험 결과를 지울까요?
             </h3>
             <p className="text-ink-secondary text-sm mb-6">
-              This will remove all backtest results and selected tickers from
-              this browser. This action cannot be undone.
+              이 브라우저에 저장된 백테스트 결과와 선택 종목이 모두 삭제됩니다. 되돌릴 수 없습니다.
             </p>
             <div className="flex gap-3 justify-end">
               <button onClick={cancelClear} className="btn-secondary">
-                Cancel
+                취소
               </button>
               <button onClick={confirmClear} className="btn-danger">
-                Clear All
+                모두 지우기
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="page-title">Research Lab · Backtest</h1>
-          <p className="page-description">
-            가설을 과거 데이터에서 탐색하되, 미검증 결과를 실전 판단과 분리합니다
-          </p>
-        </div>
-        <button
-          onClick={handleClearClick}
-          disabled={isLoading}
-          className="btn-danger"
-        >
-          Clear All
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Strategy lab"
+        title="리서치 · 전략 실험"
+        description="가설을 과거 데이터에서 탐색하되, 미검증 결과를 실전 판단과 분리합니다."
+        actions={
+          <button onClick={handleClearClick} disabled={isLoading} className="btn-danger">
+            결과 모두 지우기
+          </button>
+        }
+      />
 
       <SetStrategy onRunBacktest={handleRunBacktest} isLoading={isLoading} />
 
@@ -198,16 +195,59 @@ const Simulation = () => {
         </div>
       )}
 
-      {backtestResult?.calculation_contract && (
+      {backtestResult ? (
+        <section className="relative space-y-6 border-t border-edge pt-8" aria-labelledby="backtest-output">
+          <span aria-hidden className="absolute -top-px left-0 h-px w-44 bg-gradient-to-r from-primary-400 via-primary-500 to-secondary-400" />
+          <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary-300">Historical output</p>
+              <h2 id="backtest-output" className="mt-1 text-xl font-semibold tracking-[-0.025em] text-ink">
+                {backtestResult.strategy_name}
+              </h2>
+              <p className="mt-1 text-sm text-ink-muted">과거 시뮬레이션 결과 · 실전 성과가 아닙니다.</p>
+            </div>
+            <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10px] uppercase tracking-[0.06em] text-ink-muted">
+              <span>관측 {backtestResult.nav.length}</span>
+              <span>·</span>
+              <span>리밸런스 기록 {backtestResult.weights.length}</span>
+              <span>·</span>
+              <span>BM {backtestResult.benchmark.name}</span>
+            </div>
+          </header>
+
+          <div
+            className="scrollbar-hidden -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0"
+            role="group"
+            aria-label="백테스트 핵심 지표"
+            tabIndex={0}
+          >
+            <dl className="metric-strip min-w-[38rem] grid-cols-4 sm:min-w-0" aria-label="전략 핵심 지표">
+              {[
+                ["연환산 수익", formatPct(backtestResult.metrics.strategy.ann_ret), backtestResult.metrics.strategy.ann_ret],
+                ["연환산 변동성", formatPct(backtestResult.metrics.strategy.ann_vol), null],
+                ["샤프 비율", formatNumber(backtestResult.metrics.strategy.sharpe), null],
+                ["최대 낙폭", formatPct(backtestResult.metrics.strategy.mdd), backtestResult.metrics.strategy.mdd],
+              ].map(([label, value, signed]) => (
+                <div key={String(label)} className="metric-tile p-4 sm:p-5">
+                  <dt className="metric-label">{String(label)}</dt>
+                  <dd className={`mt-2 text-2xl font-semibold num ${typeof signed === "number" ? signed >= 0 ? "text-gains" : "text-losses" : "text-ink"}`}>
+                    {String(value)}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+
+      {backtestResult.calculation_contract && (
         <div className="rounded-xl border border-edge bg-raised px-4 py-3 text-xs text-ink-secondary">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="font-semibold text-ink">Execution Contract</span>
+            <span className="font-semibold text-ink">계산·체결 계약</span>
             <span className="text-ink-muted num">
               {backtestResult.calculation_contract.calculation_version}
             </span>
           </div>
           <p className="mt-1">
-            Basis · {backtestResult.calculation_contract.return_basis} · Execution · 리밸런스 거래일 종가
+            수익률 기준 · {backtestResult.calculation_contract.return_basis} · 체결 · 리밸런스 거래일 종가
           </p>
           {backtestResult.calculation_contract.cash_distributions !== "included" && (
             <p className="mt-1 text-warning">
@@ -218,16 +258,13 @@ const Simulation = () => {
       )}
 
       {/* Result Tabs */}
-      <div className="inline-flex self-start rounded-lg bg-raised p-1 overflow-x-auto max-w-full">
+      <div className="segmented-control self-start" aria-label="전략 결과 보기">
         {TABS.map((tab) => (
           <button
             key={tab.key}
+            type="button"
             onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-2 text-sm font-medium rounded-md whitespace-nowrap transition-colors ${
-              activeTab === tab.key
-                ? "bg-surface text-ink shadow-sm"
-                : "text-ink-muted hover:text-ink-secondary"
-            }`}
+            aria-pressed={activeTab === tab.key}
           >
             {tab.label}
           </button>
@@ -237,7 +274,10 @@ const Simulation = () => {
       {/* Performance */}
       {activeTab === "performance" && (
         <div className="card">
-          <h3 className="section-header">Performance</h3>
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+            <h3 className="text-base font-semibold text-ink">누적 성과</h3>
+            <p className="text-xs text-ink-muted">초기 NAV 1,000 기준 · 벤치마크 동시 비교</p>
+          </div>
           <StrategyChart
             strategyName={backtestResult?.strategy_name ?? "Strategy"}
             nav={backtestResult?.nav ?? null}
@@ -254,7 +294,7 @@ const Simulation = () => {
       {activeTab === "drawdown" && (
         <div className="card">
           <div className="flex items-start justify-between">
-            <h3 className="section-header">Drawdown</h3>
+            <h3 className="section-header">낙폭</h3>
             <InfoTip helpKey="bt.drawdown" />
           </div>
           {analytics && analytics.drawdown.length > 0 ? (
@@ -269,8 +309,8 @@ const Simulation = () => {
             />
           ) : (
             <EmptyState
-              title="No drawdown data"
-              hint="Run a backtest to see drawdowns"
+              title="낙폭 데이터가 없습니다"
+              hint="백테스트를 실행하면 고점 대비 하락이 표시됩니다"
             />
           )}
         </div>
@@ -280,7 +320,7 @@ const Simulation = () => {
       {activeTab === "rolling" && (
         <div className="card">
           <div className="flex items-start justify-between">
-            <h3 className="section-header">Rolling Sharpe</h3>
+            <h3 className="section-header">롤링 샤프</h3>
             <InfoTip helpKey="bt.rolling" />
           </div>
           {analytics && analytics.rolling_sharpe.length > 0 ? (
@@ -299,8 +339,8 @@ const Simulation = () => {
             />
           ) : (
             <EmptyState
-              title="No rolling Sharpe data"
-              hint="Run a backtest to see the rolling Sharpe ratio"
+              title="롤링 샤프 데이터가 없습니다"
+              hint="백테스트를 실행하면 시간에 따른 위험 조정 성과가 표시됩니다"
             />
           )}
         </div>
@@ -310,7 +350,7 @@ const Simulation = () => {
       {activeTab === "returns" && (
         <div className="flex flex-col gap-6">
           <div className="card">
-            <h3 className="section-header">Yearly Returns</h3>
+            <h3 className="section-header">연도별 수익</h3>
             {analytics && analytics.yearly_returns.length > 0 ? (
               <PeriodBarChart
                 data={toPeriodData(analytics.yearly_returns)}
@@ -331,13 +371,13 @@ const Simulation = () => {
               />
             ) : (
               <EmptyState
-                title="No yearly returns"
-                hint="Run a backtest to see period returns"
+                title="연도별 수익 데이터가 없습니다"
+                hint="백테스트를 실행하면 기간별 수익이 표시됩니다"
               />
             )}
           </div>
           <div className="card">
-            <h3 className="section-header">Monthly Returns (last 36)</h3>
+            <h3 className="section-header">월별 수익 · 최근 36개월</h3>
             {monthlyReturns.length > 0 ? (
               <PeriodBarChart
                 data={toPeriodData(monthlyReturns)}
@@ -358,8 +398,8 @@ const Simulation = () => {
               />
             ) : (
               <EmptyState
-                title="No monthly returns"
-                hint="Run a backtest to see period returns"
+                title="월별 수익 데이터가 없습니다"
+                hint="백테스트를 실행하면 기간별 수익이 표시됩니다"
               />
             )}
           </div>
@@ -370,7 +410,7 @@ const Simulation = () => {
       {activeTab === "contribution" && (
         <div className="card">
           <div className="flex items-start justify-between">
-            <h3 className="section-header">Return Contribution by Asset</h3>
+            <h3 className="section-header">자산별 수익 기여</h3>
             <InfoTip helpKey="bt.contribution" />
           </div>
           {analytics && analytics.contribution.length > 0 ? (
@@ -420,8 +460,8 @@ const Simulation = () => {
             </div>
           ) : (
             <EmptyState
-              title="No contribution data"
-              hint="Run a backtest to see per-asset contributions"
+              title="기여도 데이터가 없습니다"
+              hint="백테스트를 실행하면 자산별 기여가 표시됩니다"
             />
           )}
         </div>
@@ -431,7 +471,7 @@ const Simulation = () => {
       {activeTab === "stress" && (
         <div className="card">
           <div className="flex items-start justify-between">
-            <h3 className="section-header">Crisis Stress Windows</h3>
+            <h3 className="section-header">위기 구간 스트레스</h3>
             <InfoTip helpKey="bt.stress" />
           </div>
           {analytics && analytics.crisis.length > 0 ? (
@@ -440,19 +480,19 @@ const Simulation = () => {
                 <thead>
                   <tr className="border-b border-edge">
                     <th className="text-left py-3 px-4 font-medium text-ink-muted">
-                      Crisis
+                      위기 구간
                     </th>
                     <th className="text-left py-3 px-4 font-medium text-ink-muted">
-                      Period
+                      기간
                     </th>
                     <th className="text-right py-3 px-4 font-medium text-ink-muted">
-                      Return
+                      수익률
                     </th>
                     <th className="text-right py-3 px-4 font-medium text-ink-muted">
                       MDD
                     </th>
                     <th className="text-right py-3 px-4 font-medium text-ink-muted">
-                      Recovery
+                      회복
                     </th>
                   </tr>
                 </thead>
@@ -487,10 +527,30 @@ const Simulation = () => {
             </div>
           ) : (
             <EmptyState
-              title="No crisis windows in range"
-              hint="Extend the backtest period to cover major drawdown events"
+              title="선택 구간에 위기 이벤트가 없습니다"
+              hint="주요 하락 구간을 포함하도록 백테스트 기간을 넓혀 보세요"
             />
           )}
+        </div>
+      )}
+        </section>
+      ) : (
+        <div className="grid overflow-hidden rounded-2xl border border-dashed border-edge bg-surface/50 md:grid-cols-[minmax(0,1fr)_minmax(20rem,0.8fr)]">
+          <div className="px-5 py-8 md:px-7 md:py-10">
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-muted">Output pending</p>
+            <h2 className="mt-2 text-lg font-semibold text-ink">첫 결과를 기다리는 실험 벤치</h2>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-ink-muted">
+              위 가정표를 채우고 백테스트를 실행하면 성과·낙폭·롤링 지표·기여도·위기 구간이 이곳에 기록됩니다.
+            </p>
+          </div>
+          <ol className="grid grid-cols-3 border-t border-edge bg-raised/40 md:border-l md:border-t-0">
+            {["가정 고정", "과거 실행", "결과 반증"].map((label, index) => (
+              <li key={label} className="flex flex-col justify-center border-r border-edge px-3 py-5 last:border-r-0 md:px-4">
+                <span className="font-mono text-[10px] text-primary-300">0{index + 1}</span>
+                <span className="mt-1 text-xs font-medium text-ink-secondary">{label}</span>
+              </li>
+            ))}
+          </ol>
         </div>
       )}
     </div>

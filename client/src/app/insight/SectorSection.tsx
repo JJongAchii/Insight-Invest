@@ -171,7 +171,7 @@ const SectorSection: React.FC = () => {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-lg font-semibold text-ink">Sectors</h2>
+        <h2 className="text-lg font-semibold text-ink">섹터 흐름</h2>
         <Segmented
           options={MARKET_OPTIONS}
           value={market}
@@ -186,27 +186,27 @@ const SectorSection: React.FC = () => {
       <Card
         title={
           <span className="inline-flex items-center gap-1.5">
-            Sector Heatmap
+            섹터 히트맵
             <InfoTip helpKey="sector.heatmap" />
           </span>
         }
         action={
           heatmapData?.as_of && (
             <span className="text-xs text-ink-muted num">
-              as of {heatmapData.as_of}
+              기준 {heatmapData.as_of}
             </span>
           )
         }
       >
         {heatmapError ? (
           <ErrorState
-            message="Failed to load sector heatmap"
+            message="섹터 히트맵을 불러오지 못했습니다"
             onRetry={refetchHeatmap}
           />
         ) : heatmapLoading || !heatmapData ? (
-          <LoadingState label="Loading sector heatmap..." />
+          <LoadingState label="섹터 흐름을 불러오는 중..." />
         ) : tiles.length === 0 ? (
-          <EmptyState title="No sector data" />
+          <EmptyState title="섹터 데이터가 없습니다" />
         ) : (
           <div className="flex flex-wrap gap-2">
             {tiles.map((tile) => {
@@ -245,7 +245,7 @@ const SectorSection: React.FC = () => {
       <Card
         title={
           <span className="inline-flex items-center gap-1.5">
-            Sector Rotation
+            섹터 순환
             <InfoTip helpKey="sector.rotation" />
           </span>
         }
@@ -258,13 +258,13 @@ const SectorSection: React.FC = () => {
       >
         {rotationError ? (
           <ErrorState
-            message="Failed to load sector rotation"
+            message="섹터 순환을 불러오지 못했습니다"
             onRetry={refetchRotation}
           />
         ) : rotationLoading || !rotationData ? (
-          <LoadingState label="Loading sector rotation..." />
+          <LoadingState label="섹터 순환을 불러오는 중..." />
         ) : rotationChartData.length === 0 ? (
-          <EmptyState title="No rotation data" />
+          <EmptyState title="섹터 순환 데이터가 없습니다" />
         ) : (
           <TimeSeriesChart
             data={rotationChartData}

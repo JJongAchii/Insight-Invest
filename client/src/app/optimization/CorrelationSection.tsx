@@ -86,7 +86,7 @@ const CorrelationSection: React.FC<CorrelationSectionProps> = ({
       <Card
         title={
           <span className="inline-flex items-center gap-1.5">
-            Correlation Matrix
+            상관 행렬
             <InfoTip helpKey="opt.correlation" />
           </span>
         }
@@ -174,7 +174,7 @@ const CorrelationSection: React.FC<CorrelationSectionProps> = ({
       <Card
         title={
           <span className="inline-flex items-center gap-1.5">
-            Rolling Correlation
+            롤링 상관
             <InfoTip helpKey="opt.rolling_corr" />
           </span>
         }
@@ -206,7 +206,7 @@ const CorrelationSection: React.FC<CorrelationSectionProps> = ({
       >
         {!rolling || rollingData.length === 0 ? (
           <EmptyState
-            title="No rolling correlation data"
+            title="롤링 상관 데이터가 없습니다"
             hint="두 자산을 선택하면 롤링 상관이 표시됩니다"
           />
         ) : (

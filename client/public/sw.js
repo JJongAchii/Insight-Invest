@@ -1,4 +1,4 @@
-const CACHE_NAME = "insight-invest-shell-v3";
+const CACHE_NAME = "insight-invest-shell-v5";
 const OFFLINE_URL = "/offline";
 const PRECACHE = [
   OFFLINE_URL,

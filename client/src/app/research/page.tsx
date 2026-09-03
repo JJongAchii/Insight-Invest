@@ -162,8 +162,8 @@ function ResearchCard({
   return (
     <article
       id={`research-${item.entry_id}`}
-      className={`rounded-2xl border bg-surface p-4 transition-colors sm:p-5 ${
-        selected ? "border-primary-400 ring-2 ring-primary-500/20" : "border-edge"
+      className={`relative scroll-mt-24 p-4 transition-colors sm:p-5 ${
+        selected ? "bg-primary-500/10 shadow-[inset_2px_0_0_var(--primary)]" : "hover:bg-raised/35"
       }`}
     >
       <div className="flex items-start gap-3">
@@ -191,7 +191,7 @@ function ResearchCard({
             </span>
             {!item.is_read && (
               <span className="rounded-full bg-primary-500/15 px-2 py-0.5 font-medium text-primary-400">
-                New
+                새 자료
               </span>
             )}
             {item.is_saved && (
@@ -218,14 +218,14 @@ function ResearchCard({
               href={item.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="btn-primary inline-flex items-center gap-1.5"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500/15 px-3 py-2 text-xs font-semibold text-primary-300 transition-colors hover:bg-primary-500/25"
               onClick={markReadOnOpen}
             >
               원문 열기 <ExternalLink size={15} aria-hidden />
             </a>
             <button
               type="button"
-              className="btn-secondary inline-flex items-center gap-1.5"
+              className="btn-ghost inline-flex items-center gap-1.5 px-3 py-2 text-xs"
               onClick={() => void toggleRead()}
               disabled={isUpdatingRead}
             >
@@ -235,7 +235,7 @@ function ResearchCard({
             <button
               type="button"
               aria-pressed={item.is_saved}
-              className={`btn-secondary inline-flex items-center gap-1.5 ${
+              className={`btn-ghost inline-flex items-center gap-1.5 px-3 py-2 text-xs ${
                 item.is_saved ? "text-primary-300" : ""
               }`}
               onClick={() => void toggleSaved()}
@@ -398,8 +398,16 @@ export default function ResearchPage() {
   return (
     <div className="flex flex-col gap-6 pb-20">
       <PageHeader
-        title="Research Library"
-        description="검증된 출처를 핵심 연구, 발견 후보, 전체 기록으로 나눈 개인 퀀트 리서치 서재"
+        eyebrow="Research library"
+        title="리서치"
+        description="검증된 출처를 핵심 연구, 발견 후보, 전체 기록으로 나눠 읽고 보관하는 개인 퀀트 리서치 서재입니다."
+        meta={
+          <>
+            <span>안 읽음 {data?.unread ?? 0}</span>
+            <span>·</span>
+            <span>{data?.generated_at ? `마지막 반영 ${formatDateTime(data.generated_at)}` : "피드 확인 중"}</span>
+          </>
+        }
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -484,123 +492,132 @@ export default function ResearchPage() {
         사이드바 배지와 iPhone 알림은 핵심 연구로 분류된 신규 항목에만 표시됩니다.
       </p>
 
-      <section className="space-y-3 rounded-2xl border border-edge bg-surface p-4 sm:p-5">
-        <label className="relative block">
-          <span className="sr-only">리서치 검색</span>
-          <Search
-            size={18}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted"
-            aria-hidden
-          />
-          <input
-            type="search"
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            className="input w-full pl-10 pr-10"
-            placeholder="제목, 요약, 저자, 출처 검색"
-            maxLength={200}
-          />
-          {searchInput && (
-            <button
-              type="button"
-              onClick={clearSearch}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink"
-              aria-label="검색어 지우기"
-            >
-              <X size={17} />
-            </button>
-          )}
-        </label>
+      <div className="grid gap-5 xl:grid-cols-[15rem_minmax(0,1fr)] xl:items-start">
+        <aside className="rounded-2xl border border-edge bg-surface p-4 xl:sticky xl:top-28">
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary-300">Library view</p>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-1" aria-label="리서치 보기 방식">
+            {VIEW_OPTIONS.map((option) => {
+              const Icon = option.icon;
+              const active = view === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => selectView(option.value)}
+                  className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-sm transition-colors ${
+                    active
+                      ? "border-primary-500/60 bg-primary-500/15 text-primary-300"
+                      : "border-transparent text-ink-secondary hover:border-edge hover:bg-raised hover:text-ink"
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Icon size={16} aria-hidden /> {option.label}
+                  </span>
+                  <span className="num text-xs">{counts[option.value]}</span>
+                </button>
+              );
+            })}
+          </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="리서치 보기 방식">
-          {VIEW_OPTIONS.map((option) => {
-            const Icon = option.icon;
-            const active = view === option.value;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                aria-pressed={active}
-                onClick={() => selectView(option.value)}
-                className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-3 text-sm transition-colors ${
-                  active
-                    ? "border-primary-500 bg-primary-500/15 text-primary-300"
-                    : "border-edge bg-surface-raised text-ink-secondary hover:text-ink"
-                }`}
+          <div className="mt-4 border-t border-edge pt-4">
+            <label className="block text-xs font-medium text-ink-muted">
+              출처
+              <select
+                value={sourceId}
+                onChange={(event) => selectSource(event.target.value)}
+                className="input mt-1.5 w-full"
               >
-                <span className="inline-flex items-center gap-2">
-                  <Icon size={16} /> {option.label}
-                </span>
-                <span className="num text-xs">{counts[option.value]}</span>
-              </button>
-            );
-          })}
-        </div>
+                <option value="">모든 출처</option>
+                {data?.sources.map((source) => (
+                  <option key={source.source_id} value={source.source_id}>
+                    {source.source_name} ({source.count})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="mt-3 text-xs leading-5 text-ink-muted">
+              읽음은 삭제가 아닙니다. 다시 사용할 자료는 보관함에 따로 남길 수 있습니다.
+            </p>
+          </div>
+        </aside>
 
-        <p className="text-xs leading-5 text-ink-muted">
-          읽음은 삭제가 아닙니다. 전체 또는 읽음에서 언제든 다시 보고, 중요한 자료는 보관함에
-          따로 남길 수 있습니다.
-        </p>
-      </section>
+        <section className="min-w-0 space-y-4" aria-labelledby="research-results-title">
+          <div className="rounded-2xl border border-edge bg-surface p-3">
+            <label className="relative block">
+              <span className="sr-only">리서치 검색</span>
+              <Search
+                size={18}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted"
+                aria-hidden
+              />
+              <input
+                type="search"
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                className="input w-full border-transparent bg-raised/70 pl-10 pr-10"
+                placeholder="제목, 요약, 저자, 출처 검색"
+                maxLength={200}
+              />
+              {searchInput && (
+                <button
+                  type="button"
+                  onClick={clearSearch}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink"
+                  aria-label="검색어 지우기"
+                >
+                  <X size={17} />
+                </button>
+              )}
+            </label>
+          </div>
 
-      <section className="flex flex-col gap-3 rounded-2xl border border-edge bg-surface p-4 sm:flex-row sm:items-end">
-        <label className="flex min-w-0 flex-1 flex-col gap-1.5 text-xs font-medium text-ink-muted">
-          출처
-          <select
-            value={sourceId}
-            onChange={(event) => selectSource(event.target.value)}
-            className="input w-full"
-          >
-            <option value="">모든 출처</option>
-            {data?.sources.map((source) => (
-              <option key={source.source_id} value={source.source_id}>
-                {source.source_name} ({source.count})
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="flex min-w-44 flex-col gap-1 text-xs text-ink-muted sm:text-right">
-          <span>
-            결과 <strong className="font-semibold text-ink">{data?.total ?? 0}</strong>건
-          </span>
-          <span>
-            마지막 반영 {data?.generated_at ? formatDateTime(data.generated_at) : "준비 중"}
-          </span>
-        </div>
-      </section>
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-muted">Reading queue</p>
+              <h2 id="research-results-title" className="mt-1 text-base font-semibold text-ink">
+                {VIEW_OPTIONS.find((option) => option.value === view)?.label ?? "전체"} 자료
+              </h2>
+            </div>
+            <p className="text-xs text-ink-muted">
+              결과 <strong className="num font-semibold text-ink">{data?.total ?? 0}</strong>건
+            </p>
+          </div>
 
-      {error ? (
-        <div className="card">
-          <ErrorState message="Research Library를 불러오지 못했습니다." onRetry={refetch} />
-        </div>
-      ) : isLoading || !initialized ? (
-        <div className="card">
-          <LoadingState label="Research Library를 불러오는 중..." />
-        </div>
-      ) : !data?.items.length ? (
-        <div className="card">
-          <EmptyState
-            icon={view === "saved" ? <Bookmark size={28} /> : <CheckCircle2 size={28} />}
-            title={entryId ? "선택한 자료를 찾지 못했습니다" : emptyTitle}
-            hint={
-              view === "saved"
-                ? "자료 카드의 보관 버튼을 누르면 여기에 계속 남습니다."
-                : "검색어·출처·보기 방식을 바꾸거나 잠시 후 다시 확인해 주세요."
-            }
-          />
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {data.items.map((item) => (
-            <ResearchCard
-              key={item.entry_id}
-              item={item}
-              selected={item.entry_id === entryId}
-              onError={(message) => setNotice({ kind: "error", message })}
-            />
-          ))}
-        </div>
-      )}
+          {error ? (
+            <div className="card">
+              <ErrorState message="리서치 서재를 불러오지 못했습니다." onRetry={refetch} />
+            </div>
+          ) : isLoading || !initialized ? (
+            <div className="card">
+              <LoadingState label="리서치 서재를 불러오는 중..." />
+            </div>
+          ) : !data?.items.length ? (
+            <div className="card">
+              <EmptyState
+                icon={view === "saved" ? <Bookmark size={28} /> : <CheckCircle2 size={28} />}
+                title={entryId ? "선택한 자료를 찾지 못했습니다" : emptyTitle}
+                hint={
+                  view === "saved"
+                    ? "자료의 보관 버튼을 누르면 여기에 계속 남습니다."
+                    : "검색어·출처·보기 방식을 바꾸거나 잠시 후 다시 확인해 주세요."
+                }
+              />
+            </div>
+          ) : (
+            <div className="divide-y divide-edge overflow-hidden rounded-2xl border border-edge bg-surface">
+              {data.items.map((item) => (
+                <ResearchCard
+                  key={item.entry_id}
+                  item={item}
+                  selected={item.entry_id === entryId}
+                  onError={(message) => setNotice({ kind: "error", message })}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

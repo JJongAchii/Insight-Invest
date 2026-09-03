@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, GitCompareArrows, X } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -54,6 +54,8 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
   onAddToCompare,
 }) => {
   const [period, setPeriod] = useState<Period>("1y");
+  const panelRef = useRef<HTMLElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   // Calculate date range based on period
   const dateRange = useMemo(() => {
@@ -93,6 +95,44 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
     }));
   }, [priceData]);
 
+  useEffect(() => {
+    if (!stock) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeButtonRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab" || !panelRef.current) return;
+      const focusable = Array.from(
+        panelRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [onClose, stock]);
+
   if (!stock) return null;
 
   const isLoading = priceLoading || detailLoading;
@@ -128,14 +168,19 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
 
   return (
     <aside
+      ref={panelRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="stock-panel-title"
       aria-label={`${displayedStock.name || displayedStock.ticker} 상세 정보`}
-      className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[400px] flex-col bg-surface shadow-2xl"
+      className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[420px] flex-col border-l border-edge-strong bg-surface shadow-2xl"
     >
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-edge">
+      <div className="relative flex items-center justify-between border-b border-edge p-4">
+        <span aria-hidden className="absolute inset-y-0 left-0 w-px bg-gradient-to-b from-primary-400 to-secondary-400" />
         <div className="flex items-center gap-1">
           <div>
-            <h2 className="text-lg font-semibold text-ink">
+            <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-primary-300">Security brief</p>
+            <h2 id="stock-panel-title" className="mt-0.5 text-lg font-semibold tracking-[-0.02em] text-ink">
               {displayedStock.ticker}
             </h2>
             <p className="text-sm text-ink-muted">{displayedStock.name}</p>
@@ -153,23 +198,13 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
             <ArrowRight size={12} aria-hidden />
           </Link>
           <button
+            ref={closeButtonRef}
+            type="button"
             onClick={onClose}
             className="p-2 hover:bg-raised rounded-lg transition-colors"
             aria-label="상세 패널 닫기"
           >
-            <svg
-              className="w-5 h-5 text-ink-muted"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
+            <X size={19} className="text-ink-muted" aria-hidden />
           </button>
         </div>
       </div>
@@ -194,18 +229,18 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
 
         {/* Price Chart */}
         <div>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-ink-secondary">Price Chart</h3>
-            <div className="flex gap-1">
+          <div className="mb-3 flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-medium text-ink-secondary">가격 경로</h3>
+              <span className="font-mono text-[9px] uppercase tracking-wider text-ink-muted">Price history</span>
+            </div>
+            <div className="segmented-control" aria-label="가격 조회 기간">
               {PERIOD_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
+                  type="button"
                   onClick={() => setPeriod(opt.value)}
-                  className={`px-2 py-1 text-xs font-medium rounded ${
-                    period === opt.value
-                      ? "bg-primary-500 text-white"
-                      : "bg-raised text-ink-secondary hover:bg-overlay"
-                  }`}
+                  aria-pressed={period === opt.value}
                 >
                   {opt.label}
                 </button>
@@ -445,13 +480,13 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="p-4 border-t border-edge space-y-2">
+      <div className="space-y-2 border-t border-edge p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
         <button
+          type="button"
           onClick={() => onAddToCompare(displayedStock.meta_id)}
-          className="w-full py-2 px-4 bg-primary-500 text-white font-medium rounded-lg
-                     hover:bg-primary-600 transition-colors"
+          className="btn-primary inline-flex w-full items-center justify-center gap-2"
         >
+          <GitCompareArrows size={16} aria-hidden />
           비교 목록에 추가
         </button>
       </div>

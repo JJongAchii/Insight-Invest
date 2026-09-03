@@ -1,24 +1,24 @@
 "use client";
 
-import { useMemo } from "react";
+import { ChartNoAxesCombined, ChevronDown, FlaskConical } from "lucide-react";
+import { useMemo, useState } from "react";
+
 import TradingViewWidget from "@/app/(components)/TradingViewWidget";
 import { useAppSelector } from "@/app/redux";
-import PageHeader from "@/components/ui/PageHeader";
-import MarketTiles from "./MarketTiles";
-import WatchlistCard from "./WatchlistCard";
-import StrategiesCard from "./StrategiesCard";
-import FlowsTopCard from "./FlowsTopCard";
-import NewsBriefingCard from "./NewsBriefingCard";
-import ActionCenterSummary from "./ActionCenterSummary";
-import SpotlightLane from "./SpotlightLane";
-import PortfolioCard from "./PortfolioCard";
 import DecisionBrief from "./DecisionBrief";
-import SinceLastVisit from "./SinceLastVisit";
+import FlowsTopCard from "./FlowsTopCard";
+import MarketTiles from "./MarketTiles";
+import NewsBriefingCard from "./NewsBriefingCard";
+import PortfolioCard from "./PortfolioCard";
+import SpotlightLane from "./SpotlightLane";
+import StrategiesCard from "./StrategiesCard";
+import WatchlistCard from "./WatchlistCard";
 
-const Home = () => {
+export default function Home() {
   const isDarkMode = useAppSelector((state) => state.global.isDarkMode);
+  const [marketToolsOpen, setMarketToolsOpen] = useState(false);
+  const [researchToolsOpen, setResearchToolsOpen] = useState(false);
   const colorTheme = isDarkMode ? "dark" : "light";
-
   const tickerTapeUrl =
     "https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js";
   const tickerTapeConfig = useMemo(
@@ -35,7 +35,6 @@ const Home = () => {
         { description: "USD/CNY", proName: "FX_IDC:USDCNY" },
       ],
       showSymbolLogo: true,
-      // 투명 배경은 우리 표면과 글자색이 어긋날 수 있어 TradingView 자체 테마 배경 사용
       isTransparent: false,
       displayMode: "compact",
       colorTheme,
@@ -46,52 +45,88 @@ const Home = () => {
   );
 
   return (
-    <div className="flex flex-col gap-6 pb-16">
-      <PageHeader
-        title="My Dashboard"
-        description="시장 현황과 내 포트폴리오를 한눈에 확인합니다"
-      />
-
-      <SinceLastVisit />
-      <ActionCenterSummary />
+    <div className="pb-10">
       <DecisionBrief />
-
-      {/* 판단 직후 내 자산 영향을 확인한다. */}
       <PortfolioCard />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <WatchlistCard />
-        <MarketTiles />
+      <section className="mb-8" aria-labelledby="connected-change-title">
+        <header className="mb-4">
+          <h2
+            id="connected-change-title"
+            className="text-lg font-semibold tracking-[-0.02em] text-ink"
+          >
+            판단과 연결된 변화
+          </h2>
+          <p className="mt-1 text-xs text-ink-muted">
+            보유·관심 자산과 연결된 가격 변화와 소식만 먼저 봅니다.
+          </p>
+        </header>
+        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-2">
+          <WatchlistCard />
+          <NewsBriefingCard />
+        </div>
+      </section>
+
+      <div className="space-y-4">
+        <details
+          className="group overflow-hidden rounded-2xl border border-edge bg-surface/60"
+          onToggle={(event) => setMarketToolsOpen(event.currentTarget.open)}
+        >
+          <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-sm font-semibold text-ink transition-colors hover:bg-raised/60 [&::-webkit-details-marker]:hidden">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-edge bg-raised text-secondary-400">
+              <ChartNoAxesCombined size={16} aria-hidden />
+            </span>
+            시장 데이터 더 보기
+            <span className="ml-1 text-xs font-normal text-ink-muted">
+              지수 · 수급 · 글로벌 티커
+            </span>
+            <ChevronDown
+              size={16}
+              className="ml-auto text-ink-muted transition-transform group-open:rotate-180"
+              aria-hidden
+            />
+          </summary>
+          {marketToolsOpen && (
+            <div className="space-y-5 border-t border-edge p-5">
+              <MarketTiles />
+              <FlowsTopCard />
+              <div className="overflow-hidden rounded-xl border border-edge">
+                <TradingViewWidget
+                  key={`tape-${colorTheme}`}
+                  widgetScriptUrl={tickerTapeUrl}
+                  widgetConfig={tickerTapeConfig}
+                />
+              </div>
+            </div>
+          )}
+        </details>
+
+        <details
+          className="group overflow-hidden rounded-2xl border border-edge bg-surface/60"
+          onToggle={(event) => setResearchToolsOpen(event.currentTarget.open)}
+        >
+          <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-sm font-semibold text-ink transition-colors hover:bg-raised/60 [&::-webkit-details-marker]:hidden">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-edge bg-raised text-[color:var(--primary)]">
+              <FlaskConical size={16} aria-hidden />
+            </span>
+            리서치 도구 열기
+            <span className="ml-1 text-xs font-normal text-ink-muted">
+              후보 탐색 · 저장 전략
+            </span>
+            <ChevronDown
+              size={16}
+              className="ml-auto text-ink-muted transition-transform group-open:rotate-180"
+              aria-hidden
+            />
+          </summary>
+          {researchToolsOpen && (
+            <div className="space-y-5 border-t border-edge p-5">
+              <SpotlightLane />
+              <StrategiesCard />
+            </div>
+          )}
+        </details>
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <FlowsTopCard />
-        <NewsBriefingCard />
-      </div>
-
-      <details className="rounded-2xl border border-edge bg-surface p-4">
-        <summary className="cursor-pointer text-sm font-semibold text-ink">
-          Explore New Candidates
-        </summary>
-        <div className="mt-4"><SpotlightLane /></div>
-      </details>
-
-      <div className="rounded-xl border border-edge overflow-hidden">
-        <TradingViewWidget
-          key={`tape-${colorTheme}`}
-          widgetScriptUrl={tickerTapeUrl}
-          widgetConfig={tickerTapeConfig}
-        />
-      </div>
-
-      <details className="rounded-2xl border border-edge bg-surface p-4">
-        <summary className="cursor-pointer text-sm font-semibold text-ink">
-          Saved Research Strategies
-        </summary>
-        <div className="mt-4"><StrategiesCard /></div>
-      </details>
     </div>
   );
-};
-
-export default Home;
+}

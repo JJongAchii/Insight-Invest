@@ -15,14 +15,27 @@ import EfficientFrontierChart from "./EfficientFrontierChart";
 import OptimalPortfolioDisplay from "./OptimalPortfolioDisplay";
 import RiskContributionChart from "./RiskContributionChart";
 import CorrelationSection, { CorrelationAsset } from "./CorrelationSection";
+import PageHeader from "@/components/ui/PageHeader";
 
 type OptimizationType = "mvo" | "risk_parity" | "correlation";
 
 const TABS: { id: OptimizationType; label: string }[] = [
-  { id: "mvo", label: "Mean-Variance (MVO)" },
-  { id: "risk_parity", label: "Risk Parity" },
-  { id: "correlation", label: "Correlation" },
+  { id: "mvo", label: "평균-분산" },
+  { id: "risk_parity", label: "리스크 패리티" },
+  { id: "correlation", label: "상관관계" },
 ];
+
+const METHOD_NOTES: Record<OptimizationType, string> = {
+  mvo: "기대수익과 변동성의 조합을 비교합니다. 추정 오차에 가장 민감합니다.",
+  risk_parity: "기대수익 예측 없이 자산별 위험 기여가 가까워지도록 배분합니다.",
+  correlation: "배분을 만들기 전에 자산 간 동행 구조와 시간 변화를 진단합니다.",
+};
+
+const RESULT_TITLES: Record<OptimizationType, string> = {
+  mvo: "효율적 투자선 · 후보 배분",
+  risk_parity: "위험 기여 균형 배분",
+  correlation: "상관 구조 진단",
+};
 
 const OptimizationPage = () => {
   const [calculateFrontier, { isLoading: isFrontierLoading }] =
@@ -82,7 +95,7 @@ const OptimizationPage = () => {
         ]);
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Calculation failed";
+      const errorMessage = err instanceof Error ? err.message : "계산을 완료하지 못했습니다";
       setError(errorMessage);
       console.error("Optimization error:", err);
     }
@@ -98,7 +111,7 @@ const OptimizationPage = () => {
         pair
       );
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Calculation failed";
+      const errorMessage = err instanceof Error ? err.message : "계산을 완료하지 못했습니다";
       setError(errorMessage);
       console.error("Correlation error:", err);
     }
@@ -127,32 +140,28 @@ const OptimizationPage = () => {
         </div>
       )}
 
-      {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-ink">
-          Portfolio Optimization
-        </h1>
-        <p className="text-sm text-ink-muted mt-1">
-          평균-분산·리스크 패리티 배분과 자산 간 상관관계를 분석합니다
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Allocation lab"
+        title="포트폴리오 최적화"
+        description="평균-분산·리스크 패리티 배분과 자산 간 상관관계를 비교하되, 입력 가정과 결과를 분리해 봅니다."
+      />
 
       {/* Tab Selection */}
-      <div className="flex gap-2">
+      <div className="segmented-control self-start" aria-label="최적화 방식">
         {TABS.map((tab) => (
           <button
             key={tab.id}
+            type="button"
             onClick={() => setSelectedTab(tab.id)}
-            className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-              selectedTab === tab.id
-                ? "bg-primary-500 text-white shadow-md shadow-primary-500/25"
-                : "bg-raised text-ink-secondary hover:bg-overlay"
-            }`}
+            aria-pressed={selectedTab === tab.id}
           >
             {tab.label}
           </button>
         ))}
       </div>
+      <p className="-mt-3 max-w-3xl text-xs leading-5 text-ink-muted">
+        {METHOD_NOTES[selectedTab]}
+      </p>
 
       {/* Error Display */}
       {error && (
@@ -176,72 +185,70 @@ const OptimizationPage = () => {
         optimizationType={selectedTab}
       />
 
-      {/* MVO Results */}
-      {selectedTab === "mvo" && frontierData && (
-        <div className="space-y-6">
-          <EfficientFrontierChart data={frontierData} />
-          <OptimalPortfolioDisplay
-            maxSharpe={frontierData.max_sharpe}
-            minVol={frontierData.min_volatility}
-          />
-          <RiskContributionChart
-            data={frontierData.max_sharpe.risk_contributions}
-            title="Risk Contributions (Max Sharpe Portfolio)"
-          />
-        </div>
-      )}
+      {hasResult && (
+        <section className="relative border-t border-edge pt-8" aria-labelledby="optimization-output">
+          <span aria-hidden className="absolute -top-px left-0 h-px w-40 bg-gradient-to-r from-primary-400 via-primary-500 to-secondary-400" />
+          <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary-300">
+                Computed output
+              </p>
+              <h2 id="optimization-output" className="mt-1 text-xl font-semibold tracking-[-0.025em] text-ink">
+                {RESULT_TITLES[selectedTab]}
+              </h2>
+            </div>
+            <p className="max-w-lg text-xs leading-5 text-ink-muted sm:text-right">
+              입력 표본에 대한 계산 결과입니다. 추천 비중이 아니라 검토할 후보로 다루세요.
+            </p>
+          </div>
 
-      {/* Risk Parity Results */}
-      {selectedTab === "risk_parity" && riskParityData && (
-        <div className="space-y-6">
-          <OptimalPortfolioDisplay
-            riskParity={riskParityData}
-            title="Risk Parity Portfolio"
-          />
-          <RiskContributionChart
-            data={riskParityData.risk_contributions}
-            title="Risk Contributions (Equal by Design)"
-          />
-        </div>
-      )}
+          {selectedTab === "mvo" && frontierData && (
+            <div className="space-y-6">
+              <EfficientFrontierChart data={frontierData} />
+              <OptimalPortfolioDisplay maxSharpe={frontierData.max_sharpe} minVol={frontierData.min_volatility} />
+              <RiskContributionChart data={frontierData.max_sharpe.risk_contributions} title="최대 샤프 배분 · 위험 기여" />
+            </div>
+          )}
 
-      {/* Correlation Results */}
-      {selectedTab === "correlation" && correlationData && (
-        <CorrelationSection
-          data={correlationData}
-          assets={correlationAssets}
-          rollingPair={rollingPair}
-          onPairChange={handlePairChange}
-          isRollingLoading={isCorrelationLoading}
-        />
+          {selectedTab === "risk_parity" && riskParityData && (
+            <div className="space-y-6">
+              <OptimalPortfolioDisplay riskParity={riskParityData} title="리스크 패리티 배분" />
+              <RiskContributionChart data={riskParityData.risk_contributions} title="균등 목표 · 위험 기여" />
+            </div>
+          )}
+
+          {selectedTab === "correlation" && correlationData && (
+            <CorrelationSection
+              data={correlationData}
+              assets={correlationAssets}
+              rollingPair={rollingPair}
+              onPairChange={handlePairChange}
+              isRollingLoading={isCorrelationLoading}
+            />
+          )}
+        </section>
       )}
 
       {/* Empty State */}
       {!hasResult && !isLoading && (
-        <div className="card text-center py-12">
-          <div className="w-16 h-16 mx-auto mb-4 bg-raised rounded-full flex items-center justify-center">
-            <svg
-              className="w-8 h-8 text-ink-muted"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-              />
-            </svg>
+        <div className="grid overflow-hidden rounded-2xl border border-dashed border-edge bg-surface/50 md:grid-cols-[minmax(0,1fr)_minmax(20rem,0.8fr)]">
+          <div className="px-5 py-8 md:px-7 md:py-10">
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-muted">Output pending</p>
+            <h3 className="mt-2 text-lg font-semibold text-ink">
+              {selectedTab === "correlation" ? "상관 구조를 계산할 준비가 됐습니다" : "후보 배분을 계산할 준비가 됐습니다"}
+            </h3>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-ink-muted">
+              위 가정표에서 자산을 2개 이상 선택하고 조건을 확인한 뒤 {selectedTab === "correlation" ? "분석" : "최적화"}를 실행하세요.
+            </p>
           </div>
-          <h3 className="text-lg font-medium text-ink-secondary mb-2">
-            {selectedTab === "correlation"
-              ? "아직 상관관계 분석 결과가 없습니다"
-              : "아직 최적화 결과가 없습니다"}
-          </h3>
-          <p className="text-sm text-ink-muted">
-            자산을 2개 이상 선택한 뒤 {selectedTab === "correlation" ? "Run Analysis" : "Run Optimization"}를 실행하세요
-          </p>
+          <ol className="grid grid-cols-3 border-t border-edge bg-raised/40 md:border-l md:border-t-0">
+            {["자산 선택", "가정 명시", "결과 검토"].map((label, index) => (
+              <li key={label} className="flex flex-col justify-center border-r border-edge px-3 py-5 last:border-r-0 md:px-4">
+                <span className="font-mono text-[10px] text-primary-300">0{index + 1}</span>
+                <span className="mt-1 text-xs font-medium text-ink-secondary">{label}</span>
+              </li>
+            ))}
+          </ol>
         </div>
       )}
     </div>

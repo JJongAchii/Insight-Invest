@@ -30,27 +30,27 @@ import {
 type Tab = "overview" | "calendar" | "results";
 
 const TABS: { value: Tab; label: string }[] = [
-  { value: "overview", label: "Overview" },
-  { value: "calendar", label: "Calendar" },
-  { value: "results", label: "Results" },
+  { value: "overview", label: "한눈에 보기" },
+  { value: "calendar", label: "발표 일정" },
+  { value: "results", label: "발표 결과" },
 ];
 
 const SCOPES: { value: EarningsScope; label: string }[] = [
-  { value: "all", label: "All Coverage" },
-  { value: "mine", label: "My Coverage" },
-  { value: "leaders", label: "Market Leaders" },
+  { value: "all", label: "전체" },
+  { value: "mine", label: "내 종목" },
+  { value: "leaders", label: "시장 대표" },
 ];
 
 const CALENDAR_WINDOWS = [
-  { value: 30, label: "Next 30D" },
-  { value: 90, label: "Next 90D" },
-  { value: 180, label: "Next 180D" },
+  { value: 30, label: "향후 30일" },
+  { value: 90, label: "향후 90일" },
+  { value: 180, label: "향후 180일" },
 ];
 
 const RESULT_WINDOWS = [
-  { value: 120, label: "Last 120D" },
-  { value: 365, label: "Last 1Y" },
-  { value: 1098, label: "Last 3Y" },
+  { value: 120, label: "최근 120일" },
+  { value: 365, label: "최근 1년" },
+  { value: 1098, label: "최근 3년" },
 ];
 
 const TIMING: Record<string, { label: string; hint: string }> = {
@@ -81,6 +81,15 @@ const dateLabel = (value: string) =>
     day: "numeric",
     weekday: "short",
   }).format(new Date(`${value.slice(0, 10)}T00:00:00`));
+
+const dateParts = (value: string) => {
+  const date = new Date(`${value.slice(0, 10)}T00:00:00`);
+  return {
+    month: new Intl.DateTimeFormat("ko-KR", { month: "short" }).format(date),
+    day: new Intl.DateTimeFormat("ko-KR", { day: "2-digit" }).format(date),
+    weekday: new Intl.DateTimeFormat("ko-KR", { weekday: "short" }).format(date),
+  };
+};
 
 const numberLabel = (value: number | null, digits = 2) =>
   value == null
@@ -127,21 +136,19 @@ function MetricBlock({
   const surpriseStyle =
     surprise == null ? "text-ink-muted" : surprise > 0 ? "text-gains" : surprise < 0 ? "text-losses" : "text-ink-secondary";
   return (
-    <div className="rounded-xl border border-edge bg-raised/60 p-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{title}</p>
-      <div className="mt-2 grid grid-cols-3 gap-2">
-        <div>
-          <p className="text-[11px] text-ink-muted">Actual</p>
-          <p className="mt-0.5 text-sm font-semibold text-ink num">{format(actual)}</p>
-        </div>
-        <div>
-          <p className="text-[11px] text-ink-muted">Estimate</p>
-          <p className="mt-0.5 text-sm font-medium text-ink-secondary num">{format(estimate)}</p>
-        </div>
-        <div>
-          <p className="text-[11px] text-ink-muted">Surprise</p>
-          <p className={`mt-0.5 text-sm font-semibold num ${surpriseStyle}`}>{surpriseLabel(surprise)}</p>
-        </div>
+    <div className="grid min-w-[30rem] grid-cols-[5.5rem_repeat(3,minmax(6rem,1fr))] items-end gap-3 border-b border-edge py-3 last:border-b-0">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">{title}</p>
+      <div>
+        <p className="text-[10px] uppercase tracking-wide text-ink-muted">실제</p>
+        <p className="mt-0.5 text-sm font-semibold text-ink num">{format(actual)}</p>
+      </div>
+      <div>
+        <p className="text-[10px] uppercase tracking-wide text-ink-muted">예상</p>
+        <p className="mt-0.5 text-sm font-medium text-ink-secondary num">{format(estimate)}</p>
+      </div>
+      <div>
+        <p className="text-[10px] uppercase tracking-wide text-ink-muted">차이</p>
+        <p className={`mt-0.5 text-sm font-semibold num ${surpriseStyle}`}>{surpriseLabel(surprise)}</p>
       </div>
     </div>
   );
@@ -157,6 +164,17 @@ function EarningsCard({ item }: { item: EarningsEvent }) {
     .join(" ");
   const signal = item.result_signal ? SIGNAL[item.result_signal] : null;
   const officialResultFiled = item.official_result_status === "filed";
+  const releaseDate = dateParts(item.release_date);
+  const railStyle = item.display_status === "reported"
+    ? "from-gains via-gains/60 to-transparent"
+    : item.display_status === "awaiting_results" || item.display_status === "result_unavailable"
+      ? "from-warning via-warning/60 to-transparent"
+      : "from-primary-400 via-primary-500/60 to-transparent";
+  const dotStyle = item.display_status === "reported"
+    ? "border-gains shadow-[0_0_12px_rgba(52,211,153,0.55)]"
+    : item.display_status === "awaiting_results" || item.display_status === "result_unavailable"
+      ? "border-warning shadow-[0_0_12px_rgba(251,191,36,0.55)]"
+      : "border-primary-300 shadow-[0_0_12px_rgba(155,126,255,0.65)]";
 
   const saveToJournal = () => {
     const result = item.lifecycle === "reported"
@@ -188,8 +206,19 @@ function EarningsCard({ item }: { item: EarningsEvent }) {
   };
 
   return (
-    <article className={`rounded-2xl border bg-surface p-4 sm:p-5 ${item.display_status === "awaiting_results" ? "border-warning/40" : "border-edge"}`}>
-      <div className="flex flex-col gap-4">
+    <article className="grid gap-4 px-4 py-5 sm:px-5 md:grid-cols-[7.5rem_minmax(0,1fr)] md:gap-6 md:px-6 md:py-6">
+      <div className="relative min-h-14 pl-5 md:min-h-0 md:pl-0 md:pr-6">
+        <span aria-hidden className={`absolute bottom-0 left-0 top-0 w-px bg-gradient-to-b md:left-auto md:right-0 ${railStyle}`} />
+        <span aria-hidden className={`absolute left-[-3px] top-1 h-[7px] w-[7px] rounded-full border bg-surface md:left-auto md:right-[-3px] ${dotStyle}`} />
+        <div className="flex items-baseline gap-2 md:block">
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-primary-300">{releaseDate.month}</p>
+          <p className="num text-2xl font-semibold tracking-[-0.04em] text-ink md:mt-1 md:text-3xl">{releaseDate.day}</p>
+          <p className="text-xs text-ink-muted md:mt-1">{releaseDate.weekday} · US</p>
+        </div>
+      </div>
+
+      <div className="min-w-0">
+        <div className="flex flex-col gap-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
@@ -200,17 +229,16 @@ function EarningsCard({ item }: { item: EarningsEvent }) {
               {officialResultFiled && <span className="rounded-full bg-primary-400/15 px-2 py-0.5 font-semibold text-primary-400">Official Result Filed</span>}
               {signal && <span className={`rounded-full px-2 py-0.5 font-semibold ${signal.style}`}>{signal.label}</span>}
             </div>
-            <h2 className="mt-2 truncate text-lg font-semibold text-ink">
+            <h3 className="mt-2 truncate text-lg font-semibold tracking-[-0.02em] text-ink">
               {item.ticker} <span className="font-normal text-ink-secondary">{item.name}</span>
-            </h2>
+            </h3>
             <p className="mt-1 text-sm text-ink-secondary">
-              {period || "Fiscal period unavailable"} · {dateLabel(item.release_date)} (US)
+              {period || "회계 기간 미확인"} · {dateLabel(item.release_date)}
             </p>
           </div>
-          <CalendarDays className="mt-1 shrink-0 text-primary-400" size={22} aria-hidden />
         </div>
 
-        <div className="flex items-start gap-2 rounded-xl bg-raised px-3 py-2.5 text-sm">
+        <div className="flex items-start gap-2 border-y border-edge py-3 text-sm">
           <Clock3 size={16} className="mt-0.5 shrink-0 text-ink-muted" aria-hidden />
           <div>
             <p className="font-medium text-ink">{timing.label}</p>
@@ -228,24 +256,13 @@ function EarningsCard({ item }: { item: EarningsEvent }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <MetricBlock
-            title="EPS"
-            actual={item.eps_actual}
-            estimate={item.eps_estimate}
-            surprise={item.eps_surprise_pct}
-          />
-          <MetricBlock
-            title="Revenue"
-            actual={item.revenue_actual}
-            estimate={item.revenue_estimate}
-            surprise={item.revenue_surprise_pct}
-            money
-          />
+        <div className="scrollbar-hidden overflow-x-auto">
+          <MetricBlock title="EPS" actual={item.eps_actual} estimate={item.eps_estimate} surprise={item.eps_surprise_pct} />
+          <MetricBlock title="Revenue" actual={item.revenue_actual} estimate={item.revenue_estimate} surprise={item.revenue_surprise_pct} money />
         </div>
 
-        <details className="rounded-xl border border-edge px-3 py-2.5">
-          <summary className="cursor-pointer text-sm font-medium text-ink">Earnings Call & Sources</summary>
+        <details className="border-t border-edge pt-3">
+          <summary className="cursor-pointer text-sm font-medium text-ink">어닝콜 · 데이터 근거</summary>
           <div className="mt-3 space-y-2 text-xs leading-5 text-ink-secondary">
             {item.call_time || item.webcast_url ? (
               <p>확인된 어닝콜 정보가 있습니다.</p>
@@ -259,25 +276,26 @@ function EarningsCard({ item }: { item: EarningsEvent }) {
           </div>
         </details>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Link href={item.stock_link} className="btn-primary inline-flex items-center gap-1.5">
-            Open Stock <ChevronRight size={15} aria-hidden />
+        <div className="flex flex-wrap items-center gap-2 border-t border-edge pt-3">
+          <Link href={item.stock_link} className="btn-secondary inline-flex items-center gap-1.5 text-xs">
+            종목 보기 <ChevronRight size={15} aria-hidden />
           </Link>
           {item.official_result_url && (
-            <a href={item.official_result_url} target="_blank" rel="noopener noreferrer" className="btn-secondary inline-flex items-center gap-1.5">
-              Official Filing <ExternalLink size={14} aria-hidden />
+            <a href={item.official_result_url} target="_blank" rel="noopener noreferrer" className="btn-secondary inline-flex items-center gap-1.5 text-xs">
+              공식 공시 <ExternalLink size={14} aria-hidden />
             </a>
           )}
           {item.source_url && (
-            <a href={item.source_url} target="_blank" rel="noopener noreferrer" className="btn-secondary inline-flex items-center gap-1.5">
-              SEC Filings <ExternalLink size={14} aria-hidden />
+            <a href={item.source_url} target="_blank" rel="noopener noreferrer" className="btn-secondary inline-flex items-center gap-1.5 text-xs">
+              SEC 제출 목록 <ExternalLink size={14} aria-hidden />
             </a>
           )}
-          <button type="button" onClick={saveToJournal} className="btn-secondary inline-flex items-center gap-1.5">
-            <BookOpen size={14} aria-hidden /> Save to Journal
+          <button type="button" onClick={saveToJournal} className="btn-secondary inline-flex items-center gap-1.5 text-xs">
+            <BookOpen size={14} aria-hidden /> 저널에 저장
           </button>
           <span className="ml-auto text-[11px] text-ink-muted">Data {item.data_as_of}</span>
         </div>
+      </div>
       </div>
     </article>
   );
@@ -303,7 +321,7 @@ function Section({
         <p className="mt-1 text-sm text-ink-muted">{description}</p>
       </div>
       {items.length ? (
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+        <div className="divide-y divide-edge overflow-hidden rounded-2xl border border-edge bg-surface shadow-[0_18px_60px_rgba(0,0,0,0.12)]">
           {items.map((item) => <EarningsCard key={item.event_id} item={item} />)}
         </div>
       ) : (
@@ -409,16 +427,30 @@ export default function EarningsPage() {
   return (
     <div className="flex flex-col gap-6 pb-20">
       <PageHeader
-        title="Earnings Hub"
-        description="주요 미국 기업과 내 종목의 실적 일정·컨센서스·발표 결과를 한곳에서 비교합니다"
+        eyebrow="Event calendar"
+        title="실적 일정"
+        description="주요 미국 기업과 내 종목의 실적 일정·컨센서스·발표 결과를 한 흐름에서 비교합니다."
+        meta={
+          <>
+            <span>예정 {data?.summary.upcoming ?? 0}건</span>
+            <span>·</span>
+            <span>{lastUpdated ? `마지막 반영 ${lastUpdated}` : "원본 확인 중"}</span>
+          </>
+        }
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div
+        className="scrollbar-hidden -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0"
+        role="group"
+        aria-label="실적 일정 요약"
+        tabIndex={0}
+      >
+        <section className="metric-strip min-w-[40rem] grid-cols-4 sm:min-w-0" aria-label="실적 일정 요약">
         {[
-          ["This Week", data?.summary.this_week ?? 0, CalendarDays, "calendar"],
-          ["Upcoming", data?.summary.upcoming ?? 0, Clock3, "calendar"],
-          ["Awaiting Results", data?.summary.awaiting_results ?? 0, History, "results"],
-          ["Recent Results", data?.summary.reported_recently ?? 0, BarChart3, "results"],
+          ["이번 주", data?.summary.this_week ?? 0, CalendarDays, "calendar"],
+          ["발표 예정", data?.summary.upcoming ?? 0, Clock3, "calendar"],
+          ["결과 대기", data?.summary.awaiting_results ?? 0, History, "results"],
+          ["최근 결과", data?.summary.reported_recently ?? 0, BarChart3, "results"],
         ].map(([label, value, Icon, target]) => {
           const MetricIcon = Icon as typeof CalendarDays;
           return (
@@ -426,27 +458,29 @@ export default function EarningsPage() {
               key={String(label)}
               type="button"
               onClick={() => setTab(target as Tab)}
-              className="rounded-2xl border border-edge bg-surface p-4 text-left transition-colors hover:border-edge-strong hover:bg-raised"
+              className="metric-tile p-4 text-left transition-colors hover:bg-raised sm:p-5"
+              aria-pressed={tab === target}
             >
               <div className="flex items-center gap-2 text-xs text-ink-muted"><MetricIcon size={15} />{String(label)}</div>
-              <p className={`mt-2 text-2xl font-semibold num ${label === "Awaiting Results" && Number(value) > 0 ? "text-warning" : "text-ink"}`}>{Number(value)}</p>
+              <p className={`mt-2 text-2xl font-semibold num ${label === "결과 대기" && Number(value) > 0 ? "text-warning" : "text-ink"}`}>{Number(value)}</p>
             </button>
           );
         })}
+        </section>
       </div>
 
       <div className="space-y-3 rounded-2xl border border-edge bg-surface p-3 sm:p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex gap-1 overflow-x-auto" aria-label="Earnings views">
+          <div className="segmented-control border-0 bg-transparent p-0" aria-label="실적 보기 방식">
             {TABS.map((item) => (
-              <button key={item.value} type="button" onClick={() => setTab(item.value)} className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium ${tab === item.value ? "bg-primary-500 text-white" : "text-ink-secondary hover:bg-raised hover:text-ink"}`}>
+              <button key={item.value} type="button" onClick={() => setTab(item.value)} aria-pressed={tab === item.value}>
                 {item.label}
               </button>
             ))}
           </div>
-          <div className="flex gap-1 overflow-x-auto" aria-label="Coverage filters">
+          <div className="scrollbar-hidden flex gap-1 overflow-x-auto" aria-label="실적 대상 필터">
             {SCOPES.map((item) => (
-              <button key={item.value} type="button" onClick={() => setScope(item.value)} className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium ${scope === item.value ? "border-primary-400 bg-primary-400/15 text-primary-400" : "border-edge text-ink-muted hover:text-ink"}`}>
+              <button key={item.value} type="button" onClick={() => setScope(item.value)} className="filter-chip" aria-pressed={scope === item.value}>
                 {item.label}
               </button>
             ))}
@@ -484,7 +518,7 @@ export default function EarningsPage() {
             </select>
           </label>
           {hasActiveFilters && (
-            <button type="button" className="btn-secondary h-11 whitespace-nowrap" onClick={resetFilters}>Reset</button>
+            <button type="button" className="btn-secondary h-11 whitespace-nowrap" onClick={resetFilters}>초기화</button>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
@@ -546,29 +580,29 @@ export default function EarningsPage() {
       ) : (
         <>
           {tab === "overview" && upcoming.length > 0 && (
-            <Section title="Upcoming Earnings" description={`향후 ${calendarDays}일의 공급자 발표 일정입니다. Estimated는 회사 확정 일정이라는 뜻이 아닙니다.`} items={upcoming} />
+            <Section title="발표 예정" description={`향후 ${calendarDays}일의 공급자 발표 일정입니다. Estimated는 회사 확정 일정이라는 뜻이 아닙니다.`} items={upcoming} />
           )}
           {(tab === "overview" || tab === "results") && pending.length > 0 && (
-            <Section title="Awaiting Results" description={awaitingDescription} items={pending} />
+            <Section title="결과 반영 대기" description={awaitingDescription} items={pending} />
           )}
           {tab === "overview" && results.length > 0 && (
-            <Section title="Recent Results" description={`최근 ${resultsDays}일 발표치와 컨센서스 차이입니다. Beat/Miss는 EPS와 매출을 함께 비교합니다.`} items={results} />
+            <Section title="최근 발표 결과" description={`최근 ${resultsDays}일 발표치와 컨센서스 차이입니다. Beat/Miss는 EPS와 매출을 함께 비교합니다.`} items={results} />
           )}
           {tab === "calendar" && (
             <Section
-              title="Upcoming Earnings"
+              title="발표 예정"
               description={`향후 ${calendarDays}일의 공급자 발표 일정입니다. Estimated는 회사 확정 일정이라는 뜻이 아닙니다.`}
               items={upcoming}
               emptyTitle={emptyTitle}
             />
           )}
           {tab === "results" && results.length > 0 && (
-            <Section title="Reported Results" description={`최근 ${resultsDays}일 발표치와 컨센서스 차이입니다. Beat/Miss는 EPS와 매출을 함께 비교합니다.`} items={results} />
+            <Section title="발표 결과" description={`최근 ${resultsDays}일 발표치와 컨센서스 차이입니다. Beat/Miss는 EPS와 매출을 함께 비교합니다.`} items={results} />
           )}
           {!hasVisibleEvents && tab !== "calendar" && (
             <div className="card text-center">
               <EmptyState icon={<Search size={28} aria-hidden />} title={emptyTitle} hint="티커·회사명을 확인하거나 Coverage와 기간을 넓혀 보세요." />
-              {hasActiveFilters && <button type="button" className="btn-secondary -mt-8" onClick={resetFilters}>Reset Filters</button>}
+              {hasActiveFilters && <button type="button" className="btn-secondary -mt-8" onClick={resetFilters}>필터 초기화</button>}
             </div>
           )}
           {tab === "overview" && data && data.revisions.length > 0 && (

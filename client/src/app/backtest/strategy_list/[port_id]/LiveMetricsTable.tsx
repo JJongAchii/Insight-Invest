@@ -85,7 +85,12 @@ const LiveMetricsTable = ({
           hint="다음 데일리 파이프라인 실행 후 표시됩니다"
         />
       ) : (
-        <div className="overflow-x-auto">
+        <div
+          className="overflow-x-auto"
+          role="region"
+          aria-label="백테스트와 저장 후 지표 비교표"
+          tabIndex={0}
+        >
           <table className="w-full text-sm">
             <thead>
               <tr className="table-header">

@@ -12,11 +12,6 @@ interface StrategyMetricsProps {
   selectedTicker: Record<string, SaveStrategyPayload>;
 }
 
-interface MetricRow extends Partial<MetricSet> {
-  strategy: string;
-  isStrategy: boolean;
-}
-
 type MetricKey = keyof MetricSet;
 
 interface MetricColumn {
@@ -29,12 +24,12 @@ interface MetricColumn {
 }
 
 const METRIC_COLUMNS: MetricColumn[] = [
-  { key: "ann_ret", label: "Return", format: "pct", signed: true },
-  { key: "ann_vol", label: "Vol", format: "pct" },
-  { key: "sharpe", label: "Sharpe", helpKey: "bt.sharpe", format: "num" },
-  { key: "sortino", label: "Sortino", helpKey: "bt.sortino", format: "num" },
-  { key: "calmar", label: "Calmar", helpKey: "bt.calmar", format: "num" },
-  { key: "mdd", label: "MDD", helpKey: "bt.mdd", format: "pct" },
+  { key: "ann_ret", label: "연환산 수익", format: "pct", signed: true },
+  { key: "ann_vol", label: "연환산 변동성", format: "pct" },
+  { key: "sharpe", label: "샤프", helpKey: "bt.sharpe", format: "num" },
+  { key: "sortino", label: "소르티노", helpKey: "bt.sortino", format: "num" },
+  { key: "calmar", label: "칼마", helpKey: "bt.calmar", format: "num" },
+  { key: "mdd", label: "최대 낙폭", helpKey: "bt.mdd", format: "pct" },
   { key: "var", label: "VaR", helpKey: "bt.var", format: "pct" },
   { key: "cvar", label: "CVaR", helpKey: "bt.cvar", format: "pct" },
 ];
@@ -55,23 +50,6 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
 }) => {
   const [saveStrategy, { isLoading: isSaving }] = useSaveStrategyMutation();
 
-  const rows: MetricRow[] = [];
-  if (result) {
-    rows.push({
-      strategy: result.strategy_name,
-      isStrategy: true,
-      ...result.metrics.strategy,
-    });
-    const bm = result.metrics.benchmark;
-    if (bm && Object.keys(bm).length > 0) {
-      rows.push({
-        strategy: result.benchmark.name,
-        isStrategy: false,
-        ...bm,
-      });
-    }
-  }
-
   const handleSave = async (strategy: string) => {
     const strategyData = selectedTicker[strategy];
     if (!strategyData) return;
@@ -84,65 +62,60 @@ const StrategyMetrics: React.FC<StrategyMetricsProps> = ({
   };
 
   return (
-    <div>
-      <h4 className="text-sm font-semibold text-ink mb-3 mt-6">
-        Performance Metrics
-      </h4>
-      {rows.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+    <div className="mt-6 border-t border-edge pt-5">
+      {result ? (
+        <>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h4 className="text-sm font-semibold text-ink">성과 지표 원장</h4>
+              <p className="mt-1 text-xs text-ink-muted">전략과 벤치마크를 같은 정의로 비교합니다.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleSave(result.strategy_name)}
+              disabled={isSaving || !selectedTicker[result.strategy_name]}
+              className="btn-secondary px-3 py-1.5 text-xs"
+            >
+              {isSaving ? "저장 중..." : "전략 저장"}
+            </button>
+          </div>
+          <div className="scrollbar-hidden overflow-x-auto">
+          <table className="min-w-[32rem] w-full text-sm">
             <thead>
               <tr className="table-header">
-                <th className="py-2.5 px-4 text-left rounded-l-lg">Strategy</th>
-                {METRIC_COLUMNS.map((col) => (
-                  <th
-                    key={col.key}
-                    className="py-2.5 px-4 text-right whitespace-nowrap"
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      {col.label}
-                      {col.helpKey && <InfoTip helpKey={col.helpKey} />}
-                    </span>
-                  </th>
-                ))}
-                <th className="py-2.5 px-4 rounded-r-lg" />
+                <th className="rounded-l-lg px-4 py-2.5 text-left">지표</th>
+                <th className="px-4 py-2.5 text-right">{result.strategy_name}</th>
+                <th className="rounded-r-lg px-4 py-2.5 text-right">{result.benchmark.name}</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={row.strategy} className="table-row">
-                  <td className="table-cell font-medium whitespace-nowrap">
-                    {row.strategy}
+              {METRIC_COLUMNS.map((metric) => (
+                <tr key={metric.key} className="table-row">
+                  <td className="table-cell whitespace-nowrap font-medium text-ink-secondary">
+                    <span className="inline-flex items-center gap-1.5">
+                      {metric.label}
+                      {metric.helpKey && <InfoTip helpKey={metric.helpKey} />}
+                    </span>
                   </td>
-                  {METRIC_COLUMNS.map((col) => (
-                    <td key={col.key} className="table-cell text-right">
-                      <span className={valueClass(row[col.key], col.signed)}>
-                        {formatValue(row[col.key], col.format)}
-                      </span>
-                    </td>
-                  ))}
-                  <td className="table-cell text-center">
-                    {row.isStrategy ? (
-                      <button
-                        onClick={() => handleSave(row.strategy)}
-                        disabled={isSaving}
-                        className="btn-primary text-xs py-1.5 px-3"
-                      >
-                        {isSaving ? "..." : "Save"}
-                      </button>
-                    ) : null}
+                  <td className="table-cell text-right">
+                    <span className={valueClass(result.metrics.strategy[metric.key], metric.signed)}>
+                      {formatValue(result.metrics.strategy[metric.key], metric.format)}
+                    </span>
+                  </td>
+                  <td className="table-cell text-right">
+                    <span className={valueClass(result.metrics.benchmark[metric.key], metric.signed)}>
+                      {formatValue(result.metrics.benchmark[metric.key], metric.format)}
+                    </span>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        </>
       ) : (
         <div className="flex flex-col items-center justify-center py-12">
-          <p className="text-ink-muted text-sm">No metrics available</p>
-          <p className="text-ink-muted text-xs mt-1">
-            Run a backtest to see performance metrics
-          </p>
+          <p className="text-sm text-ink-muted">표시할 성과 지표가 없습니다.</p>
         </div>
       )}
     </div>

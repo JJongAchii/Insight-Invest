@@ -102,7 +102,8 @@ export default function LedgerPanel() {
 
   return (
     <Card
-      title="Portfolio Ledger"
+      headingLevel={2}
+      title="거래 원장"
       action={
         <button
           className="btn-secondary"

@@ -73,17 +73,18 @@ const IndexBreadthStrip: React.FC<IndexBreadthStripProps> = ({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <Card
-        title="KOSPI vs KOSDAQ"
+        headingLevel={2}
+        title="KOSPI와 KOSDAQ 흐름"
         action={
-          <span className="text-xs text-ink-muted">1Y · indexed to 100</span>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-ink-muted">1년 · 시작값 100</span>
         }
       >
         {indexError ? (
-          <ErrorState message="Failed to load index data" onRetry={refetchIndex} />
+          <ErrorState message="지수 흐름을 불러오지 못했습니다" onRetry={refetchIndex} />
         ) : indexLoading || !indexData ? (
-          <LoadingState label="Loading index data..." />
+          <LoadingState label="지수 흐름을 불러오는 중..." />
         ) : chartData.length === 0 ? (
-          <EmptyState title="No index data" />
+          <EmptyState title="지수 데이터가 없습니다" />
         ) : (
           <TimeSeriesChart
             data={chartData}
@@ -99,12 +100,13 @@ const IndexBreadthStrip: React.FC<IndexBreadthStripProps> = ({
       </Card>
 
       <Card
-        title="Market Breadth"
+        headingLevel={2}
+        title="시장 참여 폭"
         action={
           <div className="flex items-center gap-3">
             {breadthData?.as_of && (
               <span className="text-xs text-ink-muted num">
-                as of {breadthData.as_of}
+                기준 {breadthData.as_of}
               </span>
             )}
             <Segmented
@@ -117,17 +119,17 @@ const IndexBreadthStrip: React.FC<IndexBreadthStripProps> = ({
       >
         {breadthError ? (
           <ErrorState
-            message="Failed to load breadth data"
+            message="시장폭 데이터를 불러오지 못했습니다"
             onRetry={refetchBreadth}
           />
         ) : breadthLoading || !breadthData ? (
-          <LoadingState label="Loading breadth data..." />
+          <LoadingState label="시장 참여 폭을 계산하는 중..." />
         ) : !latest ? (
-          <EmptyState title="No breadth data" />
+          <EmptyState title="시장폭 데이터가 없습니다" />
         ) : (
           <div className="grid grid-cols-2 gap-4">
             <StatTile
-              label="Advance / Decline"
+              label="상승 / 하락"
               helpKey="breadth.ad"
               value={
                 <>
@@ -140,10 +142,10 @@ const IndexBreadthStrip: React.FC<IndexBreadthStripProps> = ({
                   </span>
                 </>
               }
-              sub={`Unchanged ${latest.unchanged.toLocaleString()}`}
+              sub={`보합 ${latest.unchanged.toLocaleString()}`}
             />
             <StatTile
-              label="New 52w High / Low"
+              label="52주 신고가 / 신저가"
               helpKey="breadth.high_low"
               value={
                 <>
@@ -154,13 +156,13 @@ const IndexBreadthStrip: React.FC<IndexBreadthStripProps> = ({
               }
             />
             <StatTile
-              label="Limit-up"
+              label="상한가"
               helpKey="breadth.limit"
               value={latest.limit_up}
-              sub={`Limit-down ${latest.limit_down}`}
+              sub={`하한가 ${latest.limit_down}`}
             />
             <StatTile
-              label="% Above MA20"
+              label="20일선 상회 비율"
               helpKey="breadth.ma20"
               value={`${latest.pct_above_ma20.toFixed(1)}%`}
               deltaType={latest.pct_above_ma20 >= 50 ? "gain" : "loss"}

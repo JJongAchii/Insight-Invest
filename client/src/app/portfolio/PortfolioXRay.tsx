@@ -91,29 +91,29 @@ const PortfolioXRay = ({ positions, summary }: PortfolioXRayProps) => {
   }
 
   return (
-    <Card title="Portfolio X-Ray">
+    <Card title="포트폴리오 진단">
       <p className="-mt-2 mb-4 text-sm leading-6 text-ink-secondary">
         수익률보다 먼저 포트폴리오의 쏠림과 실제 변동성 기여를 확인합니다. 아래 수치는 매수·매도 신호가 아니라 점검 우선순위입니다.
       </p>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Metric
-          label="Top 3 Weight"
+          label="상위 3개 비중"
           value={pct(summary.top3_weight)}
           detail="평가 가능한 종목 중 상위 3개 비중"
         />
         <Metric
-          label="Effective Positions"
+          label="유효 분산 종목 수"
           value={summary.effective_positions?.toFixed(1) ?? "—"}
           detail="현재 HHI와 같은 집중도를 갖는 동일비중 종목 수"
         />
         <Metric
-          label="Diversification Ratio"
+          label="분산 효과"
           value={risk?.diversification_ratio?.toFixed(2) ?? "—"}
           detail="1보다 클수록 종목 간 분산효과가 존재"
         />
         <Metric
-          label="Risk Coverage"
+          label="위험 분석 범위"
           value={risk?.coverage ? pct(risk.coverage.weight) : "—"}
           detail={
             risk?.coverage
@@ -125,7 +125,7 @@ const PortfolioXRay = ({ positions, summary }: PortfolioXRayProps) => {
 
       <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
         <section>
-          <h4 className="metric-label mb-3">Risk Contribution</h4>
+          <h4 className="metric-label mb-3">종목별 위험 기여</h4>
           {riskLoading ? (
             <LoadingState label="위험 기여도를 계산하는 중..." />
           ) : contributions.length === 0 ? (
@@ -143,7 +143,7 @@ const PortfolioXRay = ({ positions, summary }: PortfolioXRayProps) => {
                         {row.name} <span className="num text-xs text-ink-muted">{row.ticker}</span>
                       </span>
                       <span className="num shrink-0 text-ink-secondary">
-                        {pct(row.risk_share)} risk · {pct(row.weight)} weight
+                        위험 {pct(row.risk_share)} · 비중 {pct(row.weight)}
                       </span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-raised">
@@ -163,7 +163,7 @@ const PortfolioXRay = ({ positions, summary }: PortfolioXRayProps) => {
         </section>
 
         <section>
-          <h4 className="metric-label mb-3">Checkpoints</h4>
+          <h4 className="metric-label mb-3">우선 점검 항목</h4>
           {checkpoints.length > 0 ? (
             <ul className="space-y-2">
               {checkpoints.map((item) => (
