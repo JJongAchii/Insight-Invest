@@ -71,6 +71,7 @@ jobs:
               WebPushPublicKey=${{ secrets.WEB_PUSH_PUBLIC_KEY }} \
               WebPushPrivateKey=${{ secrets.WEB_PUSH_PRIVATE_KEY }} \
               WebPushSubject=https://insight-invest-ten.vercel.app \
+              ResearchAutomationEnabled=false \
             --no-fail-on-empty-changeset
 
       - name: Smoke test
@@ -116,4 +117,5 @@ jobs:
               '.paths["/research/{entry_id}/saved"].put
                and .paths["/research/read/all"].put
                and .paths["/research/status"].get
-               and .paths["/research/seen"].put'
+               and .paths["/research/seen"].put
+               and .paths["/research/jobs/{entry_id}"].get'

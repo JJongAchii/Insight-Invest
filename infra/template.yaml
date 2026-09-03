@@ -51,6 +51,15 @@ Parameters:
     Type: String
     Default: "https://insight-invest-ten.vercel.app"
     Description: VAPID contact subject
+  ResearchAutomationEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues: ["false", "true"]
+    Description: Research runner handoff only; keep false until budget and credentials are approved
+  ResearchMonthlyBudgetUsd:
+    Type: String
+    Default: ""
+    Description: Required by the handoff when research automation is enabled
 
 Resources:
   ApiRole:
@@ -75,6 +84,7 @@ Resources:
                   - !Sub arn:aws:s3:::${DataBucket}
                   - !Sub arn:aws:s3:::${DataBucket}/qdata/*
                   - !Sub arn:aws:s3:::${DataBucket}/app/*
+                  - !Sub arn:aws:s3:::${DataBucket}/research-radar/jobs/*/request.json
               - Effect: Allow  # 포트폴리오 저장 + 백테스트 임시결과 (read-modify-write)
                 Action: [s3:PutObject, s3:DeleteObject]
                 Resource:
@@ -109,6 +119,8 @@ Resources:
           WEB_PUSH_PUBLIC_KEY: !Ref WebPushPublicKey
           WEB_PUSH_PRIVATE_KEY: !Ref WebPushPrivateKey
           WEB_PUSH_SUBJECT: !Ref WebPushSubject
+          RADAR_BUCKET: !Ref DataBucket
+          RADAR_JOB_PREFIX: research-radar/jobs/
 
   ApiUrl:
     Type: AWS::Lambda::Url
@@ -402,6 +414,7 @@ Resources:
                     s3:prefix:
                       - research-radar/public/records/*
                       - research-radar/realtime/pending/*
+                      - research-radar/jobs/*
                       - app/*
               - Sid: ReadResearchAndNotificationState
                 Effect: Allow
@@ -409,6 +422,7 @@ Resources:
                 Resource:
                   - !Sub arn:aws:s3:::${DataBucket}/research-radar/public/records/*
                   - !Sub arn:aws:s3:::${DataBucket}/research-radar/realtime/pending/*
+                  - !Sub arn:aws:s3:::${DataBucket}/research-radar/jobs/*/request.json
                   - !Sub arn:aws:s3:::${DataBucket}/app/research_feed.json
                   - !Sub arn:aws:s3:::${DataBucket}/app/notification_subscriptions.parquet
                   - !Sub arn:aws:s3:::${DataBucket}/app/notification_deliveries.parquet
@@ -424,6 +438,11 @@ Resources:
                 Action: [s3:DeleteObject]
                 Resource:
                   - !Sub arn:aws:s3:::${DataBucket}/research-radar/realtime/pending/*
+              - Sid: CreateResearchJobRequest
+                Effect: Allow
+                Action: [s3:PutObject]
+                Resource:
+                  - !Sub arn:aws:s3:::${DataBucket}/research-radar/jobs/*/request.json
 
   ResearchPollerLogGroup:
     Type: AWS::Logs::LogGroup
@@ -451,6 +470,9 @@ Resources:
           RADAR_BUCKET: !Ref DataBucket
           RADAR_RECORD_PREFIX: research-radar/public/records/
           RADAR_PENDING_PREFIX: research-radar/realtime/pending/
+          RADAR_JOB_PREFIX: research-radar/jobs/
+          RESEARCH_AUTOMATION_ENABLED: !Ref ResearchAutomationEnabled
+          RESEARCH_MONTHLY_BUDGET_USD: !Ref ResearchMonthlyBudgetUsd
           WEB_PUSH_PUBLIC_KEY: !Ref WebPushPublicKey
           WEB_PUSH_PRIVATE_KEY: !Ref WebPushPrivateKey
           WEB_PUSH_SUBJECT: !Ref WebPushSubject

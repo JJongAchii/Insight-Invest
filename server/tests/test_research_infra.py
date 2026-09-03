@@ -16,6 +16,10 @@ def test_research_poller_is_bounded_and_offset_from_radar():
     assert "RetentionInDays: 14" in body
     assert "RADAR_RECORD_PREFIX: research-radar/public/records/" in body
     assert "RADAR_PENDING_PREFIX: research-radar/realtime/pending/" in body
+    assert "RADAR_JOB_PREFIX: research-radar/jobs/" in body
+    assert "RESEARCH_AUTOMATION_ENABLED: !Ref ResearchAutomationEnabled" in body
+    assert "RESEARCH_MONTHLY_BUDGET_USD: !Ref ResearchMonthlyBudgetUsd" in body
+    assert 'Default: "false"' in body
 
 
 def test_research_poller_role_is_prefix_scoped():
@@ -23,6 +27,7 @@ def test_research_poller_role_is_prefix_scoped():
 
     assert "research-radar/public/records/*" in body
     assert "research-radar/realtime/pending/*" in body
+    assert "research-radar/jobs/*/request.json" in body
     assert "app/research_feed.json" in body
     assert "app/research_read_state.parquet" in body
     assert "app/research_seen_state.json" in body
@@ -43,3 +48,4 @@ def test_release_smoke_requires_projection_api_and_active_push():
     assert '.notification_eligible | type' in body
     assert '"$URL/research/status"' in body
     assert '.paths["/research/seen"].put' in body
+    assert '.paths["/research/jobs/{entry_id}"].get' in body

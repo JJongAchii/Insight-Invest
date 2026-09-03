@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from datastore import research as research_store
+from module import research_jobs
 
 router = APIRouter(prefix="/research", tags=["Research"])
 ENTRY_ID = re.compile(r"^[0-9a-f]{64}$")
@@ -86,6 +87,19 @@ def acknowledge_research_feed(request: ResearchSeenRequest):
     requested = request.through.astimezone(timezone.utc)
     seen_through = research_store.save_seen_through(min(requested, generated_at))
     return _research_status(feed, seen_through)
+
+
+@router.get("/jobs/{entry_id}")
+def get_research_job(entry_id: str):
+    _validate_entry_id(entry_id)
+    try:
+        return research_jobs.get_request(entry_id)
+    except Exception as exc:
+        response = getattr(exc, "response", {})
+        error = response.get("Error", {}) if isinstance(response, dict) else {}
+        if isinstance(error, dict) and str(error.get("Code", "")) in {"NoSuchKey", "404"}:
+            raise HTTPException(status_code=404, detail="research job not found") from exc
+        raise
 
 
 @router.get("")

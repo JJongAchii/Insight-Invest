@@ -1,7 +1,7 @@
 import pytest
 
 from app import research_poller
-from module import action_push, research_feed
+from module import action_push, research_feed, research_jobs
 
 
 def _pending():
@@ -11,7 +11,15 @@ def _pending():
             f"research-radar/realtime/pending/{entry_id}.json",
             {
                 "entry_id": entry_id,
+                "source_id": "alpha",
+                "source_name": "Alpha Research",
                 "title": "New quant paper",
+                "summary": "A testable signal",
+                "authors": ["Alice Quant"],
+                "url": "https://example.test/paper",
+                "published_at": "2026-09-03T00:00:00+00:00",
+                "discovered_at": "2026-09-03T00:10:00+00:00",
+                "research_lane": "core",
                 "notification_eligible": True,
             },
         )
@@ -19,7 +27,7 @@ def _pending():
 
 
 def _arrange(monkeypatch, push):
-    captured = {"deleted": []}
+    captured = {"deleted": [], "jobs": []}
     monkeypatch.setattr(
         research_feed,
         "reconcile",
@@ -31,6 +39,13 @@ def _arrange(monkeypatch, push):
         "delete_pending",
         lambda **kwargs: captured["deleted"].extend(kwargs["keys"]),
     )
+
+    def ensure_request(record, **_kwargs):
+        captured["jobs"].append(record["entry_id"])
+        return {"created": True, "job": {"status": "awaiting_activation"}}
+
+    monkeypatch.setattr(research_jobs, "ensure_request", ensure_request)
+    monkeypatch.setattr(research_jobs, "automation_enabled", lambda: False)
 
     def dispatch(events, **kwargs):
         captured["events"] = events
@@ -52,6 +67,13 @@ def test_poller_batches_research_push_and_deletes_settled_pending(monkeypatch):
     assert result["ok"] is True
     assert result["delivery_ready"] is True
     assert result["pending_deleted"] == 1
+    assert result["jobs"] == {
+        "requested": 1,
+        "created": 1,
+        "replayed": 0,
+        "billable_execution_enabled": False,
+    }
+    assert captured["jobs"] == ["a" * 64]
     assert captured["events"][0]["link"] == f"/research?entry={'a' * 64}"
     assert captured["dispatch_kwargs"] == {
         "notification_title": "Research Radar",
@@ -87,6 +109,12 @@ def test_poller_discards_legacy_or_context_pending_without_push(monkeypatch):
         "delete_pending",
         lambda **kwargs: captured["deleted"].extend(kwargs["keys"]),
     )
+    monkeypatch.setattr(
+        research_jobs,
+        "ensure_request",
+        lambda *_args, **_kwargs: pytest.fail("suppressed research must not create a job"),
+    )
+    monkeypatch.setattr(research_jobs, "automation_enabled", lambda: False)
 
     def dispatch(events, **_kwargs):
         captured["events"] = events
@@ -102,6 +130,24 @@ def test_poller_discards_legacy_or_context_pending_without_push(monkeypatch):
     assert result["pending_deleted"] == 1
     assert captured["events"] == []
     assert captured["deleted"] == [f"research-radar/realtime/pending/{entry_id}.json"]
+
+
+def test_poller_does_not_push_or_delete_when_job_handoff_fails(monkeypatch):
+    captured = _arrange(
+        monkeypatch,
+        {"enabled": True, "subscriptions": 1, "sent": 1, "failed": 0, "disabled": 0},
+    )
+    monkeypatch.setattr(
+        research_jobs,
+        "ensure_request",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("s3 unavailable")),
+    )
+
+    with pytest.raises(RuntimeError, match="s3 unavailable"):
+        research_poller.run(s3=object())
+
+    assert captured["deleted"] == []
+    assert "events" not in captured
 
 
 @pytest.mark.parametrize(

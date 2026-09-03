@@ -7,6 +7,7 @@ from app.main import app
 from app.routers import research
 from datastore import research as research_store
 from datastore import storage
+from module import research_jobs
 
 client = TestClient(app)
 
@@ -371,3 +372,31 @@ def test_research_status_and_seen_routes_are_deployed_as_static_paths(monkeypatc
     assert status.json()["initialized"] is False
     assert acknowledged.status_code == 200
     assert acknowledged.json()["initialized"] is True
+
+
+def test_research_job_status_route(monkeypatch):
+    entry_id = "a" * 64
+    monkeypatch.setattr(
+        research_jobs,
+        "get_request",
+        lambda requested: {
+            "schema_version": 1,
+            "job_id": requested,
+            "status": "awaiting_activation",
+        },
+    )
+
+    response = client.get(f"/research/jobs/{entry_id}")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "schema_version": 1,
+        "job_id": entry_id,
+        "status": "awaiting_activation",
+    }
+
+
+def test_research_job_status_rejects_invalid_id():
+    response = client.get("/research/jobs/not-a-digest")
+
+    assert response.status_code == 422

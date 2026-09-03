@@ -6,7 +6,7 @@ import logging
 import os
 from typing import Any
 
-from module import action_push, research_feed
+from module import action_push, research_feed, research_jobs
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,7 @@ def run(*, s3: Any | None = None) -> dict:
     pending = research_feed.pending_records(s3=s3, bucket=bucket, pending_prefix=pending_prefix)
     eligible = [(key, record) for key, record in pending if record["notification_eligible"]]
     suppressed_keys = [key for key, record in pending if not record["notification_eligible"]]
+    jobs = [research_jobs.ensure_request(record, s3=s3, bucket=bucket) for _, record in eligible]
     push = action_push.dispatch(
         [_event(record) for _, record in eligible],
         notification_title="Research Radar",
@@ -53,6 +54,12 @@ def run(*, s3: Any | None = None) -> dict:
         "pending_eligible": len(eligible),
         "pending_suppressed": len(suppressed_keys),
         "pending_deleted": len(deleted_keys),
+        "jobs": {
+            "requested": len(jobs),
+            "created": sum(job["created"] for job in jobs),
+            "replayed": sum(not job["created"] for job in jobs),
+            "billable_execution_enabled": research_jobs.automation_enabled(),
+        },
         "push": push,
     }
 
