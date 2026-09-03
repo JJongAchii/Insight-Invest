@@ -26,13 +26,16 @@ export default function PwaManager() {
       (window.navigator.platform === "MacIntel" &&
         window.navigator.maxTouchPoints > 1);
     const dismissedAt = Number(localStorage.getItem(INSTALL_DISMISSED_AT) || 0);
-    if (ios && !standalone && Date.now() - dismissedAt > DISMISS_FOR_MS) {
+    const wasRecentlyDismissed = Date.now() - dismissedAt <= DISMISS_FOR_MS;
+    if (ios && !standalone && !wasRecentlyDismissed) {
       setShowIosGuide(true);
     }
 
     const captureInstallPrompt = (event: Event) => {
       event.preventDefault();
-      if (!standalone) setInstallPrompt(event as InstallPromptEvent);
+      if (!standalone && !wasRecentlyDismissed) {
+        setInstallPrompt(event as InstallPromptEvent);
+      }
     };
     window.addEventListener("beforeinstallprompt", captureInstallPrompt);
     return () =>
@@ -72,6 +75,7 @@ export default function PwaManager() {
   const dismissGuide = () => {
     localStorage.setItem(INSTALL_DISMISSED_AT, String(Date.now()));
     setShowIosGuide(false);
+    setInstallPrompt(null);
   };
 
   const install = async () => {
@@ -84,7 +88,12 @@ export default function PwaManager() {
   return (
     <>
       {(showIosGuide || installPrompt) && (
-        <aside className="fixed inset-x-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[60] mx-auto max-w-md rounded-2xl border border-edge-strong bg-overlay p-4 shadow-2xl md:bottom-6 md:left-auto md:right-6 md:mx-0">
+        <aside
+          role="region"
+          aria-label="앱 설치 안내"
+          className="fixed inset-x-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[60] mx-auto max-w-md overflow-hidden rounded-2xl border border-edge-strong bg-overlay/95 p-4 shadow-2xl backdrop-blur-xl md:bottom-6 md:left-auto md:right-6 md:mx-0"
+        >
+          <span aria-hidden className="absolute inset-y-0 left-0 w-px bg-gradient-to-b from-primary-400 to-secondary-400" />
           <button
             type="button"
             onClick={dismissGuide}
@@ -95,18 +104,18 @@ export default function PwaManager() {
           </button>
           <div className="flex gap-3 pr-7">
             <div className="mt-0.5 rounded-xl bg-primary-500/15 p-2 text-primary-400">
-              {showIosGuide ? <Share size={20} /> : <Download size={20} />}
+              {showIosGuide ? <Share size={20} aria-hidden /> : <Download size={20} aria-hidden />}
             </div>
             <div>
-              <h2 className="font-semibold text-ink">Install Insight Invest</h2>
+              <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-primary-300">App access</p>
+              <h2 className="mt-0.5 font-semibold text-ink">Insight Invest 설치</h2>
               {showIosGuide ? (
                 <p className="mt-1 text-sm leading-5 text-ink-secondary">
-                  Safari의 공유 버튼을 누른 뒤 <strong>홈 화면에 추가</strong>와
-                  <strong> 웹 앱으로 열기</strong>를 선택하세요.
+                  Safari의 공유 버튼을 누른 뒤 <strong>홈 화면에 추가</strong>를 선택하세요.
                 </p>
               ) : (
                 <button type="button" onClick={install} className="btn-primary mt-3">
-                  Add to Home Screen
+                  홈 화면에 추가
                 </button>
               )}
             </div>
@@ -115,12 +124,17 @@ export default function PwaManager() {
       )}
 
       {waitingWorker && (
-        <aside className="fixed inset-x-4 top-[calc(1rem+env(safe-area-inset-top))] z-[70] mx-auto flex max-w-md items-center justify-between gap-3 rounded-2xl border border-edge-strong bg-overlay p-4 shadow-2xl">
+        <aside
+          role="region"
+          aria-label="앱 업데이트 안내"
+          className="fixed inset-x-4 top-[calc(1rem+env(safe-area-inset-top))] z-[70] mx-auto flex max-w-md items-center justify-between gap-3 overflow-hidden rounded-2xl border border-edge-strong bg-overlay/95 p-4 shadow-2xl backdrop-blur-xl"
+        >
+          <span aria-hidden className="absolute inset-y-0 left-0 w-px bg-gradient-to-b from-primary-400 to-secondary-400" />
           <div className="flex items-center gap-3">
-            <RefreshCw size={19} className="text-primary-400" />
+            <RefreshCw size={19} className="text-primary-400" aria-hidden />
             <div>
-              <h2 className="text-sm font-semibold text-ink">Update Ready</h2>
-              <p className="text-xs text-ink-muted">새 버전을 다시 불러올 수 있습니다.</p>
+              <h2 className="text-sm font-semibold text-ink">업데이트 준비 완료</h2>
+              <p className="text-xs text-ink-muted" role="status" aria-live="polite">새 버전을 다시 불러올 수 있습니다.</p>
             </div>
           </div>
           <button
@@ -128,7 +142,7 @@ export default function PwaManager() {
             className="btn-primary whitespace-nowrap px-3 py-2 text-sm"
             onClick={() => waitingWorker.postMessage({ type: "SKIP_WAITING" })}
           >
-            Reload
+            새로고침
           </button>
         </aside>
       )}

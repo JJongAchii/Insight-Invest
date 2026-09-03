@@ -75,7 +75,7 @@ const FactorSection: React.FC = () => {
     <Card
       title={
         <span className="inline-flex items-center gap-1.5">
-          Factor Lens
+          팩터 렌즈
           <InfoTip helpKey="factor.lens" />
         </span>
       }
@@ -170,7 +170,7 @@ const FactorSection: React.FC = () => {
           <div>
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm font-medium text-ink-secondary inline-flex items-center gap-1.5">
-                Factor Rotation
+                팩터 순환
                 <InfoTip helpKey="factor.rotation" />
               </p>
               <span className="text-xs text-ink-muted">3년 · 시작값 100</span>

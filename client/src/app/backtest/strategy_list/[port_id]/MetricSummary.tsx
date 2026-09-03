@@ -88,9 +88,9 @@ const MetricSummary = ({
       {/* 백테스트 최종 배분 - Horizontal Bars */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h4 className="text-sm font-semibold text-ink-secondary">
+          <h3 className="text-sm font-semibold text-ink-secondary">
             백테스트 최종 배분
-          </h4>
+          </h3>
           {lastDate && (
             <span className="text-xs text-ink-muted">
               as of {lastDate} — 백테스트 종료 시점의 목표 배분입니다

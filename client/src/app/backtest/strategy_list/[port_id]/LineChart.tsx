@@ -136,12 +136,12 @@ const LineChart = ({
 
   return (
     <div className="card">
-      <h4 className="text-base font-semibold text-ink mb-4">
+      <h3 className="text-base font-semibold text-ink mb-4">
         <span className="inline-flex items-center gap-1.5">
           {hasLive ? "Backtest vs Live" : "Cumulative Performance"}
           {hasLive && <InfoTip helpKey="bt.live" />}
         </span>
-      </h4>
+      </h3>
       <TimeSeriesChart
         data={chartData}
         series={series}

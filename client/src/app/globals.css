@@ -27,24 +27,40 @@ body,
     color-scheme: dark;
 
     --canvas: #0a0f1a;
+    --canvas-rgb: 10 15 26;
     --surface: #101726;
+    --surface-rgb: 16 23 38;
     --surface-raised: #17202f;
+    --surface-raised-rgb: 23 32 47;
     --surface-overlay: #1c2839;
+    --surface-overlay-rgb: 28 40 57;
 
     --border: rgba(148, 163, 184, 0.14);
     --border-strong: rgba(148, 163, 184, 0.3);
 
     --text-primary: #e8ecf4;
+    --text-primary-rgb: 232 236 244;
     --text-secondary: #9aa6b8;
-    --text-muted: #667487;
+    --text-secondary-rgb: 154 166 184;
+    --text-muted: #7f8c9f;
+    --text-muted-rgb: 127 140 159;
 
     --primary: #9b7eff;
+    --primary-rgb: 155 126 255;
+    --primary-soft: #b8a3ff;
+    --primary-soft-rgb: 184 163 255;
     --primary-deep: #7c5bff;
     --secondary: #38bdf8;
+    --secondary-rgb: 56 189 248;
+    --focus: #c4b5fd;
+    --font-data: "SF Mono", ui-monospace, "Fira Code", monospace;
 
     --gains: #34d399;
+    --gains-rgb: 52 211 153;
     --losses: #fb7185;
+    --losses-rgb: 251 113 133;
     --warning: #fbbf24;
+    --warning-rgb: 251 191 36;
 
     --chart-1: #9b7eff;
     --chart-2: #38bdf8;
@@ -66,24 +82,38 @@ body,
     color-scheme: light;
 
     --canvas: #f5f6fa;
+    --canvas-rgb: 245 246 250;
     --surface: #ffffff;
+    --surface-rgb: 255 255 255;
     --surface-raised: #ffffff;
+    --surface-raised-rgb: 255 255 255;
     --surface-overlay: #ffffff;
+    --surface-overlay-rgb: 255 255 255;
 
     --border: rgba(15, 23, 42, 0.08);
     --border-strong: rgba(15, 23, 42, 0.18);
 
     --text-primary: #17203a;
+    --text-primary-rgb: 23 32 58;
     --text-secondary: #55617a;
-    --text-muted: #8a94a8;
+    --text-secondary-rgb: 85 97 122;
+    --text-muted: #647086;
+    --text-muted-rgb: 100 112 134;
 
-    --primary: #7c5bff;
+    --primary: #6845d6;
+    --primary-rgb: 104 69 214;
+    --primary-soft: #6845d6;
+    --primary-soft-rgb: 104 69 214;
     --primary-deep: #6a48e0;
-    --secondary: #0ea5e9;
+    --secondary: #0369a1;
+    --secondary-rgb: 3 105 161;
 
-    --gains: #10b981;
-    --losses: #ef4444;
-    --warning: #f59e0b;
+    --gains: #047857;
+    --gains-rgb: 4 120 87;
+    --losses: #dc2626;
+    --losses-rgb: 220 38 38;
+    --warning: #b45309;
+    --warning-rgb: 180 83 9;
 
     --chart-1: #7c5bff;
     --chart-2: #0ea5e9;
@@ -108,6 +138,15 @@ body,
     overscroll-behavior-y: none;
   }
 
+  html {
+    scroll-behavior: smooth;
+  }
+
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+  }
+
   .app-main-safe {
     padding-bottom: calc(6rem + env(safe-area-inset-bottom));
   }
@@ -126,13 +165,24 @@ body,
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
 @layer components {
   /* ============================================
      SURFACES
      ============================================ */
   .card {
-    @apply rounded-2xl border border-edge bg-surface p-6;
-    @apply shadow-lg shadow-black/20;
+    @apply rounded-2xl border border-edge bg-surface p-5 md:p-6;
+    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.14);
   }
   .light .card {
     @apply shadow-black/5;
@@ -224,11 +274,11 @@ body,
   }
 
   .page-title {
-    @apply text-2xl font-semibold text-ink;
+    @apply text-2xl font-semibold tracking-[-0.035em] text-ink md:text-3xl;
   }
 
   .page-description {
-    @apply text-sm text-ink-muted mt-0.5;
+    @apply mt-1 text-sm leading-6 text-ink-secondary;
   }
 
   /* 수치는 전부 tabular 모노 — 퀀트 터미널 시그니처 */
@@ -242,6 +292,57 @@ body,
 
   .metric-label {
     @apply text-xs uppercase tracking-wider text-ink-muted;
+  }
+
+  .metric-strip {
+    @apply grid overflow-hidden rounded-2xl border border-edge bg-surface;
+    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.12);
+  }
+
+  .metric-strip > .metric-tile {
+    @apply rounded-none border-0 border-r border-edge bg-transparent;
+  }
+
+  .metric-strip > .metric-tile:last-child {
+    @apply border-r-0;
+  }
+
+  .segmented-control {
+    @apply flex max-w-full gap-1 overflow-x-auto rounded-xl border border-edge bg-surface p-1;
+    scrollbar-width: none;
+  }
+
+  .segmented-control::-webkit-scrollbar,
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hidden {
+    scrollbar-width: none;
+  }
+
+  .segmented-control > button {
+    @apply shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-ink-secondary transition-colors;
+  }
+
+  .segmented-control > button:hover {
+    @apply bg-raised text-ink;
+  }
+
+  .segmented-control > button[aria-pressed="true"] {
+    @apply bg-primary-500 text-white shadow-lg shadow-primary-500/20;
+  }
+
+  .filter-chip {
+    @apply shrink-0 rounded-full border border-edge px-3 py-1.5 text-xs font-medium text-ink-muted transition-colors;
+  }
+
+  .filter-chip:hover {
+    @apply border-edge-strong text-ink;
+  }
+
+  .filter-chip[aria-pressed="true"] {
+    @apply border-primary-400 bg-primary-500/15 text-primary-300;
   }
 
   .metric-positive {

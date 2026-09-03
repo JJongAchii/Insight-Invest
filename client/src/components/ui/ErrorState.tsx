@@ -8,7 +8,7 @@ interface ErrorStateProps {
 /** Card-friendly error block with optional retry action. */
 const ErrorState: React.FC<ErrorStateProps> = ({ message, onRetry }) => {
   return (
-    <div className="flex flex-col items-center justify-center py-16">
+    <div role="alert" className="flex flex-col items-center justify-center py-16 text-center">
       <div
         className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
         style={{
@@ -16,6 +16,7 @@ const ErrorState: React.FC<ErrorStateProps> = ({ message, onRetry }) => {
         }}
       >
         <svg
+          aria-hidden
           className="w-8 h-8 text-losses"
           fill="none"
           viewBox="0 0 24 24"
@@ -31,11 +32,11 @@ const ErrorState: React.FC<ErrorStateProps> = ({ message, onRetry }) => {
       </div>
       <p className="text-losses text-lg font-medium mb-2">{message}</p>
       <p className="text-ink-muted text-sm mb-4">
-        Please check your connection and try again
+        데이터 연결 상태를 확인한 뒤 다시 시도해 주세요.
       </p>
       {onRetry && (
-        <button onClick={onRetry} className="btn-primary">
-          Try Again
+        <button type="button" onClick={onRetry} className="btn-primary">
+          다시 시도
         </button>
       )}
     </div>

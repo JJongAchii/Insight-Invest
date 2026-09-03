@@ -35,7 +35,11 @@ const PhaseTimeline: React.FC = () => {
   }, [data]);
 
   return (
-    <Card title="Growth & Inflation Trend">
+    <Card
+      title="성장·물가 관측 이력"
+      action={<span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-muted">Latest vintage</span>}
+      className="min-h-[42rem]"
+    >
       {error ? (
         <ErrorState message="국면 이력을 불러오지 못했습니다" onRetry={refetch} />
       ) : isLoading || !data ? (
@@ -44,11 +48,14 @@ const PhaseTimeline: React.FC = () => {
         <EmptyState title="국면 이력이 없습니다" />
       ) : (
         <div className="space-y-5">
-          <p className="text-xs text-ink-muted">
+          <p className="max-w-3xl text-xs leading-5 text-ink-muted">
             수준 차이가 큰 CLI와 CPI YoY를 별도 축으로 표시합니다. {data.methodology?.release_lag}
           </p>
           <div>
-            <p className="mb-2 text-sm font-medium text-ink-secondary">OECD 경기선행지수 (CLI)</p>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-ink-secondary">OECD 경기선행지수 (CLI)</p>
+              <span className="font-mono text-[9px] uppercase tracking-wider text-ink-muted">Growth direction</span>
+            </div>
             <TimeSeriesChart
               data={chartData}
               series={[{ key: "cli", name: "CLI", color: "var(--chart-1)" }]}
@@ -57,7 +64,10 @@ const PhaseTimeline: React.FC = () => {
             />
           </div>
           <div>
-            <p className="mb-2 text-sm font-medium text-ink-secondary">미국 CPI 전년동월비 (%)</p>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-ink-secondary">미국 CPI 전년동월비 (%)</p>
+              <span className="font-mono text-[9px] uppercase tracking-wider text-ink-muted">Inflation direction</span>
+            </div>
             <TimeSeriesChart
               data={chartData}
               series={[{ key: "cpi_yoy", name: "CPI YoY", color: "var(--chart-5)" }]}

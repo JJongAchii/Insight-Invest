@@ -53,7 +53,7 @@ const ValuationSection: React.FC = () => {
     <Card
       title={
         <span className="inline-flex items-center gap-1.5">
-          {`Market Valuation · ${market}`}
+          {`시장 밸류에이션 · ${market}`}
           <InfoTip helpKey="valuation.gauge" />
         </span>
       }

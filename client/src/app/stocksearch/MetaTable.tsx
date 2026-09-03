@@ -19,6 +19,7 @@ import { useFetchSparklinesQuery } from "@/state/api";
 import { MetaRow, FilterState, CAP_THRESHOLDS } from "./types";
 import SparklineChart from "@/components/charts/SparklineChart";
 import { formatMarketCap } from "@/lib/market";
+import { Search } from "lucide-react";
 
 interface MetaTableProps {
   data: MetaRow[];
@@ -134,34 +135,34 @@ const MetaTable: React.FC<MetaTableProps> = ({
       {
         id: "select",
         enableSorting: false,
-        header: ({ table }) => (
-          <input
-            type="checkbox"
-            className="accent-primary-500 cursor-pointer"
-            checked={table.getIsAllPageRowsSelected()}
-            ref={(el) => {
-              if (el) el.indeterminate = table.getIsSomePageRowsSelected();
-            }}
-            onChange={table.getToggleAllPageRowsSelectedHandler()}
-            aria-label="Select all rows on page"
-          />
-        ),
+        header: "비교",
         cell: ({ row }) => (
           <input
             type="checkbox"
             className="accent-primary-500 cursor-pointer"
             checked={row.getIsSelected()}
+            disabled={!row.getIsSelected() && selectedIds.length >= 5}
             onChange={row.getToggleSelectedHandler()}
             onClick={(e) => e.stopPropagation()}
-            aria-label={`Select ${row.original.ticker}`}
+            aria-label={`${row.original.ticker} 비교 ${row.getIsSelected() ? "해제" : "추가"}`}
           />
         ),
       },
       {
         accessorKey: "ticker",
         header: "Ticker",
-        cell: ({ getValue }) => (
-          <span className="num font-medium">{getValue<string>()}</span>
+        cell: ({ getValue, row }) => (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onRowClick(row.original);
+            }}
+            className="num font-medium text-ink underline-offset-4 hover:text-primary-300 hover:underline"
+            aria-label={`${row.original.name || getValue<string>()} 요약 열기`}
+          >
+            {getValue<string>()}
+          </button>
         ),
       },
       {
@@ -229,7 +230,7 @@ const MetaTable: React.FC<MetaTableProps> = ({
         },
       },
     ],
-    [sparklineCache]
+    [onRowClick, selectedIds.length, sparklineCache]
   );
 
   // Bridge the parent's number[] selection to TanStack's RowSelectionState.
@@ -241,11 +242,10 @@ const MetaTable: React.FC<MetaTableProps> = ({
 
   const handleRowSelectionChange = (updater: Updater<RowSelectionState>) => {
     const next = typeof updater === "function" ? updater(rowSelection) : updater;
-    onSelectionChange(
-      Object.keys(next)
-        .filter((key) => next[key])
-        .map(Number)
-    );
+    const ids = Object.keys(next)
+      .filter((key) => next[key])
+      .map(Number);
+    onSelectionChange(ids.slice(0, 5));
   };
 
   const table = useReactTable({
@@ -293,50 +293,60 @@ const MetaTable: React.FC<MetaTableProps> = ({
   const lastRow = Math.min((pageIndex + 1) * pageSize, totalRows);
 
   return (
-    <div className="card">
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+    <div>
+      <div className="flex flex-wrap items-end justify-between gap-4 px-5 py-5 md:px-6">
         <div>
-          <h3 className="text-base font-semibold text-ink">Stock Universe</h3>
-          <p className="text-sm text-ink-muted mt-0.5">
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-muted">Registry result</p>
+          <p className="mt-1 text-sm text-ink-secondary">
             {totalRows.toLocaleString()}개 종목
             {totalRows !== data.length &&
               ` (전체 ${data.length.toLocaleString()}개에서 필터)`}
           </p>
         </div>
-        <input
-          type="search"
-          value={quickFilterInput}
-          onChange={(e) => setQuickFilterInput(e.target.value)}
-          placeholder="티커·종목명·섹터 검색"
-          className="input w-64"
-          aria-label="종목 빠른 검색"
-        />
+        <label className="w-full sm:w-80">
+          <span className="sr-only">종목 빠른 검색</span>
+          <span className="relative block">
+            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" aria-hidden />
+            <input
+              type="search"
+              value={quickFilterInput}
+              onChange={(e) => setQuickFilterInput(e.target.value)}
+              placeholder="티커 · 종목명 · 섹터"
+              className="input h-11 pl-10"
+            />
+          </span>
+        </label>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto border-y border-edge">
+        <table className="w-full min-w-[940px] text-sm" aria-label="종목 유니버스">
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id} className="table-header">
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
-                    className={`py-2.5 px-4 text-left whitespace-nowrap first:rounded-l-lg last:rounded-r-lg ${
-                      header.column.getCanSort()
-                        ? "cursor-pointer select-none"
-                        : ""
-                    }`}
-                    onClick={header.column.getToggleSortingHandler()}
+                    className="whitespace-nowrap px-4 py-3 text-left first:pl-5 last:pr-5 md:first:pl-6 md:last:pr-6"
+                    aria-sort={
+                      header.column.getIsSorted() === "asc"
+                        ? "ascending"
+                        : header.column.getIsSorted() === "desc"
+                          ? "descending"
+                          : undefined
+                    }
                   >
-                    <span className="inline-flex items-center gap-1">
-                      {flexRender(
-                        header.column.columnDef.header,
-                        header.getContext()
-                      )}
-                      {header.column.getCanSort() && (
+                    {header.column.getCanSort() ? (
+                      <button
+                        type="button"
+                        onClick={header.column.getToggleSortingHandler()}
+                        className="inline-flex items-center gap-1 rounded text-left hover:text-ink"
+                      >
+                        {flexRender(header.column.columnDef.header, header.getContext())}
                         <SortIcon dir={header.column.getIsSorted()} />
-                      )}
-                    </span>
+                      </button>
+                    ) : (
+                      <span>{flexRender(header.column.columnDef.header, header.getContext())}</span>
+                    )}
                   </th>
                 ))}
               </tr>
@@ -358,18 +368,9 @@ const MetaTable: React.FC<MetaTableProps> = ({
                   key={row.id}
                   className="table-row cursor-pointer"
                   onClick={() => onRowClick(row.original)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      onRowClick(row.original);
-                    }
-                  }}
-                  tabIndex={0}
-                  role="button"
-                  aria-label={`${row.original.name || row.original.ticker} 상세 보기`}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="table-cell whitespace-nowrap">
+                    <td key={cell.id} className="table-cell whitespace-nowrap first:pl-5 last:pr-5 md:first:pl-6 md:last:pr-6">
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
@@ -384,7 +385,7 @@ const MetaTable: React.FC<MetaTableProps> = ({
       </div>
 
       {/* Pagination footer */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 md:px-6">
         <div className="flex items-center gap-2 text-sm text-ink-secondary">
           <span>페이지당 행</span>
           <select

@@ -57,12 +57,20 @@ const PortfolioPage = () => {
   return (
     <div className="flex flex-col gap-6 pb-16">
       <PageHeader
-        title="My Portfolio"
-        description="보유 포지션·거래 원장·현금·손익·통화 노출"
+        eyebrow="Portfolio ledger"
+        title="내 포트폴리오"
+        description="평가액보다 먼저 쏠림과 목표 괴리를 확인하고, 거래 원장과 투자 논거를 한 흐름에서 관리합니다."
+        meta={
+          <>
+            <span>{summary ? `${summary.n_positions}개 포지션` : "포지션 확인 중"}</span>
+            <span>·</span>
+            <span>{summary?.valuation_complete ? "전체 가격 반영" : "일부 가격 확인 필요"}</span>
+          </>
+        }
         actions={
           (ledger?.summary.events_count ?? 0) === 0 ? <button onClick={openAdd} className="btn-primary inline-flex items-center gap-1.5">
             <Plus size={16} aria-hidden />
-            Add Opening Position
+            기초 보유 추가
           </button> : undefined
         }
       />
@@ -91,14 +99,19 @@ const PortfolioPage = () => {
             </div>
           )}
 
-          {/* Summary tiles */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div
+            className="scrollbar-hidden -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0"
+            role="group"
+            aria-label="포트폴리오 요약"
+            tabIndex={0}
+          >
+            <section className="metric-strip min-w-[50rem] grid-cols-5 sm:min-w-0" aria-label="포트폴리오 요약">
             <StatTile
-              label={summary.valuation_complete ? "Total Value" : "Priced Value"}
+              label={summary.valuation_complete ? "총 평가액" : "가격 반영 평가액"}
               value={summary.priced_positions > 0 ? fmtJo(summary.total_value_krw) : "—"}
             />
             <StatTile
-              label="Total P&L"
+              label="누적 손익"
               helpKey="portfolio.pnl"
               value={
                 <span className={signClassNum(summary.total_pnl_krw)}>
@@ -109,17 +122,18 @@ const PortfolioPage = () => {
               deltaType={pnlDeltaType(summary.total_pnl_krw)}
             />
             <StatTile
-              label="Day P&L"
+              label="오늘 손익"
               value={summary.priced_positions > 0 ? fmtSignedJo(summary.day_pnl_krw) : "—"}
               deltaType={pnlDeltaType(summary.day_pnl_krw)}
             />
-            <StatTile label="Positions" value={summary.n_positions} />
+            <StatTile label="보유 종목" value={`${summary.n_positions}개`} />
             <StatTile
-              label="Largest Weight"
+              label="최대 단일 비중"
               helpKey="portfolio.hhi"
               value={summary.top_weight == null ? "—" : `${(summary.top_weight * 100).toFixed(1)}%`}
               sub={summary.hhi == null ? undefined : <span className="num">HHI {summary.hhi.toFixed(2)}</span>}
             />
+            </section>
           </div>
 
           {summary.target_total != null && Math.abs(summary.target_total - 1) > 0.005 && (
@@ -131,8 +145,10 @@ const PortfolioPage = () => {
 
           <PortfolioXRay positions={positions} summary={summary} />
 
-          {/* Holdings table */}
-          <Card title="Holdings">
+          <Card
+            title="보유 포지션"
+            action={<span className="font-mono text-[10px] uppercase tracking-wider text-ink-muted">비중순 · 행을 눌러 종목 보기</span>}
+          >
             <PortfolioTable
               positions={positions}
               onEdit={openEdit}
@@ -141,13 +157,10 @@ const PortfolioPage = () => {
             />
           </Card>
 
-          {/* Allocation breakdown */}
           <AllocationCard summary={summary} />
 
-          {/* Portfolio risk summary */}
           <RiskCard />
 
-          {/* Portfolio factor exposure (KR holdings only) */}
           <FactorExposureCard positions={positions} />
         </>
       )}

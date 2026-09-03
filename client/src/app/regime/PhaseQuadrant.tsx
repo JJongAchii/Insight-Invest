@@ -37,7 +37,7 @@ const PhaseQuadrant: React.FC<PhaseQuadrantProps> = ({ className = "" }) => {
     <Card
       title={
         <span className="inline-flex items-center gap-1.5">
-          Growth / Inflation Phase
+          성장 × 물가 좌표
           <InfoTip helpKey="regime.phase" />
         </span>
       }
@@ -62,7 +62,23 @@ const PhaseQuadrant: React.FC<PhaseQuadrantProps> = ({ className = "" }) => {
         <LoadingState label="Loading regime phase..." />
       ) : (
         <div className="flex flex-col gap-4">
-          <div className="flex gap-3">
+          {current && (
+            <div className="grid gap-3 rounded-xl border border-edge bg-raised/55 p-4 sm:grid-cols-[1fr_auto] sm:items-end">
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">Current coordinate</p>
+                <p className="mt-1 text-2xl font-semibold tracking-[-0.03em]" style={{ color: PHASE_COLORS[current.phase] }}>
+                  {current.phase}
+                </p>
+                <p className="mt-1 text-xs text-ink-secondary">{PHASE_AXES[current.phase]}</p>
+              </div>
+              <p className="font-mono text-[10px] text-ink-muted">OBS {current.as_of}</p>
+            </div>
+          )}
+          <div
+            className="flex gap-3"
+            role="img"
+            aria-label={current ? `현재 시장 국면은 ${current.phase}, ${PHASE_AXES[current.phase]}` : "성장과 물가 방향에 따른 4개 시장 국면"}
+          >
             {/* Y axis label */}
             <div className="flex flex-col items-center justify-between py-6 text-[11px] text-ink-muted shrink-0">
               <span>성장 ↑</span>
@@ -100,7 +116,7 @@ const PhaseQuadrant: React.FC<PhaseQuadrantProps> = ({ className = "" }) => {
                         >
                           {phase}
                         </p>
-                        <p className="text-[11px] text-ink-muted mt-0.5">
+                        <p className="mt-0.5 text-[11px] text-ink-secondary">
                           {PHASE_AXES[phase]}
                         </p>
                       </div>
@@ -114,10 +130,10 @@ const PhaseQuadrant: React.FC<PhaseQuadrantProps> = ({ className = "" }) => {
                             }}
                           />
                           <span
-                            className="text-xs font-medium"
+                            className="font-mono text-[10px] font-semibold uppercase tracking-wider"
                             style={{ color: PHASE_COLORS[phase] }}
                           >
-                            현재
+                            observed
                           </span>
                         </div>
                       )}
@@ -134,11 +150,8 @@ const PhaseQuadrant: React.FC<PhaseQuadrantProps> = ({ className = "" }) => {
             </div>
           </div>
 
-          {/* Caption row */}
+          {/* Observation row */}
           <div className="flex flex-wrap items-center gap-x-6 gap-y-1 pt-3 border-t border-edge text-xs text-ink-secondary">
-            <span className="text-ink-muted">
-              기준일 <span className="num text-ink-secondary">{current?.as_of ?? "—"}</span>
-            </span>
             <span>
               CLI{" "}
               <span className="num text-ink">{fmtNum(current?.cli)}</span>{" "}

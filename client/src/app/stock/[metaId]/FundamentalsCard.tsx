@@ -30,7 +30,7 @@ const FundamentalsCard: React.FC<{
   isLoading: boolean;
 }> = ({ facts, asOf, note, isLoading }) => (
   <Card
-    title="SEC Annual Fundamentals · 10-K"
+    title="연간 재무 원장 · SEC 10-K"
     action={asOf ? <span className="text-xs text-ink-muted num">최근 제출 {asOf}</span> : undefined}
   >
     {isLoading ? (
@@ -39,19 +39,21 @@ const FundamentalsCard: React.FC<{
       <p className="text-sm text-ink-muted">{note ?? "표시할 연간 재무가 없습니다."}</p>
     ) : (
       <div>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="scrollbar-hidden -mx-5 overflow-x-auto px-5 md:-mx-6 md:px-6">
+          <div className="metric-strip min-w-[43rem] grid-cols-5 md:min-w-0">
           {facts.map((fact) => (
-            <div key={fact.key} className="rounded-xl border border-edge p-3">
-              <p className="text-xs text-ink-muted">{LABELS[fact.key]}</p>
-              <p className="text-lg font-semibold text-ink num mt-1">{fmtUsd(fact.value)}</p>
-              <p className="text-xs text-ink-secondary num mt-1">
-                {fact.yoy_pct == null ? "전년 비교 없음" : `YoY ${fact.yoy_pct >= 0 ? "+" : ""}${fact.yoy_pct.toFixed(1)}%`}
+            <div key={fact.key} className="metric-tile min-w-0 p-4">
+              <p className="metric-label">{LABELS[fact.key]}</p>
+              <p className="mt-2 text-lg font-semibold text-ink num">{fmtUsd(fact.value)}</p>
+              <p className={`mt-1 text-xs num ${fact.yoy_pct == null ? "text-ink-muted" : fact.yoy_pct >= 0 ? "text-gains" : "text-losses"}`}>
+                {fact.yoy_pct == null ? "전년 비교 없음" : `전년 대비 ${fact.yoy_pct >= 0 ? "+" : ""}${fact.yoy_pct.toFixed(1)}%`}
               </p>
-              <p className="text-[10px] text-ink-muted num mt-1">기간 {fact.period}</p>
+              <p className="mt-2 text-[10px] text-ink-muted num">기간 {fact.period}</p>
             </div>
           ))}
+          </div>
         </div>
-        <p className="text-xs text-ink-muted mt-3">
+        <p className="mt-4 border-t border-edge pt-3 text-xs leading-5 text-ink-muted">
           {note} 현재 연간 10-K만 제공하며 분기 10-Q는 포함하지 않습니다. 정정 제출은 현재
           시점에 공개된 최신 filed 값을 사용합니다.
         </p>

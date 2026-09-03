@@ -36,7 +36,7 @@ const WatchlistCard: React.FC = () => {
       title={
         <span className="inline-flex items-center gap-2">
           <Star size={16} className="text-amber-400" fill="currentColor" aria-hidden />
-          My Watchlist
+          관심종목 변화
         </span>
       }
       action={
@@ -44,7 +44,7 @@ const WatchlistCard: React.FC = () => {
           href="/stocksearch"
           className="text-xs font-medium text-ink-muted hover:text-ink transition-colors"
         >
-          Search Stocks →
+          종목 찾기 →
         </Link>
       }
     >

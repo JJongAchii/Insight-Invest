@@ -46,7 +46,7 @@ const FactorExposureCard: React.FC<FactorExposureCardProps> = ({
     <Card
       title={
         <span className="inline-flex items-center gap-1.5">
-          Factor Exposure
+          팩터 노출
           <InfoTip helpKey="factor.exposure" />
         </span>
       }

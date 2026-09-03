@@ -67,8 +67,8 @@ const StrategyChart: React.FC<StrategyChartProps> = ({
   if (chartData.length === 0) {
     return (
       <EmptyState
-        title="No data available"
-        hint="Run a backtest to see performance"
+        title="누적 성과 데이터가 없습니다"
+        hint="백테스트를 실행하면 전략과 벤치마크 NAV가 표시됩니다"
       />
     );
   }

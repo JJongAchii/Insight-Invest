@@ -37,29 +37,31 @@ const PortfolioCard: React.FC<PortfolioCardProps> = ({
   };
 
   return (
-    <div className="card">
-      <div className="flex items-center gap-2 mb-4">
+    <article className="overflow-hidden rounded-2xl border border-edge bg-surface">
+      <div className="h-px" style={{ backgroundColor: accentColor.includes("emerald") ? "var(--gains)" : accentColor.includes("amber") ? "var(--warning)" : "var(--primary)" }} />
+      <div className="p-5 md:p-6">
+      <div className="mb-4 flex items-center gap-2">
         <div className={`w-3 h-3 rounded-full ${accentColor}`}></div>
         <h4 className="text-sm font-semibold text-ink">{title}</h4>
       </div>
 
       {/* Metrics */}
-      <div className="grid grid-cols-3 gap-4 mb-5">
-        <div className="text-center p-3 bg-raised rounded-lg">
-          <p className="text-xs text-ink-muted mb-1">Return</p>
-          <p className="text-lg font-semibold text-ink">
+      <div className="mb-5 grid grid-cols-3 divide-x divide-edge border-y border-edge">
+        <div className="px-2 py-3">
+          <p className="mb-1 text-[10px] uppercase tracking-wide text-ink-muted">기대수익</p>
+          <p className="num text-lg font-semibold text-ink">
             {(portfolio.expected_return * 100).toFixed(2)}%
           </p>
         </div>
-        <div className="text-center p-3 bg-raised rounded-lg">
-          <p className="text-xs text-ink-muted mb-1">Volatility</p>
-          <p className="text-lg font-semibold text-ink">
+        <div className="px-3 py-3">
+          <p className="mb-1 text-[10px] uppercase tracking-wide text-ink-muted">변동성</p>
+          <p className="num text-lg font-semibold text-ink">
             {(portfolio.volatility * 100).toFixed(2)}%
           </p>
         </div>
-        <div className="text-center p-3 bg-raised rounded-lg">
-          <p className="text-xs text-ink-muted mb-1">Sharpe</p>
-          <p className="text-lg font-semibold text-ink">
+        <div className="px-3 py-3">
+          <p className="mb-1 text-[10px] uppercase tracking-wide text-ink-muted">샤프</p>
+          <p className="num text-lg font-semibold text-ink">
             {portfolio.sharpe_ratio.toFixed(2)}
           </p>
         </div>
@@ -68,7 +70,7 @@ const PortfolioCard: React.FC<PortfolioCardProps> = ({
       {/* Weights */}
       <div>
         <p className="text-xs font-medium text-ink-muted mb-3">
-          Portfolio Weights
+          계산 비중
         </p>
         <div className="space-y-2">
           {sortedWeights.map(([ticker, weight]) => (
@@ -99,10 +101,11 @@ const PortfolioCard: React.FC<PortfolioCardProps> = ({
       {/* Backtest handoff */}
       <div className="flex justify-end mt-5">
         <button onClick={handleBacktest} className="btn-secondary text-xs">
-          Backtest this portfolio
+          이 비중으로 백테스트
         </button>
       </div>
-    </div>
+      </div>
+    </article>
   );
 };
 
@@ -115,7 +118,7 @@ const OptimalPortfolioDisplay: React.FC<OptimalPortfolioDisplayProps> = ({
   if (riskParity) {
     return (
       <PortfolioCard
-        title={title || "Risk Parity Portfolio"}
+        title={title || "리스크 패리티 배분"}
         portfolio={riskParity}
         accentColor="bg-violet-500"
       />
@@ -126,14 +129,14 @@ const OptimalPortfolioDisplay: React.FC<OptimalPortfolioDisplayProps> = ({
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       {maxSharpe && (
         <PortfolioCard
-          title="Maximum Sharpe Portfolio"
+          title="최대 샤프 배분"
           portfolio={maxSharpe}
           accentColor="bg-emerald-500"
         />
       )}
       {minVol && (
         <PortfolioCard
-          title="Minimum Volatility Portfolio"
+          title="최소 변동성 배분"
           portfolio={minVol}
           accentColor="bg-amber-500"
         />

@@ -62,7 +62,10 @@ const EfficientFrontierChart: React.FC<EfficientFrontierChartProps> = ({
 
   return (
     <div className="card">
-      <h3 className="section-header">Efficient Frontier</h3>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+        <h3 className="text-base font-semibold text-ink">효율적 투자선</h3>
+        <p className="text-xs text-ink-muted">오른쪽 위일수록 기대수익과 변동성이 함께 큽니다.</p>
+      </div>
       <div style={{ height: 400 }}>
         <ResponsiveContainer width="100%" height="100%">
           <ScatterChart margin={{ top: 8, right: 8, bottom: 16, left: 8 }}>
@@ -77,7 +80,7 @@ const EfficientFrontierChart: React.FC<EfficientFrontierChartProps> = ({
               axisLine={{ stroke: "var(--border)" }}
               tickLine={{ stroke: "var(--border)" }}
               label={{
-                value: "Volatility (%)",
+                value: "변동성 (%)",
                 position: "insideBottom",
                 offset: -8,
                 fill: "var(--text-secondary)",
@@ -94,7 +97,7 @@ const EfficientFrontierChart: React.FC<EfficientFrontierChartProps> = ({
               axisLine={{ stroke: "var(--border)" }}
               tickLine={{ stroke: "var(--border)" }}
               label={{
-                value: "Expected Return (%)",
+                value: "기대수익률 (%)",
                 angle: -90,
                 position: "insideLeft",
                 fill: "var(--text-secondary)",

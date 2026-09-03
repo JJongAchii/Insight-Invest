@@ -9,6 +9,7 @@ interface StatTileProps {
   sub?: React.ReactNode;
   /** INDICATOR_HELP key; renders an InfoTip next to the label. */
   helpKey?: string;
+  className?: string;
 }
 
 /** Metric tile: uppercase label + tabular mono value, optional colored delta and sub line. */
@@ -19,6 +20,7 @@ const StatTile: React.FC<StatTileProps> = ({
   deltaType = "neutral",
   sub,
   helpKey,
+  className = "",
 }) => {
   const deltaClass =
     deltaType === "gain"
@@ -36,7 +38,7 @@ const StatTile: React.FC<StatTileProps> = ({
         : "metric-value";
 
   return (
-    <div className="p-4 bg-raised rounded-xl border border-edge">
+    <div className={`metric-tile rounded-xl border border-edge bg-raised p-4 ${className}`.trim()}>
       <p className="metric-label mb-1 flex items-center gap-1">
         <span>{label}</span>
         {helpKey && <InfoTip helpKey={helpKey} />}

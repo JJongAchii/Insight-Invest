@@ -25,7 +25,7 @@ import PhaseCrisisCard from "./analysis/PhaseCrisisCard";
 import MonthlyStatsCard from "./analysis/MonthlyStatsCard";
 import TradingRealityCard from "./analysis/TradingRealityCard";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { Activity, ArrowLeft, Radio, ShieldAlert } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
 import LoadingState from "@/components/ui/LoadingState";
 import ErrorState from "@/components/ui/ErrorState";
@@ -35,6 +35,43 @@ import { calculatePeriodReturns, NavPoint } from "@/components/charts/returns";
 interface StrategyDetailProps {
   params: Promise<{ port_id: string }>;
 }
+
+interface CaseSectionProps {
+  id: string;
+  index: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}
+
+/** Numbering reflects the actual review order of a saved strategy case file. */
+const CaseSection: React.FC<CaseSectionProps> = ({
+  id,
+  index,
+  eyebrow,
+  title,
+  description,
+  children,
+}) => (
+  <section id={id} className="scroll-mt-24" aria-labelledby={`${id}-title`}>
+    <header className="mb-4 grid gap-2 border-t border-edge pt-6 md:grid-cols-[4rem_minmax(0,1fr)] md:gap-4">
+      <span className="font-mono text-xs font-semibold text-primary-300">{index}</span>
+      <div>
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-muted">
+          {eyebrow}
+        </p>
+        <div className="mt-1 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-5">
+          <h2 id={`${id}-title`} className="text-xl font-semibold tracking-[-0.025em] text-ink">
+            {title}
+          </h2>
+          <p className="max-w-2xl text-sm leading-6 text-ink-muted">{description}</p>
+        </div>
+      </div>
+    </header>
+    <div className="space-y-6 md:pl-20">{children}</div>
+  </section>
+);
 
 interface ReturnBarRow {
   [series: string]: string | number | null;
@@ -107,7 +144,8 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
     isError: analyticsIsError,
     refetch: refetchAnalytics,
   } = useFetchStrategyAnalyticsQuery(port_id);
-  const [setStatus, { isLoading: toggling }] = useSetStrategyStatusMutation();
+  const [setStatus, { isLoading: toggling, isError: statusError }] =
+    useSetStrategyStatusMutation();
 
   const bmNavData: NavPoint[] = useMemo(
     () => (bmDetails?.nav ? JSON.parse(bmDetails.nav) : []),
@@ -149,6 +187,7 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
   }
 
   const strategyName = strategyInfo[0].port_name;
+  const strategyMethod = strategyInfo[0].strategy_name;
   const status = strategyInfo[0].status;
   const isActive = status === "active";
   const hasLiveNav = (liveData?.nav?.length ?? 0) > 0;
@@ -268,20 +307,42 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
   return (
     <div className="flex flex-col gap-6 pb-16">
       <PageHeader
+        eyebrow="Investment case file"
         title={
-          <div className="flex items-center gap-3">
-            <span>Strategy Report</span>
+          <div className="flex flex-wrap items-center gap-3">
+            <span>{strategyName}</span>
             {isActive && (
-              <span className="badge-neutral" style={{ color: "var(--gains)" }}>
-                ACTIVE
+              <span className="badge-success font-mono text-[9px] tracking-[0.1em]">
+                LIVE TRACKING
               </span>
             )}
           </div>
         }
-        description="Detailed performance analysis and metrics"
+        description={
+          strategyMethod
+            ? `${strategyMethod}의 전제, 역사적 증거, 저장 후 경로를 하나의 검토 순서로 읽습니다.`
+            : "전제, 역사적 증거, 저장 후 경로를 하나의 검토 순서로 읽습니다."
+        }
+        meta={
+          <>
+            <span>case #{port_id}</span>
+            <span>·</span>
+            <span>{isActive ? "tracking" : "research only"}</span>
+            <span>·</span>
+            <span>unverified</span>
+          </>
+        }
         actions={
           <div className="flex items-center gap-2">
+            <Link
+              href="/backtest/strategy_list"
+              className="btn-ghost inline-flex items-center gap-2 text-sm"
+            >
+              <ArrowLeft size={16} aria-hidden />
+              보관함
+            </Link>
             <button
+              type="button"
               onClick={() =>
                 setStatus({
                   portId: port_id,
@@ -289,76 +350,135 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
                 })
               }
               disabled={toggling}
-              className="btn-secondary inline-flex items-center text-sm"
+              aria-busy={toggling}
+              className={`${isActive ? "btn-secondary" : "btn-primary"} inline-flex items-center gap-2 text-sm`}
             >
-              {isActive ? "운영 중지" : "운영 시작"}
+              {isActive ? <Activity size={15} aria-hidden /> : <Radio size={15} aria-hidden />}
+              {toggling ? "변경 중…" : isActive ? "추적 중지" : "운영 추적 시작"}
             </button>
-            <Link
-              href="/backtest/strategy_list"
-              className="btn-secondary inline-flex items-center"
-            >
-              <ArrowLeft size={16} className="mr-2" />
-              Back to List
-            </Link>
           </div>
         }
       />
 
-      {isActive ? (
-        <>
+      <aside className="relative overflow-hidden rounded-2xl border border-warning/25 bg-warning/5 px-5 py-4">
+        <span aria-hidden className="absolute inset-y-0 left-0 w-px bg-warning" />
+        <div className="flex items-start gap-3">
+          <ShieldAlert size={18} className="mt-0.5 shrink-0 text-warning" aria-hidden />
+          <div>
+            <p className="text-sm font-semibold text-ink">검증되지 않은 연구 기록</p>
+            <p className="mt-1 text-xs leading-5 text-ink-secondary">
+              운영 추적은 저장 이후의 관찰을 시작할 뿐, 전략 승인이나 미래 성과 보장을 의미하지 않습니다.
+            </p>
+          </div>
+        </div>
+      </aside>
+
+      {statusError && (
+        <p role="alert" className="rounded-xl border border-losses/30 bg-losses/5 px-4 py-3 text-sm text-losses">
+          추적 상태를 변경하지 못했습니다. 연결을 확인한 뒤 다시 시도해 주세요.
+        </p>
+      )}
+
+      <nav
+        aria-label="전략 보고서 목차"
+        className="scrollbar-hidden flex gap-1 overflow-x-auto rounded-2xl border border-edge bg-surface p-1.5"
+      >
+        {[
+          ["#research-contract", "01", "연구 계약"],
+          ["#historical-evidence", "02", "역사적 증거"],
+          ["#return-path", "03", "수익 경로"],
+          ...(isActive
+            ? [
+                ["#live-observation", "04", "저장 후 관찰"],
+                ["#next-rebalance", "05", "다음 리밸런싱"],
+              ]
+            : []),
+        ].map(([href, index, label]) => (
+          <a
+            key={href}
+            href={href}
+            className="flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-xs text-ink-secondary transition-colors hover:bg-raised hover:text-ink"
+          >
+            <span className="font-mono text-[10px] text-primary-300">{index}</span>
+            {label}
+          </a>
+        ))}
+      </nav>
+
+      <CaseSection
+        id="research-contract"
+        index="01"
+        eyebrow="Mandate & assumptions"
+        title="연구 계약"
+        description="무엇을, 어느 구간에서, 어떤 비용과 실행 규칙으로 시험했는지 먼저 고정합니다."
+      >
+        {renderAnalyticsGroup(premiseCard)}
+      </CaseSection>
+
+      <CaseSection
+        id="historical-evidence"
+        index="02"
+        eyebrow="Backtest evidence"
+        title="역사적 증거"
+        description="헤드라인 수치보다 기간 의존성·낙폭·국면·거래 현실을 함께 봅니다."
+      >
+        {metricSummary}
+        {renderAnalyticsGroup(
+          <>
+            {rollingCard}
+            {drawdownCard}
+            {phaseCrisisCard}
+            {monthlyTradingRow}
+          </>
+        )}
+      </CaseSection>
+
+      <CaseSection
+        id="return-path"
+        index="03"
+        eyebrow="Path, not point estimate"
+        title="수익 경로"
+        description="누적 성과와 월·연도별 분포를 벤치마크 및 저장 후 구간과 같은 축에서 확인합니다."
+      >
+        <LineChart
+          strategyName={strategyName}
+          strategyNav={strategyNav}
+          bmNav={bmDetails.nav}
+          liveNav={liveData?.nav}
+          savedAt={liveData?.saved_at}
+          bmLiveNav={liveData?.bm_live?.nav}
+          bmLabel={bmLabel}
+        />
+        {yearlyMonthlyReturns}
+      </CaseSection>
+
+      {isActive && (
+        <CaseSection
+          id="live-observation"
+          index="04"
+          eyebrow="Post-save observation"
+          title="저장 후 관찰"
+          description="백테스트와 실제 저장 이후의 경로 차이, 현재 보유 비중, 분포 내 위치를 분리해 읽습니다."
+        >
           <LiveHeadline live={liveData} />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <HoldingsNowCard weights={liveData?.weights} />
             <ExpectationCard expectation={liveData?.expectation} />
           </div>
-          <NextRebalCard portId={port_id} isActive={isActive} />
-          <LineChart
-            strategyName={strategyName}
-            strategyNav={strategyNav}
-            bmNav={bmDetails.nav}
-            liveNav={liveData?.nav}
-            savedAt={liveData?.saved_at}
-            bmLiveNav={liveData?.bm_live?.nav}
-            bmLabel={bmLabel}
-          />
           <LiveMetricsTable live={liveData} bmMetrics={bmDetails.metrics} />
-          {yearlyMonthlyReturns}
+        </CaseSection>
+      )}
 
-          <h3 className="section-header border-t border-edge pt-6">Backtest Analysis</h3>
-          {renderAnalyticsGroup(
-            <>
-              {premiseCard}
-              {rollingCard}
-              {drawdownCard}
-              {phaseCrisisCard}
-              {monthlyTradingRow}
-            </>
-          )}
-          {metricSummary}
-        </>
-      ) : (
-        <>
-          {renderAnalyticsGroup(premiseCard)}
-          {metricSummary}
-          {renderAnalyticsGroup(
-            <>
-              {rollingCard}
-              {drawdownCard}
-              {phaseCrisisCard}
-              {monthlyTradingRow}
-            </>
-          )}
-          <LineChart
-            strategyName={strategyName}
-            strategyNav={strategyNav}
-            bmNav={bmDetails.nav}
-            liveNav={liveData?.nav}
-            savedAt={liveData?.saved_at}
-            bmLiveNav={liveData?.bm_live?.nav}
-            bmLabel={bmLabel}
-          />
-          {yearlyMonthlyReturns}
-        </>
+      {isActive && (
+        <CaseSection
+          id="next-rebalance"
+          index="05"
+          eyebrow="Next observable action"
+          title="다음 리밸런싱"
+          description="예상일과 목표 비중은 실행 확정값이 아니라 전일 저녁 계산될 관찰 대상입니다."
+        >
+          <NextRebalCard portId={port_id} isActive={isActive} />
+        </CaseSection>
       )}
     </div>
   );

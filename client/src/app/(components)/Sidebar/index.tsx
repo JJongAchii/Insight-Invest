@@ -1,122 +1,128 @@
 "use client";
 
 import { useAppSelector } from "@/app/redux";
+import {
+  BellRing,
+  BookOpenText,
+  BriefcaseBusiness,
+  CalendarDays,
+  ChartNoAxesCombined,
+  ChevronDown,
+  FlaskConical,
+  Gauge,
+  NotebookPen,
+  Search,
+  ShieldCheck,
+  X,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import React, { useEffect } from "react";
-import {
-  IoHome,
-  IoSearch,
-  IoTelescope,
-  IoOptions,
-  IoTrendingUp,
-  IoBriefcase,
-  IoClose,
-  IoDocumentText,
-  IoShieldCheckmark,
-  IoNotifications,
-  IoCalendar,
-  IoLibrary,
-} from "react-icons/io5";
-import { FaRunning, FaList } from "react-icons/fa";
-import { IconType } from "react-icons";
-import Image from "next/image";
-import ResearchUnseenBadge from "../ResearchUnseenBadge";
+import { useEffect } from "react";
 
-interface SidebarLinkProps {
+interface WorkspaceItem {
   href: string;
-  icon: IconType;
   label: string;
-  isCollapsed: boolean;
-  isDropdown?: boolean;
-  onClick?: () => void;
+  hint: string;
+  icon: LucideIcon;
   activePrefixes?: string[];
-  badgeCount?: number;
+  badge?: "actions" | "research";
 }
 
-const SidebarLink = ({
-  href,
-  icon: Icon,
-  label,
-  isCollapsed,
-  isDropdown = false,
-  onClick,
-  activePrefixes = [],
-  badgeCount = 0,
-}: SidebarLinkProps) => {
-  const pathname = usePathname();
-  const isActive =
-    pathname === href ||
-    pathname.startsWith(`${href}/`) ||
-    activePrefixes.some((prefix) => pathname.startsWith(prefix)) ||
-    (pathname === "/" && href === "/home");
+const workspaces: WorkspaceItem[] = [
+  { href: "/home", label: "브리핑", hint: "변화와 판단", icon: Gauge },
+  {
+    href: "/actions",
+    label: "검토",
+    hint: "지금 할 일",
+    icon: BellRing,
+    activePrefixes: ["/earnings"],
+    badge: "actions",
+  },
+  {
+    href: "/insight",
+    label: "시장",
+    hint: "흐름과 국면",
+    icon: ChartNoAxesCombined,
+    activePrefixes: ["/regime", "/stocksearch", "/stock/"],
+  },
+  {
+    href: "/portfolio",
+    label: "포트폴리오",
+    hint: "노출과 기록",
+    icon: BriefcaseBusiness,
+    activePrefixes: ["/journal", "/optimization"],
+  },
+  {
+    href: "/research",
+    label: "리서치",
+    hint: "근거와 전략",
+    icon: BookOpenText,
+    activePrefixes: ["/backtest"],
+    badge: "research",
+  },
+];
+
+const tools: Array<{ href: string; label: string; icon: LucideIcon }> = [
+  { href: "/stocksearch", label: "종목 검색", icon: Search },
+  { href: "/earnings", label: "실적 일정", icon: CalendarDays },
+  { href: "/regime", label: "시장 국면", icon: ChartNoAxesCombined },
+  { href: "/journal", label: "판단 기록", icon: NotebookPen },
+  { href: "/backtest/simulation", label: "전략 실험", icon: FlaskConical },
+];
+
+const isActiveRoute = (
+  pathname: string,
+  href: string,
+  activePrefixes: string[] = []
+) =>
+  pathname === href ||
+  pathname.startsWith(`${href}/`) ||
+  activePrefixes.some((prefix) => pathname.startsWith(prefix)) ||
+  (pathname === "/" && href === "/home");
+
+const CountBadge = ({ count, label }: { count: number; label: string }) => {
+  if (count <= 0) return null;
+  const display = count > 99 ? "99+" : String(count);
 
   return (
-    <Link
-      href={href}
-      onClick={onClick}
-      aria-current={isActive ? "page" : undefined}
-      className={`
-          relative flex items-center gap-3 cursor-pointer
-          ${isCollapsed ? "md:justify-center md:py-3 md:mx-2" : "md:px-4 md:py-2.5 md:mx-3"}
-          max-md:px-4 max-md:py-2.5 max-md:mx-3
-          ${isDropdown ? "ml-10" : ""}
-          rounded-xl
-          transition-all duration-200
-          ${
-            isActive
-              ? "bg-gradient-to-r from-primary-400 to-primary-500 text-white shadow-lg shadow-primary-500/25"
-              : "text-ink-secondary hover:bg-raised hover:text-ink"
-          }
-        `}
+    <span
+      aria-label={`${label} ${count}개`}
+      title={`${label} ${count}개`}
+      className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-losses px-1.5 text-[10px] font-bold leading-none text-white shadow-sm shadow-rose-500/30 md:group-data-[collapsed=true]:absolute md:group-data-[collapsed=true]:right-1 md:group-data-[collapsed=true]:top-1 md:group-data-[collapsed=true]:h-2.5 md:group-data-[collapsed=true]:min-w-2.5 md:group-data-[collapsed=true]:w-2.5 md:group-data-[collapsed=true]:p-0 md:group-data-[collapsed=true]:text-transparent md:group-data-[collapsed=true]:ring-2 md:group-data-[collapsed=true]:ring-surface"
     >
-      <Icon className="w-5 h-5 flex-shrink-0" aria-hidden />
-      <span
-        className={`
-            ${isCollapsed ? "md:hidden" : ""}
-            text-sm font-medium
-          `}
-      >
-        {label}
-      </span>
-      <ResearchUnseenBadge
-        count={badgeCount}
-        className="ml-auto"
-        collapsedOnDesktop={isCollapsed}
-      />
-    </Link>
+      <span aria-hidden>{display}</span>
+    </span>
   );
 };
 
-/** Uppercase section label; hidden entirely when the sidebar is collapsed. */
-const SectionHeader = ({
-  label,
-  isCollapsed,
-}: {
-  label: string;
-  isCollapsed: boolean;
-}) => {
-  return (
-    <p className={`${isCollapsed ? "md:hidden" : ""} px-7 pt-4 pb-1 text-xs uppercase tracking-wider text-ink-muted font-semibold`}>
-      {label}
-    </p>
-  );
-};
+const SignalMark = () => (
+  <span className="relative block h-9 w-8 shrink-0" aria-hidden>
+    <span className="absolute bottom-1 left-1/2 top-1 w-px -translate-x-1/2 bg-gradient-to-b from-secondary-400 via-primary-300 to-primary-500 shadow-[0_0_14px_rgba(124,91,255,0.35)]" />
+    <span className="absolute left-1/2 top-0 h-2.5 w-2.5 -translate-x-1/2 rounded-full border-2 border-surface bg-secondary-400 ring-1 ring-secondary-400" />
+    <span className="absolute left-1/2 top-[13px] h-2.5 w-2.5 -translate-x-1/2 rounded-full border-2 border-surface bg-ink ring-1 ring-ink shadow-[0_0_12px_rgba(155,126,255,0.35)]" />
+    <span className="absolute bottom-0 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rounded-full border-2 border-surface bg-primary-400 ring-1 ring-primary-400" />
+  </span>
+);
 
 const Sidebar = ({
   isMobileOpen,
   onMobileClose,
   researchUnseenCount,
+  actionCount,
 }: {
   isMobileOpen: boolean;
   onMobileClose: () => void;
   researchUnseenCount: number;
+  actionCount: number;
 }) => {
   const isSidebarCollapsed = useAppSelector(
     (state) => state.global.isSidebarCollapsed
   );
-
   const pathname = usePathname();
+  const utilityRouteActive = tools.some((item) =>
+    isActiveRoute(pathname, item.href)
+  );
 
   useEffect(() => {
     if (isMobileOpen) onMobileClose();
@@ -125,162 +131,148 @@ const Sidebar = ({
   }, [pathname]);
 
   return (
-    <div
-      className={`
-        fixed inset-y-0 left-0 flex flex-col z-50 w-60
-        ${isMobileOpen ? "translate-x-0" : "-translate-x-full"}
-        md:translate-x-0 ${isSidebarCollapsed ? "md:w-16" : "md:w-60"}
-        bg-surface border-r border-edge
-        transition-all duration-200 overflow-hidden shadow-2xl md:shadow-none
-      `}
+    <aside
+      data-collapsed={isSidebarCollapsed}
+      className={`group fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col overflow-hidden border-r border-edge bg-surface/95 shadow-2xl shadow-black/30 backdrop-blur-xl transition-all duration-200 md:translate-x-0 md:shadow-none ${
+        isMobileOpen ? "translate-x-0" : "-translate-x-full"
+      } ${isSidebarCollapsed ? "md:w-[72px]" : "md:w-56"}`}
+      aria-label="주요 탐색"
     >
-      {/* Logo */}
       <div
-        className={`
-          flex items-center justify-between
-          ${isSidebarCollapsed ? "md:px-2 md:py-4" : "md:px-4 md:py-5"}
-          px-4 py-5
-          border-b border-edge
-        `}
+        className={`flex min-h-[76px] items-center border-b border-edge px-5 ${
+          isSidebarCollapsed ? "md:justify-center md:px-0" : ""
+        }`}
       >
-        <Link href="/home" className="flex items-center gap-2">
-          <Image
-            src="/icons/icon-192.png"
-            alt=""
-            width={32}
-            height={32}
-            className="rounded-xl shadow-lg shadow-primary-500/25"
-          />
-          <span className={`${isSidebarCollapsed ? "md:hidden" : ""} font-semibold text-ink`}>
-            Insight Invest
+        <Link
+          href="/home"
+          className="flex min-w-0 items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400"
+          aria-label="Insight Invest 브리핑"
+        >
+          <SignalMark />
+          <span className={`${isSidebarCollapsed ? "md:hidden" : ""} min-w-0`}>
+            <strong className="block truncate text-[15px] font-semibold tracking-[0.01em] text-ink">
+              Insight Invest
+            </strong>
+            <span className="mt-0.5 block font-mono text-[8px] uppercase tracking-[0.18em] text-ink-muted">
+              Decision instrument
+            </span>
           </span>
         </Link>
         <button
-          className="md:hidden p-1.5 hover:bg-raised rounded-lg transition-colors"
+          type="button"
+          className="ml-auto rounded-lg p-2 text-ink-muted transition-colors hover:bg-raised hover:text-ink md:hidden"
           onClick={onMobileClose}
           aria-label="메뉴 닫기"
         >
-          <IoClose className="w-5 h-5 text-ink-secondary" />
+          <X size={19} />
         </button>
       </div>
 
-      {/* Navigation Links */}
-      <nav className="flex-1 overflow-y-auto py-4 space-y-1">
-        {/* MARKETS */}
-        <SectionHeader label="Markets" isCollapsed={isSidebarCollapsed} />
-        <SidebarLink
-          href="/home"
-          icon={IoHome}
-          label="Dashboard"
-          isCollapsed={isSidebarCollapsed}
-          onClick={onMobileClose}
-        />
-        <SidebarLink
-          href="/actions"
-          icon={IoNotifications}
-          label="Action Center"
-          isCollapsed={isSidebarCollapsed}
-          onClick={onMobileClose}
-        />
-        <SidebarLink
-          href="/earnings"
-          icon={IoCalendar}
-          label="Earnings Hub"
-          isCollapsed={isSidebarCollapsed}
-          onClick={onMobileClose}
-        />
-        <SidebarLink
-          href="/insight"
-          icon={IoTrendingUp}
-          label="KR Market Insight"
-          isCollapsed={isSidebarCollapsed}
-          onClick={onMobileClose}
-        />
-        <SidebarLink
-          href="/stocksearch"
-          icon={IoSearch}
-          label="Stock Search"
-          activePrefixes={["/stock/"]}
-          isCollapsed={isSidebarCollapsed}
-          onClick={onMobileClose}
-        />
-        <SidebarLink
-          href="/data-trust"
-          icon={IoShieldCheckmark}
-          label="Data Trust"
-          isCollapsed={isSidebarCollapsed}
-          onClick={onMobileClose}
-        />
+      <nav className="flex-1 overflow-y-auto px-3 py-5" aria-label="작업공간">
+        <p
+          className={`${isSidebarCollapsed ? "md:hidden" : ""} mb-3 px-3 font-mono text-[9px] uppercase tracking-[0.16em] text-ink-muted`}
+        >
+          Workspace
+        </p>
+        <div className="space-y-1.5">
+          {workspaces.map((item) => {
+            const active = isActiveRoute(
+              pathname,
+              item.href,
+              item.activePrefixes
+            );
+            const count =
+              item.badge === "actions"
+                ? actionCount
+                : item.badge === "research"
+                  ? researchUnseenCount
+                  : 0;
+            const badgeLabel =
+              item.badge === "actions" ? "검토할 항목" : "새 리서치";
+            const Icon = item.icon;
 
-        {/* PORTFOLIO */}
-        <SectionHeader label="Portfolio" isCollapsed={isSidebarCollapsed} />
-        <SidebarLink
-          href="/portfolio"
-          icon={IoBriefcase}
-          label="My Portfolio"
-          isCollapsed={isSidebarCollapsed}
-          onClick={onMobileClose}
-        />
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                title={isSidebarCollapsed ? item.label : undefined}
+                aria-current={active ? "page" : undefined}
+                className={`relative flex min-h-[48px] items-center gap-3 rounded-xl border px-3 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 ${
+                  isSidebarCollapsed ? "md:justify-center md:px-0" : ""
+                } ${
+                  active
+                    ? "border-primary-400/25 bg-gradient-to-r from-primary-500/15 to-secondary-400/5 text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_10px_28px_rgba(3,5,14,0.16)]"
+                    : "border-transparent text-ink-secondary hover:border-primary-400/10 hover:bg-primary-500/[0.05] hover:text-ink"
+                }`}
+              >
+                {active && (
+                  <span className="absolute -left-px h-5 w-[3px] rounded-r bg-gradient-to-b from-secondary-400 to-primary-400 shadow-[0_0_10px_rgba(124,91,255,0.35)]" />
+                )}
+                <Icon
+                  size={18}
+                  strokeWidth={1.75}
+                  className={active ? "text-[color:var(--primary)]" : ""}
+                  aria-hidden
+                />
+                <span className={`${isSidebarCollapsed ? "md:hidden" : ""} min-w-0`}>
+                  <span className="block text-[13px] font-semibold">{item.label}</span>
+                  <span className="mt-0.5 block text-[10px] text-ink-muted">
+                    {item.hint}
+                  </span>
+                </span>
+                <CountBadge count={count} label={badgeLabel} />
+              </Link>
+            );
+          })}
+        </div>
 
-        <SidebarLink
-          href="/journal"
-          icon={IoDocumentText}
-          label="Decision Journal"
-          isCollapsed={isSidebarCollapsed}
-          onClick={onMobileClose}
-        />
-
-        {/* Research Lab: 투자 화면과 연구 도구를 시각적으로 분리한다. */}
-        <SectionHeader label="Research Lab" isCollapsed={isSidebarCollapsed} />
-        <SidebarLink
-          href="/research"
-          icon={IoLibrary}
-          label="Research Feed"
-          isCollapsed={isSidebarCollapsed}
-          onClick={onMobileClose}
-          badgeCount={researchUnseenCount}
-        />
-        <SidebarLink
-          href="/backtest/simulation"
-          icon={FaRunning}
-          label="Backtest"
-          isCollapsed={isSidebarCollapsed}
-          onClick={onMobileClose}
-        />
-        <SidebarLink
-          href="/backtest/strategy_list"
-          icon={FaList}
-          label="Strategy Library"
-          isCollapsed={isSidebarCollapsed}
-          onClick={onMobileClose}
-        />
-
-        <SidebarLink
-          href="/optimization"
-          icon={IoOptions}
-          label="Portfolio Optimization"
-          isCollapsed={isSidebarCollapsed}
-          onClick={onMobileClose}
-        />
-
-        {/* MACRO */}
-        <SectionHeader label="Macro" isCollapsed={isSidebarCollapsed} />
-        <SidebarLink
-          href="/regime"
-          icon={IoTelescope}
-          label="Market Regime"
-          isCollapsed={isSidebarCollapsed}
-          onClick={onMobileClose}
-        />
+        <details
+          className={`${isSidebarCollapsed ? "md:hidden" : ""} mt-6 border-t border-edge pt-3`}
+          open={utilityRouteActive || undefined}
+        >
+          <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg px-3 py-2 text-[11px] font-medium text-ink-secondary transition-colors hover:bg-raised hover:text-ink [&::-webkit-details-marker]:hidden">
+            세부 도구
+            <ChevronDown size={14} aria-hidden />
+          </summary>
+          <div className="mt-1 space-y-0.5">
+            {tools.map(({ href, label, icon: Icon }) => {
+              const active = isActiveRoute(pathname, href);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={active ? "page" : undefined}
+                  className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs transition-colors ${
+                    active
+                      ? "bg-raised text-[color:var(--primary)]"
+                      : "text-ink-muted hover:bg-raised hover:text-ink-secondary"
+                  }`}
+                >
+                  <Icon size={14} strokeWidth={1.7} aria-hidden />
+                  {label}
+                </Link>
+              );
+            })}
+          </div>
+        </details>
       </nav>
 
-      {/* Footer */}
-      <div className={`${isSidebarCollapsed ? "md:hidden" : ""} p-4 border-t border-edge`}>
-          <p className="text-xs text-ink-muted text-center">
-            Insight Invest &copy; {new Date().getFullYear()}
-          </p>
+      <div className="border-t border-edge p-3">
+        <Link
+          href="/data-trust"
+          title={isSidebarCollapsed ? "데이터 상태" : undefined}
+          className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-xs text-ink-muted transition-colors hover:bg-raised hover:text-ink-secondary ${
+            isSidebarCollapsed ? "md:justify-center md:px-0" : ""
+          }`}
+        >
+          <span className="relative">
+            <ShieldCheck size={17} strokeWidth={1.7} aria-hidden />
+            <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-primary-400 ring-2 ring-surface" />
+          </span>
+          <span className={isSidebarCollapsed ? "md:hidden" : ""}>데이터 상태 확인</span>
+        </Link>
       </div>
-    </div>
+    </aside>
   );
 };
 

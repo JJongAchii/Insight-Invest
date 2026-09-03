@@ -12,9 +12,12 @@ const LoadingState: React.FC<LoadingStateProps> = ({
 }) => {
   return (
     <div
+      role="status"
+      aria-live="polite"
       className={`flex flex-col items-center justify-center py-16 gap-3 ${className}`.trim()}
     >
       <div
+        aria-hidden
         className="w-8 h-8 rounded-full animate-spin"
         style={{
           border: "3px solid var(--border)",

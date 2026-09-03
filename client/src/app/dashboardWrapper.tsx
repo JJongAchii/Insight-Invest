@@ -10,6 +10,7 @@ import StoreProvider, { useAppSelector } from "./redux";
 import { usePathname } from "next/navigation";
 import {
   useAcknowledgeResearchSeenMutation,
+  useFetchActionsQuery,
   useFetchResearchStatusQuery,
 } from "@/state/api";
 
@@ -19,6 +20,15 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   );
   const isDarkMode = useAppSelector((state) => state.global.isDarkMode);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const { data: actionStatus } = useFetchActionsQuery(
+    { horizonDays: 30 },
+    {
+      pollingInterval: 120_000,
+      skipPollingIfUnfocused: true,
+      refetchOnFocus: true,
+      refetchOnReconnect: true,
+    }
+  );
   const { data: researchStatus } = useFetchResearchStatusQuery(undefined, {
     pollingInterval: 120_000,
     skipPollingIfUnfocused: true,
@@ -33,6 +43,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   }, [acknowledgeResearchSeen, researchStatus?.generated_at, researchStatus?.initialized]);
 
   const researchUnseenCount = researchStatus?.unseen ?? 0;
+  const actionCount = actionStatus?.counts.badge ?? actionStatus?.counts.actionable ?? 0;
 
   useEffect(() => {
     if (isDarkMode) {
@@ -55,12 +66,13 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <div
-      className={`${isDarkMode ? "dark" : "light"} flex text-ink w-full min-h-screen`}
+      className={`${isDarkMode ? "dark" : "light"} relative flex min-h-screen w-full overflow-x-clip bg-canvas text-ink`}
     >
       <Sidebar
         isMobileOpen={isMobileSidebarOpen}
         onMobileClose={() => setIsMobileSidebarOpen(false)}
         researchUnseenCount={researchUnseenCount}
+        actionCount={actionCount}
       />
       {isMobileSidebarOpen && (
         <button
@@ -72,15 +84,18 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
       )}
       <main
         className={`
-          app-main-safe flex min-w-0 flex-col w-full h-full px-4 pb-24 pt-4 md:px-6 md:pb-6 md:pt-6
-          transition-all duration-200
-          ${isSidebarCollapsed ? "md:pl-24" : "md:pl-[17rem]"}
+          app-main-safe flex min-h-screen min-w-0 w-full flex-col px-4 pb-24 pt-3
+          transition-[padding] duration-200 md:pb-6 md:pr-5 md:pt-5 lg:pr-8
+          ${isSidebarCollapsed ? "md:pl-[5.75rem]" : "md:pl-[15.5rem]"}
         `}
       >
         <Navbar onMobileMenuOpen={() => setIsMobileSidebarOpen(true)} />
-        <div className="flex-grow">{children}</div>
+        <div className="mx-auto w-full max-w-[1560px] flex-grow">{children}</div>
       </main>
-      <MobileBottomNav researchUnseenCount={researchUnseenCount} />
+      <MobileBottomNav
+        actionCount={actionCount}
+        researchUnseenCount={researchUnseenCount}
+      />
       {!isMobileSidebarOpen && <PullToRefresh />}
       <PwaManager />
     </div>
