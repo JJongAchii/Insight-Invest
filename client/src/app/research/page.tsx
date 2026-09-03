@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Archive,
   Bookmark,
   BookOpen,
   Check,
@@ -10,7 +11,9 @@ import {
   ExternalLink,
   LibraryBig,
   RefreshCw,
+  Radar,
   Search,
+  Sparkles,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -21,6 +24,7 @@ import LoadingState from "@/components/ui/LoadingState";
 import PageHeader from "@/components/ui/PageHeader";
 import {
   ResearchEntry,
+  ResearchLane,
   ResearchView,
   useAcknowledgeResearchSeenMutation,
   useFetchResearchQuery,
@@ -36,9 +40,35 @@ const VIEW_OPTIONS = [
   { value: "saved", label: "보관함", icon: Bookmark },
 ] as const;
 
+const LANE_OPTIONS = [
+  {
+    value: "core",
+    label: "핵심 연구",
+    description: "퀀트 전략·자산가격 기준을 통과한 항목",
+    icon: Sparkles,
+  },
+  {
+    value: "discovery",
+    label: "발견함",
+    description: "검증된 출처의 나머지 연구 후보",
+    icon: Radar,
+  },
+  {
+    value: "all",
+    label: "전체 기록",
+    description: "기존 피드와 맥락 자료까지 모두 보기",
+    icon: Archive,
+  },
+] as const;
+
 const parseView = (value: string | null): ResearchView => {
   if (VIEW_OPTIONS.some((option) => option.value === value)) return value as ResearchView;
   return "all";
+};
+
+const parseLane = (value: string | null): ResearchLane => {
+  if (LANE_OPTIONS.some((option) => option.value === value)) return value as ResearchLane;
+  return "core";
 };
 
 const formatDate = (value: string) => {
@@ -63,7 +93,12 @@ const formatDateTime = (value: string) => {
   }).format(date);
 };
 
-const replaceLibraryUrl = (sourceId: string, view: ResearchView, query: string) => {
+const replaceLibraryUrl = (
+  sourceId: string,
+  view: ResearchView,
+  query: string,
+  lane: ResearchLane,
+) => {
   const url = new URL(window.location.href);
   if (sourceId) url.searchParams.set("source", sourceId);
   else url.searchParams.delete("source");
@@ -71,6 +106,8 @@ const replaceLibraryUrl = (sourceId: string, view: ResearchView, query: string) 
   else url.searchParams.delete("view");
   if (query) url.searchParams.set("q", query);
   else url.searchParams.delete("q");
+  if (lane !== "core") url.searchParams.set("lane", lane);
+  else url.searchParams.delete("lane");
   url.searchParams.delete("filter");
   url.searchParams.delete("entry");
   window.history.replaceState(window.history.state, "", url);
@@ -90,6 +127,13 @@ function ResearchCard({
   const [updateSavedState, { isLoading: isUpdatingSaved }] =
     useUpdateResearchSavedStateMutation();
   const authors = item.authors.filter(Boolean).join(", ");
+  const laneLabel =
+    item.research_lane === "core"
+      ? "핵심"
+      : item.research_lane === "discovery"
+        ? "발견"
+        : "기록";
+  const relevance = item.relevance_terms.slice(0, 2).join(" · ");
 
   const toggleRead = async () => {
     try {
@@ -132,6 +176,19 @@ function ResearchCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
             <span className="badge-neutral">{item.source_name}</span>
+            <span
+              title={relevance || undefined}
+              className={`rounded-full px-2 py-0.5 font-medium ${
+                item.research_lane === "core"
+                  ? "bg-emerald-500/15 text-emerald-300"
+                  : item.research_lane === "discovery"
+                    ? "bg-sky-500/15 text-sky-300"
+                    : "bg-surface-raised text-ink-muted"
+              }`}
+            >
+              {laneLabel}
+              {relevance ? ` · ${relevance}` : ""}
+            </span>
             {!item.is_read && (
               <span className="rounded-full bg-primary-500/15 px-2 py-0.5 font-medium text-primary-400">
                 New
@@ -197,6 +254,7 @@ function ResearchCard({
 export default function ResearchPage() {
   const [sourceId, setSourceId] = useState("");
   const [view, setView] = useState<ResearchView>("all");
+  const [lane, setLane] = useState<ResearchLane>("core");
   const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
   const [entryId, setEntryId] = useState("");
@@ -213,6 +271,7 @@ export default function ResearchPage() {
     const initialQuery = params.get("q")?.trim() ?? "";
     setSourceId(params.get("source") ?? "");
     setView(initialView);
+    setLane(parseLane(params.get("lane")));
     setSearchInput(initialQuery);
     setQuery(initialQuery);
     setEntryId(params.get("entry") ?? "");
@@ -239,6 +298,7 @@ export default function ResearchPage() {
     {
       sourceId: sourceId || undefined,
       view,
+      lane,
       query: query || undefined,
       entryId: entryId || undefined,
       limit: 500,
@@ -274,20 +334,27 @@ export default function ResearchPage() {
   const selectSource = (value: string) => {
     setSourceId(value);
     setEntryId("");
-    replaceLibraryUrl(value, view, query);
+    replaceLibraryUrl(value, view, query, lane);
   };
 
   const selectView = (value: ResearchView) => {
     setView(value);
     setEntryId("");
-    replaceLibraryUrl(sourceId, value, query);
+    replaceLibraryUrl(sourceId, value, query, lane);
+  };
+
+  const selectLane = (value: ResearchLane) => {
+    setLane(value);
+    setSourceId("");
+    setEntryId("");
+    replaceLibraryUrl("", view, query, value);
   };
 
   const clearSearch = () => {
     setSearchInput("");
     setQuery("");
     setEntryId("");
-    replaceLibraryUrl(sourceId, view, "");
+    replaceLibraryUrl(sourceId, view, "", lane);
   };
 
   const markEverythingRead = async () => {
@@ -295,13 +362,13 @@ export default function ResearchPage() {
     if (!unread) return;
     if (!window.confirm(`읽지 않은 자료 ${unread}건을 모두 읽음으로 표시할까요?`)) return;
     try {
-      const result = await markAllRead().unwrap();
+      const result = await markAllRead({ lane }).unwrap();
       setView("all");
       setEntryId("");
-      replaceLibraryUrl(sourceId, "all", query);
+      replaceLibraryUrl(sourceId, "all", query, lane);
       setNotice({
         kind: "success",
-        message: `${result.updated}건을 읽음으로 표시했습니다. 자료는 전체와 읽음에서 계속 볼 수 있습니다.`,
+        message: `${result.updated}건을 읽음으로 표시했습니다. 자료는 읽음과 전체 기록에서 계속 볼 수 있습니다.`,
       });
     } catch {
       setNotice({
@@ -332,7 +399,7 @@ export default function ResearchPage() {
     <div className="flex flex-col gap-6 pb-20">
       <PageHeader
         title="Research Library"
-        description="새 자료를 발견하고, 읽고, 다시 찾을 자료를 보관하는 개인 퀀트 리서치 서재"
+        description="검증된 출처를 핵심 연구, 발견 후보, 전체 기록으로 나눈 개인 퀀트 리서치 서재"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -379,6 +446,43 @@ export default function ResearchPage() {
           수 있습니다.
         </div>
       )}
+
+      <section className="grid gap-2 sm:grid-cols-3" aria-label="리서치 품질 레인">
+        {LANE_OPTIONS.map((option) => {
+          const Icon = option.icon;
+          const active = lane === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => selectLane(option.value)}
+              className={`rounded-2xl border p-4 text-left transition-colors ${
+                active
+                  ? "border-primary-500 bg-primary-500/15"
+                  : "border-edge bg-surface hover:border-primary-500/40"
+              }`}
+            >
+              <span className="flex items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
+                  <Icon size={17} className={active ? "text-primary-300" : "text-ink-muted"} />
+                  {option.label}
+                </span>
+                <span className="num text-sm text-ink-muted">
+                  {data?.lane_counts[option.value] ?? 0}
+                </span>
+              </span>
+              <span className="mt-2 block text-xs leading-5 text-ink-muted">
+                {option.description}
+              </span>
+            </button>
+          );
+        })}
+      </section>
+
+      <p className="-mt-3 px-1 text-xs leading-5 text-ink-muted">
+        사이드바 배지와 iPhone 알림은 핵심 연구로 분류된 신규 항목에만 표시됩니다.
+      </p>
 
       <section className="space-y-3 rounded-2xl border border-edge bg-surface p-4 sm:p-5">
         <label className="relative block">

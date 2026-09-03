@@ -9,7 +9,11 @@ def _pending():
     return [
         (
             f"research-radar/realtime/pending/{entry_id}.json",
-            {"entry_id": entry_id, "title": "New quant paper"},
+            {
+                "entry_id": entry_id,
+                "title": "New quant paper",
+                "notification_eligible": True,
+            },
         )
     ]
 
@@ -54,6 +58,50 @@ def test_poller_batches_research_push_and_deletes_settled_pending(monkeypatch):
         "digest_url": "/research?view=unread",
         "tag_prefix": "insight-research",
     }
+
+
+def test_poller_discards_legacy_or_context_pending_without_push(monkeypatch):
+    captured = {"deleted": [], "events": None}
+    monkeypatch.setattr(
+        research_feed,
+        "reconcile",
+        lambda **_kwargs: {"records": 10, "added": 0, "removed": 0, "updated": False},
+    )
+    entry_id = "b" * 64
+    monkeypatch.setattr(
+        research_feed,
+        "pending_records",
+        lambda **_kwargs: [
+            (
+                f"research-radar/realtime/pending/{entry_id}.json",
+                {
+                    "entry_id": entry_id,
+                    "title": "Old noisy item",
+                    "notification_eligible": False,
+                },
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        research_feed,
+        "delete_pending",
+        lambda **kwargs: captured["deleted"].extend(kwargs["keys"]),
+    )
+
+    def dispatch(events, **_kwargs):
+        captured["events"] = events
+        return {"enabled": False, "subscriptions": 0, "sent": 0, "failed": 0}
+
+    monkeypatch.setattr(action_push, "dispatch", dispatch)
+
+    result = research_poller.run(s3=object())
+
+    assert result["ok"] is True
+    assert result["pending_eligible"] == 0
+    assert result["pending_suppressed"] == 1
+    assert result["pending_deleted"] == 1
+    assert captured["events"] == []
+    assert captured["deleted"] == [f"research-radar/realtime/pending/{entry_id}.json"]
 
 
 @pytest.mark.parametrize(

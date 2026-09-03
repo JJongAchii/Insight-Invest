@@ -28,8 +28,10 @@ def run(*, s3: Any | None = None) -> dict:
     pending_prefix = os.environ.get("RADAR_PENDING_PREFIX", research_feed.DEFAULT_PENDING_PREFIX)
     projection = research_feed.reconcile(s3=s3, bucket=bucket)
     pending = research_feed.pending_records(s3=s3, bucket=bucket, pending_prefix=pending_prefix)
+    eligible = [(key, record) for key, record in pending if record["notification_eligible"]]
+    suppressed_keys = [key for key, record in pending if not record["notification_eligible"]]
     push = action_push.dispatch(
-        [_event(record) for _, record in pending],
+        [_event(record) for _, record in eligible],
         notification_title="Research Radar",
         digest_url="/research?view=unread",
         tag_prefix="insight-research",
@@ -38,17 +40,19 @@ def run(*, s3: Any | None = None) -> dict:
     subscriptions = push.get("subscriptions", 0)
     settled = enabled and push.get("failed", 0) == push.get("disabled", 0)
     delivery_ready = enabled and subscriptions > 0
-    deleted = 0
-    if pending and settled:
-        keys = [key for key, _ in pending]
-        research_feed.delete_pending(s3=s3, bucket=bucket, keys=keys)
-        deleted = len(keys)
+    deleted_keys = list(suppressed_keys)
+    if eligible and settled:
+        deleted_keys.extend(key for key, _ in eligible)
+    if deleted_keys:
+        research_feed.delete_pending(s3=s3, bucket=bucket, keys=deleted_keys)
     return {
-        "ok": settled,
+        "ok": settled or not eligible,
         "delivery_ready": delivery_ready,
         "projection": projection,
         "pending_seen": len(pending),
-        "pending_deleted": deleted,
+        "pending_eligible": len(eligible),
+        "pending_suppressed": len(suppressed_keys),
+        "pending_deleted": len(deleted_keys),
         "push": push,
     }
 

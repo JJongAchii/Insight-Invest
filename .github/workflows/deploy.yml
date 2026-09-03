@@ -87,9 +87,19 @@ jobs:
             "$URL/meta" >/dev/null
           curl -sf -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
             -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
-            "$URL/research?limit=1" | jq -e \
+            "$URL/research?lane=all&limit=1" | jq -e \
               '.total > 0 and (.items | length) == 1 and .read >= 0 and .saved >= 0
-               and .view == "all" and (.items[0].is_saved | type) == "boolean"'
+               and .view == "all" and .lane == "all" and .lane_counts.all > 0
+               and (.items[0].is_saved | type) == "boolean"
+               and (.items[0].research_lane == "core"
+                    or .items[0].research_lane == "discovery"
+                    or .items[0].research_lane == "context")'
+          curl -sf -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
+            -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
+            "$URL/research?limit=1" | jq -e \
+              '.lane == "core"
+               and (.items | all(.research_lane == "core"
+                                  and (.notification_eligible | type) == "boolean"))'
           curl -sf -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
             -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
             "$URL/research?view=saved&q=__deployment_smoke_no_match__&limit=1" | jq -e \
