@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
@@ -106,15 +107,6 @@ const CountBadge = ({ count, label }: { count: number; label: string }) => {
   );
 };
 
-const SignalMark = () => (
-  <span className="relative block h-9 w-8 shrink-0" aria-hidden>
-    <span className="absolute bottom-1 left-1/2 top-1 w-px -translate-x-1/2 bg-gradient-to-b from-secondary-400 via-primary-300 to-primary-500 shadow-[0_0_14px_rgba(124,91,255,0.35)]" />
-    <span className="absolute left-1/2 top-0 h-2.5 w-2.5 -translate-x-1/2 rounded-full border-2 border-surface bg-secondary-400 ring-1 ring-secondary-400" />
-    <span className="absolute left-1/2 top-[13px] h-2.5 w-2.5 -translate-x-1/2 rounded-full border-2 border-surface bg-ink ring-1 ring-ink shadow-[0_0_12px_rgba(155,126,255,0.35)]" />
-    <span className="absolute bottom-0 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rounded-full border-2 border-surface bg-primary-400 ring-1 ring-primary-400" />
-  </span>
-);
-
 const Sidebar = ({
   isMobileOpen,
   onMobileClose,
@@ -158,7 +150,13 @@ const Sidebar = ({
           className="flex min-w-0 items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400"
           aria-label="Insight Invest 브리핑"
         >
-          <SignalMark />
+          <Image
+            src="/icons/icon-192.png"
+            alt=""
+            width={32}
+            height={32}
+            className="h-8 w-8 shrink-0 rounded-xl shadow-lg shadow-primary-500/20"
+          />
           <span className={`${isSidebarCollapsed ? "md:hidden" : ""} min-w-0`}>
             <strong className="block truncate text-[15px] font-semibold tracking-[0.01em] text-ink">
               Insight Invest
