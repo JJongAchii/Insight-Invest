@@ -41,7 +41,7 @@ const Contents = ({
       <div className="px-5 md:px-6">
         <EmptyState
           icon={<FlaskConical size={28} aria-hidden />}
-          title="조건에 맞는 연구 전략이 없습니다"
+          title="조건에 맞는 백테스트가 없습니다"
           hint="검색어를 지우거나 새 백테스트를 저장해 보세요"
         />
       </div>
@@ -137,7 +137,7 @@ const Contents = ({
 
             <dl className="grid gap-2 text-[11px] sm:grid-cols-2 xl:grid-cols-1">
               <div className="flex justify-between gap-3">
-                <dt className="text-ink-muted">실험 구간</dt>
+                <dt className="text-ink-muted">백테스트 구간</dt>
                 <dd className="num text-right text-ink-secondary">
                   {strategy.bt_start ?? "—"} → {strategy.bt_end ?? "—"}
                 </dd>

@@ -253,7 +253,7 @@ const SetStrategyInner: React.FC<SetStrategyProps> = ({
     const newErrors: ValidationErrors = {};
 
     if (!strategyName.trim()) {
-      newErrors.strategyName = "실험 이름을 입력해 주세요";
+      newErrors.strategyName = "백테스트 이름을 입력해 주세요";
     }
 
     if (selectedTickers.length === 0) {
@@ -347,12 +347,12 @@ const SetStrategyInner: React.FC<SetStrategyProps> = ({
           <div>
             <p className="font-mono text-xs font-semibold text-primary-300">01</p>
             <h3 id="backtest-hypothesis" className="mt-1 text-sm font-semibold text-ink">가설과 규칙</h3>
-            <p className="mt-1 text-xs leading-5 text-ink-muted">실험을 식별하고 매매 규칙을 선택합니다.</p>
+            <p className="mt-1 text-xs leading-5 text-ink-muted">백테스트를 식별하고 매매 규칙을 선택합니다.</p>
           </div>
           <div className="min-w-0 space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="input-label" htmlFor="strategy-name">실험 이름 <span className="text-danger">*</span></label>
+                <label className="input-label" htmlFor="strategy-name">백테스트 이름 <span className="text-danger">*</span></label>
                 <input
                   id="strategy-name"
                   type="text"

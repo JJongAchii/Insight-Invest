@@ -41,13 +41,13 @@ const StrategiesCard: React.FC = () => {
 
   return (
     <Card
-      title="저장한 전략"
+      title="저장된 백테스트"
       action={
         <Link
           href="/backtest/strategy_list"
           className="text-xs font-medium text-ink-muted hover:text-ink transition-colors"
         >
-          모든 전략 →
+          모든 결과 →
         </Link>
       }
     >
