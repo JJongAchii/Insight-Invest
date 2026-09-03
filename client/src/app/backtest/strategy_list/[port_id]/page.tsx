@@ -339,7 +339,7 @@ const StrategyDetail = ({ params }: StrategyDetailProps) => {
               className="btn-ghost inline-flex items-center gap-2 text-sm"
             >
               <ArrowLeft size={16} aria-hidden />
-              보관함
+              결과 목록
             </Link>
             <button
               type="button"

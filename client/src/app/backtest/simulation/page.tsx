@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import SetStrategy from "./SetStrategy";
 import StrategyChart from "./StrategyChart";
 import StrategyMetrics from "./StrategyMetrics";
@@ -159,10 +160,10 @@ const Simulation = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="card-elevated max-w-md mx-4">
             <h3 className="text-lg font-semibold text-ink mb-2">
-              모든 실험 결과를 지울까요?
+              현재 백테스트 결과를 지울까요?
             </h3>
             <p className="text-ink-secondary text-sm mb-6">
-              이 브라우저에 저장된 백테스트 결과와 선택 종목이 모두 삭제됩니다. 되돌릴 수 없습니다.
+              이 브라우저에 임시 저장된 현재 결과와 선택 종목이 삭제됩니다. 서버에 저장한 결과는 유지됩니다.
             </p>
             <div className="flex gap-3 justify-end">
               <button onClick={cancelClear} className="btn-secondary">
@@ -177,13 +178,21 @@ const Simulation = () => {
       )}
 
       <PageHeader
-        eyebrow="Strategy lab"
-        title="리서치 · 전략 실험"
-        description="가설을 과거 데이터에서 탐색하되, 미검증 결과를 실전 판단과 분리합니다."
+        eyebrow="Backtest"
+        title="새 백테스트"
+        description="전략 조건을 정하고 과거 성과와 위험을 검증합니다. 저장한 결과는 결과 목록에서 다시 확인할 수 있습니다."
         actions={
-          <button onClick={handleClearClick} disabled={isLoading} className="btn-danger">
-            결과 모두 지우기
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/backtest/strategy_list"
+              className="btn-secondary inline-flex items-center text-sm"
+            >
+              저장된 결과
+            </Link>
+            <button onClick={handleClearClick} disabled={isLoading} className="btn-danger">
+              현재 결과 지우기
+            </button>
+          </div>
         }
       />
 
@@ -538,7 +547,7 @@ const Simulation = () => {
         <div className="grid overflow-hidden rounded-2xl border border-dashed border-edge bg-surface/50 md:grid-cols-[minmax(0,1fr)_minmax(20rem,0.8fr)]">
           <div className="px-5 py-8 md:px-7 md:py-10">
             <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-muted">Output pending</p>
-            <h2 className="mt-2 text-lg font-semibold text-ink">첫 결과를 기다리는 실험 벤치</h2>
+            <h2 className="mt-2 text-lg font-semibold text-ink">첫 백테스트 결과를 기다리고 있습니다</h2>
             <p className="mt-2 max-w-xl text-sm leading-6 text-ink-muted">
               위 가정표를 채우고 백테스트를 실행하면 성과·낙폭·롤링 지표·기여도·위기 구간이 이곳에 기록됩니다.
             </p>

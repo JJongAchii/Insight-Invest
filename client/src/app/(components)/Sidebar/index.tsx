@@ -63,12 +63,22 @@ const workspaces: WorkspaceItem[] = [
   },
 ];
 
-const tools: Array<{ href: string; label: string; icon: LucideIcon }> = [
+const tools: Array<{
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  activePrefixes?: string[];
+}> = [
   { href: "/stocksearch", label: "종목 검색", icon: Search },
   { href: "/earnings", label: "실적 일정", icon: CalendarDays },
   { href: "/regime", label: "시장 국면", icon: ChartNoAxesCombined },
   { href: "/journal", label: "판단 기록", icon: NotebookPen },
-  { href: "/backtest/simulation", label: "전략 실험", icon: FlaskConical },
+  {
+    href: "/backtest/strategy_list",
+    label: "백테스트",
+    icon: FlaskConical,
+    activePrefixes: ["/backtest"],
+  },
 ];
 
 const isActiveRoute = (
@@ -235,8 +245,8 @@ const Sidebar = ({
             <ChevronDown size={14} aria-hidden />
           </summary>
           <div className="mt-1 space-y-0.5">
-            {tools.map(({ href, label, icon: Icon }) => {
-              const active = isActiveRoute(pathname, href);
+            {tools.map(({ href, label, icon: Icon, activePrefixes }) => {
+              const active = isActiveRoute(pathname, href, activePrefixes);
               return (
                 <Link
                   key={href}

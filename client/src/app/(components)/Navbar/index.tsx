@@ -26,8 +26,8 @@ const routeContexts = [
   { prefix: "/journal", title: "포트폴리오", detail: "판단 기록" },
   { prefix: "/optimization", title: "포트폴리오", detail: "최적화" },
   { prefix: "/portfolio", title: "포트폴리오", detail: "노출과 위험" },
-  { prefix: "/backtest/simulation", title: "리서치", detail: "전략 실험" },
-  { prefix: "/backtest/strategy_list", title: "리서치", detail: "전략 보관함" },
+  { prefix: "/backtest/simulation", title: "백테스트", detail: "새 백테스트" },
+  { prefix: "/backtest/strategy_list", title: "백테스트", detail: "저장된 결과" },
   { prefix: "/research", title: "리서치", detail: "근거 피드" },
   { prefix: "/data-trust", title: "데이터 상태", detail: "출처와 최신성" },
 ] as const;
