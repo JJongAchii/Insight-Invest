@@ -37,6 +37,9 @@ def test_release_smoke_requires_projection_api_and_active_push():
     assert "aws lambda invoke --function-name insight-invest-research-poller" in body
     assert ".delivery_ready == true" in body
     assert "(.projection.records > 0)" in body
-    assert '"$URL/research?limit=1"' in body
+    assert '"$URL/research?lane=all&limit=1"' in body
+    assert '.lane == "core"' in body
+    assert '.lane_counts.all > 0' in body
+    assert '.notification_eligible | type' in body
     assert '"$URL/research/status"' in body
     assert '.paths["/research/seen"].put' in body

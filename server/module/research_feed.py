@@ -15,6 +15,7 @@ DEFAULT_BUCKET = "insight-invest-datalake"
 DEFAULT_RECORD_PREFIX = "research-radar/public/records/"
 DEFAULT_PENDING_PREFIX = "research-radar/realtime/pending/"
 MAX_FETCH_WORKERS = 8
+RESEARCH_LANES = frozenset({"core", "discovery", "context"})
 
 
 def client():
@@ -47,6 +48,71 @@ def _record_id(key: str) -> str:
     return key.rsplit("/", 1)[-1].removesuffix(".json")
 
 
+def _quality_fields(payload: dict, *, key: str) -> dict:
+    schema_version = payload.get("schema_version", 1)
+    if schema_version not in {1, 2}:
+        raise ValueError(f"지원하지 않는 Radar record schema_version이다: {key}")
+    if schema_version == 1:
+        return {
+            "quality_profile": "archive",
+            "research_lane": "context",
+            "relevance_reason": "legacy_record",
+            "relevance_terms": [],
+            "notification_eligible": False,
+        }
+
+    quality_profile = payload.get("quality_profile")
+    research_lane = payload.get("research_lane")
+    relevance_reason = payload.get("relevance_reason")
+    relevance_terms = payload.get("relevance_terms")
+    notification_eligible = payload.get("notification_eligible")
+    if not isinstance(quality_profile, str) or not quality_profile:
+        raise ValueError(f"Radar record quality_profile이 유효하지 않다: {key}")
+    if research_lane not in RESEARCH_LANES:
+        raise ValueError(f"Radar record research_lane이 유효하지 않다: {key}")
+    if not isinstance(relevance_reason, str) or not relevance_reason:
+        raise ValueError(f"Radar record relevance_reason이 유효하지 않다: {key}")
+    if not isinstance(relevance_terms, list) or not all(
+        isinstance(term, str) and term for term in relevance_terms
+    ):
+        raise ValueError(f"Radar record relevance_terms가 유효하지 않다: {key}")
+    if not isinstance(notification_eligible, bool):
+        raise ValueError(f"Radar record notification_eligible이 유효하지 않다: {key}")
+    if notification_eligible and research_lane != "core":
+        raise ValueError(f"core가 아닌 Radar record는 알림 대상일 수 없다: {key}")
+    return {
+        "quality_profile": quality_profile,
+        "research_lane": research_lane,
+        "relevance_reason": relevance_reason,
+        "relevance_terms": relevance_terms,
+        "notification_eligible": notification_eligible,
+    }
+
+
+def _normalize_projected_item(item: dict) -> dict:
+    normalized = dict(item)
+    normalized.setdefault("quality_profile", "archive")
+    normalized.setdefault("research_lane", "context")
+    normalized.setdefault("relevance_reason", "legacy_record")
+    normalized.setdefault("relevance_terms", [])
+    normalized.setdefault("notification_eligible", False)
+    if not isinstance(normalized["quality_profile"], str) or not normalized["quality_profile"]:
+        raise ValueError("research feed item quality_profile이 유효하지 않다")
+    if normalized["research_lane"] not in RESEARCH_LANES:
+        raise ValueError("research feed item lane이 유효하지 않다")
+    if not isinstance(normalized["relevance_reason"], str) or not normalized["relevance_reason"]:
+        raise ValueError("research feed item relevance_reason이 유효하지 않다")
+    if not isinstance(normalized["relevance_terms"], list) or not all(
+        isinstance(term, str) and term for term in normalized["relevance_terms"]
+    ):
+        raise ValueError("research feed item relevance_terms가 배열이 아니다")
+    if not isinstance(normalized["notification_eligible"], bool):
+        raise ValueError("research feed item notification_eligible이 bool이 아니다")
+    if normalized["notification_eligible"] and normalized["research_lane"] != "core":
+        raise ValueError("core가 아닌 research feed item은 알림 대상일 수 없다")
+    return normalized
+
+
 def _read_record(s3: Any, *, bucket: str, key: str) -> dict:
     body = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
     payload = json.load(io.BytesIO(body))
@@ -69,6 +135,7 @@ def _read_record(s3: Any, *, bucket: str, key: str) -> dict:
         "url": payload["url"],
         "published_at": str(payload.get("published_at") or ""),
         "discovered_at": payload["discovered_at"],
+        **_quality_fields(payload, key=key),
     }
 
 
@@ -107,11 +174,14 @@ def reconcile(
     canonical_ids = {_record_id(key) for key in keys}
 
     current = research_store.load_feed()
-    current_items = {
-        item["entry_id"]: item
-        for item in current["items"]
-        if isinstance(item, dict) and isinstance(item.get("entry_id"), str)
-    }
+    current_items = {}
+    migrated = False
+    for item in current["items"]:
+        if not isinstance(item, dict) or not isinstance(item.get("entry_id"), str):
+            continue
+        normalized = _normalize_projected_item(item)
+        migrated = migrated or normalized != item
+        current_items[normalized["entry_id"]] = normalized
     missing_keys = [key for key in keys if _record_id(key) not in current_items]
     added_items = _read_records(s3, bucket=bucket, keys=missing_keys)
     for item in added_items:
@@ -125,7 +195,7 @@ def reconcile(
         key=lambda item: (_timestamp(item), item["entry_id"]),
         reverse=True,
     )
-    changed = bool(added_items or removed or not current["generated_at"])
+    changed = bool(added_items or removed or migrated or not current["generated_at"])
     if changed:
         research_store.save_feed(
             {

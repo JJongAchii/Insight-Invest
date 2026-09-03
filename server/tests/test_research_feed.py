@@ -2,6 +2,8 @@ import io
 import json
 from datetime import UTC, datetime
 
+import pytest
+
 from datastore import research as research_store
 from module import research_feed
 
@@ -29,7 +31,7 @@ class FakeS3:
 
 def _record(entry_id, *, source_id="source-a", discovered_at="2026-09-01T00:00:00+00:00"):
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "source": "public_watchlist",
         "source_id": source_id,
         "source_name": source_id.title(),
@@ -40,6 +42,11 @@ def _record(entry_id, *, source_id="source-a", discovered_at="2026-09-01T00:00:0
         "summary": "Public abstract",
         "authors": ["A. Author"],
         "url": f"https://example.test/{entry_id}",
+        "quality_profile": "quant-research",
+        "research_lane": "core",
+        "relevance_reason": "keyword_match",
+        "relevance_terms": ["portfolio"],
+        "notification_eligible": True,
     }
 
 
@@ -66,6 +73,8 @@ def test_reconcile_fetches_only_membership_diff(monkeypatch, tmp_path):
 
     assert initial == {"records": 2, "added": 2, "removed": 0, "updated": True}
     assert [item["entry_id"] for item in feed["items"]] == [second_id, first_id]
+    assert all(item["research_lane"] == "core" for item in feed["items"])
+    assert all(item["notification_eligible"] is True for item in feed["items"])
     initial_generated_at = feed["generated_at"]
 
     s3.reads.clear()
@@ -105,6 +114,61 @@ def test_reconcile_rejects_record_whose_digest_does_not_match_key(monkeypatch, t
         assert "digest" in str(exc)
     else:
         raise AssertionError("digest mismatch must fail closed")
+
+
+def test_reconcile_maps_legacy_record_to_context_without_deleting_it(monkeypatch, tmp_path):
+    monkeypatch.setenv("APP_DATA", str(tmp_path))
+    entry_id = "c" * 64
+    key, body = _object(entry_id)
+    payload = json.loads(body)
+    payload["schema_version"] = 1
+    for field in (
+        "quality_profile",
+        "research_lane",
+        "relevance_reason",
+        "relevance_terms",
+        "notification_eligible",
+    ):
+        payload.pop(field)
+
+    research_feed.reconcile(
+        s3=FakeS3({key: json.dumps(payload).encode()}),
+        bucket="bucket",
+    )
+    item = research_store.load_feed()["items"][0]
+
+    assert item["research_lane"] == "context"
+    assert item["relevance_reason"] == "legacy_record"
+    assert item["notification_eligible"] is False
+
+
+def test_reconcile_rejects_notifiable_non_core_record(monkeypatch, tmp_path):
+    monkeypatch.setenv("APP_DATA", str(tmp_path))
+    entry_id = "d" * 64
+    key, body = _object(entry_id)
+    payload = json.loads(body)
+    payload["research_lane"] = "discovery"
+
+    with pytest.raises(ValueError, match="core"):
+        research_feed.reconcile(
+            s3=FakeS3({key: json.dumps(payload).encode()}),
+            bucket="bucket",
+        )
+
+
+@pytest.mark.parametrize("schema_version", [0, 3])
+def test_reconcile_rejects_unsupported_record_schema(monkeypatch, tmp_path, schema_version):
+    monkeypatch.setenv("APP_DATA", str(tmp_path))
+    entry_id = "e" * 64
+    key, body = _object(entry_id)
+    payload = json.loads(body)
+    payload["schema_version"] = schema_version
+
+    with pytest.raises(ValueError, match="schema_version"):
+        research_feed.reconcile(
+            s3=FakeS3({key: json.dumps(payload).encode()}),
+            bucket="bucket",
+        )
 
 
 def test_pending_records_are_newest_first():

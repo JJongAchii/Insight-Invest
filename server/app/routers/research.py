@@ -12,6 +12,7 @@ from datastore import research as research_store
 router = APIRouter(prefix="/research", tags=["Research"])
 ENTRY_ID = re.compile(r"^[0-9a-f]{64}$")
 RESEARCH_VIEWS = frozenset({"all", "unread", "read", "saved"})
+RESEARCH_LANE_FILTERS = frozenset({"core", "discovery", "all"})
 MAX_QUERY_LENGTH = 200
 
 
@@ -48,11 +49,21 @@ def _matches_query(item: dict, query: str) -> bool:
     return all(token in searchable for token in _normalise_search(query).split())
 
 
+def _item_lane(item: dict) -> str:
+    lane = item.get("research_lane", "context")
+    return lane if lane in {"core", "discovery", "context"} else "context"
+
+
+def _matches_lane(item: dict, lane: str) -> bool:
+    return lane == "all" or _item_lane(item) == lane
+
+
 def _research_status(feed: dict, seen_through: datetime | None) -> dict:
+    notifiable = [item for item in feed["items"] if item.get("notification_eligible") is True]
     return {
         "schema_version": 1,
         "initialized": seen_through is not None,
-        "unseen": research_store.unseen_entry_count(feed["items"], seen_through),
+        "unseen": research_store.unseen_entry_count(notifiable, seen_through),
         "generated_at": feed.get("generated_at"),
         "seen_through": seen_through.isoformat() if seen_through else None,
     }
@@ -82,6 +93,7 @@ def get_research_feed(
     source_id: str | None = None,
     unread_only: bool = False,
     view: str = "all",
+    lane: str = "core",
     q: str | None = Query(None, max_length=MAX_QUERY_LENGTH),
     entry_id: str | None = None,
     offset: int = Query(0, ge=0),
@@ -89,6 +101,8 @@ def get_research_feed(
 ):
     if view not in RESEARCH_VIEWS:
         raise HTTPException(status_code=422, detail="invalid research view")
+    if lane not in RESEARCH_LANE_FILTERS:
+        raise HTTPException(status_code=422, detail="invalid research lane")
     if unread_only:
         if view not in {"all", "unread"}:
             raise HTTPException(status_code=422, detail="conflicting research view filters")
@@ -108,8 +122,9 @@ def get_research_feed(
         }
         for item in feed["items"]
     ]
+    lane_items = [item for item in all_items if _matches_lane(item, lane)]
     sources: dict[str, dict] = {}
-    for item in all_items:
+    for item in lane_items:
         source = sources.setdefault(
             item["source_id"],
             {"source_id": item["source_id"], "source_name": item["source_name"], "count": 0},
@@ -120,7 +135,7 @@ def get_research_feed(
         if not filtered:
             raise HTTPException(status_code=404, detail="research entry not found")
     else:
-        filtered = all_items
+        filtered = lane_items
         if source_id:
             filtered = [item for item in filtered if item["source_id"] == source_id]
         if view == "unread":
@@ -135,9 +150,16 @@ def get_research_feed(
         "schema_version": 1,
         "generated_at": feed["generated_at"],
         "total": len(filtered),
-        "unread": sum(not item["is_read"] for item in all_items),
-        "read": sum(item["is_read"] for item in all_items),
-        "saved": sum(item["is_saved"] for item in all_items),
+        "unread": sum(not item["is_read"] for item in lane_items),
+        "read": sum(item["is_read"] for item in lane_items),
+        "saved": sum(item["is_saved"] for item in lane_items),
+        "lane": lane,
+        "lane_counts": {
+            "core": sum(_item_lane(item) == "core" for item in all_items),
+            "discovery": sum(_item_lane(item) == "discovery" for item in all_items),
+            "context": sum(_item_lane(item) == "context" for item in all_items),
+            "all": len(all_items),
+        },
         "view": view,
         "query": query,
         "offset": offset,
@@ -148,11 +170,13 @@ def get_research_feed(
 
 
 @router.put("/read/all")
-def mark_all_research_read():
+def mark_all_research_read(lane: str = "core"):
+    if lane not in RESEARCH_LANE_FILTERS:
+        raise HTTPException(status_code=422, detail="invalid research lane")
     feed = research_store.load_feed()
-    entry_ids = [item["entry_id"] for item in feed["items"]]
+    entry_ids = [item["entry_id"] for item in feed["items"] if _matches_lane(item, lane)]
     updated = research_store.mark_all_read(entry_ids)
-    return {"updated": updated, "total": len(entry_ids), "unread": 0}
+    return {"updated": updated, "total": len(entry_ids), "unread": 0, "lane": lane}
 
 
 @router.put("/{entry_id}/read")

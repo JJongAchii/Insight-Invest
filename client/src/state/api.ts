@@ -662,6 +662,11 @@ export interface ResearchEntry {
   url: string;
   published_at: string;
   discovered_at: string;
+  quality_profile: string;
+  research_lane: "core" | "discovery" | "context";
+  relevance_reason: string;
+  relevance_terms: string[];
+  notification_eligible: boolean;
   is_read: boolean;
   is_saved: boolean;
 }
@@ -680,6 +685,8 @@ export interface ResearchFeedResponse {
   read: number;
   saved: number;
   view: ResearchView;
+  lane: ResearchLane;
+  lane_counts: Record<"core" | "discovery" | "context" | "all", number>;
   query: string;
   offset: number;
   limit: number;
@@ -696,10 +703,12 @@ export interface ResearchStatusResponse {
 }
 
 export type ResearchView = "all" | "unread" | "read" | "saved";
+export type ResearchLane = "core" | "discovery" | "all";
 
 export interface ResearchFeedParams {
   sourceId?: string;
   view?: ResearchView;
+  lane?: ResearchLane;
   query?: string;
   entryId?: string;
   offset?: number;
@@ -1893,6 +1902,7 @@ export const api = createApi({
         const query = new URLSearchParams();
         if (params?.sourceId) query.set("source_id", params.sourceId);
         if (params?.view && params.view !== "all") query.set("view", params.view);
+        if (params?.lane && params.lane !== "core") query.set("lane", params.lane);
         if (params?.query?.trim()) query.set("q", params.query.trim());
         if (params?.entryId) query.set("entry_id", params.entryId);
         if (params?.offset) query.set("offset", String(params.offset));
@@ -1940,11 +1950,11 @@ export const api = createApi({
       invalidatesTags: ["Research"],
     }),
     markAllResearchRead: builder.mutation<
-      { updated: number; total: number; unread: number },
-      void
+      { updated: number; total: number; unread: number; lane: ResearchLane },
+      { lane: ResearchLane }
     >({
-      query: () => ({
-        url: "/research/read/all",
+      query: ({ lane }) => ({
+        url: `/research/read/all?lane=${encodeURIComponent(lane)}`,
         method: "PUT",
       }),
       invalidatesTags: ["Research"],
