@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-08-26
+- Superseded in part: Decision 5 by [ADR-0012](0012-official-earnings-actual-fallback.md)
 
 ## Context
 

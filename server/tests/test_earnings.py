@@ -1,4 +1,5 @@
 from datetime import date
+from pathlib import Path
 
 import httpx
 import pandas as pd
@@ -6,6 +7,7 @@ import pandas as pd
 from module import earnings
 
 AVAILABLE_AT = "2026-08-26T10:00:00+09:00"
+FIXTURES = Path(__file__).with_name("fixtures")
 
 
 def _master():
@@ -291,6 +293,187 @@ def test_sec_result_filing_enriches_exact_202_item_without_filling_actuals():
     assert pd.isna(microsoft["official_result_status"])
     assert coverage["companies_queried"] == 2
     assert coverage["events_enriched"] == 1
+
+
+def test_sec_result_filing_extracts_dell_official_actuals_from_exhibit():
+    universe = pd.DataFrame(
+        [
+            {
+                "meta_id": 5431,
+                "ticker": "DELL",
+                "name": "Dell Technologies Inc.",
+                "cik": "0001571996",
+                "scope": "market",
+                "is_market_leader": True,
+                "marketcap_rank": 45,
+                "marketcap": 100,
+                "universe_as_of": "2026-09-01",
+            }
+        ]
+    )
+    events = earnings.normalize_calendar(
+        [
+            {
+                "symbol": "DELL",
+                "date": "2026-09-01",
+                "hour": "amc",
+                "year": 2027,
+                "quarter": 2,
+                "epsActual": None,
+                "epsEstimate": 5.012,
+                "revenueActual": None,
+                "revenueEstimate": 45_852_452_985,
+            }
+        ],
+        universe,
+        "2026-09-02T09:11:15+09:00",
+    )
+    exhibit = (FIXTURES / "dell_q2_fy27_exhibit_minimal.html").read_text()
+
+    def handler(request: httpx.Request):
+        if request.url.host == "data.sec.gov":
+            return httpx.Response(
+                200,
+                json={
+                    "filings": {
+                        "recent": {
+                            "accessionNumber": ["0001571996-26-000039"],
+                            "filingDate": ["2026-09-01"],
+                            "acceptanceDateTime": ["2026-09-01T16:10:14.000Z"],
+                            "reportDate": ["2026-09-01"],
+                            "form": ["8-K"],
+                            "items": ["2.02,9.01"],
+                            "primaryDocument": ["dell-20260901.htm"],
+                        }
+                    }
+                },
+                request=request,
+            )
+        if request.url.path.endswith("0001571996-26-000039-index.html"):
+            return httpx.Response(
+                200,
+                text="""
+                    <table>
+                      <tr><th>Seq</th><th>Description</th><th>Document</th><th>Type</th></tr>
+                      <tr><td>1</td><td>8-K</td><td><a href=\"dell-20260901.htm\">8-K</a></td><td>8-K</td></tr>
+                      <tr><td>2</td><td>Press Release</td><td><a href=\"exhibit991earnings8kq2fy27.htm\">EX-99.1</a></td><td>EX-99.1</td></tr>
+                    </table>
+                """,
+                request=request,
+            )
+        if request.url.path.endswith("exhibit991earnings8kq2fy27.htm"):
+            return httpx.Response(200, text=exhibit, request=request)
+        raise AssertionError(f"unexpected SEC request: {request.url}")
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        enriched, coverage = earnings.enrich_sec_result_filings(
+            events,
+            "research@example.com",
+            date(2026, 8, 30),
+            date(2026, 9, 2),
+            "2026-09-02T09:11:15+09:00",
+            client=client,
+            request_interval_seconds=0,
+        )
+
+    dell = enriched.iloc[0]
+    assert dell["official_result_status"] == "filed"
+    assert dell["official_actual_status"] == "extracted"
+    assert dell["official_revenue_actual"] == 46_971_000_000
+    assert dell["official_eps_gaap_actual"] == 6.34
+    assert dell["official_eps_adjusted_actual"] == 7.04
+    assert dell["official_actual_url"].endswith("exhibit991earnings8kq2fy27.htm")
+    assert pd.isna(dell["eps_actual"])
+    assert pd.isna(dell["revenue_actual"])
+    assert dell["lifecycle"] == "reported"
+    assert coverage["official_actuals_attempted"] == 1
+    assert coverage["official_actuals_extracted"] == 1
+    assert coverage["official_actuals_failed"] == 0
+
+
+def test_sec_exhibit_parser_rejects_conflicting_current_period_tables():
+    page = """
+      <table>
+        <tr><th>Three Months Ended</th></tr>
+        <tr><td>(in millions, except per share amounts)</td></tr>
+        <tr><td>Net revenue</td><td>$</td><td>100</td></tr>
+        <tr><td>Diluted earnings per share</td><td>$</td><td>1.00</td></tr>
+      </table>
+      <table>
+        <tr><th>Three Months Ended</th></tr>
+        <tr><td>(in millions, except per share amounts)</td></tr>
+        <tr><td>Net revenue</td><td>$</td><td>200</td></tr>
+        <tr><td>Diluted earnings per share</td><td>$</td><td>2.00</td></tr>
+      </table>
+    """
+
+    actuals = earnings.parse_sec_earnings_exhibit(page)
+
+    assert actuals["status"] == "ambiguous"
+    assert actuals["official_revenue_actual"] is None
+    assert actuals["official_eps_gaap_actual"] is None
+
+
+def test_sec_exhibit_parser_handles_separate_gaap_and_non_gaap_quarter_tables():
+    page = """
+      <table>
+        <tr><th>GAAP</th></tr>
+        <tr><td>($ in millions, except earnings per share)</td><td>Q2 FY27</td></tr>
+        <tr><td>Revenue</td><td>$96,221</td></tr>
+        <tr><td>Diluted earnings per share</td><td>$2.46</td></tr>
+      </table>
+      <table>
+        <tr><th>Non-GAAP</th></tr>
+        <tr><td>($ in millions, except earnings per share)</td><td>Q2 FY27</td></tr>
+        <tr><td>Revenue</td><td>$96,221</td></tr>
+        <tr><td>Diluted earnings per share</td><td>$2.22</td></tr>
+      </table>
+      <table>
+        <tr><th>Three Months Ended</th></tr>
+        <tr><td>($ in millions, except per share data)</td></tr>
+        <tr><td>Diluted net income per share</td></tr>
+        <tr><td></td><td>GAAP</td><td>$</td><td>2.46</td></tr>
+        <tr><td></td><td>Non-GAAP</td><td>$</td><td>2.22</td></tr>
+        <tr><td>Weighted average shares used in diluted net income per share computation</td><td>24,285</td></tr>
+      </table>
+    """
+
+    actuals = earnings.parse_sec_earnings_exhibit(page)
+
+    assert actuals["status"] == "extracted"
+    assert actuals["official_revenue_actual"] == 96_221_000_000
+    assert actuals["official_eps_gaap_actual"] == 2.46
+    assert actuals["official_eps_adjusted_actual"] == 2.22
+
+
+def test_merge_history_keeps_official_only_result_reported():
+    previous = earnings.empty_events()
+    previous.loc[0] = {
+        "event_id": "dell-fy27-q2",
+        "ticker": "DELL",
+        "release_date": "2026-09-01",
+        "lifecycle": "reported",
+        "official_actual_status": "extracted",
+        "official_eps_adjusted_actual": 7.04,
+        "official_revenue_actual": 46_971_000_000,
+    }
+    current = previous.copy()
+    current.loc[0, "lifecycle"] = "scheduled"
+    current.loc[0, "official_actual_status"] = None
+    current.loc[0, "official_eps_adjusted_actual"] = None
+    current.loc[0, "official_revenue_actual"] = None
+
+    merged, _ = earnings.merge_history(
+        previous,
+        current,
+        earnings.empty_revisions(),
+        available_at="2026-09-03T09:10:00+09:00",
+    )
+
+    result = merged.iloc[0]
+    assert result["official_actual_status"] == "extracted"
+    assert result["official_eps_adjusted_actual"] == 7.04
+    assert result["lifecycle"] == "reported"
 
 
 def test_sec_periodic_report_is_an_official_result_fallback():
