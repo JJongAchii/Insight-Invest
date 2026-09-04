@@ -24,6 +24,7 @@ import LoadingState from "@/components/ui/LoadingState";
 import PageHeader from "@/components/ui/PageHeader";
 import {
   ResearchEntry,
+  ResearchEvidenceDimension,
   ResearchLane,
   ResearchView,
   useAcknowledgeResearchSeenMutation,
@@ -44,22 +45,34 @@ const LANE_OPTIONS = [
   {
     value: "core",
     label: "핵심 연구",
-    description: "퀀트 전략·자산가격 기준을 통과한 항목",
+    description: "본문·정량 주제·방법 근거·해결 확인을 모두 통과",
     icon: Sparkles,
   },
   {
     value: "discovery",
     label: "발견함",
-    description: "검증된 출처의 나머지 연구 후보",
+    description: "본문과 근거는 충분하지만 해결 상태가 아직 미확인",
     icon: Radar,
   },
   {
     value: "all",
     label: "전체 기록",
-    description: "기존 피드와 맥락 자료까지 모두 보기",
+    description: "알림에서 제외된 기존 피드와 맥락 자료까지 보존",
     icon: Archive,
   },
 ] as const;
+
+const PROVENANCE_LABELS = {
+  release_detail: "릴리스 상세",
+  full_body: "전체 본문",
+} as const;
+
+const EVIDENCE_LABELS: Record<ResearchEvidenceDimension, string> = {
+  method: "방법",
+  data: "데이터",
+  validation: "검증",
+  result: "결과",
+};
 
 const parseView = (value: string | null): ResearchView => {
   if (VIEW_OPTIONS.some((option) => option.value === value)) return value as ResearchView;
@@ -134,6 +147,8 @@ function ResearchCard({
         ? "발견"
         : "기록";
   const relevance = item.relevance_terms.slice(0, 2).join(" · ");
+  const schemaThreeEvidence =
+    item.record_schema_version === 3 && item.item_type === "evidence_update";
 
   const toggleRead = async () => {
     try {
@@ -189,6 +204,27 @@ function ResearchCard({
               {laneLabel}
               {relevance ? ` · ${relevance}` : ""}
             </span>
+            {schemaThreeEvidence && (
+              <>
+                <span className="rounded-full border border-amber-400/25 bg-amber-400/10 px-2 py-0.5 font-medium text-amber-200">
+                  근거 업데이트
+                </span>
+                {item.content_provenance && (
+                  <span className="rounded-full border border-violet-400/25 bg-violet-400/10 px-2 py-0.5 font-medium text-violet-200">
+                    {PROVENANCE_LABELS[item.content_provenance]}
+                  </span>
+                )}
+                {item.evidence_dimensions?.map((dimension) => (
+                  <span
+                    key={dimension}
+                    className="rounded-full border border-edge bg-raised/70 px-2 py-0.5 font-medium text-ink-secondary"
+                    title={item.evidence_excerpts?.[dimension]?.join("\n")}
+                  >
+                    근거 · {EVIDENCE_LABELS[dimension]}
+                  </span>
+                ))}
+              </>
+            )}
             {!item.is_read && (
               <span className="rounded-full bg-primary-500/15 px-2 py-0.5 font-medium text-primary-400">
                 새 자료
@@ -400,7 +436,7 @@ export default function ResearchPage() {
       <PageHeader
         eyebrow="Research library"
         title="리서치"
-        description="검증된 출처를 핵심 연구, 발견 후보, 전체 기록으로 나눠 읽고 보관하는 개인 퀀트 리서치 서재입니다."
+        description="독립 심사를 통과한 출처에서 본문·정량 주제·방법 근거·해결 상태를 확인한 업데이트만 핵심으로 보여줍니다."
         meta={
           <>
             <span>안 읽음 {data?.unread ?? 0}</span>
@@ -489,7 +525,8 @@ export default function ResearchPage() {
       </section>
 
       <p className="-mt-3 px-1 text-xs leading-5 text-ink-muted">
-        사이드바 배지와 iPhone 알림은 핵심 연구로 분류된 신규 항목에만 표시됩니다.
+        사이드바 배지와 iPhone 알림은 해결이 확인된 신규 근거 업데이트에만 표시됩니다.
+        기존 기록과 미해결 발견 항목은 보존되지만 알림에는 포함되지 않습니다.
       </p>
 
       <div className="grid gap-5 xl:grid-cols-[15rem_minmax(0,1fr)] xl:items-start">

@@ -652,6 +652,8 @@ export interface ActionCenterResponse {
   };
 }
 
+export type ResearchEvidenceDimension = "method" | "data" | "validation" | "result";
+
 export interface ResearchEntry {
   entry_id: string;
   source_id: string;
@@ -662,11 +664,23 @@ export interface ResearchEntry {
   url: string;
   published_at: string;
   discovered_at: string;
+  record_schema_version: 1 | 2 | 3;
   quality_profile: string;
   research_lane: "core" | "discovery" | "context";
   relevance_reason: string;
   relevance_terms: string[];
   notification_eligible: boolean;
+  item_type?: "evidence_update";
+  content_provenance?: "release_detail" | "full_body";
+  evidence_dimensions?: ResearchEvidenceDimension[];
+  evidence_excerpts?: Partial<Record<ResearchEvidenceDimension, string[]>>;
+  source_digest?: string;
+  resolution_status?:
+    | "maintainer_published"
+    | "maintainer_confirmed"
+    | "commit_linked"
+    | "unresolved";
+  quality_gates?: Record<"transport" | "content" | "topic" | "evidence" | "notification", boolean>;
   is_read: boolean;
   is_saved: boolean;
 }

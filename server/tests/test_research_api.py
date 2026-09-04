@@ -24,8 +24,28 @@ def _feed(first_id, second_id):
                 "summary": "Robust portfolio construction",
                 "authors": ["Alice Quant"],
                 "discovered_at": "2026-09-02T00:01:00+00:00",
+                "record_schema_version": 3,
+                "quality_profile": "strict-evidence-update",
                 "research_lane": "core",
+                "relevance_reason": "strict_quality_pass",
+                "relevance_terms": ["factor", "portfolio"],
                 "notification_eligible": True,
+                "item_type": "evidence_update",
+                "content_provenance": "full_body",
+                "evidence_dimensions": ["method", "data"],
+                "evidence_excerpts": {
+                    "method": ["The method constructs a factor portfolio."],
+                    "data": ["The data includes a CRSP sample."],
+                },
+                "source_digest": "1" * 64,
+                "resolution_status": "maintainer_confirmed",
+                "quality_gates": {
+                    "transport": True,
+                    "content": True,
+                    "topic": True,
+                    "evidence": True,
+                    "notification": True,
+                },
             },
             {
                 "entry_id": second_id,
@@ -69,8 +89,16 @@ def test_feed_filters_and_read_state(monkeypatch, tmp_path):
     assert initial["read"] == 0
     assert initial["saved"] == 0
     assert {source["source_id"] for source in initial["sources"]} == {"alpha", "beta"}
+    schema_three = next(
+        item for item in initial["items"] if item["entry_id"] == first_id
+    )
+    assert schema_three["item_type"] == "evidence_update"
+    assert schema_three["content_provenance"] == "full_body"
+    assert schema_three["evidence_dimensions"] == ["method", "data"]
 
-    response = research.set_research_read_state(first_id, research.ResearchReadRequest(read=True))
+    response = research.set_research_read_state(
+        first_id, research.ResearchReadRequest(read=True)
+    )
     assert response == {"entry_id": first_id, "is_read": True}
     assert [item["entry_id"] for item in _get(unread_only=True)["items"]] == [second_id]
     assert [item["entry_id"] for item in _get(source_id="alpha")["items"]] == [first_id]
@@ -88,7 +116,9 @@ def test_feed_filters_and_read_state(monkeypatch, tmp_path):
     assert _get()["unread"] == 2
     assert _get(entry_id=first_id)["items"][0]["is_saved"] is True
 
-    research.set_research_saved_state(first_id, research.ResearchSavedRequest(saved=False))
+    research.set_research_saved_state(
+        first_id, research.ResearchSavedRequest(saved=False)
+    )
     assert _get()["saved"] == 0
 
 
@@ -151,7 +181,9 @@ def test_mark_all_read_preserves_saved_state_and_is_idempotent(monkeypatch, tmp_
     assert preserved_read_at == original_read_at
 
 
-def test_legacy_read_state_adds_saved_column_without_losing_read_at(monkeypatch, tmp_path):
+def test_legacy_read_state_adds_saved_column_without_losing_read_at(
+    monkeypatch, tmp_path
+):
     monkeypatch.setenv("APP_DATA", str(tmp_path))
     first_id = "a" * 64
     second_id = "b" * 64
@@ -166,7 +198,10 @@ def test_legacy_read_state_adds_saved_column_without_losing_read_at(monkeypatch,
     item = _get(entry_id=first_id)["items"][0]
     assert item["is_read"] is True
     assert item["is_saved"] is True
-    assert list(research_store.list_read_state().columns) == research_store.READ_STATE_COLUMNS
+    assert (
+        list(research_store.list_read_state().columns)
+        == research_store.READ_STATE_COLUMNS
+    )
 
 
 def test_feed_rejects_invalid_or_unknown_entry(monkeypatch, tmp_path):
@@ -179,7 +214,9 @@ def test_feed_rejects_invalid_or_unknown_entry(monkeypatch, tmp_path):
     assert invalid.value.status_code == 422
 
     with pytest.raises(HTTPException) as unknown:
-        research.set_research_read_state("c" * 64, research.ResearchReadRequest(read=True))
+        research.set_research_read_state(
+            "c" * 64, research.ResearchReadRequest(read=True)
+        )
     assert unknown.value.status_code == 404
 
     with pytest.raises(HTTPException) as unknown_get:
@@ -336,7 +373,9 @@ def test_research_status_ignores_new_non_notifiable_items(monkeypatch, tmp_path)
     assert research.get_research_status()["unseen"] == 0
 
 
-def test_research_seen_watermark_is_monotonic_and_capped_at_current_feed(monkeypatch, tmp_path):
+def test_research_seen_watermark_is_monotonic_and_capped_at_current_feed(
+    monkeypatch, tmp_path
+):
     monkeypatch.setenv("APP_DATA", str(tmp_path))
     research_store.save_feed(_feed("a" * 64, "b" * 64))
 
@@ -357,7 +396,9 @@ def test_research_seen_watermark_is_monotonic_and_capped_at_current_feed(monkeyp
     assert naive.value.status_code == 422
 
 
-def test_research_status_and_seen_routes_are_deployed_as_static_paths(monkeypatch, tmp_path):
+def test_research_status_and_seen_routes_are_deployed_as_static_paths(
+    monkeypatch, tmp_path
+):
     monkeypatch.setenv("APP_DATA", str(tmp_path))
     research_store.save_feed(_feed("a" * 64, "b" * 64))
 
