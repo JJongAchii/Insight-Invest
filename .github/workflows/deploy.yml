@@ -87,6 +87,19 @@ jobs:
             "$URL/meta" >/dev/null
           curl -sf -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
             -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
+            "$URL/regime/kr" >/tmp/regime-kr.json
+          jq -e '
+            .cpi_yoy.frequency == "monthly"
+            and (.cpi_yoy.as_of | test("^[0-9]{4}-[0-9]{2}$"))
+            and ([.base_rate, .ktb_3y, .ktb_10y, .usdkrw] | all(
+              .source == "ECOS" and .frequency == "daily"
+              and (.as_of | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))
+              and (.latest | type) == "number"))
+          ' /tmp/regime-kr.json
+          jq 'with_entries(.value |= {latest, as_of, frequency, source})' \
+            /tmp/regime-kr.json > /tmp/regime-kr-snapshot.json
+          curl -sf -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
+            -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
             "$URL/research?lane=all&limit=1" | jq -e \
               '.total > 0 and (.items | length) == 1 and .read >= 0 and .saved >= 0
                and .view == "all" and .lane == "all" and .lane_counts.all > 0
@@ -117,3 +130,10 @@ jobs:
                and .paths["/research/read/all"].put
                and .paths["/research/status"].get
                and .paths["/research/seen"].put'
+
+      - name: Record deployed macro snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: regime-kr-snapshot
+          path: /tmp/regime-kr-snapshot.json
+          if-no-files-found: error
