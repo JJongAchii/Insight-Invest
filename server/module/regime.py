@@ -1,7 +1,7 @@
 """매크로 레짐 v2 — 성장(OECD CLI) × 물가(CPI YoY) 4국면 + 리스크 게이지 + 한국 매크로.
 
 데이터는 qdata 레이크(QDATA_LAKE)에서 읽는다. 순수 계산 모듈 — FastAPI 의존 없음.
-ECOS·OECD 로드는 5분 단위 캐시로 warm Lambda에서도 새 발행분을 확인한다.
+원천 로드는 5분 단위 캐시로 warm Lambda에서도 새 발행분을 확인한다.
 캐시된 원본 DataFrame/Series는 절대 in-place 수정하지 않는다.
 """
 
@@ -36,22 +36,29 @@ def _cli(country: str = "USA") -> pd.Series:
     return _cli_for_bucket(country, int(time.time() // 300))
 
 
-@lru_cache(maxsize=8)
-def _fred(series: str) -> pd.Series:
+@lru_cache(maxsize=16)
+def _fred_for_bucket(series: str, _bucket: int) -> pd.Series:
     return qdata_api.load_fred([series])[series]
 
 
-@lru_cache(maxsize=1)
+def _fred(series: str) -> pd.Series:
+    return _fred_for_bucket(series, int(time.time() // 300))
+
+
 def _cpi() -> pd.Series:
     """CPIAUCSL 월간 — qdata FRED 단일 원천(1980~)."""
     return _fred("CPIAUCSL").dropna().sort_index()
 
 
 @lru_cache(maxsize=1)
-def _hyg_ief() -> pd.DataFrame:
+def _hyg_ief_for_bucket(_bucket: int) -> pd.DataFrame:
     from datastore import prices
 
     return prices.us_adj_close_wide(["HYG", "IEF"])
+
+
+def _hyg_ief() -> pd.DataFrame:
+    return _hyg_ief_for_bucket(int(time.time() // 300))
 
 
 @lru_cache(maxsize=1)

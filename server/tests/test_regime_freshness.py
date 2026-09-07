@@ -10,9 +10,13 @@ from module import regime
 def clear_caches():
     regime._ecos_for_bucket.cache_clear()
     regime._cli_for_bucket.cache_clear()
+    regime._fred_for_bucket.cache_clear()
+    regime._hyg_ief_for_bucket.cache_clear()
     yield
     regime._ecos_for_bucket.cache_clear()
     regime._cli_for_bucket.cache_clear()
+    regime._fred_for_bucket.cache_clear()
+    regime._hyg_ief_for_bucket.cache_clear()
 
 
 def test_kr_snapshot_date_is_observation_date_not_friday_bucket(monkeypatch):
@@ -92,3 +96,39 @@ def test_oecd_cache_expires_and_keeps_countries_separate(monkeypatch):
     assert regime._cli("KOR").iloc[0] == 1
     clock[0] = 900.0
     assert regime._cli("KOR").iloc[0] == 3
+
+
+def test_us_macro_and_cpi_see_new_publication_in_warm_process(monkeypatch):
+    clock = [600.0]
+    calls = []
+    monkeypatch.setattr(regime.time, "time", lambda: clock[0])
+
+    def load(series):
+        calls.append(series[0])
+        return pd.DataFrame({series[0]: [len(calls)]})
+
+    monkeypatch.setattr(regime.qdata_api, "load_fred", load)
+    assert regime._fred("VIXCLS").iloc[0] == 1
+    assert regime._cpi().iloc[0] == 2
+    clock[0] = 899.0
+    assert regime._cpi().iloc[0] == 2
+    clock[0] = 900.0
+    assert regime._fred("VIXCLS").iloc[0] == 3
+    assert regime._cpi().iloc[0] == 4
+
+
+def test_hy_price_cache_expires_and_failed_read_is_not_old_success(monkeypatch):
+    from datastore import prices
+
+    clock = [600.0]
+    monkeypatch.setattr(regime.time, "time", lambda: clock[0])
+    monkeypatch.setattr(prices, "us_adj_close_wide", lambda *a: pd.DataFrame({"HYG": [100]}))
+    assert regime._hyg_ief().iloc[0, 0] == 100
+    clock[0] = 900.0
+
+    def fail(*a):
+        raise OSError("price mirror unavailable")
+
+    monkeypatch.setattr(prices, "us_adj_close_wide", fail)
+    with pytest.raises(OSError, match="unavailable"):
+        regime._hyg_ief()
