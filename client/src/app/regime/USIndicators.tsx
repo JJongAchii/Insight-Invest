@@ -37,7 +37,7 @@ const USIndicators: React.FC = () => {
       macroInfo?.find((macro: MacroInfo) => macro.fred === fred) ||
       ({} as Partial<MacroInfo>);
     const data =
-      macroData?.filter((d: MacroData) => d.macro_id === info.macro_id) || [];
+      macroData?.filter((d: MacroData) => d.macro_id === info.macro_id).sort((a: MacroData, b: MacroData) => a.base_date.localeCompare(b.base_date)) || [];
     return { info, data };
   };
 
@@ -53,7 +53,7 @@ const USIndicators: React.FC = () => {
     return (
       <div className="card">
         <ErrorState
-          message="Failed to load macro data"
+          message="미국 경제 지표를 불러오지 못했습니다"
           onRetry={() => {
             refetchInfo();
             refetchData();
@@ -66,7 +66,7 @@ const USIndicators: React.FC = () => {
   if (!macroInfo || !macroData) {
     return (
       <div className="card">
-        <LoadingState label="Loading macro indicators..." />
+        <LoadingState label="미국 경제 지표를 불러오는 중…" />
       </div>
     );
   }
@@ -85,45 +85,48 @@ const USIndicators: React.FC = () => {
       {/* Current Regime Indicator */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="section-header mb-0">US Cycle Snapshot</h2>
-          <span className={isRecession ? "badge-danger" : "badge-success"}>
-            {isRecession ? "Recession" : "Expansion"}
+          <h2 className="section-header mb-0">미국 경제 지표 요약</h2>
+          <span className={!latestRecession ? "badge-neutral" : isRecession ? "badge-danger" : "badge-success"}>
+            {!latestRecession ? "경기 관측값 없음" : isRecession ? "침체 관측" : "비침체 관측"}
           </span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatTile
-            label="Yield Spread (10Y-2Y)"
+            label="장단기 금리차 (10년−2년)"
             helpKey="macro.t10y2y"
-            value={`${latestT10Y2Y?.value?.toFixed(2) ?? "—"}%`}
+            value={latestT10Y2Y ? `${latestT10Y2Y.value.toFixed(2)}%p` : "—"}
+            sub={`${latestT10Y2Y?.base_date ?? "기준일 미확인"} · FRED`}
             deltaType={
-              latestT10Y2Y && latestT10Y2Y.value >= 0 ? "gain" : "loss"
+              !latestT10Y2Y ? "neutral" : latestT10Y2Y.value >= 0 ? "gain" : "loss"
             }
           />
           <StatTile
-            label="Unemployment Rate"
+            label="실업률"
             helpKey="macro.unrate"
-            value={`${latestUnemployment?.value?.toFixed(1) ?? "—"}%`}
+            value={latestUnemployment ? `${latestUnemployment.value.toFixed(1)}%` : "—"}
+            sub={`${latestUnemployment?.base_date ?? "기준일 미확인"} · FRED`}
           />
           <StatTile
-            label="Fed Funds Rate"
+            label="유효 연방기금금리"
             helpKey="macro.fedfunds"
-            value={`${latestFedFund?.value?.toFixed(2) ?? "—"}%`}
+            value={latestFedFund ? `${latestFedFund.value.toFixed(2)}%` : "—"}
+            sub={`${latestFedFund?.base_date ?? "기준일 미확인"} · FRED`}
           />
           <StatTile
-            label="Last Updated"
+            label="침체 지표 기준월"
             value={latestRecession?.base_date?.slice(0, 7) ?? "—"}
           />
         </div>
       </div>
 
       {/* Charts Grid */}
-      <div className="grid grid-cols-1 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <MacroChart
           primaryData={t10y2yData}
           recessionData={recessionData}
           primaryLabel={t10y2yInfo.description ?? "T10Y2Y"}
           recessionLabel={recessionInfo.description ?? "US Recession"}
-          title="10-Year Minus 2-Year Treasury Spread"
+          title="미 국채 장단기 금리차 (%p)"
           helpKey="macro.t10y2y"
           baseline={0}
         />
@@ -133,7 +136,7 @@ const USIndicators: React.FC = () => {
           recessionData={recessionData}
           primaryLabel={unemploymentInfo.description ?? "Unemployment Rate"}
           recessionLabel={recessionInfo.description ?? "US Recession"}
-          title="Unemployment Rate"
+          title="실업률 (%)"
           helpKey="macro.unrate"
           baseline={5}
         />
@@ -143,7 +146,7 @@ const USIndicators: React.FC = () => {
           recessionData={recessionData}
           primaryLabel={employeesInfo.description ?? "Nonfarm Payrolls"}
           recessionLabel={recessionInfo.description ?? "US Recession"}
-          title="All Employees, Total Nonfarm"
+          title="비농업 고용 (천 명)"
           helpKey="macro.payems"
           baseline={150000}
         />
@@ -153,7 +156,7 @@ const USIndicators: React.FC = () => {
           recessionData={recessionData}
           primaryLabel={fedFundInfo.description ?? "Federal Funds Rate"}
           recessionLabel={recessionInfo.description ?? "US Recession"}
-          title="Federal Funds Rate"
+          title="유효 연방기금금리 (%)"
           helpKey="macro.fedfunds"
         />
 
@@ -162,9 +165,8 @@ const USIndicators: React.FC = () => {
           recessionData={recessionData}
           primaryLabel={cpiInfo.description ?? "CPI"}
           recessionLabel={recessionInfo.description ?? "US Recession"}
-          title="Consumer Price Index for All Urban Consumers"
+          title="소비자물가지수 (CPI, 지수 수준)"
           helpKey="macro.cpi"
-          baseline={0.02}
         />
       </div>
     </div>

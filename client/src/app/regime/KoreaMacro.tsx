@@ -33,6 +33,11 @@ const mergeSeries = (
   );
 };
 
+const asOf = (series?: KrMacroSeries) => {
+  const date = series?.data.reduce((latest, point) => point.date > latest ? point.date : latest, "");
+  return date ? `${date} 기준` : "기준일 미확인";
+};
+
 /** Korea macro tab: policy/market rates, FX, inflation, and OECD CLI. */
 const KoreaMacro: React.FC = () => {
   const { data, isLoading, error, refetch } = useFetchRegimeKrQuery();
@@ -58,7 +63,7 @@ const KoreaMacro: React.FC = () => {
   if (error) {
     return (
       <div className="card">
-        <ErrorState message="Failed to load Korea macro data" onRetry={refetch} />
+        <ErrorState message="한국 경제 지표를 불러오지 못했습니다" onRetry={refetch} />
       </div>
     );
   }
@@ -66,7 +71,7 @@ const KoreaMacro: React.FC = () => {
   if (isLoading || !data) {
     return (
       <div className="card">
-        <LoadingState label="Loading Korea macro data..." />
+        <LoadingState label="한국 경제 지표를 불러오는 중…" />
       </div>
     );
   }
@@ -75,8 +80,8 @@ const KoreaMacro: React.FC = () => {
     return (
       <div className="card">
         <EmptyState
-          title="No Korea macro data"
-          hint="KR macro series will appear once ingested"
+          title="한국 경제 지표가 없습니다"
+          hint="지표가 수집되면 금리·물가·환율을 확인할 수 있습니다."
         />
       </div>
     );
@@ -89,18 +94,22 @@ const KoreaMacro: React.FC = () => {
         <StatTile
           label={baseRate?.name ?? "기준금리"}
           value={fmt(baseRate?.latest, 2, "%")}
+          sub={asOf(baseRate)}
         />
         <StatTile
           label={ktb3y?.name ?? "국고채 3Y"}
           value={fmt(ktb3y?.latest, 2, "%")}
+          sub={asOf(ktb3y)}
         />
         <StatTile
           label={usdkrw?.name ?? "USD/KRW"}
           value={fmt(usdkrw?.latest, 1)}
+          sub={asOf(usdkrw)}
         />
         <StatTile
           label={cpiYoy?.name ?? "CPI YoY"}
           value={fmt(cpiYoy?.latest, 2, "%")}
+          sub={asOf(cpiYoy)}
         />
       </div>
 
@@ -108,7 +117,7 @@ const KoreaMacro: React.FC = () => {
         <Card
           title={
             <span className="inline-flex items-center gap-1.5">
-              Korea Rates · Base Rate & KTB
+              한국 금리 · 기준금리와 국고채
               <InfoTip helpKey="kr.rates" />
             </span>
           }

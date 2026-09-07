@@ -1,0 +1,38 @@
+{
+  "date": "2026-09-07",
+  "nextVersion": "16.3.1",
+  "commands": [
+    {
+      "command": "npm run lint",
+      "exitCode": 0
+    },
+    {
+      "command": "npx tsc --noEmit",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run build",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run test:pull-refresh",
+      "exitCode": 0,
+      "passed": 5
+    },
+    {
+      "command": "npm run test:market-experience",
+      "exitCode": 0,
+      "passed": 11
+    }
+  ],
+  "browserData": "Synthetic fixtures; production API and iOS device behavior not tested",
+  "viewports": [
+    1440,
+    390,
+    320
+  ],
+  "themes": [
+    "dark",
+    "light"
+  ]
+}

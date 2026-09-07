@@ -71,7 +71,7 @@ const MacroChart: React.FC<MacroChartProps> = ({
 
   return (
     <div className="card">
-      <div className="flex items-center justify-between mb-4">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold text-ink">
             <span className="inline-flex items-center gap-1.5">
@@ -80,12 +80,13 @@ const MacroChart: React.FC<MacroChartProps> = ({
             </span>
           </h3>
           <p className="text-xs text-ink-muted mt-0.5">
-            {subtitle ?? `${primaryLabel} · shaded: ${recessionLabel}`}
+            {subtitle ?? `${primaryLabel} · 음영: ${recessionLabel}`}
           </p>
         </div>
         {latestValue !== undefined && (
           <span className="num text-sm font-medium text-ink-secondary">
-            Latest: {latestValue.toFixed(2)}
+            {latestValue.toFixed(2)}
+            <span className="mt-1 block font-sans text-[11px] text-ink-muted">{primaryData[primaryData.length - 1]?.base_date} 기준</span>
           </span>
         )}
       </div>

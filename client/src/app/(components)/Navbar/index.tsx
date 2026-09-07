@@ -18,17 +18,17 @@ import type { FormEvent } from "react";
 
 const routeContexts = [
   { prefix: "/actions", title: "검토", detail: "지금 할 일" },
-  { prefix: "/earnings", title: "검토", detail: "실적 일정" },
+  { prefix: "/earnings", title: "실적 일정", detail: "주요 기업 발표와 결과" },
   { prefix: "/stocksearch", title: "시장", detail: "종목 검색" },
   { prefix: "/stock/", title: "시장", detail: "종목 상세" },
-  { prefix: "/regime", title: "시장", detail: "시장 국면" },
+  { prefix: "/regime", title: "경제 · 매크로", detail: "지표와 경기 국면" },
   { prefix: "/insight", title: "시장", detail: "시장 흐름" },
   { prefix: "/journal", title: "포트폴리오", detail: "판단 기록" },
   { prefix: "/optimization", title: "포트폴리오", detail: "최적화" },
   { prefix: "/portfolio", title: "포트폴리오", detail: "노출과 위험" },
   { prefix: "/backtest/simulation", title: "백테스트", detail: "새 백테스트" },
   { prefix: "/backtest/strategy_list", title: "백테스트", detail: "저장된 결과" },
-  { prefix: "/research", title: "리서치", detail: "근거 피드" },
+  { prefix: "/research", title: "리서치", detail: "논문과 연구 자료" },
   { prefix: "/data-trust", title: "데이터 상태", detail: "출처와 최신성" },
 ] as const;
 
@@ -105,7 +105,7 @@ const Navbar = ({ onMobileMenuOpen }: { onMobileMenuOpen: () => void }) => {
             {isBriefing ? todayLabel : routeContext?.title ?? "Insight Invest"}
           </strong>
           <span className="hidden text-[10px] text-ink-muted sm:block">
-            {isBriefing ? "오늘의 판단 브리핑" : routeContext?.detail ?? "작업공간"}
+            {isBriefing ? "시장 · 경제 · 리서치" : routeContext?.detail ?? "작업공간"}
           </span>
         </div>
       </div>
