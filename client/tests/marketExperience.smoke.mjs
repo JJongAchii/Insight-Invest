@@ -29,6 +29,11 @@ async function contextFor(viewport) {
     serviceWorkers: "block",
     reducedMotion: "reduce",
   });
+  // Fixture requests must bypass the PWA cache. Represent an unsupported browser
+  // instead of Playwright's blocked register() resolving with no registration.
+  await context.addInitScript(() => {
+    Reflect.deleteProperty(Navigator.prototype, "serviceWorker");
+  });
   await context.addCookies([
     { name: "ii_access", value: "insight-local-ui-review", url: baseURL },
   ]);
@@ -126,6 +131,9 @@ try {
     async () => {
       await visible(page, "2026-09-07 15:30 · 마감 스냅샷");
       await visible(page, "데이터 상태 · 미확인");
+      await visible(page, "2026-09-02 관측 · ECOS");
+      await visible(page, "2026-09-03 관측 · ECOS");
+      assert.equal(await page.getByText("2026-09-04 기준 · ECOS").count(), 0);
       assert.equal(await page.getByText("함께 봐야 할 엇갈림").count(), 1);
       await page.getByText("근거 1개 더 보기").click();
       await visible(page, "추가 관측 근거");
@@ -208,6 +216,8 @@ try {
     async () => {
       await page.goto("/regime?country=kr");
       await visible(page, "한국 금리 · 기준금리와 국고채");
+      await visible(page, "2026-09-02 관측 · ECOS");
+      await visible(page, "2026-08 기준월 · ECOS");
       assert.equal(
         await page
           .getByRole("button", { name: "한국 · ECOS / OECD", exact: true })
@@ -218,6 +228,10 @@ try {
         .getByRole("button", { name: "미국 · FRED", exact: true })
         .click();
       await visible(page, "경기 관측값 없음");
+      const cpiCard = page.locator(".card").filter({
+        has: page.getByRole("heading", { name: "소비자물가 상승률 (전년동월 대비, %)" }),
+      });
+      assert.match(await cpiCard.locator(".num").innerText(), /^2\.10/);
       assert.ok(page.url().includes("country=us"));
       await page
         .getByRole("button", { name: "경기 국면 · 위험", exact: true })

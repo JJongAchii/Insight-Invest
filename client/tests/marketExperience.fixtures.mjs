@@ -98,21 +98,25 @@ export const intraday = {
   ],
   breadth: { advancers: 1400, decliners: 980, unchanged: 120 },
 };
-const series = (name, value) => ({
+const series = (name, value, asOf = "2026-09-03", frequency = "daily", source = "ECOS") => ({
   name,
   latest: value,
+  as_of: asOf,
+  frequency,
+  source,
   data: [
-    { date: "2026-08-01", value: value * 0.98 },
-    { date, value },
+    { date: "2026-07-01", value: value * 0.98 },
+    // Weekly chart labels must never become the latest observation date.
+    { date: frequency === "monthly" ? `${asOf}-01` : "2026-09-04", value },
   ],
 });
 export const macro = {
   usdkrw: series("달러/원 환율", 1324.5),
-  base_rate: series("한국 기준금리", 2.5),
+  base_rate: series("한국 기준금리", 2.5, "2026-09-02"),
   ktb_3y: series("국고채 3년", 2.7),
   ktb_10y: series("국고채 10년", 2.9),
-  cpi_yoy: series("소비자물가 전년비", 2.1),
-  cli_kor: series("한국 경기선행지수", 100.2),
+  cpi_yoy: series("소비자물가 전년비", 2.1, "2026-08", "monthly"),
+  cli_kor: series("한국 경기선행지수", 100.2, "2026-07", "monthly", "OECD"),
 };
 export const researchItems = [
   [
@@ -219,6 +223,7 @@ export function fixtureFor(path, params, mode) {
           { macro_id: "T10Y2Y", base_date: date, value: 0.4 },
           { macro_id: "UNRATE", base_date: "2026-08-01", value: 4.1 },
           { macro_id: "FEDFUNDS", base_date: "2026-08-01", value: 4.25 },
+          { macro_id: "CPIAUCSL", base_date: "2026-08-01", value: 0.021 },
         ];
   if (path === "regime/phase")
     return {

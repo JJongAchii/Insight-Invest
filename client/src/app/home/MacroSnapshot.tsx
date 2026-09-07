@@ -11,17 +11,17 @@ const indicators = [
 ];
 
 export default function MacroSnapshot() {
-  const { data, isLoading, error, refetch } = useFetchRegimeKrQuery();
+  const { data, isLoading, error, refetch } = useFetchRegimeKrQuery(undefined, {
+    pollingInterval: 300_000,
+    refetchOnMountOrArgChange: 300,
+    refetchOnFocus: true,
+    refetchOnReconnect: true,
+  });
   return (
     <div className={styles.quotes}>
       {indicators.map((indicator) => {
         const series = data?.[indicator.key];
-        const latest = series?.data.reduce<
-          (typeof series.data)[number] | undefined
-        >(
-          (last, point) => (!last || point.date > last.date ? point : last),
-          undefined,
-        );
+        const latest = series?.latest;
         return (
           <div className={styles.quote} key={indicator.key}>
             <Link href="/regime?country=kr" className={styles.quoteLabel}>
@@ -29,8 +29,8 @@ export default function MacroSnapshot() {
               <ArrowUpRight size={14} aria-hidden />
             </Link>
             <p className={styles.quoteValue}>
-              {latest && Number.isFinite(latest.value)
-                ? latest.value.toLocaleString("ko-KR", {
+              {latest != null && Number.isFinite(latest)
+                ? latest.toLocaleString("ko-KR", {
                     minimumFractionDigits: indicator.digits,
                     maximumFractionDigits: indicator.digits,
                   })
@@ -49,9 +49,9 @@ export default function MacroSnapshot() {
               <p className={styles.quoteDate}>
                 {isLoading
                   ? "관측값 불러오는 중…"
-                  : latest
-                    ? `${latest.date} 기준 · ECOS`
-                    : "관측값 미확인"}
+                  : latest == null
+                    ? "관측값 미확인"
+                    : `${series?.as_of ? `${series.as_of} 관측` : "기준일 미확인"} · ECOS`}
               </p>
             )}
           </div>
