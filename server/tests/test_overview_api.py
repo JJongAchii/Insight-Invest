@@ -1,6 +1,7 @@
 """홈 판단 요약은 방향 충돌과 데이터 신선도를 숨기지 않는다."""
 
 import pandas as pd
+import pytest
 
 from app.routers import overview
 
@@ -130,3 +131,48 @@ def test_calculation_contracts_do_not_overstate_kr_etf_or_execution_timing():
 
     us_valuation = contracts["us_valuation"]
     assert us_valuation["coverage"] == "PER/PBR 미산출"
+
+
+@pytest.mark.parametrize(
+    "now,dataset,expected",
+    [
+        ("2026-09-07 10:39", "us_prices", "2026-09-04 19:00"),
+        ("2026-09-07 10:40", "us_prices", "2026-09-07 09:00"),
+        ("2026-09-07 20:39", "breadth_daily", "2026-09-04 19:00"),
+        ("2026-09-07 20:40", "breadth_daily", "2026-09-07 19:00"),
+        ("2026-09-06 21:00", "us_prices", "2026-09-04 19:00"),
+    ],
+)
+def test_refresh_deadline_respects_batch_window_and_weekend(now, dataset, expected):
+    kst = "Asia/Seoul"
+    assert overview._required_batch_start(dataset, pd.Timestamp(now, tz=kst)) == pd.Timestamp(
+        expected, tz=kst
+    )
+
+
+@pytest.mark.parametrize(
+    "dataset,as_of,built_at,expected",
+    [
+        ("breadth_daily", "2026-09-03", "2026-09-03T19:24:00+09:00", "warn"),
+        ("us_prices", "2026-09-02", "2026-09-04T09:11:00+09:00", "warn"),
+        ("breadth_daily", "2026-09-07", "2026-09-07T19:24:00+09:00", "ok"),
+        # US Labor Day: a fresh scheduled check can legitimately retain Friday's data.
+        ("us_prices", "2026-09-04", "2026-09-07T19:24:00+09:00", "ok"),
+        ("breadth_daily", "2026-09-07", None, "unknown"),
+    ],
+)
+def test_data_status_does_not_hide_missed_batch(monkeypatch, dataset, as_of, built_at, expected):
+    class Clock:
+        @staticmethod
+        def now(tz):
+            return pd.Timestamp("2026-09-07 22:00", tz=tz).to_pydatetime()
+
+    monkeypatch.setattr(overview, "datetime", Clock)
+    sidecar = pd.DataFrame(
+        [{"dataset": dataset, "status": "ok", "as_of": as_of, "built_at": built_at}]
+    )
+    monkeypatch.setattr(overview.storage, "read_parquet", lambda *a, **kw: sidecar)
+    row = next(r for r in overview._data_status() if r["dataset"] == dataset)
+    assert row["level"] == expected
+    if expected == "warn":
+        assert "예약 갱신 미확인" in row["detail"]
