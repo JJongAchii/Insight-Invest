@@ -73,7 +73,7 @@ const MarketReadout: React.FC = () => {
           {conflict && (
             <p className="mt-3 text-xs leading-5 text-warning">현재 관측이 엇갈립니다. 각 데이터의 기준일을 함께 확인하세요.</p>
           )}
-          <Link href="/regime" className="mt-5 inline-flex text-xs font-medium text-primary-300 hover:text-primary-200">
+          <Link href="/regime?section=phase" className="mt-5 inline-flex text-xs font-medium text-primary-300 hover:text-primary-200">
             글로벌 국면과 비교하기 →
           </Link>
         </aside>

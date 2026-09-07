@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Insight Invest",
   applicationName: "Insight Invest",
-  description: "시장 흐름과 포트폴리오 판단을 연결하는 개인 투자 인사이트 앱",
+  description: "시장·경제 현황과 리서치 자료를 함께 탐색하는 투자 인사이트 앱",
   manifest: "/manifest.webmanifest",
   formatDetection: { telephone: false },
   icons: {

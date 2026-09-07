@@ -1,11 +1,10 @@
 "use client";
 
-import React, { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-
 import {
-  InsightFlowTopRow,
+  InsightInvestor,
+  InsightWindow,
   useFetchInsightFlowsTopQuery,
   useFetchMetaDataQuery,
 } from "@/state/api";
@@ -13,107 +12,156 @@ import Card from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
 import ErrorState from "@/components/ui/ErrorState";
-import { fmtEok, fmtPct, MarketBadge, signClass } from "@/app/insight/format";
+import { fmtEok, fmtPct, signClass } from "@/app/insight/format";
 
-/** Dashboard card: foreign investors' top-5 net buys over the last week. */
-const FlowsTopCard: React.FC = () => {
-  const router = useRouter();
-  const { data, isLoading, error, refetch } = useFetchInsightFlowsTopQuery({
-    window: "1w",
-    investor: "frgn",
-  });
-
-  // Insight rows only carry tickers; resolve meta_id via the cached meta list.
+export default function FlowsTopCard() {
+  const [investor, setInvestor] = useState<InsightInvestor>("frgn");
+  const [window, setWindow] = useState<InsightWindow>("1w");
+  const [side, setSide] = useState<"buys" | "sells">("buys");
+  const {
+    currentData: data,
+    isFetching,
+    error,
+    refetch,
+  } = useFetchInsightFlowsTopQuery({ window, investor });
   const { data: metaData } = useFetchMetaDataQuery({});
   const tickerToMetaId = useMemo(() => {
     const map = new Map<string, number>();
     const rows =
-      (metaData as { ticker: string; meta_id: number }[] | undefined) ?? [];
-    for (const row of rows) map.set(row.ticker, row.meta_id);
+      (metaData as
+        { ticker: string; meta_id: number; iso_code: string }[] | undefined) ??
+      [];
+    for (const row of rows)
+      if (row.iso_code === "KR") map.set(row.ticker, row.meta_id);
     return map;
   }, [metaData]);
-
-  const goToStock = (row: InsightFlowTopRow) => {
-    const metaId = tickerToMetaId.get(row.ticker);
-    if (metaId !== undefined) {
-      router.push(`/stock/${metaId}`);
-    } else {
-      router.push(`/stocksearch?q=${encodeURIComponent(row.name)}`);
-    }
-  };
-
-  const rows = (data?.buys ?? []).slice(0, 5);
+  const rows = (data?.[side] ?? []).slice(0, 5);
 
   return (
     <Card
-      title="외국인 순매수 상위"
+      headingLevel={2}
+      title="자금은 어디로 움직였나"
       action={
-        <div className="flex items-center gap-3">
-          {data?.as_of && (
-            <span className="text-xs text-ink-muted num">1W · {data.as_of}</span>
-          )}
-          <Link
-            href="/insight"
-            className="text-xs font-medium text-ink-muted hover:text-ink transition-colors"
-          >
-            더 보기 →
-          </Link>
-        </div>
+        <Link
+          href="/insight?tab=settled&section=flows"
+          className="text-xs text-primary-300 hover:underline"
+        >
+          시장 수급 전체 →
+        </Link>
       }
     >
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 text-xs text-ink-secondary">
+          투자자
+          <select
+            aria-label="수급 투자자"
+            className="rounded-lg border border-edge bg-raised px-3 py-2 text-ink"
+            value={investor}
+            onChange={(event) =>
+              setInvestor(event.target.value as InsightInvestor)
+            }
+          >
+            <option value="frgn">외국인</option>
+            <option value="inst">기관</option>
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-xs text-ink-secondary">
+          기간
+          <select
+            aria-label="수급 기간"
+            className="rounded-lg border border-edge bg-raised px-3 py-2 text-ink"
+            value={window}
+            onChange={(event) => setWindow(event.target.value as InsightWindow)}
+          >
+            <option value="1d">1거래일</option>
+            <option value="1w">1주</option>
+            <option value="1m">1개월</option>
+          </select>
+        </label>
+        <div className="flex gap-1" aria-label="수급 방향">
+          {(
+            [
+              ["buys", "순매수"],
+              ["sells", "순매도"],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              type="button"
+              key={key}
+              className="filter-chip"
+              aria-pressed={side === key}
+              onClick={() => setSide(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {data?.as_of && (
+          <span className="text-xs text-ink-muted sm:ml-auto">
+            {data.as_of} 기준 · 상위 5종목
+          </span>
+        )}
+      </div>
       {error ? (
-        <ErrorState message="Failed to load top flows" onRetry={refetch} />
-      ) : isLoading || !data ? (
-        <LoadingState label="수급 데이터를 불러오는 중..." />
+        <ErrorState
+          message="수급 데이터를 불러오지 못했습니다"
+          onRetry={refetch}
+        />
+      ) : !data && isFetching ? (
+        <LoadingState label="수급 데이터를 불러오는 중…" />
       ) : rows.length === 0 ? (
-        <EmptyState title="No data" />
+        <EmptyState title="해당 조건의 수급 데이터가 없습니다" />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
+            <caption className="sr-only">
+              {investor === "frgn" ? "외국인" : "기관"}{" "}
+              {side === "buys" ? "순매수" : "순매도"} 상위 종목
+            </caption>
             <thead>
               <tr className="table-header">
-                <th className="py-2.5 px-3 text-left rounded-l-lg">#</th>
-                <th className="py-2.5 px-3 text-left">Name</th>
-                <th className="py-2.5 px-3 text-left">Mkt</th>
-                <th className="py-2.5 px-3 text-right">Net</th>
-                <th className="py-2.5 px-3 text-right rounded-r-lg">Chg</th>
+                <th className="px-2 py-3 text-left">종목</th>
+                <th className="px-2 py-3 text-right">순매수액</th>
+                <th className="px-2 py-3 text-right">등락률</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr
-                  key={`${row.rank}-${row.ticker}`}
-                  className="table-row cursor-pointer"
-                  onClick={() => goToStock(row)}
-                >
-                  <td className="table-cell num text-ink-muted">{row.rank}</td>
-                  <td className="table-cell">
-                    <span className="font-medium text-ink">{row.name}</span>
-                    <span className="ml-1.5 text-xs text-ink-muted num">
-                      {row.ticker}
-                    </span>
-                  </td>
-                  <td className="table-cell">
-                    <MarketBadge market={row.market} />
-                  </td>
-                  <td className="table-cell text-right">
-                    <span className={signClass(row.net_value)}>
+              {rows.map((row) => {
+                const metaId = tickerToMetaId.get(row.ticker);
+                return (
+                  <tr className="table-row" key={row.ticker}>
+                    <td className="px-2 py-3">
+                      <Link
+                        className="inline-flex flex-col gap-1 hover:text-primary-300"
+                        href={
+                          metaId === undefined
+                            ? `/stocksearch?q=${encodeURIComponent(row.ticker)}`
+                            : `/stock/${metaId}`
+                        }
+                      >
+                        <span className="font-medium">{row.name}</span>
+                        <span className="text-[11px] text-ink-muted">
+                          {row.ticker} · {row.market}
+                        </span>
+                      </Link>
+                    </td>
+                    <td
+                      className={`whitespace-nowrap px-2 py-3 text-right num ${signClass(row.net_value)}`}
+                    >
                       {fmtEok(row.net_value)}
-                    </span>
-                  </td>
-                  <td className="table-cell text-right">
-                    <span className={signClass(row.chg_pct)}>
+                    </td>
+                    <td
+                      className={`whitespace-nowrap px-2 py-3 text-right num ${signClass(row.chg_pct)}`}
+                    >
                       {fmtPct(row.chg_pct)}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
     </Card>
   );
-};
-
-export default FlowsTopCard;
+}

@@ -1,98 +1,100 @@
 "use client";
 
-import React, { useMemo } from "react";
+import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
 import {
   InsightMarket,
   useFetchInsightIndexQuery,
   useFetchIntradayMarketQuery,
 } from "@/state/api";
 import { fmtPct, signClass } from "@/app/insight/format";
+import styles from "./marketBriefing.module.css";
 
-interface IndexSnapshot {
-  close: number;
-  chgPct: number | null;
-}
-
-const Tile: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="card flex flex-col justify-between gap-1 min-h-[92px]">
-    {children}
-  </div>
-);
-
-const IndexTile: React.FC<{
-  market: InsightMarket;
-  snap: IndexSnapshot | null;
-  badge?: string;
-}> = ({ market, snap, badge }) => (
-  <Tile>
-    <p className={badge ? "metric-label flex items-center gap-1.5" : "metric-label"}>
-      {market}
-      {badge && <span className="text-xs font-normal text-losses">{badge}</span>}
-    </p>
-    {snap ? (
-      <div className="flex items-baseline gap-2">
-        <p className="metric-value">
-          {snap.close.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-        </p>
-        <span className={`text-sm ${signClass(snap.chgPct)}`}>
-          {fmtPct(snap.chgPct)}
-        </span>
-      </div>
-    ) : (
-      <p className="metric-value text-ink-muted">—</p>
-    )}
-  </Tile>
-);
-
-/** KOSPI / KOSDAQ snapshot. 레짐과 위험도는 시간축 카드에서 중복하지 않는다. */
-const MarketTiles: React.FC = () => {
-  const { data: indexData } = useFetchInsightIndexQuery({ days: 30 });
+export default function MarketTiles() {
+  const {
+    data: indexData,
+    isLoading,
+    error,
+    refetch,
+  } = useFetchInsightIndexQuery({ days: 30 });
   const { data: intraday } = useFetchIntradayMarketQuery(undefined, {
     pollingInterval: 5 * 60 * 1000,
     skipPollingIfUnfocused: true,
   });
 
-  // Latest close + day % per index from the last two points of each series.
-  const snapshots = useMemo(() => {
-    const out: Partial<Record<InsightMarket, IndexSnapshot>> = {};
-    const rows = indexData?.rows ?? [];
-    for (const market of ["KOSPI", "KOSDAQ"] as InsightMarket[]) {
-      const series = rows
-        .filter((r) => r.index === market && r.close != null)
-        .sort((a, b) => a.date.localeCompare(b.date));
-      if (series.length === 0) continue;
-      const last = series[series.length - 1];
-      const prev = series.length > 1 ? series[series.length - 2] : null;
-      out[market] = {
-        close: last.close,
-        chgPct: prev ? (last.close / prev.close - 1) * 100 : null,
-      };
-    }
-    return out;
-  }, [indexData]);
-
-  // 장중 스냅샷이 active면 KR 지수 타일만 장중 값으로 교체 (스펙 D4 — US 무관).
-  const liveSnapshots = useMemo(() => {
-    if (!intraday?.active || !intraday.indices) return snapshots;
-    const out = { ...snapshots };
-    for (const idx of intraday.indices) {
-      if (idx.key === "KOSPI" || idx.key === "KOSDAQ") {
-        out[idx.key as InsightMarket] = { close: idx.level, chgPct: idx.chg_pct };
-      }
-    }
-    return out;
-  }, [snapshots, intraday]);
-
-  const liveBadge = intraday?.active
-    ? `🔴 ${intraday.as_of?.slice(-5)}`
-    : undefined;
-
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <IndexTile market="KOSPI" snap={liveSnapshots.KOSPI ?? null} badge={liveBadge} />
-      <IndexTile market="KOSDAQ" snap={liveSnapshots.KOSDAQ ?? null} badge={liveBadge} />
+    <div className={styles.quotes}>
+      {(["KOSPI", "KOSDAQ"] as InsightMarket[]).map((market) => {
+        const series = (indexData?.rows ?? [])
+          .filter((row) => row.index === market && Number.isFinite(row.close))
+          .sort((a, b) => a.date.localeCompare(b.date));
+        const last = series.at(-1);
+        const previous = series.at(-2);
+        const snapshot = intraday?.active
+          ? intraday.indices?.find(
+              (index) => index.key === market && Number.isFinite(index.level),
+            )
+          : undefined;
+        // A delayed snapshot must not overwrite a more recent settled observation.
+        const useSnapshot = Boolean(
+          snapshot &&
+          intraday?.trade_date &&
+          (!last ||
+            intraday.trade_date > last.date ||
+            (intraday.trade_date === last.date && intraday.is_open)),
+        );
+        const value = useSnapshot ? snapshot?.level : last?.close;
+        const change = useSnapshot
+          ? (snapshot?.chg_pct ?? null)
+          : last && previous && previous.close !== 0
+            ? (last.close / previous.close - 1) * 100
+            : null;
+        const asOf = useSnapshot ? intraday?.as_of : last?.date;
+        const label = useSnapshot
+          ? intraday?.is_open
+            ? "장중 · 지연 시세"
+            : "마감 스냅샷"
+          : "정산 종가";
+        return (
+          <div className={styles.quote} key={market}>
+            <Link
+              href={`/insight?tab=${useSnapshot ? "intraday" : "settled"}&market=${market}`}
+              className={styles.quoteLabel}
+            >
+              {market}
+              <ArrowUpRight size={14} aria-hidden />
+            </Link>
+            <p className={styles.quoteValue}>
+              {value == null
+                ? "—"
+                : value.toLocaleString("ko-KR", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+            </p>
+            <p className={`${styles.quoteChange} ${signClass(change)}`}>
+              {fmtPct(change)} <small>전일 대비</small>
+            </p>
+            {error && value == null ? (
+              <button
+                type="button"
+                onClick={refetch}
+                className={styles.quoteDate}
+              >
+                불러오기 실패 · 다시 시도
+              </button>
+            ) : (
+              <p className={styles.quoteDate}>
+                {isLoading && value == null
+                  ? "지수 불러오는 중…"
+                  : asOf
+                    ? `${asOf.replace("T", " ")} · ${label}`
+                    : "관측값 미확인"}
+              </p>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
-};
-
-export default MarketTiles;
+}

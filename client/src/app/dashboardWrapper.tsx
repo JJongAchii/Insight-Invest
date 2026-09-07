@@ -93,7 +93,6 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
         <div className="mx-auto w-full max-w-[1560px] flex-grow">{children}</div>
       </main>
       <MobileBottomNav
-        actionCount={actionCount}
         researchUnseenCount={researchUnseenCount}
       />
       {!isMobileSidebarOpen && <PullToRefresh />}
