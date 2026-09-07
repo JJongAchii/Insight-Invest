@@ -123,6 +123,21 @@ def _finite(value):
     return value if math.isfinite(value) else None
 
 
+def _required_batch_start(dataset: str, now: pd.Timestamp) -> pd.Timestamp:
+    """평일 예약 회차 중 완료 기한(기동 후 100분)이 지난 마지막 시작 시각.
+
+    휴장일에도 수집기는 확인·빌드를 실행한다. 거래일을 추정하는 대신 built_at으로
+    그 확인이 실제 수행됐는지 본다. 09:00 US / 19:00 full, 10:40·20:40 failsafe와 일치.
+    """
+    hours = (9, 19) if dataset == "us_prices" else (19,)
+    starts = (
+        day + pd.Timedelta(hours=hour)
+        for day in pd.bdate_range(end=now.normalize(), periods=2)
+        for hour in hours
+    )
+    return max(start for start in starts if start + pd.Timedelta(minutes=100) <= now)
+
+
 def _data_status() -> list[dict]:
     """배치가 발행한 sidecar를 홈에서 읽기 쉬운 신선도 상태로 변환한다."""
     try:
@@ -130,7 +145,8 @@ def _data_status() -> list[dict]:
     except (FileNotFoundError, OSError):
         return []
 
-    today = pd.Timestamp(datetime.now(ZoneInfo("Asia/Seoul")).date())
+    now = pd.Timestamp(datetime.now(ZoneInfo("Asia/Seoul")))
+    today = now.tz_localize(None).normalize()
     rows = []
     for dataset, label in CORE_DATASETS.items():
         hit = df[df["dataset"] == dataset]
@@ -155,6 +171,8 @@ def _data_status() -> list[dict]:
         row = hit.iloc[-1]
         raw_status = str(row.get("status", "unknown"))
         as_of = None if pd.isna(row.get("as_of")) else str(row.get("as_of"))[:10]
+        required_start = _required_batch_start(dataset, now)
+        built_at = pd.to_datetime(row.get("built_at"), utc=True, errors="coerce")
         age = None
         session_age = None
         if as_of:
@@ -167,8 +185,14 @@ def _data_status() -> list[dict]:
             level, detail = "error", "최근 빌드 실패"
         elif raw_status == "preserved":
             level, detail = "warn", "이전 파일 보존"
+        elif pd.isna(built_at):
+            level, detail = "unknown", "갱신 시각 미확인"
+        elif built_at < required_start:
+            level, detail = "warn", f"예약 갱신 미확인 ({required_start:%m-%d %H:%M} 회차)"
+        elif session_age is None:
+            level, detail = "unknown", "데이터 기준일 미확인"
         elif session_age is not None and session_age > EXPECTED_LAG_SESSIONS[dataset]:
-            level, detail = "warn", f"시장일 기준 {session_age}세션 경과"
+            level, detail = "warn", f"평일 기준 {session_age}일 경과"
         else:
             level, detail = "ok", "정상"
         # factor_current는 4행뿐이라 구성 팩터 결측을 별도로 확인한다. sidecar의
