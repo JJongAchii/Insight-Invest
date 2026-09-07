@@ -98,6 +98,12 @@ jobs:
           ' /tmp/regime-kr.json
           jq 'with_entries(.value |= {latest, as_of, frequency, source})' \
             /tmp/regime-kr.json > /tmp/regime-kr-snapshot.json
+          curl -sf --max-time 110 \
+            -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
+            -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
+            "$URL/overview" >/tmp/market-overview.json
+          jq -e '.data_status | length == 5' /tmp/market-overview.json
+          jq '{data_status}' /tmp/market-overview.json >/tmp/market-data-status.json
           curl -sf -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
             -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
             "$URL/research?lane=all&limit=1" | jq -e \
@@ -136,4 +142,11 @@ jobs:
         with:
           name: regime-kr-snapshot
           path: /tmp/regime-kr-snapshot.json
+          if-no-files-found: error
+
+      - name: Record deployed market refresh status
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-data-status
+          path: /tmp/market-data-status.json
           if-no-files-found: error
