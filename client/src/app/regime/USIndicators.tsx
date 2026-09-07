@@ -47,7 +47,7 @@ const USIndicators: React.FC = () => {
     findIndicator("UNRATE");
   const { info: employeesInfo, data: employeesData } = findIndicator("PAYEMS");
   const { info: fedFundInfo, data: fedFundData } = findIndicator("FEDFUNDS");
-  const { info: cpiInfo, data: cpiData } = findIndicator("CPIAUCSL");
+  const { data: cpiData } = findIndicator("CPIAUCSL");
 
   if (infoError || dataError) {
     return (
@@ -161,12 +161,13 @@ const USIndicators: React.FC = () => {
         />
 
         <MacroChart
-          primaryData={cpiData}
+          primaryData={cpiData.map((point: MacroData) => ({ ...point, value: point.value * 100 }))}
           recessionData={recessionData}
-          primaryLabel={cpiInfo.description ?? "CPI"}
+          primaryLabel="CPI 전년동월 대비 (%)"
           recessionLabel={recessionInfo.description ?? "US Recession"}
-          title="소비자물가지수 (CPI, 지수 수준)"
+          title="소비자물가 상승률 (전년동월 대비, %)"
           helpKey="macro.cpi"
+          baseline={2}
         />
       </div>
     </div>

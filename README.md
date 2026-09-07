@@ -98,6 +98,7 @@ iPhone Safari와 홈 화면 PWA에서는 페이지 최상단에서 아래로 당
 | KR 전 종목 (KOSPI+KOSDAQ, 상폐 포함, 2016~) | qdata KRX 패널 | 매일 (배치 EC2 → S3 sync) |
 | US 종목·ETF (앱 meta 등록분, 2008~) | qdata Massive 전종목 가격 + 분할·배당 | 매일 09:00·19:00 KST 배치 → `app/us_prices.parquet` |
 | FRED 매크로 (레짐 대시보드) | qdata FRED 단일 원천(필요 시계열 1980~ 직접 수집) | 매일 |
+| 한국 금리·환율·CPI | qdata ECOS | 평일 19:00 KST 배치 초반 우선 발행 · 일간 관측일/월간 기준월 표시 |
 | 통합 종목 마스터 | qdata KRX 주식·ETF + Massive 티커 참조 → `app/asset_master.parquet` | 매일 |
 | US 실적 일정·발표 | Finnhub Earnings Calendar + qdata 활성 US 종목 참조 + SEC 공식 제출 페이지 | 평일 09:00·19:00 KST 우선 배치 · 주요 기업 50개 + 내 종목, 과거 결과 누적 |
 | 앱 자산 ID / 포트폴리오 | `app/asset_id_registry.parquet` / `app/portfolio/` | 신규 상장·앱 저장 시 |

@@ -34,13 +34,19 @@ const mergeSeries = (
 };
 
 const asOf = (series?: KrMacroSeries) => {
-  const date = series?.data.reduce((latest, point) => point.date > latest ? point.date : latest, "");
-  return date ? `${date} 기준` : "기준일 미확인";
+  if (!series?.as_of) return "기준일 미확인";
+  const period = series.frequency === "monthly" ? "기준월" : "관측";
+  return `${series.as_of} ${period} · ${series.source ?? "출처 미확인"}`;
 };
 
 /** Korea macro tab: policy/market rates, FX, inflation, and OECD CLI. */
 const KoreaMacro: React.FC = () => {
-  const { data, isLoading, error, refetch } = useFetchRegimeKrQuery();
+  const { data, isLoading, error, refetch } = useFetchRegimeKrQuery(undefined, {
+    pollingInterval: 300_000,
+    refetchOnMountOrArgChange: 300,
+    refetchOnFocus: true,
+    refetchOnReconnect: true,
+  });
 
   const series = data;
   const baseRate = series?.base_rate;

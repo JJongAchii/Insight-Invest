@@ -1234,7 +1234,10 @@ export interface KrMacroPoint {
 export interface KrMacroSeries {
   name: string;
   data: KrMacroPoint[];
-  latest: number;
+  latest: number | null;
+  as_of?: string;
+  frequency?: "daily" | "monthly";
+  source?: "ECOS" | "OECD";
 }
 
 export type RegimeKrResponse = Record<string, KrMacroSeries | undefined>
