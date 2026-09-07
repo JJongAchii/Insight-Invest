@@ -147,6 +147,11 @@ def _data_status() -> list[dict]:
 
     now = pd.Timestamp(datetime.now(ZoneInfo("Asia/Seoul")))
     today = now.tz_localize(None).normalize()
+    # 수집기와 같은 18:00 ET 정산 경계. 한국의 자정·미국 장중을 미수집일로 세지 않는다.
+    now_et = now.tz_convert("America/New_York")
+    settled_us_day = now_et.tz_localize(None).normalize()
+    if now_et.hour < 18:
+        settled_us_day -= pd.Timedelta(days=1)
     rows = []
     for dataset, label in CORE_DATASETS.items():
         hit = df[df["dataset"] == dataset]
@@ -178,7 +183,10 @@ def _data_status() -> list[dict]:
         if as_of:
             try:
                 age = max(0, int((today - pd.Timestamp(as_of)).days))
-                session_age = len(pd.bdate_range(pd.Timestamp(as_of) + pd.Timedelta(days=1), today))
+                age_end = settled_us_day if dataset == "us_prices" else today
+                session_age = len(
+                    pd.bdate_range(pd.Timestamp(as_of) + pd.Timedelta(days=1), age_end)
+                )
             except (TypeError, ValueError):
                 pass
         if raw_status == "error":

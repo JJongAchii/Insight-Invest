@@ -176,3 +176,34 @@ def test_data_status_does_not_hide_missed_batch(monkeypatch, dataset, as_of, bui
     assert row["level"] == expected
     if expected == "warn":
         assert "예약 갱신 미확인" in row["detail"]
+
+
+@pytest.mark.parametrize(
+    "now,as_of,elapsed,level",
+    [
+        ("2026-09-08 00:30", "2026-09-04", 0, "ok"),
+        ("2026-09-08 10:45", "2026-09-04", 1, "ok"),
+        ("2026-09-08 20:50", "2026-09-04", 1, "ok"),
+        ("2026-09-09 10:45", "2026-09-04", 2, "warn"),
+        ("2026-11-03 07:59", "2026-10-30", 0, "ok"),
+        ("2026-11-03 08:00", "2026-10-30", 1, "ok"),
+    ],
+)
+def test_us_age_uses_settled_et_day_across_kst_midnight_and_dst(
+    monkeypatch, now, as_of, elapsed, level
+):
+    current = pd.Timestamp(now, tz="Asia/Seoul")
+
+    class Clock:
+        @staticmethod
+        def now(tz):
+            return current.tz_convert(tz).to_pydatetime()
+
+    monkeypatch.setattr(overview, "datetime", Clock)
+    sidecar = pd.DataFrame(
+        [{"dataset": "us_prices", "status": "ok", "as_of": as_of, "built_at": current.isoformat()}]
+    )
+    monkeypatch.setattr(overview.storage, "read_parquet", lambda *a, **kw: sidecar)
+    us = next(row for row in overview._data_status() if row["dataset"] == "us_prices")
+    assert us["market_sessions_old"] == elapsed
+    assert us["level"] == level
