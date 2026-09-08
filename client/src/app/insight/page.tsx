@@ -29,8 +29,8 @@ const SECTIONS = [
   },
   {
     id: "sectors",
-    label: "섹터",
-    description: "강세 업종의 확산과 업종 간 순환을 살펴봅니다.",
+    label: "섹터 · 테마",
+    description: "업종과 테마의 강약을 비교하고, 구성 종목에서 가격·수급의 근거를 확인합니다.",
   },
   {
     id: "factors",
