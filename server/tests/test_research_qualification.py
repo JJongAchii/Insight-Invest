@@ -115,6 +115,17 @@ def test_previous_ready_model_is_not_a_completed_comparison(monkeypatch):
     assert not qualification.current_analysis(item)
 
 
+def test_prefilter_skip_is_not_counted_as_a_model_comparison():
+    records = [
+        {"title": "AI introduction", "analysis_status": "not_requested"},
+        {"title": "Systematic credit", "analysis_status": "pending"},
+    ]
+    assert qualification.analysis_candidates(records) == [records[1]]
+    assert (
+        len(records) == 2
+    )  # Keep the exclusion in the evidence, not silently delete it.
+
+
 def test_runner_sets_mini_prices_and_restores_defaults_without_io(
     configured, monkeypatch, tmp_path
 ):

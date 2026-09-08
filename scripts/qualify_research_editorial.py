@@ -79,6 +79,13 @@ def select_records(groups: list[list[dict]], maximum: int) -> list[dict]:
     return list(selected.values())
 
 
+def analysis_candidates(records: list[dict]) -> list[dict]:
+    """Do not count deterministic prefilter skips as model comparison slots."""
+    return [
+        record for record in records if record.get("analysis_status") != "not_requested"
+    ]
+
+
 def current_analysis(item: dict) -> bool:
     # A ready nano brief is not a completed mini comparison on the same source.
     return item.get("analysis_status") == "ready" and item.get("analysis", {}).get(
@@ -175,6 +182,16 @@ def run(output: Path) -> int:
         with ThreadPoolExecutor(max_workers=4) as pool:
             for health, records in pool.map(collect, sources):
                 report["sources"].append(health)
+                if model == "gpt-5-mini":
+                    report.setdefault("prefilter_skipped", []).extend(
+                        {
+                            key: record[key]
+                            for key in ("source_id", "title", "url", "relevance_reason")
+                        }
+                        for record in records
+                        if record.get("analysis_status") == "not_requested"
+                    )
+                    records = analysis_candidates(records)
                 # Listings can pin an old abstract first. A one-card connection
                 # check should prefer a recent accessible body from that source.
                 groups.append(
