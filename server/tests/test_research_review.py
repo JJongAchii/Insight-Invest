@@ -278,3 +278,35 @@ def test_unchanged_etag_migration_demotes_unreviewed_ready_without_key(
     item = research.load_feed()["items"][0]
     assert item["research_lane"] == "discovery" and not item["notification_eligible"]
     assert item["analysis"]["brief"] == feed["items"][0]["analysis"]["brief"]
+
+
+def test_reviewer_cannot_borrow_other_fields_citations_or_hide_missing_years():
+    text = TEXT + "The separate sample ran from 2009 to 2025."
+    value = brief()
+    value["method_data"] = {
+        **value["method_data"],
+        "text_ko": "저자는 2009–2025 자료를 분석했다.",
+    }
+    checks = checks_for(value)
+    checks["method_data"]["evidence_ids"] = [len(analysis._source_passages(text)) - 1]
+    grounded = review.validate_checks(checks, text, value)
+    method = grounded["method_data"]
+    assert method["status"] == "supported"  # Preserve the raw model's false pass.
+    assert method["guard_issues"] == [
+        "review_cites_outside_point_evidence",
+        "years_absent_from_point_evidence:2009,2025",
+    ]
+    assert review._decision(grounded, value) == "rejected"
+    assert review.missing_years("2009–2025", "December 2009 to December 2025.") == []
+    assert review.missing_years("2018년", "2018, since launch.") == []
+
+
+def test_new_year_facts_in_unquoted_note_are_not_cleared_by_elsewhere_source():
+    value = brief()
+    value["reviewer_note"] = "2018년부터 운용한 전략을 확인하세요."
+    checked = review.validate_checks(
+        checks_for(value), TEXT + "The strategy started in 2018.", value
+    )
+    assert checked["reviewer_note"]["guard_issues"] == [
+        "note_years_absent_from_grounded_points:2018"
+    ]

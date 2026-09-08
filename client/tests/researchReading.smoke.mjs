@@ -11,9 +11,11 @@ const report = JSON.parse(await readFile(reportPath, "utf8"));
 assert.equal(report.production_modified, false);
 assert.equal(report.status, "api_contract_qualified");
 const originalItems = report.items.filter((item) =>
-  item.analysis_status === "ready" && item.analysis?.prompt_version === report.prompt_version,
+  item.analysis?.prompt_version === report.prompt_version,
 );
 assert.equal(originalItems.length, 3, "This smoke test covers the bounded three-card sample");
+assert.equal(report.reviewed, 3, "Use actual source-review outcomes, never mark drafts reviewed in the fixture");
+const reviewed = (item) => item.analysis_status === "ready" && item.editorial_review_status === "accepted";
 const baseURL = process.env.UI_BASE_URL || "http://127.0.0.1:3118";
 assert.ok(["127.0.0.1", "localhost"].includes(new URL(baseURL).hostname));
 const output = process.env.UI_OUTPUT_DIR || "/tmp/insight-research-reading-review";
@@ -77,9 +79,23 @@ try {
     page.on("dialog", (dialog) => dialog.accept());
     await page.goto("/research");
     for (const item of items.filter((value) => value.research_lane === "core")) {
+      assert.ok(reviewed(item), "Core requires an accepted actual review");
+      await page.locator(`#research-${item.entry_id}`).waitFor();
+    }
+    assert.equal(await page.locator("article[id^='research-']").count(), items.filter((item) => item.research_lane === "core").length);
+    await page.screenshot({ path: `${output}/core-${viewport.width}.png`, fullPage: true });
+    await page.getByRole("button", { name: /^전체 기록/ }).click();
+    for (const item of items) {
       const card = page.locator(`#research-${item.entry_id}`);
       await card.waitFor();
       assert.equal(await card.getByRole("link", { name: "원문 열기" }).getAttribute("href"), item.url);
+      if (!reviewed(item)) {
+        assert.equal(await card.locator("dl").count(), 0, "Do not display a rejected Korean draft as an approved summary");
+        assert.ok(await card.getByText(item.title, { exact: true }).count());
+        assert.ok(await card.getByText("요약 검수 보류", { exact: false }).count());
+        continue;
+      }
+      assert.ok(await card.getByText("원문 대조 완료", { exact: false }).count());
       const points = card.locator("dl > div");
       for (const [index, point] of Object.values(item.analysis.brief).filter((value) => value?.evidence).entries()) {
         const row = points.nth(index);
@@ -89,30 +105,33 @@ try {
         if (expected.length > 1) assert.ok(await row.getByText("중간 원문 생략 · 다음 근거").count());
       }
     }
-    assert.ok(await page.getByText("방법·실증 연구", { exact: true }).count());
-    assert.ok(await page.getByText("운용 아이디어·실무", { exact: true }).count());
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
-    await page.screenshot({ path: `${output}/core-${viewport.width}.png`, fullPage: true });
-    await page.getByRole("button", { name: /^시장·배경/ }).click();
-    const commentary = items.find((item) => item.analysis.brief.content_kind === "market_commentary");
-    assert.ok(commentary, "The sample must retain a market-commentary card");
-    const card = page.locator(`#research-${commentary.entry_id}`);
+    await page.screenshot({ path: `${output}/all-${viewport.width}.png`, fullPage: true });
+    for (const [lane, label] of [["discovery", /^발견함/], ["context", /^시장·배경/]]) {
+      await page.getByRole("button", { name: label }).click();
+      for (const item of items.filter((value) => value.research_lane === lane)) {
+        await page.locator(`#research-${item.entry_id}`).waitFor();
+      }
+    }
+    await page.getByRole("button", { name: /^전체 기록/ }).click();
+    const selected = items.find(reviewed) || items[0];
+    const card = page.locator(`#research-${selected.entry_id}`);
     await card.waitFor();
-    assert.ok(await card.getByText("저자의 전망·해석", { exact: true }).count());
     await card.getByRole("button", { name: "보관", exact: true }).click();
     await card.getByRole("button", { name: "보관 해제", exact: true }).waitFor();
     await page.getByRole("button", { name: /^보관함/ }).click();
     await card.waitFor();
-    await page.getByRole("searchbox", { name: "리서치 검색" }).fill(commentary.analysis.brief.title_ko.slice(0, 6));
+    await page.getByRole("searchbox", { name: "리서치 검색" }).fill(selected.title.slice(0, 12));
     await page.waitForURL((url) => Boolean(url.searchParams.get("q")));
     await card.waitFor();
     await page.getByRole("button", { name: "모두 읽음", exact: true }).click();
     await card.getByRole("button", { name: "안 읽음으로", exact: true }).waitFor();
     assert.ok(await card.getByRole("button", { name: "보관 해제", exact: true }).isVisible());
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
-    await page.screenshot({ path: `${output}/commentary-${viewport.width}.png`, fullPage: true });
-    checks.push({ width: viewport.width, status: "passed", cards: items.length });
-    console.log(`PASS ${viewport.width}px: actual briefs, separated quotes, lane, search, save, mark-all-read`);
+    await page.screenshot({ path: `${output}/library-${viewport.width}.png`, fullPage: true });
+    checks.push({ width: viewport.width, status: "passed", cards: items.length,
+      accepted: items.filter(reviewed).length, rejected: report.review_rejected });
+    console.log(`PASS ${viewport.width}px: actual review outcomes, held originals, lane, search, save, mark-all-read`);
     await context.close();
   }
   assert.deepEqual(errors, []);
