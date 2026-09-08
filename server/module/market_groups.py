@@ -79,7 +79,7 @@ def build_snapshots(prices, sectors, master, flows, fundamentals, indices, theme
     All percentages are 0..100 units; contributions/excess are percentage points.
     """
     px = prices.copy()
-    px["date"] = pd.to_datetime(px["date"]).dt.normalize()
+    px["date"] = pd.to_datetime(px["date"]).astype("datetime64[ns]").dt.normalize()
     px = px[px["market"].isin(MARKETS)].sort_values(["ticker", "date"])
     _unique(px, ["date", "ticker"], "prices")
     if px.empty:
@@ -103,7 +103,7 @@ def build_snapshots(prices, sectors, master, flows, fundamentals, indices, theme
     )
 
     sec = sectors.copy()
-    sec["date"] = pd.to_datetime(sec["date"]).dt.normalize()
+    sec["date"] = pd.to_datetime(sec["date"]).astype("datetime64[ns]").dt.normalize()
     sec = sec[sec["date"] <= as_of]
     _unique(sec, ["date", "ticker"], "classification")
     current = master[master["market"].isin(MARKETS)].copy()
@@ -138,7 +138,7 @@ def build_snapshots(prices, sectors, master, flows, fundamentals, indices, theme
 
     fund = fundamentals.copy()
     if not fund.empty:
-        fund["date"] = pd.to_datetime(fund["date"]).dt.normalize()
+        fund["date"] = pd.to_datetime(fund["date"]).astype("datetime64[ns]").dt.normalize()
         fund = fund[fund["date"] <= as_of]
         _unique(fund, ["date", "ticker"], "fundamentals")
         fund = fund.sort_values("date").drop_duplicates("ticker", keep="last")
@@ -150,7 +150,7 @@ def build_snapshots(prices, sectors, master, flows, fundamentals, indices, theme
 
     flow = flows.copy()
     if not flow.empty:
-        flow["date"] = pd.to_datetime(flow["date"]).dt.normalize()
+        flow["date"] = pd.to_datetime(flow["date"]).astype("datetime64[ns]").dt.normalize()
         flow["investor"] = flow["investor"].str.lower()
         flow = flow[flow["date"].isin(dates) & flow["investor"].isin(["frgn", "inst"])]
         _unique(flow, ["date", "ticker", "investor"], "flows")
@@ -159,7 +159,7 @@ def build_snapshots(prices, sectors, master, flows, fundamentals, indices, theme
     benchmarks = {"ALL": _daily(px)}
     idx = indices.copy()
     if not idx.empty:
-        idx["date"] = pd.to_datetime(idx["date"]).dt.normalize()
+        idx["date"] = pd.to_datetime(idx["date"]).astype("datetime64[ns]").dt.normalize()
         _unique(idx, ["date", "index_code"], "indices")
     idx = idx.reindex(columns=["date", "index_code", "close"])
     for market, code in (("KOSPI", "1001"), ("KOSDAQ", "2001")):

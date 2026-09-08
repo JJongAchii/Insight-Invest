@@ -214,3 +214,13 @@ def test_shipped_theme_registry_has_unique_members_and_reviewable_sources():
     for theme in themes:
         assert theme["source_as_of"] <= theme["reviewed_at"]
         assert all(source["url"].startswith("https://") for source in theme["sources"])
+
+
+@pytest.mark.parametrize("price_unit,sector_unit", [("ms", "ns"), ("ns", "ms"), ("us", "ms")])
+def test_arrow_date_resolutions_join_without_changing_results(price_unit, sector_unit):
+    args = list(inputs())
+    expected = detail(mg.build_snapshots(*args))
+    args[0]["date"] = args[0]["date"].astype(f"datetime64[{price_unit}]")
+    for index in (1, 3, 4, 5):
+        args[index]["date"] = args[index]["date"].astype(f"datetime64[{sector_unit}]")
+    assert detail(mg.build_snapshots(*args)) == expected
