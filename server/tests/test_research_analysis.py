@@ -221,7 +221,7 @@ def test_model_request_uses_gpt5_mini_strict_schema_without_storage(monkeypatch)
     assert payload["text"]["format"]["type"] == "json_schema"
     assert payload["text"]["format"]["strict"] is True
     assert payload["max_output_tokens"] == analysis.MAX_OUTPUT_TOKENS
-    assert payload["reasoning"] == {"effort": "low"}
+    assert payload["reasoning"] == {"effort": "medium"}
     source = json.loads(payload["input"])
     assert source["source_passages"][0]["text"] in TEXT
     assert "source_text" not in source
@@ -648,6 +648,8 @@ def test_prompt_requires_finance_terms_attribution_and_conditions():
     # Real linguistic/semantic quality is checked separately against real sources.
     assert "시스템 기반 크레딧 투자" in analysis.SYSTEM
     assert "금융배출량" in analysis.SYSTEM
+    assert "revenue = 매출" in analysis.SYSTEM
+    assert "운용 인력의 점검·감독" in analysis.SYSTEM
     assert "Preserve material conditions on numerical claims" in analysis.SYSTEM
     assert "an expected benefit is not a measured result" in analysis.SYSTEM
 

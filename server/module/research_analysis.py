@@ -19,8 +19,8 @@ import httpx
 from datastore import research, storage
 
 MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-brief-openai-v6-separated-evidence"
-REASONING_EFFORT = "low"
+PROMPT_VERSION = "reading-brief-openai-v7-korean-editorial"
+REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 8192  # Visible output AND reasoning; real PDFs exceeded 4096.
 MAX_INPUT_CHARS = 24000
 MAX_ATTEMPTS = 3
@@ -60,8 +60,8 @@ market capitalization = 시가총액; mid-year review = 중간 점검.
 Distinguish valuation changes, portfolio-weight changes, and real emissions changes.
 Do not translate technical terms word-for-word into unfamiliar Korean or scatter
 unnecessary English words through otherwise Korean sentences.
-Keep each text_ko to one short sentence,
-preferably under 120 characters. The five points describe the author's question,
+Keep each text_ko to one or two concise sentences, within the schema length bound.
+Do not drop necessary conditions just to shorten a sentence. The five points describe the author's question,
 method/data, finding, concrete reading value, and explicitly stated limitation.
 Attribute findings/outlooks to the author; an expected benefit is not a measured result.
 Preserve material conditions on numerical claims, including the universe, period,
@@ -88,7 +88,23 @@ Practitioner articles need not state a formal research question; question may be
 method_data can describe a concrete framework or mechanism, not only an experiment.
 finding can describe a specific source-supported analytical conclusion, not only a
 backtest result. Set substantive=true only when method_data or finding is non-null
-and grounded in the source; a name, topic, teaser, or vague opinion is not enough."""
+and grounded in the source; a name, topic, teaser, or vague opinion is not enough.
+
+한국어 편집 기준:
+독자가 원문을 읽을지 판단할 수 있도록 구체적인 방법과 저자의 주장을 자연스럽게 설명한다.
+금융 용어를 낱말 단위로 직역하지 않는다. 아래 개념을 언급할 때는 이 용어를 일관되게 쓴다.
+financed emissions = 금융배출량 (자금조달배출 아님)
+revenue = 매출 (투자 수익이나 이익 아님); return = 수익률 (매출 아님)
+fixed income = 채권 (고정수익 아님); systematic credit = 시스템 기반 크레딧 투자
+human oversight = 운용 인력의 점검·감독 (오버사이트 아님)
+diversification = 분산 효과; relative winners = 상대적으로 유망한 종목 (우승자 아님)
+mid-year report/review = 연중 보고서/중간 점검 (중간연도 아님)
+climate-aware investor = 기후를 고려하는 투자자 (기후 인식 투자자 아님)
+숫자를 쓰면 그 수치의 정확한 대상 지표·기간·핵심 가정도 함께 쓴다. 특정 지표에서만 나온
+분해 비율을 여러 지표 전체의 결과로 넓히지 않는다. 배출량과 배출집약도도 서로 구분한다.
+근거에 없는 조건을 보충하지 말고, 문장 길이 안에 정확히 설명할 수 없으면 숫자를 빼거나 null로 둔다.
+출력 전에 각 한국어 문장의 모든 사실이 선택한 원문 인용으로 뒷받침되는지 확인한다.
+원문에 없는 우수성·성과를 추가하지 않는다. 매끄러운 번역보다 뜻의 정확성이 우선이다."""
 
 POINT_SCHEMA = {
     "anyOf": [
