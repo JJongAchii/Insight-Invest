@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import textwrap
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -18,7 +19,7 @@ import httpx
 from datastore import research, storage
 
 MODEL = "gpt-5-nano"
-PROMPT_VERSION = "reading-brief-openai-v2"
+PROMPT_VERSION = "reading-brief-openai-v3-passages"
 MAX_OUTPUT_TOKENS = 8192  # Visible output AND reasoning; real PDFs exceeded 4096.
 MAX_INPUT_CHARS = 24000
 MAX_ATTEMPTS = 3
@@ -39,10 +40,11 @@ analysis, interviews, and promotional teasers are not substantive quant research
 Write title_ko and text_ko in Korean. Keep each text_ko to one short sentence,
 preferably under 120 characters. The five points describe the author's question,
 method/data, finding, concrete reading value, and explicitly stated limitation.
-For each non-null point, evidence MUST be one exact contiguous quote from source_text
-(15-180 characters), in its original language, supporting that point. Do not translate
-or rewrite quotes. If a point has no such support, return null. Do not fill missing
-limitations from general knowledge. reviewer_note is a short Korean AI interpretation
+The source_passages are consecutive excerpts of ONE document, in reading order.
+For each non-null point, choose the evidence_id of a supplied passage that directly
+supports text_ko. The application will attach its verbatim text; never generate a
+quote yourself. If no supplied passage supports the point, return null. Do not fill
+missing limitations from general knowledge. reviewer_note is a short Korean AI interpretation
 or question to check, clearly separate from the author's claims, not new factual
 evidence. It must acknowledge a partial extract when the input is incomplete.
 Practitioner articles need not state a formal research question; question may be null.
@@ -58,9 +60,9 @@ POINT_SCHEMA = {
             "type": "object",
             "properties": {
                 "text_ko": {"type": "string", "maxLength": 360},
-                "evidence": {"type": "string", "maxLength": 180},
+                "evidence_id": {"type": "integer", "minimum": 0},
             },
-            "required": ["text_ko", "evidence"],
+            "required": ["text_ko", "evidence_id"],
             "additionalProperties": False,
         },
     ]
@@ -89,6 +91,35 @@ class AnalysisContractError(ValueError):
 
 def _normalize(text: str) -> str:
     return " ".join(text.split())
+
+
+def _source_passages(text: str) -> list[dict]:
+    normalized = _normalize(text)
+    quotes = textwrap.wrap(normalized, width=180, break_on_hyphens=False)
+    if quotes and len(quotes[-1]) < 15 and len(normalized) >= 15:
+        quotes[-1] = normalized[-180:]
+    return [{"id": number, "text": quote} for number, quote in enumerate(quotes)]
+
+
+def _ground_response(value: dict, text: str) -> dict:
+    if not isinstance(value, dict):
+        raise AnalysisContractError("analysis JSON must be an object")
+    passages = _source_passages(text)
+    result = dict(value)
+    for field in FIELDS:
+        point = value.get(field)
+        if point is None:
+            continue
+        if not isinstance(point, dict) or set(point) != {"text_ko", "evidence_id"}:
+            raise AnalysisContractError(f"invalid structured brief {field}")
+        number = point["evidence_id"]
+        if type(number) is not int or not 0 <= number < len(passages):
+            raise AnalysisContractError(f"unknown source passage: {field}")
+        result[field] = {
+            "text_ko": point["text_ko"],
+            "evidence": passages[number]["text"],
+        }
+    return validate_brief(result, text)
 
 
 def validate_brief(value: dict, text: str) -> dict:
@@ -179,7 +210,7 @@ def _request_payload(text: str, title: str) -> dict:
         "input": json.dumps(
             {
                 "source_title": title,
-                "source_text": text,
+                "source_passages": _source_passages(text),
                 "scope": "bounded_source_extract",
             },
             ensure_ascii=False,
@@ -253,7 +284,7 @@ def _model_call(text: str, title: str, api_key: str) -> tuple[dict, dict]:
         brief = json.loads(raw)
     except json.JSONDecodeError as exc:
         raise AnalysisContractError("analysis response was not valid JSON") from exc
-    return validate_brief(brief, text), measured
+    return _ground_response(brief, text), measured
 
 
 def enrich(

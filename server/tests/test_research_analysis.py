@@ -58,6 +58,14 @@ def brief(*, relevant=True):
     }
 
 
+def wire_brief():
+    result = brief()
+    for field in analysis.FIELDS:
+        if result[field] is not None:
+            result[field] = {"text_ko": result[field]["text_ko"], "evidence_id": 0}
+    return result
+
+
 @pytest.fixture
 def source(monkeypatch, tmp_path):
     monkeypatch.setenv("APP_DATA", str(tmp_path))
@@ -190,7 +198,7 @@ def test_model_request_uses_gpt5_nano_strict_schema_without_storage(monkeypatch)
                     {
                         "type": "message",
                         "content": [
-                            {"type": "output_text", "text": json.dumps(brief())}
+                            {"type": "output_text", "text": json.dumps(wire_brief())}
                         ],
                     }
                 ],
@@ -213,6 +221,9 @@ def test_model_request_uses_gpt5_nano_strict_schema_without_storage(monkeypatch)
     assert payload["text"]["format"]["strict"] is True
     assert payload["max_output_tokens"] == analysis.MAX_OUTPUT_TOKENS
     assert payload["reasoning"] == {"effort": "minimal"}
+    source = json.loads(payload["input"])
+    assert source["source_passages"][0]["text"] in TEXT
+    assert "source_text" not in source
     assert "tools" not in payload
     assert captured["headers"]["Authorization"] == "Bearer test-key"
 
@@ -460,3 +471,22 @@ def test_practitioner_article_needs_substance_not_a_formal_research_question():
         analysis.AnalysisContractError, match="lacks grounded method/finding"
     ):
         analysis.validate_brief(value, TEXT)
+
+
+def test_quotes_are_attached_by_code_not_rewritten_by_the_model():
+    value = analysis._ground_response(wire_brief(), TEXT)
+    assert (
+        value["method_data"]["evidence"] == analysis._source_passages(TEXT)[0]["text"]
+    )
+    assert value["method_data"]["evidence"] in TEXT
+    bad = wire_brief()
+    bad["method_data"]["evidence_id"] = 999999
+    with pytest.raises(analysis.AnalysisContractError, match="unknown source passage"):
+        analysis._ground_response(bad, TEXT)
+
+
+def test_passages_are_bounded_verbatim_even_with_unicode_and_a_short_tail():
+    text = ("한국어 원문 근거를 그대로 연결합니다. " * 40) + "끝"
+    for passage in analysis._source_passages(text):
+        assert 15 <= len(passage["text"]) <= 180
+        assert passage["text"] in analysis._normalize(text)
