@@ -142,6 +142,133 @@ def test_missing_post_release_actual_stays_visible_and_is_searchable(monkeypatch
     assert result["coverage"]["filtered_events"] == 1
 
 
+def test_official_actuals_are_reported_without_unsafe_eps_surprise(monkeypatch):
+    today = datetime.now(earnings.KST).date()
+    release = (today - timedelta(days=2)).isoformat()
+    rows = [
+        {
+            "event_id": "dell-official",
+            "meta_id": 5431,
+            "ticker": "DELL",
+            "name": "Dell Technologies Inc.",
+            "scope": "market",
+            "is_market_leader": True,
+            "marketcap_rank": 45,
+            "release_date": release,
+            "release_timing": "amc",
+            "lifecycle": "scheduled",
+            "eps_actual": None,
+            "eps_estimate": 5.012,
+            "revenue_actual": None,
+            "revenue_estimate": 45_852_452_985,
+            "official_result_status": "filed",
+            "official_actual_status": "extracted",
+            "official_eps_gaap_actual": 6.34,
+            "official_eps_adjusted_actual": 7.04,
+            "official_revenue_actual": 46_971_000_000,
+            "official_actual_url": "https://www.sec.gov/dell-release",
+            "data_as_of": today.isoformat(),
+            "as_of": today.isoformat(),
+        }
+    ]
+    monkeypatch.setattr(earnings.earnings_store, "list_events", lambda: pd.DataFrame(rows))
+    monkeypatch.setattr(
+        earnings.earnings_store,
+        "list_universe",
+        lambda: pd.DataFrame(
+            [
+                {
+                    "meta_id": 5431,
+                    "ticker": "DELL",
+                    "name": "Dell Technologies Inc.",
+                    "scope": "market",
+                    "is_market_leader": True,
+                }
+            ]
+        ),
+    )
+    monkeypatch.setattr(earnings.earnings_store, "list_revisions", lambda: pd.DataFrame())
+    monkeypatch.setattr(
+        earnings.earnings_store,
+        "source_status",
+        lambda: {"provider": "finnhub", "status": "ok", "data_as_of": today.isoformat()},
+    )
+
+    result = earnings.get_earnings(scope="all", days=90, results_days=120, q="DELL")
+
+    assert result["pending_results"] == []
+    assert len(result["recent_results"]) == 1
+    dell = result["recent_results"][0]
+    assert dell["display_status"] == "reported"
+    assert dell["eps_actual"] == 7.04
+    assert dell["eps_actual_source"] == "sec"
+    assert dell["eps_actual_basis"] == "non_gaap_diluted"
+    assert dell["eps_surprise_pct"] is None
+    assert dell["revenue_actual"] == 46_971_000_000
+    assert dell["revenue_actual_source"] == "sec"
+    assert round(dell["revenue_surprise_pct"], 2) == 2.44
+    assert dell["result_signal"] is None
+    assert dell["actual_reconciliation_status"] == "official_only"
+
+
+def test_finnhub_actuals_reconcile_against_preserved_official_values():
+    frame = pd.DataFrame(
+        [
+            {
+                "eps_actual": 7.04,
+                "eps_estimate": 5.012,
+                "eps_surprise_pct": 40.46,
+                "revenue_actual": 46_970_000_000,
+                "revenue_estimate": 45_852_452_985,
+                "revenue_surprise_pct": 2.44,
+                "result_signal": "beat",
+                "official_actual_status": "extracted",
+                "official_eps_adjusted_actual": 7.04,
+                "official_eps_gaap_actual": 6.34,
+                "official_revenue_actual": 46_971_000_000,
+            },
+            {
+                "eps_actual": 6.34,
+                "eps_estimate": 5.012,
+                "revenue_actual": 44_000_000_000,
+                "revenue_estimate": 45_852_452_985,
+                "official_actual_status": "extracted",
+                "official_eps_adjusted_actual": 7.04,
+                "official_eps_gaap_actual": 6.34,
+                "official_revenue_actual": 46_971_000_000,
+            },
+        ]
+    )
+
+    resolved = earnings._resolve_actuals(frame)
+
+    assert resolved.iloc[0]["actual_reconciliation_status"] == "matched"
+    assert resolved.iloc[0]["eps_actual_source"] == "finnhub"
+    assert resolved.iloc[1]["actual_reconciliation_status"] == "differs"
+
+
+def test_non_extracted_official_values_never_become_display_actuals():
+    frame = pd.DataFrame(
+        [
+            {
+                "lifecycle": "scheduled",
+                "eps_actual": None,
+                "revenue_actual": None,
+                "official_actual_status": "ambiguous",
+                "official_eps_adjusted_actual": 99.0,
+                "official_revenue_actual": 999_000_000_000,
+            }
+        ]
+    )
+
+    resolved = earnings._resolve_actuals(frame).iloc[0]
+
+    assert pd.isna(resolved["eps_actual"])
+    assert pd.isna(resolved["revenue_actual"])
+    assert resolved["lifecycle"] == "scheduled"
+    assert resolved["actual_reconciliation_status"] is None
+
+
 def test_empty_event_source_still_applies_company_search_to_coverage(monkeypatch):
     monkeypatch.setattr(earnings.earnings_store, "list_events", lambda: pd.DataFrame())
     monkeypatch.setattr(

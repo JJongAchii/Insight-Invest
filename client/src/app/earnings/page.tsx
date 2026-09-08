@@ -124,12 +124,14 @@ function MetricBlock({
   actual,
   estimate,
   surprise,
+  actualNote,
   money = false,
 }: {
   title: string;
   actual: number | null;
   estimate: number | null;
   surprise: number | null;
+  actualNote?: string | null;
   money?: boolean;
 }) {
   const format = money ? moneyLabel : numberLabel;
@@ -141,6 +143,7 @@ function MetricBlock({
       <div>
         <p className="text-[10px] uppercase tracking-wide text-ink-muted">실제</p>
         <p className="mt-0.5 text-sm font-semibold text-ink num">{format(actual)}</p>
+        {actualNote && <p className="mt-0.5 text-[10px] text-ink-muted">{actualNote}</p>}
       </div>
       <div>
         <p className="text-[10px] uppercase tracking-wide text-ink-muted">예상</p>
@@ -164,6 +167,21 @@ function EarningsCard({ item }: { item: EarningsEvent }) {
     .join(" ");
   const signal = item.result_signal ? SIGNAL[item.result_signal] : null;
   const officialResultFiled = item.official_result_status === "filed";
+  const officialFallback = item.actual_reconciliation_status === "official_only";
+  const reconciliationDiffers = item.actual_reconciliation_status === "differs";
+  const reconciliationMatched = item.actual_reconciliation_status === "matched";
+  const epsActualNote = item.eps_actual_basis === "non_gaap_diluted"
+    ? "Official non-GAAP"
+    : item.eps_actual_basis === "gaap_diluted"
+      ? "Official GAAP"
+      : item.eps_actual_source === "finnhub"
+        ? "Finnhub standardized"
+        : null;
+  const revenueActualNote = item.revenue_actual_source === "sec"
+    ? "Official release"
+    : item.revenue_actual_source === "finnhub"
+      ? "Finnhub standardized"
+      : null;
   const releaseDate = dateParts(item.release_date);
   const railStyle = item.display_status === "reported"
     ? "from-gains via-gains/60 to-transparent"
@@ -177,7 +195,7 @@ function EarningsCard({ item }: { item: EarningsEvent }) {
       : "border-primary-300 shadow-[0_0_12px_rgba(155,126,255,0.65)]";
 
   const saveToJournal = () => {
-    const result = item.lifecycle === "reported"
+    const result = item.display_status === "reported"
       ? `EPS ${numberLabel(item.eps_actual)} vs ${numberLabel(item.eps_estimate)}, Revenue ${moneyLabel(item.revenue_actual)} vs ${moneyLabel(item.revenue_estimate)}`
       : `EPS estimate ${numberLabel(item.eps_estimate)}, Revenue estimate ${moneyLabel(item.revenue_estimate)}`;
     sessionStorage.setItem(
@@ -195,11 +213,11 @@ function EarningsCard({ item }: { item: EarningsEvent }) {
         name: item.name,
         market: "US",
         scope: item.scope,
-        event_status: item.lifecycle === "reported" ? "observed" : "projected",
+        event_status: item.display_status === "reported" ? "observed" : "projected",
         scheduled_for: item.release_date,
         available_at: item.available_at,
         data_as_of: item.data_as_of,
-        source: item.source,
+        source: officialFallback ? "sec" : item.source,
       })
     );
     router.push("/journal?prefill=earnings");
@@ -227,6 +245,9 @@ function EarningsCard({ item }: { item: EarningsEvent }) {
               {item.scope === "watchlist" && <span className="badge-neutral">Watchlist</span>}
               <span className={`rounded-full px-2 py-0.5 font-medium ${displayStatus.style}`}>{displayStatus.label}</span>
               {officialResultFiled && <span className="rounded-full bg-primary-400/15 px-2 py-0.5 font-semibold text-primary-400">Official Result Filed</span>}
+              {officialFallback && <span className="rounded-full bg-primary-400/15 px-2 py-0.5 font-semibold text-primary-300">Official Actual</span>}
+              {reconciliationMatched && <span className="rounded-full bg-gains/15 px-2 py-0.5 font-semibold text-gains">Sources Matched</span>}
+              {reconciliationDiffers && <span className="rounded-full bg-warning/15 px-2 py-0.5 font-semibold text-warning">Source Difference</span>}
               {signal && <span className={`rounded-full px-2 py-0.5 font-semibold ${signal.style}`}>{signal.label}</span>}
             </div>
             <h3 className="mt-2 truncate text-lg font-semibold tracking-[-0.02em] text-ink">
@@ -243,22 +264,26 @@ function EarningsCard({ item }: { item: EarningsEvent }) {
           <div>
             <p className="font-medium text-ink">{timing.label}</p>
             <p className="text-xs text-ink-muted">
-              {item.display_status === "awaiting_results"
-                ? officialResultFiled
-                  ? "SEC 공식 실적 공시는 확인됐습니다. Finnhub 표준 Actual 반영을 기다리는 중입니다."
-                  : "발표 구간이 지났으며 공급자의 실제치 반영을 기다리는 중입니다."
-                : item.display_status === "result_unavailable"
-                  ? officialResultFiled
-                    ? "SEC 공식 실적 공시는 확인됐지만 Finnhub 표준 Actual은 아직 확인되지 않았습니다."
-                    : "발표 구간은 지났지만 현재 공급자에서 실제치를 확인하지 못했습니다."
-                  : timing.hint}
+              {officialFallback
+                ? "SEC 공식 발표 수치를 먼저 반영했습니다. Finnhub 표준 Actual은 도착 후 자동 대조됩니다."
+                : reconciliationDiffers
+                  ? "Finnhub 표준값과 공식 발표 수치에 차이가 있어 두 출처를 함께 보존하고 있습니다."
+                  : item.display_status === "awaiting_results"
+                    ? officialResultFiled
+                      ? "SEC 공식 실적 공시는 확인됐지만 안전하게 추출 가능한 수치는 아직 없습니다."
+                      : "발표 구간이 지났으며 공급자의 실제치 반영을 기다리는 중입니다."
+                    : item.display_status === "result_unavailable"
+                      ? officialResultFiled
+                        ? "SEC 공식 실적 공시는 확인됐지만 Finnhub 표준 Actual은 아직 확인되지 않았습니다."
+                        : "발표 구간은 지났지만 현재 공급자에서 실제치를 확인하지 못했습니다."
+                      : timing.hint}
             </p>
           </div>
         </div>
 
         <div className="scrollbar-hidden overflow-x-auto">
-          <MetricBlock title="EPS" actual={item.eps_actual} estimate={item.eps_estimate} surprise={item.eps_surprise_pct} />
-          <MetricBlock title="Revenue" actual={item.revenue_actual} estimate={item.revenue_estimate} surprise={item.revenue_surprise_pct} money />
+          <MetricBlock title="EPS" actual={item.eps_actual} estimate={item.eps_estimate} surprise={item.eps_surprise_pct} actualNote={epsActualNote} />
+          <MetricBlock title="Revenue" actual={item.revenue_actual} estimate={item.revenue_estimate} surprise={item.revenue_surprise_pct} actualNote={revenueActualNote} money />
         </div>
 
         <details className="border-t border-edge pt-3">
@@ -270,9 +295,17 @@ function EarningsCard({ item }: { item: EarningsEvent }) {
               <p>현재 소스는 정확한 어닝콜 시각·웹캐스트·전문을 제공하지 않습니다. 발표 시각을 어닝콜 시각으로 추정하지 않습니다.</p>
             )}
             {officialResultFiled && (
-              <p>SEC {item.official_result_form ?? "filing"}에서 공식 결과 발표를 확인했습니다. 공시의 GAAP 수치를 Finnhub 조정 실적 컨센서스와 직접 비교하지 않습니다.</p>
+              <p>SEC {item.official_result_form ?? "filing"}에서 공식 결과 발표를 확인했습니다.</p>
             )}
-            <p>일정·컨센서스·표준 Actual은 Finnhub, 공식 결과 접수 여부와 제출 문서는 SEC에서 확인합니다. Beat/Miss는 Finnhub Actual이 들어온 뒤에만 계산합니다.</p>
+            {item.official_actual_status === "extracted" && (
+              <p>
+                공식 발표: GAAP EPS {numberLabel(item.official_eps_gaap_actual ?? null)} · Adjusted EPS {numberLabel(item.official_eps_adjusted_actual ?? null)} · Revenue {moneyLabel(item.official_revenue_actual ?? null)}.
+              </p>
+            )}
+            {officialFallback && <p>공식 EPS는 회계 기준을 표시하되 Finnhub 컨센서스와 직접 비교하지 않습니다. 매출은 같은 통화 기준일 때만 차이를 계산하며, 종합 Beat/Miss는 표준 Actual 도착 전까지 보류합니다.</p>}
+            {reconciliationMatched && <p>Finnhub 표준 Actual과 SEC 공식 발표 수치가 허용 오차 안에서 일치합니다.</p>}
+            {reconciliationDiffers && <p>Finnhub 표준 Actual과 SEC 공식 발표 수치가 허용 오차를 벗어났습니다. 화면 Actual은 Finnhub 표준값이며 공식값은 위에 함께 남깁니다.</p>}
+            <p>일정·컨센서스·표준 Actual은 Finnhub, 공식 결과와 선반영 수치는 SEC 제출 문서에서 확인합니다.</p>
           </div>
         </details>
 
@@ -283,6 +316,11 @@ function EarningsCard({ item }: { item: EarningsEvent }) {
           {item.official_result_url && (
             <a href={item.official_result_url} target="_blank" rel="noopener noreferrer" className="btn-secondary inline-flex items-center gap-1.5 text-xs">
               공식 공시 <ExternalLink size={14} aria-hidden />
+            </a>
+          )}
+          {item.official_actual_url && item.official_actual_url !== item.official_result_url && (
+            <a href={item.official_actual_url} target="_blank" rel="noopener noreferrer" className="btn-secondary inline-flex items-center gap-1.5 text-xs">
+              Official Release <ExternalLink size={14} aria-hidden />
             </a>
           )}
           {item.source_url && (
@@ -405,7 +443,7 @@ export default function EarningsPage() {
     : data?.source?.message ?? "아직 발행된 Earnings 데이터가 없습니다.";
   const awaitingDescription = sourceStale
     ? "원본 갱신이 지연되어 Actual 도착 여부를 아직 판정할 수 없습니다. 배치 복구 후 자동으로 다시 분류됩니다."
-    : "발표 후 표준 Actual을 기다리는 이벤트입니다. SEC 공식 공시가 먼저 확인되면 카드에 별도로 표시합니다.";
+    : "발표 후 Actual을 기다리는 이벤트입니다. SEC 공식 수치를 안전하게 읽으면 Results로 먼저 이동하고, 아니면 Finnhub 반영을 기다립니다.";
   const lastUpdated = dateTimeLabel(data?.source?.available_at);
   const hasVisibleEvents = tab === "calendar"
     ? upcoming.length > 0
@@ -541,7 +579,7 @@ export default function EarningsPage() {
               <p className="mt-1 text-xs leading-5 text-ink-muted">
                 {sourceStale
                   ? "정기 원본 갱신이 지연됐습니다. 복구 전에는 Actual 결측을 공급자 지연으로 판단하지 않습니다."
-                  : "정기 원본 갱신은 09:00·19:00 KST 배치 후 반영됩니다. 발표 후 실제치가 오기 전까지 해당 종목은 Awaiting Results에 유지됩니다."}
+                  : "정기 원본 갱신은 09:00·19:00 KST 배치 후 반영됩니다. 공식 SEC 수치는 먼저 표시하고 Finnhub 표준값은 도착 후 자동 대조합니다."}
               </p>
               <details className="mt-2 text-xs text-ink-muted">
                 <summary className="cursor-pointer">Data Coverage</summary>
@@ -564,7 +602,7 @@ export default function EarningsPage() {
             {sourceStale
               ? awaitingDescription
               : data.summary.official_results_available > 0
-              ? `이 중 ${data.summary.official_results_available}건은 SEC 공식 결과 공시가 확인됐습니다. 표준 Actual과 Beat/Miss는 Finnhub 값이 들어오면 자동으로 Reported로 전환됩니다.`
+              ? `이 중 ${data.summary.official_results_available}건은 SEC 공식 결과 공시가 확인됐지만 안전하게 추출 가능한 수치가 없어 Finnhub Actual을 기다리고 있습니다.`
               : "발표 구간은 지났지만 Finnhub 실제치가 아직 도착하지 않은 이벤트입니다. Results에서 사라지지 않고 실제치가 들어오면 자동으로 Reported로 전환됩니다."}
           </p>
         </div>

@@ -1787,7 +1787,10 @@ def build_earnings_hub() -> pd.DataFrame | None:
                 today,
                 available_at,
             )
-            sec_message = f" · SEC 공식 결과 {sec_coverage['events_enriched']}건 연결"
+            sec_message = (
+                f" · SEC 공식 결과 {sec_coverage['events_enriched']}건 연결"
+                f" · 공식 수치 {sec_coverage.get('official_actuals_extracted', 0)}건"
+            )
         except (external_events.ProviderUnavailable, RuntimeError) as exc:
             sec_coverage = {
                 "status": "unavailable",

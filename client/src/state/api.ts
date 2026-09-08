@@ -795,6 +795,16 @@ export interface EarningsEvent {
   official_result_url: string | null;
   official_result_filed_at: string | null;
   official_result_detected_at: string | null;
+  official_actual_status?: "extracted" | "not_found" | "ambiguous" | "unsupported" | "fetch_failed" | null;
+  official_actual_url?: string | null;
+  official_actual_extracted_at?: string | null;
+  official_eps_gaap_actual?: number | null;
+  official_eps_adjusted_actual?: number | null;
+  official_revenue_actual?: number | null;
+  eps_actual_source?: "finnhub" | "sec" | null;
+  eps_actual_basis?: "provider_standardized" | "non_gaap_diluted" | "gaap_diluted" | null;
+  revenue_actual_source?: "finnhub" | "sec" | null;
+  actual_reconciliation_status?: "standardized" | "official_only" | "matched" | "differs" | null;
   source: "finnhub";
   source_url: string | null;
   stock_link: string;
@@ -1253,7 +1263,10 @@ export interface KrMacroPoint {
 export interface KrMacroSeries {
   name: string;
   data: KrMacroPoint[];
-  latest: number;
+  latest: number | null;
+  as_of?: string;
+  frequency?: "daily" | "monthly";
+  source?: "ECOS" | "OECD";
 }
 
 export type RegimeKrResponse = Record<string, KrMacroSeries | undefined>

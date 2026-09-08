@@ -1,61 +1,17 @@
 "use client";
 
-import {
-  BellRing,
-  BookOpenText,
-  BriefcaseBusiness,
-  ChartNoAxesCombined,
-  Gauge,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { marketNavigation, isActiveRoute } from "@/lib/navigation";
 
-interface NavItem {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-  activePrefixes: string[];
-  badge?: "actions" | "research";
-}
-
-const items: NavItem[] = [
-  { href: "/home", label: "브리핑", icon: Gauge, activePrefixes: [] },
-  {
-    href: "/actions",
-    label: "검토",
-    icon: BellRing,
-    activePrefixes: ["/earnings"],
-    badge: "actions",
-  },
-  {
-    href: "/insight",
-    label: "시장",
-    icon: ChartNoAxesCombined,
-    activePrefixes: ["/regime", "/stocksearch", "/stock/"],
-  },
-  {
-    href: "/portfolio",
-    label: "포트폴리오",
-    icon: BriefcaseBusiness,
-    activePrefixes: ["/journal", "/optimization"],
-  },
-  {
-    href: "/research",
-    label: "리서치",
-    icon: BookOpenText,
-    activePrefixes: ["/backtest"],
-    badge: "research",
-  },
-];
+const items = marketNavigation.slice(0, 5);
+const shortLabels: Record<string, string> = { "/home": "브리핑", "/insight": "한국 시장", "/regime": "경제", "/research": "리서치", "/stocksearch": "종목" };
 
 const displayCount = (count: number) => (count > 99 ? "99+" : String(count));
 
 export default function MobileBottomNav({
-  actionCount,
   researchUnseenCount,
 }: {
-  actionCount: number;
   researchUnseenCount: number;
 }) {
   const pathname = usePathname();
@@ -66,17 +22,8 @@ export default function MobileBottomNav({
       className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-primary-400/20 bg-surface/90 px-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-16px_42px_rgba(3,5,14,0.26)] backdrop-blur-xl md:hidden"
     >
       {items.map(({ href, label, icon: Icon, activePrefixes, badge }) => {
-        const active =
-          pathname === href ||
-          pathname.startsWith(`${href}/`) ||
-          activePrefixes.some((prefix) => pathname.startsWith(prefix)) ||
-          (pathname === "/" && href === "/home");
-        const count =
-          badge === "actions"
-            ? actionCount
-            : badge === "research"
-              ? researchUnseenCount
-              : 0;
+        const active = isActiveRoute(pathname, href, activePrefixes);
+        const count = badge === "research" ? researchUnseenCount : 0;
 
         return (
           <Link
@@ -106,7 +53,7 @@ export default function MobileBottomNav({
                 </span>
               )}
             </span>
-            {label}
+            {shortLabels[href] ?? label}
           </Link>
         );
       })}

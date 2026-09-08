@@ -1,4 +1,4 @@
-# ADR-0012: 원문 중심 Research Feed와 근거가 연결된 읽기 요약
+# ADR-0016: 원문 중심 Research Feed와 근거가 연결된 읽기 요약
 
 - Date: 2026-09-07
 - Status: Accepted for implementation; production acceptance pending

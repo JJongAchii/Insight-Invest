@@ -9,8 +9,11 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import time
 from datetime import date, timedelta
+from html.parser import HTMLParser
+from urllib.parse import urljoin, urlparse
 
 import httpx
 import pandas as pd
@@ -29,14 +32,25 @@ UNIVERSE_COLUMNS = [
     "universe_as_of",
 ]
 
-OFFICIAL_RESULT_COLUMNS = [
+OFFICIAL_RESULT_TEXT_COLUMNS = [
     "official_result_status",
     "official_result_source",
     "official_result_form",
     "official_result_url",
     "official_result_filed_at",
     "official_result_detected_at",
+    "official_actual_status",
+    "official_actual_url",
+    "official_actual_extracted_at",
 ]
+
+OFFICIAL_RESULT_VALUE_COLUMNS = [
+    "official_eps_gaap_actual",
+    "official_eps_adjusted_actual",
+    "official_revenue_actual",
+]
+
+OFFICIAL_RESULT_COLUMNS = [*OFFICIAL_RESULT_TEXT_COLUMNS, *OFFICIAL_RESULT_VALUE_COLUMNS]
 
 EVENT_COLUMNS = [
     "event_id",
@@ -99,6 +113,239 @@ SEC_PERIODIC_RESULT_FORMS = {
     "40-F",
     "40-F/A",
 }
+SEC_DOCUMENT_MAX_BYTES = 5_000_000
+
+
+class _SecTableParser(HTMLParser):
+    """SEC filing tables as visible cell text plus links, without an HTML dependency."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.tables: list[list[list[dict]]] = []
+        self._table_depth = 0
+        self._table: list[list[dict]] | None = None
+        self._row: list[dict] | None = None
+        self._cell_text: list[str] | None = None
+        self._cell_links: list[str] | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]):
+        tag = tag.lower()
+        if tag == "table":
+            if self._table_depth == 0:
+                self._table = []
+            self._table_depth += 1
+        elif tag == "tr" and self._table_depth:
+            self._row = []
+        elif tag in {"td", "th"} and self._table_depth and self._row is not None:
+            self._cell_text = []
+            self._cell_links = []
+        elif tag == "a" and self._cell_text is not None and self._cell_links is not None:
+            href = dict(attrs).get("href")
+            if href:
+                self._cell_links.append(href)
+
+    def handle_data(self, data: str):
+        if self._cell_text is not None:
+            self._cell_text.append(data)
+
+    def handle_endtag(self, tag: str):
+        tag = tag.lower()
+        if tag in {"td", "th"} and self._cell_text is not None and self._row is not None:
+            text = " ".join("".join(self._cell_text).replace("\xa0", " ").split())
+            self._row.append({"text": text, "links": self._cell_links or []})
+            self._cell_text = None
+            self._cell_links = None
+        elif tag == "tr" and self._row is not None and self._table is not None:
+            self._table.append(self._row)
+            self._row = None
+        elif tag == "table" and self._table_depth:
+            self._table_depth -= 1
+            if self._table_depth == 0 and self._table is not None:
+                self.tables.append(self._table)
+                self._table = None
+
+
+def _sec_tables(page: str) -> list[list[list[dict]]]:
+    parser = _SecTableParser()
+    parser.feed(page)
+    return parser.tables
+
+
+def _normalized_label(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
+
+
+def _cell_number(value: str) -> float | None:
+    text = value.strip().replace("$", "").replace(",", "")
+    if not text or "%" in text or not re.fullmatch(r"\(?-?\d+(?:\.\d+)?\)?", text):
+        return None
+    negative = text.startswith("(") and text.endswith(")")
+    number = float(text.strip("()"))
+    return -number if negative else number
+
+
+def _first_row_number(row: list[dict]) -> float | None:
+    for cell in row[1:]:
+        value = _cell_number(str(cell.get("text", "")))
+        if value is not None:
+            return value
+    return None
+
+
+def _revenue_scale(table_text: str) -> float | None:
+    normalized = _normalized_label(table_text)
+    if "$" not in table_text and "dollars in" not in normalized:
+        return None
+    if "in billions" in normalized:
+        return 1_000_000_000
+    if "in millions" in normalized:
+        return 1_000_000
+    if "in thousands" in normalized:
+        return 1_000
+    return None
+
+
+def _table_official_actuals(table: list[list[dict]]) -> dict | None:
+    table_text = " ".join(str(cell.get("text", "")) for row in table for cell in row)
+    normalized_table = _normalized_label(table_text)
+    period_table = any(
+        marker in normalized_table
+        for marker in ("three months ended", "quarter ended", "quarterly results")
+    ) or re.search(r"\bq[1-4] fy\d{2,4}\b", normalized_table)
+    if not period_table:
+        return None
+    scale = _revenue_scale(table_text)
+    standalone_labels = set()
+    for row in table:
+        nonempty = [cell for cell in row if str(cell.get("text", "")).strip()]
+        if len(nonempty) == 1:
+            standalone_labels.add(_normalized_label(str(nonempty[0].get("text", ""))))
+    non_gaap_table = "non gaap" in standalone_labels or "adjusted" in standalone_labels
+    values = {
+        "official_revenue_actual": None,
+        "official_eps_gaap_actual": None,
+        "official_eps_adjusted_actual": None,
+    }
+    revenue_labels = {
+        "revenue",
+        "revenues",
+        "net revenue",
+        "net revenues",
+        "total revenue",
+        "total revenues",
+        "total net revenue",
+        "net sales",
+        "total net sales",
+    }
+    eps_section = False
+    for row in table:
+        nonempty = [cell for cell in row if str(cell.get("text", "")).strip()]
+        if not nonempty:
+            continue
+        label = _normalized_label(str(nonempty[0].get("text", "")))
+        value = _first_row_number(row)
+        eps_label = "diluted" in label and (
+            "earnings per share" in label
+            or "net income per share" in label
+            or "net earnings per share" in label
+            or label.endswith("diluted eps")
+        )
+        if value is None:
+            if eps_label and not any(
+                marker in label for marker in ("weighted average", "shares used", "computation")
+            ):
+                eps_section = True
+            continue
+        if label in revenue_labels and scale is not None:
+            values["official_revenue_actual"] = value * scale
+            continue
+        if eps_section and label in {"gaap", "non gaap", "adjusted", "adjusted non gaap"}:
+            key = (
+                "official_eps_gaap_actual"
+                if label == "gaap"
+                else "official_eps_adjusted_actual"
+            )
+            values[key] = value
+            continue
+        is_eps = eps_label and not any(
+            marker in label for marker in ("weighted average", "shares used", "computation")
+        )
+        if not is_eps:
+            continue
+        if non_gaap_table or "non gaap" in label or "adjusted" in label:
+            values["official_eps_adjusted_actual"] = value
+        else:
+            values["official_eps_gaap_actual"] = value
+    return values if any(value is not None for value in values.values()) else None
+
+
+def parse_sec_earnings_exhibit(page: str) -> dict:
+    """Extract current-quarter official figures only when each metric is unambiguous."""
+    keys = (
+        "official_revenue_actual",
+        "official_eps_gaap_actual",
+        "official_eps_adjusted_actual",
+    )
+    candidates = {key: set() for key in keys}
+    for table in _sec_tables(page):
+        values = _table_official_actuals(table)
+        if values:
+            for key in keys:
+                if values[key] is not None:
+                    candidates[key].add(values[key])
+    empty = {key: None for key in keys}
+    if not any(candidates.values()):
+        return {"status": "not_found", **empty}
+    if any(len(values) > 1 for values in candidates.values()):
+        return {"status": "ambiguous", **empty}
+    return {
+        "status": "extracted",
+        **{
+            key: next(iter(values)) if values else None
+            for key, values in candidates.items()
+        },
+    }
+
+
+def _sec_exhibit_urls(index_page: str, index_url: str) -> list[str]:
+    candidates: list[tuple[int, str]] = []
+    for table in _sec_tables(index_page):
+        for row in table:
+            texts = [_normalized_label(str(cell.get("text", ""))) for cell in row]
+            joined = " ".join(texts)
+            if not any(text.startswith("ex 99") for text in texts):
+                continue
+            score = 2 if any(text == "ex 99 1" for text in texts) else 1
+            if any(word in joined for word in ("earnings", "results", "press release")):
+                score += 2
+            for cell in row:
+                for href in cell.get("links", []):
+                    url = urljoin(index_url, href)
+                    parsed = urlparse(url)
+                    if (
+                        parsed.scheme == "https"
+                        and parsed.netloc.lower() in {"sec.gov", "www.sec.gov"}
+                        and parsed.path.startswith("/Archives/")
+                        and parsed.path.lower().endswith((".htm", ".html"))
+                    ):
+                        candidates.append((score, url))
+    ordered = sorted(candidates, key=lambda item: (-item[0], item[1]))
+    return list(dict.fromkeys(url for _, url in ordered))[:3]
+
+
+def _request_sec_text(
+    client: httpx.Client, url: str, *, max_bytes: int = SEC_DOCUMENT_MAX_BYTES
+) -> str:
+    try:
+        response = client.get(url)
+        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+        detail = f"HTTP {status}" if status else type(exc).__name__
+        raise external_events.ProviderUnavailable(f"SEC 문서 요청 실패: {detail}") from exc
+    if len(response.content) > max_bytes:
+        raise external_events.ProviderUnavailable("SEC 문서가 허용 크기를 초과했습니다")
+    return response.text
 
 
 def empty_universe() -> pd.DataFrame:
@@ -403,7 +650,7 @@ def normalize_calendar(
     if not rows:
         return empty_events()
     frame = pd.DataFrame(rows).reindex(columns=EVENT_COLUMNS)
-    for column in OFFICIAL_RESULT_COLUMNS:
+    for column in OFFICIAL_RESULT_TEXT_COLUMNS:
         frame[column] = frame[column].astype("object")
     # 심볼별 보강 호출과 전역 호출이 같은 이벤트를 돌려준다. 실제치가 더 많이
     # 채워진 행을 우선해 안정 식별자당 한 행만 남긴다.
@@ -506,11 +753,12 @@ def enrich_sec_result_filings(
     max_match_days: int = 3,
     request_interval_seconds: float = 0.11,
 ) -> tuple[pd.DataFrame, dict]:
-    """최근 Earnings에 SEC 공식 결과 접수 신호와 filing 링크를 붙인다.
+    """최근 Earnings에 SEC 공식 결과 접수 신호와 공식 발표 수치를 붙인다.
 
     8-K는 Item 2.02가 명시된 경우만 실적 결과로 인정한다. 10-Q·10-K 등
-    정기보고서는 그 자체를 공식 결과 문서로 인정하되, GAAP 공시값을 Finnhub의
-    조정 실적 컨센서스와 비교하거나 actual 필드에 복사하지 않는다.
+    정기보고서는 그 자체를 공식 결과 문서로 인정한다. 실제 수치는 정확히 매칭된
+    8-K의 SEC-hosted EX-99 HTML에서만 별도 필드로 추출하고, Finnhub 필드에는
+    복사하지 않는다.
     """
     if not contact.strip():
         raise external_events.ConfigurationRequired("SEC 요청용 연락처가 없습니다")
@@ -521,12 +769,16 @@ def enrich_sec_result_filings(
             "filings_scanned": 0,
             "result_filings": 0,
             "events_enriched": 0,
+            "official_actuals_attempted": 0,
+            "official_actuals_extracted": 0,
+            "official_actuals_reused": 0,
+            "official_actuals_failed": 0,
             "window_start": start.isoformat(),
             "window_end": end.isoformat(),
         }
 
     enriched = events.reindex(columns=EVENT_COLUMNS).copy()
-    for column in OFFICIAL_RESULT_COLUMNS:
+    for column in OFFICIAL_RESULT_TEXT_COLUMNS:
         enriched[column] = enriched[column].astype("object")
     release_days = pd.to_datetime(enriched["release_date"], errors="coerce").dt.date
     candidates = enriched[
@@ -539,6 +791,10 @@ def enrich_sec_result_filings(
             "filings_scanned": 0,
             "result_filings": 0,
             "events_enriched": 0,
+            "official_actuals_attempted": 0,
+            "official_actuals_extracted": 0,
+            "official_actuals_reused": 0,
+            "official_actuals_failed": 0,
             "window_start": start.isoformat(),
             "window_end": end.isoformat(),
         }
@@ -555,21 +811,40 @@ def enrich_sec_result_filings(
     )
     filings_scanned = 0
     result_filings = 0
+    official_actuals_attempted = 0
+    official_actuals_extracted = 0
+    official_actuals_reused = 0
+    official_actuals_failed = 0
     matches: dict[str, tuple[int, str, dict]] = {}
     ciks = sorted({_cik(value) for value in candidates["cik"] if _cik(value)})
-    try:
-        previous_request_at: float | None = None
-        for cik in ciks:
-            if previous_request_at is not None and request_interval_seconds > 0:
-                elapsed = time.monotonic() - previous_request_at
-                if elapsed < request_interval_seconds:
-                    time.sleep(request_interval_seconds - elapsed)
-            payload = external_events._request_json(
-                client,
-                f"https://data.sec.gov/submissions/CIK{cik}.json",
-                params={},
-            )
+    previous_request_at: float | None = None
+
+    def wait_for_request_slot():
+        nonlocal previous_request_at
+        if previous_request_at is not None and request_interval_seconds > 0:
+            elapsed = time.monotonic() - previous_request_at
+            if elapsed < request_interval_seconds:
+                time.sleep(request_interval_seconds - elapsed)
+
+    def request_json(url: str) -> dict:
+        nonlocal previous_request_at
+        wait_for_request_slot()
+        try:
+            return external_events._request_json(client, url, params={})
+        finally:
             previous_request_at = time.monotonic()
+
+    def request_text(url: str) -> str:
+        nonlocal previous_request_at
+        wait_for_request_slot()
+        try:
+            return _request_sec_text(client, url)
+        finally:
+            previous_request_at = time.monotonic()
+
+    try:
+        for cik in ciks:
+            payload = request_json(f"https://data.sec.gov/submissions/CIK{cik}.json")
             recent = payload.get("filings", {}).get("recent", {})
             required_keys = [
                 "accessionNumber",
@@ -638,6 +913,49 @@ def enrich_sec_result_filings(
                     or (priority == current[0] and accepted > current[1])
                 ):
                     matches[str(event["event_id"])] = (rank[0], rank[1], match)
+
+        for event_id, (_, _, match) in matches.items():
+            if match["official_result_form"] not in SEC_RESULT_8K_FORMS:
+                continue
+            existing = enriched[enriched["event_id"].astype(str).eq(event_id)].iloc[0]
+            if (
+                str(existing.get("official_actual_status")) == "extracted"
+                and existing.get("official_result_url") == match["official_result_url"]
+            ):
+                official_actuals_extracted += 1
+                official_actuals_reused += 1
+                continue
+            official_actuals_attempted += 1
+            try:
+                index_page = request_text(match["official_result_url"])
+                exhibit_urls = _sec_exhibit_urls(index_page, match["official_result_url"])
+                if not exhibit_urls:
+                    match["official_actual_status"] = "unsupported"
+                    continue
+                parsed = None
+                parsed_url = None
+                ambiguous = False
+                for exhibit_url in exhibit_urls:
+                    result = parse_sec_earnings_exhibit(request_text(exhibit_url))
+                    if result["status"] == "ambiguous":
+                        ambiguous = True
+                    if result["status"] == "extracted":
+                        parsed = result
+                        parsed_url = exhibit_url
+                        break
+                if parsed is None:
+                    match["official_actual_status"] = "ambiguous" if ambiguous else "not_found"
+                    continue
+                match["official_actual_status"] = "extracted"
+                for key in OFFICIAL_RESULT_VALUE_COLUMNS:
+                    match[key] = parsed[key]
+                match["official_actual_url"] = parsed_url
+                match["official_actual_extracted_at"] = available_at
+                match["lifecycle"] = "reported"
+                official_actuals_extracted += 1
+            except external_events.ProviderUnavailable:
+                match["official_actual_status"] = "fetch_failed"
+                official_actuals_failed += 1
     finally:
         if owns_client:
             client.close()
@@ -652,6 +970,10 @@ def enrich_sec_result_filings(
         "filings_scanned": filings_scanned,
         "result_filings": result_filings,
         "events_enriched": len(matches),
+        "official_actuals_attempted": official_actuals_attempted,
+        "official_actuals_extracted": official_actuals_extracted,
+        "official_actuals_reused": official_actuals_reused,
+        "official_actuals_failed": official_actuals_failed,
         "window_start": start.isoformat(),
         "window_end": end.isoformat(),
     }
@@ -713,7 +1035,12 @@ def merge_history(
         dates = pd.to_datetime(merged["release_date"], errors="coerce").dt.date
         merged = merged[dates.ge(cutoff)].copy()
         release_days = pd.to_datetime(merged["release_date"], errors="coerce").dt.date
-        has_actual = merged[["eps_actual", "revenue_actual"]].notna().any(axis=1)
+        provider_actual = merged[["eps_actual", "revenue_actual"]].notna().any(axis=1)
+        official_actual = (
+            merged["official_actual_status"].fillna("").eq("extracted")
+            & merged[OFFICIAL_RESULT_VALUE_COLUMNS].notna().any(axis=1)
+        )
+        has_actual = provider_actual | official_actual
         merged["lifecycle"] = [
             "reported" if actual and day <= observed_on else "scheduled"
             for actual, day in zip(has_actual, release_days, strict=True)

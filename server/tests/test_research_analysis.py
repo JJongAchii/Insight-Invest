@@ -449,3 +449,14 @@ def test_request_limits_are_part_of_the_cache_identity(source, monkeypatch):
     before = analysis.cache_key(item)
     monkeypatch.setattr(analysis, "MAX_OUTPUT_TOKENS", 3600)
     assert analysis.cache_key(item) != before
+
+
+def test_practitioner_article_needs_substance_not_a_formal_research_question():
+    value = brief()
+    value["question"] = None
+    assert analysis.validate_brief(value, TEXT)["substantive"]
+    value["method_data"] = None
+    with pytest.raises(
+        analysis.AnalysisContractError, match="lacks grounded method/finding"
+    ):
+        analysis.validate_brief(value, TEXT)

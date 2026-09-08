@@ -2,8 +2,11 @@
 
 > 개인 시장분석·백테스팅 플랫폼 — 미국(NYSE/NASDAQ)·한국(KOSPI/KOSDAQ) 주식과 FRED 매크로 지표
 
-포트폴리오 구성 → 백테스트 → 저장·비교, 효율적 투자선/리스크 패리티 최적화,
-매크로 레짐 대시보드, 종목 검색·비교, 마켓 뉴스를 하나의 웹앱에서 제공한다.
+시장 브리핑 → 시장·경제 분석 → 뉴스·리서치 원문 탐색을 중심으로,
+한국 시장의 지수·수급·섹터·팩터, 미국·한국 경제 지표, 종목 검색·비교와 실적 일정을 제공한다.
+포트폴리오·판단 기록·백테스트·최적화는 개인 투자 도구에서 사용할 수 있다.
+
+화면 구성과 후속 우선순위는 [시장·경제·리서치 중심 개선 검토](docs/reviews/2026-09-07-market-research.md)를 참고한다.
 
 `Action Center`는 기존 Attention·Watchlist·Holdings·Journal·Strategy·Data Trust를
 공통 Event 계약으로 묶는다. 가격 기준 교차, Thesis 검토일, 리밸런싱, 데이터 이상을
@@ -48,6 +51,11 @@ EC2  qdata-collector (t4g.large, ARM)              ││
 ```
 
 디버깅용으로 EC2에 `touch /data/NOAUTO` 해두면 부팅해도 파이프라인·종료를 건너뛴다.
+
+홈과 Data Trust는 기준일뿐 아니라 마지막 예약 회차의 파일 생성 여부도 확인한다.
+평일 US 09:00·19:00, KR 19:00 회차가 100분 안에 반영되지 않으면 `예약 갱신 미확인`을
+표시한다. 휴장일에도 배치는 최신 자료를 확인하며, 유지보수 종료 시 NOAUTO 해제와
+일일 수집 재개를 확인해야 한다.
 
 ⚠️ `run_pipeline.sh`는 quant-data 레포에 있고, 스크립트가 **자기 자신을 pull**한다.
 따라서 그 스크립트의 변경은 **다음 실행부터** 적용된다 (실행 중인 bash는 이미 구 버전을 읽은 상태).
@@ -95,6 +103,7 @@ iPhone Safari와 홈 화면 PWA에서는 페이지 최상단에서 아래로 당
 | KR 전 종목 (KOSPI+KOSDAQ, 상폐 포함, 2016~) | qdata KRX 패널 | 매일 (배치 EC2 → S3 sync) |
 | US 종목·ETF (앱 meta 등록분, 2008~) | qdata Massive 전종목 가격 + 분할·배당 | 매일 09:00·19:00 KST 배치 → `app/us_prices.parquet` |
 | FRED 매크로 (레짐 대시보드) | qdata FRED 단일 원천(필요 시계열 1980~ 직접 수집) | 매일 |
+| 한국 금리·환율·CPI | qdata ECOS | 평일 19:00 KST 배치 초반 우선 발행 · 일간 관측일/월간 기준월 표시 |
 | 통합 종목 마스터 | qdata KRX 주식·ETF + Massive 티커 참조 → `app/asset_master.parquet` | 매일 |
 | US 실적 일정·발표 | Finnhub Earnings Calendar + qdata 활성 US 종목 참조 + SEC 공식 제출 페이지 | 평일 09:00·19:00 KST 우선 배치 · 주요 기업 50개 + 내 종목, 과거 결과 누적 |
 | 앱 자산 ID / 포트폴리오 | `app/asset_id_registry.parquet` / `app/portfolio/` | 신규 상장·앱 저장 시 |

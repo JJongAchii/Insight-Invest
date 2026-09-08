@@ -64,7 +64,7 @@ const LANE_OPTIONS = [
   {
     value: "all",
     label: "전체 기록",
-    description: "알림에서 제외된 기존 피드와 맥락 자료까지 보존",
+    description: "기존 피드와 배경 자료를 함께 탐색",
     icon: Archive,
   },
 ] as const;
@@ -214,9 +214,9 @@ function ResearchCard({
               title={relevance || undefined}
               className={`rounded-full px-2 py-0.5 font-medium ${
                 item.research_lane === "core"
-                  ? "bg-emerald-500/15 text-emerald-300"
+                  ? "bg-gains/10 text-gains"
                   : item.research_lane === "discovery"
-                    ? "bg-sky-500/15 text-sky-300"
+                    ? "bg-secondary-400/10 text-secondary-400"
                     : "bg-surface-raised text-ink-muted"
               }`}
             >
@@ -225,11 +225,11 @@ function ResearchCard({
             </span>
             {schemaThreeEvidence && (
               <>
-                <span className="rounded-full border border-amber-400/25 bg-amber-400/10 px-2 py-0.5 font-medium text-amber-200">
+                <span className="rounded-full border border-amber-400/25 bg-amber-400/10 px-2 py-0.5 font-medium text-warning">
                   근거 업데이트
                 </span>
                 {item.content_provenance && (
-                  <span className="rounded-full border border-violet-400/25 bg-violet-400/10 px-2 py-0.5 font-medium text-violet-200">
+                  <span className="rounded-full border border-violet-400/25 bg-violet-400/10 px-2 py-0.5 font-medium text-primary-300">
                     {PROVENANCE_LABELS[item.content_provenance]}
                   </span>
                 )}
@@ -237,7 +237,6 @@ function ResearchCard({
                   <span
                     key={dimension}
                     className="rounded-full border border-edge bg-raised/70 px-2 py-0.5 font-medium text-ink-secondary"
-                    title={item.evidence_excerpts?.[dimension]?.join("\n")}
                   >
                     근거 · {EVIDENCE_LABELS[dimension]}
                   </span>
@@ -272,6 +271,22 @@ function ResearchCard({
           {item.analysis && <p className="mt-1 text-xs leading-5 text-ink-muted" lang="en">{item.title}</p>}
           {authors && <p className="mt-1 text-xs text-ink-muted">{authors}</p>}
           <ResearchBrief item={item} />
+
+          {schemaThreeEvidence && !!item.evidence_dimensions?.length && (
+            <details className="mt-4 rounded-lg border border-edge bg-raised/40 p-3">
+              <summary className="cursor-pointer text-sm font-medium text-primary-300">연구 근거 펼쳐보기 · 방법 / 데이터 / 검증 / 결과</summary>
+              <div className="mt-3 space-y-4">
+                {item.evidence_dimensions.map((dimension) => (
+                  <section key={dimension} aria-label={`${EVIDENCE_LABELS[dimension]} 근거`}>
+                    <h3 className="text-xs font-semibold text-ink">{EVIDENCE_LABELS[dimension]}</h3>
+                    {item.evidence_excerpts?.[dimension]?.length ? item.evidence_excerpts[dimension]!.map((excerpt, index) => (
+                      <blockquote key={index} className="mt-2 whitespace-pre-wrap break-words border-l-2 border-primary-400/30 pl-3 text-sm leading-6 text-ink-secondary">{excerpt}</blockquote>
+                    )) : <p className="mt-1 text-xs text-ink-muted">등록된 발췌가 없습니다. 원문에서 확인하세요.</p>}
+                  </section>
+                ))}
+              </div>
+            </details>
+          )}
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <a

@@ -1,0 +1,17 @@
+{
+  "syntheticFixtures": true,
+  "passed": [
+    "Market, economy and research visible; personal tools secondary",
+    "Observation dates and unknown health stay explicit",
+    "Investor, period and buy/sell controls request the selected data",
+    "Home research opens the selected document and touch-readable evidence",
+    "Intraday deep link works and keeps its full observation date",
+    "Market sections survive reload and browser back",
+    "Economy defaults to indicators and country selection is shareable",
+    "Mobile primary navigation, readable evidence, and light theme",
+    "Stale intraday snapshots cannot replace newer settled prices",
+    "Empty data stays unknown, including the US recession indicator",
+    "Failed regions report errors while economic RSS remains usable"
+  ],
+  "browserErrors": []
+}

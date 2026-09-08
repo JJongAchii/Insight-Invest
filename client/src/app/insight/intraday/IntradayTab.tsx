@@ -17,9 +17,9 @@ const IntradayTab = ({ data }: { data: IntradayMarketResponse }) => (
           backgroundColor: "color-mix(in srgb, var(--losses) 10%, transparent)",
         }}
       >
-        {data.is_open ? "🔴 장중" : "15:30 마감"}
+        {data.is_open ? "장중" : "마감 스냅샷"}
       </span>
-      <span>지연 시세 · {data.as_of?.slice(-5)} 기준 (~20분 지연)</span>
+      <span>지연 시세 · {data.as_of ?? "시각 미확인"} 기준 (~20분 지연)</span>
     </div>
     <IntradayIndexStrip data={data} />
     {data.sectors && data.sectors.length > 0 && (

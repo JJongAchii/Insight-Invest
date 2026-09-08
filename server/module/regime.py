@@ -1,10 +1,11 @@
 """매크로 레짐 v2 — 성장(OECD CLI) × 물가(CPI YoY) 4국면 + 리스크 게이지 + 한국 매크로.
 
 데이터는 qdata 레이크(QDATA_LAKE)에서 읽는다. 순수 계산 모듈 — FastAPI 의존 없음.
-로드는 lru_cache로 프로세스 수명 동안 캐시 (Lambda 컨테이너 재사용 시 유지).
+원천 로드는 5분 단위 캐시로 warm Lambda에서도 새 발행분을 확인한다.
 캐시된 원본 DataFrame/Series는 절대 in-place 수정하지 않는다.
 """
 
+import time
 from datetime import datetime
 from functools import lru_cache
 from zoneinfo import ZoneInfo
@@ -27,33 +28,48 @@ _PHASES = {
 
 
 @lru_cache(maxsize=4)
-def _cli(country: str = "USA") -> pd.Series:
+def _cli_for_bucket(country: str, _bucket: int) -> pd.Series:
     return qdata_api.load_oecd_cli(country)
 
 
-@lru_cache(maxsize=8)
-def _fred(series: str) -> pd.Series:
+def _cli(country: str = "USA") -> pd.Series:
+    return _cli_for_bucket(country, int(time.time() // 300))
+
+
+@lru_cache(maxsize=16)
+def _fred_for_bucket(series: str, _bucket: int) -> pd.Series:
     return qdata_api.load_fred([series])[series]
 
 
-@lru_cache(maxsize=1)
+def _fred(series: str) -> pd.Series:
+    return _fred_for_bucket(series, int(time.time() // 300))
+
+
 def _cpi() -> pd.Series:
     """CPIAUCSL 월간 — qdata FRED 단일 원천(1980~)."""
     return _fred("CPIAUCSL").dropna().sort_index()
 
 
 @lru_cache(maxsize=1)
-def _hyg_ief() -> pd.DataFrame:
+def _hyg_ief_for_bucket(_bucket: int) -> pd.DataFrame:
     from datastore import prices
 
     return prices.us_adj_close_wide(["HYG", "IEF"])
 
 
+def _hyg_ief() -> pd.DataFrame:
+    return _hyg_ief_for_bucket(int(time.time() // 300))
+
+
 @lru_cache(maxsize=1)
-def _ecos() -> pd.DataFrame:
+def _ecos_for_bucket(_bucket: int) -> pd.DataFrame:
     return qdata_api.load_ecos(
         ["base_rate", "ktb_3y", "ktb_10y", "usdkrw", "cpi"], start="2010-01-01"
     )
+
+
+def _ecos() -> pd.DataFrame:
+    return _ecos_for_bucket(int(time.time() // 300))
 
 
 # ── 4국면 (성장 × 물가) ──────────────────────────────────────────────────────
@@ -235,12 +251,15 @@ def kr_macro() -> dict:
     out = {}
 
     for key in ("base_rate", "ktb_3y", "ktb_10y", "usdkrw"):
-        s = ecos[key].dropna()
+        s = ecos[key].dropna().sort_index()
         weekly = s.resample("W-FRI").last().dropna()  # 페이로드 축소
         out[key] = {
             "name": _KR_NAMES[key],
             "data": _series_payload(weekly),
             "latest": float(s.iloc[-1]),
+            "as_of": s.index[-1].strftime("%Y-%m-%d"),
+            "frequency": "daily",
+            "source": "ECOS",
         }
 
     # CPI: 월간 지수 → YoY %
@@ -252,6 +271,9 @@ def kr_macro() -> dict:
         "name": _KR_NAMES["cpi_yoy"],
         "data": _series_payload(cpi_yoy, "%Y-%m-%d"),
         "latest": float(cpi_yoy.iloc[-1]),
+        "as_of": cpi_yoy.index[-1].strftime("%Y-%m"),
+        "frequency": "monthly",
+        "source": "ECOS",
     }
 
     cli = _cli("KOR").loc["2010-01-01":].dropna()
@@ -259,5 +281,8 @@ def kr_macro() -> dict:
         "name": _KR_NAMES["cli_kor"],
         "data": _series_payload(cli, "%Y-%m-%d"),
         "latest": float(cli.iloc[-1]),
+        "as_of": cli.index[-1].strftime("%Y-%m"),
+        "frequency": "monthly",
+        "source": "OECD",
     }
     return out

@@ -78,14 +78,129 @@ def _release_window_at(release_day: date, release_timing: object) -> datetime:
     return datetime.combine(release_day, anchor, tzinfo=US_EASTERN).astimezone(KST)
 
 
-def _display_status(lifecycle: object, release_window_at: datetime, now: datetime) -> str:
-    if str(lifecycle).lower() == "reported":
+def _display_status(
+    lifecycle: object,
+    release_window_at: datetime,
+    now: datetime,
+    has_official_actual: bool = False,
+) -> str:
+    if str(lifecycle).lower() == "reported" or has_official_actual:
         return "reported"
     if release_window_at > now:
         return "upcoming"
     if now - release_window_at <= RESULT_UNAVAILABLE_AFTER:
         return "awaiting_results"
     return "result_unavailable"
+
+
+def _surprise(actual: float | None, estimate: float | None) -> float | None:
+    if actual is None or estimate is None or estimate == 0:
+        return None
+    return (actual - estimate) / abs(estimate) * 100
+
+
+def _close_enough(left: float, right: float, *, relative: float, absolute: float) -> bool:
+    return abs(left - right) <= max(absolute, max(abs(left), abs(right)) * relative)
+
+
+def _resolve_actuals(events: pd.DataFrame) -> pd.DataFrame:
+    """Project official fallback values without changing stored Finnhub fields."""
+    frame = events.copy()
+    for column in (
+        "eps_actual",
+        "eps_estimate",
+        "eps_surprise_pct",
+        "revenue_actual",
+        "revenue_estimate",
+        "revenue_surprise_pct",
+        "result_signal",
+        "official_eps_gaap_actual",
+        "official_eps_adjusted_actual",
+        "official_revenue_actual",
+    ):
+        if column not in frame.columns:
+            frame[column] = None
+    frame["eps_actual_source"] = None
+    frame["eps_actual_basis"] = None
+    frame["revenue_actual_source"] = None
+    frame["actual_reconciliation_status"] = None
+
+    for index, row in frame.iterrows():
+        standard_eps = _finite(row.get("eps_actual"))
+        standard_revenue = _finite(row.get("revenue_actual"))
+        official_extracted = str(row.get("official_actual_status")) == "extracted"
+        official_adjusted_eps = (
+            _finite(row.get("official_eps_adjusted_actual")) if official_extracted else None
+        )
+        official_gaap_eps = (
+            _finite(row.get("official_eps_gaap_actual")) if official_extracted else None
+        )
+        official_revenue = (
+            _finite(row.get("official_revenue_actual")) if official_extracted else None
+        )
+        eps_estimate = _finite(row.get("eps_estimate"))
+        revenue_estimate = _finite(row.get("revenue_estimate"))
+
+        if standard_eps is not None:
+            frame.at[index, "eps_actual_source"] = "finnhub"
+            frame.at[index, "eps_actual_basis"] = "provider_standardized"
+            frame.at[index, "eps_surprise_pct"] = _surprise(standard_eps, eps_estimate)
+        elif official_adjusted_eps is not None:
+            frame.at[index, "eps_actual"] = official_adjusted_eps
+            frame.at[index, "eps_actual_source"] = "sec"
+            frame.at[index, "eps_actual_basis"] = "non_gaap_diluted"
+            frame.at[index, "eps_surprise_pct"] = None
+        elif official_gaap_eps is not None:
+            frame.at[index, "eps_actual"] = official_gaap_eps
+            frame.at[index, "eps_actual_source"] = "sec"
+            frame.at[index, "eps_actual_basis"] = "gaap_diluted"
+            frame.at[index, "eps_surprise_pct"] = None
+
+        if standard_revenue is not None:
+            frame.at[index, "revenue_actual_source"] = "finnhub"
+            frame.at[index, "revenue_surprise_pct"] = _surprise(
+                standard_revenue, revenue_estimate
+            )
+        elif official_revenue is not None:
+            frame.at[index, "revenue_actual"] = official_revenue
+            frame.at[index, "revenue_actual_source"] = "sec"
+            frame.at[index, "revenue_surprise_pct"] = _surprise(
+                official_revenue, revenue_estimate
+            )
+
+        fallback_used = (
+            frame.at[index, "eps_actual_source"] == "sec"
+            or frame.at[index, "revenue_actual_source"] == "sec"
+        )
+        comparisons = []
+        if standard_eps is not None and official_adjusted_eps is not None:
+            comparisons.append(
+                _close_enough(standard_eps, official_adjusted_eps, relative=0.005, absolute=0.01)
+            )
+        if standard_revenue is not None and official_revenue is not None:
+            comparisons.append(
+                _close_enough(
+                    standard_revenue,
+                    official_revenue,
+                    relative=0.001,
+                    absolute=1_000_000,
+                )
+            )
+        if fallback_used:
+            frame.at[index, "result_signal"] = None
+            frame.at[index, "actual_reconciliation_status"] = "official_only"
+        elif comparisons:
+            frame.at[index, "actual_reconciliation_status"] = (
+                "matched" if all(comparisons) else "differs"
+            )
+        elif standard_eps is not None or standard_revenue is not None:
+            frame.at[index, "actual_reconciliation_status"] = "standardized"
+
+        if _finite(frame.at[index, "eps_actual"]) is not None or _finite(
+            frame.at[index, "revenue_actual"]
+        ) is not None:
+            frame.at[index, "lifecycle"] = "reported"
+    return frame
 
 
 def _expected_source_day(now: datetime) -> date:
@@ -175,7 +290,7 @@ def get_earnings(
             "source": _clean(source),
         }
 
-    frame = events.copy()
+    frame = _resolve_actuals(events)
     frame["release_day"] = pd.to_datetime(frame["release_date"], errors="coerce").dt.date
     invalid_dates = int(frame["release_day"].isna().sum())
     frame = frame[frame["release_day"].notna()].copy()
@@ -190,11 +305,26 @@ def get_earnings(
     frame["release_window_at"] = frame["release_window_datetime"].map(
         lambda value: value.isoformat()
     )
+    official_actual_available = (
+        frame.get("official_actual_status", pd.Series("", index=frame.index))
+        .fillna("")
+        .eq("extracted")
+        & frame[
+            [
+                "official_eps_gaap_actual",
+                "official_eps_adjusted_actual",
+                "official_revenue_actual",
+            ]
+        ]
+        .notna()
+        .any(axis=1)
+    )
     frame["display_status"] = [
-        _display_status(lifecycle, release_at, now)
-        for lifecycle, release_at in zip(
+        _display_status(lifecycle, release_at, now, official_actual)
+        for lifecycle, release_at, official_actual in zip(
             frame.get("lifecycle", pd.Series("scheduled", index=frame.index)),
             frame["release_window_datetime"],
+            official_actual_available,
             strict=True,
         )
     ]
@@ -231,7 +361,12 @@ def get_earnings(
 
     output_columns = list(
         dict.fromkeys(
-            [column for column in events.columns if column != "as_of"]
+            [
+                column
+                for column in frame.columns
+                if column
+                not in {"as_of", "release_day", "release_window_datetime"}
+            ]
             + ["release_window_at", "display_status"]
         )
     )

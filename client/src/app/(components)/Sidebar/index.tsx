@@ -1,96 +1,12 @@
 "use client";
 
 import { useAppSelector } from "@/app/redux";
-import {
-  BellRing,
-  BookOpenText,
-  BriefcaseBusiness,
-  CalendarDays,
-  ChartNoAxesCombined,
-  ChevronDown,
-  FlaskConical,
-  Gauge,
-  NotebookPen,
-  Search,
-  ShieldCheck,
-  X,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { ChevronDown, ShieldCheck, X } from "lucide-react";
+import { marketNavigation as workspaces, personalNavigation as tools, isActiveRoute } from "@/lib/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
-
-interface WorkspaceItem {
-  href: string;
-  label: string;
-  hint: string;
-  icon: LucideIcon;
-  activePrefixes?: string[];
-  badge?: "actions" | "research";
-}
-
-const workspaces: WorkspaceItem[] = [
-  { href: "/home", label: "브리핑", hint: "변화와 판단", icon: Gauge },
-  {
-    href: "/actions",
-    label: "검토",
-    hint: "지금 할 일",
-    icon: BellRing,
-    activePrefixes: ["/earnings"],
-    badge: "actions",
-  },
-  {
-    href: "/insight",
-    label: "시장",
-    hint: "흐름과 국면",
-    icon: ChartNoAxesCombined,
-    activePrefixes: ["/regime", "/stocksearch", "/stock/"],
-  },
-  {
-    href: "/portfolio",
-    label: "포트폴리오",
-    hint: "노출과 기록",
-    icon: BriefcaseBusiness,
-    activePrefixes: ["/journal", "/optimization"],
-  },
-  {
-    href: "/research",
-    label: "리서치",
-    hint: "근거와 전략",
-    icon: BookOpenText,
-    activePrefixes: ["/backtest"],
-    badge: "research",
-  },
-];
-
-const tools: Array<{
-  href: string;
-  label: string;
-  icon: LucideIcon;
-  activePrefixes?: string[];
-}> = [
-  { href: "/stocksearch", label: "종목 검색", icon: Search },
-  { href: "/earnings", label: "실적 일정", icon: CalendarDays },
-  { href: "/regime", label: "시장 국면", icon: ChartNoAxesCombined },
-  { href: "/journal", label: "판단 기록", icon: NotebookPen },
-  {
-    href: "/backtest/strategy_list",
-    label: "백테스트",
-    icon: FlaskConical,
-    activePrefixes: ["/backtest"],
-  },
-];
-
-const isActiveRoute = (
-  pathname: string,
-  href: string,
-  activePrefixes: string[] = []
-) =>
-  pathname === href ||
-  pathname.startsWith(`${href}/`) ||
-  activePrefixes.some((prefix) => pathname.startsWith(prefix)) ||
-  (pathname === "/" && href === "/home");
 
 const CountBadge = ({ count, label }: { count: number; label: string }) => {
   if (count <= 0) return null;
@@ -148,7 +64,7 @@ const Sidebar = ({
         <Link
           href="/home"
           className="flex min-w-0 items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400"
-          aria-label="Insight Invest 브리핑"
+          aria-label="Insight Invest 시장 브리핑"
         >
           <Image
             src="/icons/icon-192.png"
@@ -161,8 +77,8 @@ const Sidebar = ({
             <strong className="block truncate text-[15px] font-semibold tracking-[0.01em] text-ink">
               Insight Invest
             </strong>
-            <span className="mt-0.5 block font-mono text-[8px] uppercase tracking-[0.18em] text-ink-muted">
-              Decision instrument
+            <span className="mt-0.5 block font-mono text-[9px] uppercase tracking-[0.12em] text-ink-muted">
+              Market & research
             </span>
           </span>
         </Link>
@@ -176,11 +92,11 @@ const Sidebar = ({
         </button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-5" aria-label="작업공간">
+      <nav className="flex-1 overflow-y-auto px-3 py-5" aria-label="시장과 리서치">
         <p
-          className={`${isSidebarCollapsed ? "md:hidden" : ""} mb-3 px-3 font-mono text-[9px] uppercase tracking-[0.16em] text-ink-muted`}
+          className={`${isSidebarCollapsed ? "md:hidden" : ""} mb-3 px-3 font-mono text-[11px] tracking-[0.04em] text-ink-muted`}
         >
-          Workspace
+          시장과 리서치
         </p>
         <div className="space-y-1.5">
           {workspaces.map((item) => {
@@ -239,11 +155,11 @@ const Sidebar = ({
           open={utilityRouteActive || undefined}
         >
           <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg px-3 py-2 text-[11px] font-medium text-ink-secondary transition-colors hover:bg-raised hover:text-ink [&::-webkit-details-marker]:hidden">
-            세부 도구
+            개인 투자 도구
             <ChevronDown size={14} aria-hidden />
           </summary>
           <div className="mt-1 space-y-0.5">
-            {tools.map(({ href, label, icon: Icon, activePrefixes }) => {
+            {tools.map(({ href, label, icon: Icon, activePrefixes, badge }) => {
               const active = isActiveRoute(pathname, href, activePrefixes);
               return (
                 <Link
@@ -258,6 +174,7 @@ const Sidebar = ({
                 >
                   <Icon size={14} strokeWidth={1.7} aria-hidden />
                   {label}
+                  {badge === "actions" && <CountBadge count={actionCount} label="검토할 항목" />}
                 </Link>
               );
             })}

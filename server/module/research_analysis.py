@@ -18,7 +18,7 @@ import httpx
 from datastore import research, storage
 
 MODEL = "gpt-5-nano"
-PROMPT_VERSION = "reading-brief-openai-v1"
+PROMPT_VERSION = "reading-brief-openai-v2"
 MAX_OUTPUT_TOKENS = 1800  # Visible output AND reasoning tokens.
 MAX_INPUT_CHARS = 24000
 MAX_ATTEMPTS = 3
@@ -44,7 +44,12 @@ For each non-null point, evidence MUST be one exact contiguous quote from source
 or rewrite quotes. If a point has no such support, return null. Do not fill missing
 limitations from general knowledge. reviewer_note is a short Korean AI interpretation
 or question to check, clearly separate from the author's claims, not new factual
-evidence. It must acknowledge a partial extract when the input is incomplete."""
+evidence. It must acknowledge a partial extract when the input is incomplete.
+Practitioner articles need not state a formal research question; question may be null.
+method_data can describe a concrete framework or mechanism, not only an experiment.
+finding can describe a specific source-supported analytical conclusion, not only a
+backtest result. Set substantive=true only when method_data or finding is non-null
+and grounded in the source; a name, topic, teaser, or vague opinion is not enough."""
 
 POINT_SCHEMA = {
     "anyOf": [
@@ -118,12 +123,8 @@ def validate_brief(value: dict, text: str) -> dict:
             raise AnalysisContractError(
                 f"brief excerpt is not in the analyzed source: {name}"
             )
-    if value["substantive"] and (
-        not value["question"] or not (value["method_data"] or value["finding"])
-    ):
-        raise AnalysisContractError(
-            "substantive brief lacks grounded question/method/finding"
-        )
+    if value["substantive"] and not (value["method_data"] or value["finding"]):
+        raise AnalysisContractError("substantive brief lacks grounded method/finding")
     return value
 
 
