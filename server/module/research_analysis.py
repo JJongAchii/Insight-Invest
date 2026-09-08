@@ -19,7 +19,7 @@ from datastore import research, storage
 
 MODEL = "gpt-5-nano"
 PROMPT_VERSION = "reading-brief-openai-v2"
-MAX_OUTPUT_TOKENS = 4096  # Visible output AND reasoning; 1800 truncated real briefs.
+MAX_OUTPUT_TOKENS = 8192  # Visible output AND reasoning; real PDFs exceeded 4096.
 MAX_INPUT_CHARS = 24000
 MAX_ATTEMPTS = 3
 INPUT_NANOUSD_PER_TOKEN = 50
@@ -81,6 +81,10 @@ BRIEF_SCHEMA = {
 
 class AnalysisContractError(ValueError):
     """Non-secret diagnosis from our own output contract, safe to persist."""
+
+    def __init__(self, message: str, *, usage: dict | None = None):
+        super().__init__(message)
+        self.usage = usage or {}
 
 
 def _normalize(text: str) -> str:
@@ -187,7 +191,7 @@ def _request_payload(text: str, title: str) -> dict:
                 "name": "research_reading_brief",
                 "strict": True,
                 "schema": BRIEF_SCHEMA,
-            }
+            },
         },
     }
 
@@ -220,7 +224,21 @@ def _model_call(text: str, title: str, api_key: str) -> tuple[dict, dict]:
         reason = (
             reason if reason in {"max_output_tokens", "content_filter"} else "unknown"
         )
-        raise AnalysisContractError(f"analysis response was incomplete: {reason}")
+        usage = payload.get("usage") or {}
+        measured = {
+            name: usage[name]
+            for name in ("input_tokens", "output_tokens")
+            if type(usage.get(name)) is int
+        }
+        reasoning_tokens = (usage.get("output_tokens_details") or {}).get(
+            "reasoning_tokens"
+        )
+        if type(reasoning_tokens) is int:
+            measured["reasoning_tokens"] = reasoning_tokens
+        measured["output_chars"] = len(_output_text(payload))
+        raise AnalysisContractError(
+            f"analysis response was incomplete: {reason}", usage=measured
+        )
     raw = _output_text(payload)
     if not raw:
         raise AnalysisContractError("analysis response contained no output text")
@@ -362,6 +380,8 @@ def enrich(
             }
             if isinstance(exc, AnalysisContractError):
                 item["analysis_retry"]["error_reason"] = str(exc)
+                if exc.usage:
+                    item["analysis_retry"]["usage"] = exc.usage
             if isinstance(exc, httpx.HTTPStatusError):
                 item["analysis_retry"]["http_status"] = exc.response.status_code
                 try:
