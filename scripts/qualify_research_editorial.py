@@ -16,6 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from decimal import Decimal
 from importlib.metadata import version
+from itertools import zip_longest
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -29,9 +30,12 @@ QUALIFICATION_ROOT = "s3://insight-invest-datalake/research-radar/qualification/
 ENABLED_SOURCES = tuple(
     name for name in CHANNELS if name not in {"man-systematic-insights", "kjfs-current"}
 )
+# This comparison selector exists only in the isolated manual runner. Production
+# remains on its configured nano model; no environment-driven fallback is added.
+MODEL_PRICES = {"gpt-5-nano": (50, 400), "gpt-5-mini": (250, 2000)}
 
 
-def validate_environment() -> tuple[int, list[str]]:
+def validate_environment() -> tuple[int, list[str], str]:
     if not os.environ.get("OPENAI_API_KEY", "").strip():
         raise ValueError("OPENAI_API_KEY is not configured")
     if storage.app_data_root() != QUALIFICATION_ROOT:
@@ -52,7 +56,34 @@ def validate_environment() -> tuple[int, list[str]]:
     )
     if any(name not in ENABLED_SOURCES for name in sources):
         raise ValueError("source is outside the approved enabled editorial bundle")
-    return maximum, sources
+    model = os.environ.get("RESEARCH_QUALIFICATION_MODEL", "gpt-5-nano")
+    if model not in MODEL_PRICES:
+        raise ValueError("qualification model is not approved")
+    if model == "gpt-5-mini" and not 1 <= maximum <= min(3, len(sources)):
+        raise ValueError("mini comparison allows at most three distinct sources")
+    return maximum, sources, model
+
+
+def select_records(groups: list[list[dict]], maximum: int) -> list[dict]:
+    """One recent readable item per source first, then fill remaining slots."""
+    selected = {}
+    for row in zip_longest(*groups):
+        for record in row:
+            if record is None:
+                continue
+            selected.setdefault(
+                record["entry_id_sha256"], {**record, "notification_eligible": False}
+            )
+            if len(selected) == maximum:
+                return list(selected.values())
+    return list(selected.values())
+
+
+def current_analysis(item: dict) -> bool:
+    # A ready nano brief is not a completed mini comparison on the same source.
+    return item.get("analysis_status") == "ready" and item.get("analysis", {}).get(
+        "fingerprint"
+    ) == research_analysis.cache_key(item)
 
 
 class RecordSnapshot:
@@ -106,8 +137,23 @@ def run(output: Path) -> int:
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
 
+    original_settings = (
+        research_analysis.MODEL,
+        research_analysis.INPUT_NANOUSD_PER_TOKEN,
+        research_analysis.OUTPUT_NANOUSD_PER_TOKEN,
+    )
     try:
-        maximum, sources = validate_environment()
+        maximum, sources, model = validate_environment()
+        (
+            research_analysis.MODEL,
+            research_analysis.INPUT_NANOUSD_PER_TOKEN,
+            research_analysis.OUTPUT_NANOUSD_PER_TOKEN,
+        ) = (model, *MODEL_PRICES[model])
+        report["model"] = model
+        report["pricing_nanousd_per_token"] = {
+            "input": MODEL_PRICES[model][0],
+            "output": MODEL_PRICES[model][1],
+        }
         report["max_items"] = maximum
         report["monthly_qualification_limit_usd"] = "0.10"
 
@@ -125,28 +171,43 @@ def run(output: Path) -> int:
             except Exception as exc:
                 return {"source_id": name, "error_type": type(exc).__name__}, []
 
-        records_by_id = {}
+        groups = []
         with ThreadPoolExecutor(max_workers=4) as pool:
             for health, records in pool.map(collect, sources):
                 report["sources"].append(health)
                 # Listings can pin an old abstract first. A one-card connection
                 # check should prefer a recent accessible body from that source.
-                for record in sorted(
-                    records,
-                    key=lambda record: (
-                        record["analysis_scope"] != "abstract",
-                        record["published_at"],
-                    ),
-                    reverse=True,
-                ):
-                    # This is a backfill qualification, not a live push candidate.
-                    record["notification_eligible"] = False
-                    records_by_id.setdefault(record["entry_id_sha256"], record)
+                groups.append(
+                    sorted(
+                        records,
+                        key=lambda record: (
+                            record["analysis_scope"] != "abstract",
+                            record["published_at"],
+                        ),
+                        reverse=True,
+                    )
+                )
                 print(json.dumps({"stage": "source", **health}), flush=True)
                 save_report()
-        records = list(records_by_id.values())[:maximum]
+        records = select_records(groups, maximum)
         if not records:
             raise ValueError("no readable qualification publications")
+        if model == "gpt-5-mini" and len({r["source_id"] for r in records}) != maximum:
+            raise ValueError("mini comparison requires one readable item per source")
+        report["selected_entries"] = [
+            {
+                key: record[key]
+                for key in (
+                    "entry_id_sha256",
+                    "source_id",
+                    "title",
+                    "url",
+                    "source_digest",
+                )
+            }
+            for record in records
+        ]
+        save_report()  # Record the sample before the first paid call.
 
         research_feed.reconcile(s3=RecordSnapshot(records), now=now)
         feed = research.load_feed()
@@ -169,7 +230,7 @@ def run(output: Path) -> int:
                 for item in report["items"]
                 if item.get("analysis_status") != "not_requested"
             ]
-            if all(item.get("analysis_status") == "ready" for item in requested):
+            if all(current_analysis(item) for item in requested):
                 break
         requested = [
             item
@@ -177,11 +238,10 @@ def run(output: Path) -> int:
             if item.get("analysis_status") != "not_requested"
         ]
         report["requested"] = len(requested)
-        report["ready"] = sum(
-            item.get("analysis_status") == "ready" for item in requested
-        )
+        report["ready"] = sum(current_analysis(item) for item in requested)
         report["core"] = sum(
-            item.get("research_lane") == "core" for item in report["items"]
+            current_analysis(item) and item.get("research_lane") == "core"
+            for item in report["items"]
         )
         # This qualifies transport/structure/grounding, not semantic quality or alpha.
         if requested and report["ready"] == len(requested):
@@ -193,6 +253,11 @@ def run(output: Path) -> int:
         report["error_type"] = type(exc).__name__
     finally:
         save_report()
+        (
+            research_analysis.MODEL,
+            research_analysis.INPUT_NANOUSD_PER_TOKEN,
+            research_analysis.OUTPUT_NANOUSD_PER_TOKEN,
+        ) = original_settings
     print(
         json.dumps(
             {

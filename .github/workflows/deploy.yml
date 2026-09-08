@@ -31,6 +31,11 @@ on:
         description: Approved source IDs, comma separated; blank uses all enabled editorial sources
         type: string
         default: "aqr-research"
+      research_model:
+        description: Isolated qualification model only; mini is limited to 3 distinct sources
+        type: choice
+        options: [gpt-5-nano, gpt-5-mini]
+        default: gpt-5-nano
 
 env:
   AWS_REGION: ap-northeast-2
@@ -78,6 +83,7 @@ jobs:
           RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "0.10"
           RESEARCH_MAX_ITEMS: ${{ inputs.research_max_items }}
           RESEARCH_SOURCES: ${{ inputs.research_sources }}
+          RESEARCH_QUALIFICATION_MODEL: ${{ inputs.research_model }}
           QDATA_REF: ${{ inputs.qdata_ref }}
         run: python scripts/qualify_research_editorial.py --output qualification-report.json
       - uses: actions/upload-artifact@v4

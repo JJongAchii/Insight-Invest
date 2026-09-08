@@ -1,7 +1,8 @@
 # Research 요약 API 설정
 
 2026-09-08: 사용자가 키 등록을 완료했고 GitHub secret 이름을 확인했다.
-실 API 인수 전이며, 키 등록은 운영 배포 완료를 뜻하지 않는다.
+실제 GPT-5 nano 호출과 구조화 응답 생성은 확인했다. AQR 원문 대조에서 용어 오역과
+근거 연결 문제가 남아 의미 품질 인수는 미통과이며, 운영 배포는 하지 않았다.
 
 ## 사용자가 한 번 설정할 것
 
@@ -51,7 +52,12 @@
 3. quant-data/앱의 관련 테스트·웹 빌드, 최초 수집 알림 억제와 읽음/저장/확인 상태 보존을 확인한다.
 4. 관련 main 반영 → AWS/Vercel 배포 → 실제 핵심 카드/원문/새 알림 확인 후에만 릴리스 완료를 기록한다.
 
-위 1–2의 실제 요약 인수는 아직 완료하지 않았다. 운영 main/AWS/Vercel 변경도 하지 않았다.
+위 1의 키/연결 확인은 완료했다. 2의 실제 요약 품질 인수와 운영 main/AWS/Vercel 배포는
+미완료다. Actions 34179045960과 34185928307이 `api_contract_qualified`를 기록했지만,
+두 AQR 요약 모두 원문 대조에서 품질 문제가 확인되어 릴리스 근거로 사용하지 않는다.
+현재 작업 브랜치는 같은 nano에 `reasoning.effort=low`를 사용하고 추론 설정도 캐시
+식별자에 넣는다. 사용자는 2026-09-08 mini 3편 비교를 승인했다. 이것은 격리 시험만
+승인한 것으로 운영 모델 선택이나 배포 승인이 아니다.
 
 ### 키를 꺼내지 않는 실제 API 시험
 
@@ -70,6 +76,16 @@ gh workflow run deploy.yml --repo JJongAchii/Insight-Invest \
 시험은 concurrency group으로 직렬화하고, 첫 오류에서 추가 문서 호출을 멈춘다.
 `research-qualification-<run>-<attempt>` artifact의 원문 링크·한국어 요약·근거를 대조한다.
 `api_contract_qualified`는 연결/출력 계약의 통과이며, 의미 품질이나 리서치 결과의 검증이 아니다.
+
+### 승인된 mini 3편 비교
+
+`research_model=gpt-5-mini`, `research_max_items=3`,
+`research_sources=aqr-research,robeco-quant-insights,cfm-research`를 위 수동 시험에 넘긴다.
+mini는 최대 3개 출처에서 한 편씩만 허용하고, nano와 같은 입력/프롬프트/추론 설정을
+사용한다. 출처별 최신 공개 본문을 먼저 선택해 ID·digest를 API 호출 전에 기록한다.
+이전 nano 캐시의 ready 상태는 mini 완료로 세지 않는다. 원문이 달라졌다면 직접적인
+모델 우열 비교라고 하지 않는다. 단가는 시험 프로세스 안에서만 mini에 맞춰 적용하고
+종료 시 복원한다. 운영 모듈 기본값·CloudFormation 모델 설정은 바꾸지 않는다.
 
 ## 공식 문서
 
