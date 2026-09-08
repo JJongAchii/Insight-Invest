@@ -58,6 +58,12 @@ try {
           sources: inLane.map((item) => ({ source_id: item.source_id, source_name: item.source_name, count: 1 })),
           items: selected,
         };
+      } else if (path === "research/status" || path === "research/seen") {
+        // These isolated records cannot notify; don't borrow the generic market
+        // fixture's red badge and misrepresent it as a research result.
+        assert.ok(items.every((item) => !item.notification_eligible));
+        payload = { schema_version: 1, initialized: true, unseen: 0,
+          generated_at: report.checked_at, seen_through: report.checked_at };
       } else if (path === "research/read/all") {
         const updated = inLane.filter((item) => !item.is_read).length;
         inLane.forEach((item) => { item.is_read = true; });

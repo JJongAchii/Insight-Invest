@@ -12,7 +12,7 @@ import re
 
 MODEL = "gpt-5-mini"
 PROMPT_VERSION = "reading-review-openai-v2-point-bound"
-REASONING_EFFORT = "high"
+REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 8192
 REQUEST_TIMEOUT_SECONDS = 120
 INPUT_NANOUSD_PER_TOKEN = 250

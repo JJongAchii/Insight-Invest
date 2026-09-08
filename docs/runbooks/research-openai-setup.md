@@ -120,6 +120,17 @@ v7 초안을 유지한 채 같은 mini의 별도 요청으로 모든 요약 항�
 검수 판단의 정확성은 실제 원문으로 따로 확인한다. 상세는
 [ADR-0017](../adr/0017-source-bound-editorial-review.md)을 따른다.
 
+2026-09-08 후속 시험: 검수 v1/medium은 세 편을 모두 통과시켰지만 AQR의 기존 의미
+오류도 통과시켜 인수 실패했다. v2/high 단건 AQR은 HTTP 60초 timeout, 시간 한도를
+늘린 후 CFM은 출력 상한(내부 추론 8,064/총 출력 8,192)으로 미완료였다. 이후 유료
+호출은 멈췄다. 누적 시험 예약은 $0.15570295 / $0.50이다. v2/medium으로 기본을
+되돌렸지만 새 설정의 실제 품질은 미검증이며 main/AWS/Vercel 배포는 계속 보류한다.
+
+검수 HTTP 한도는 120초, ResearchPoller 실행 한도는 300초(한 실행당 한 유료 단계)다.
+단계 재시도는 별도 `research_analysis/retries/`에 저장해 표본 교체로 초기화되지 않게 한다.
+`scripts/verify_research_review.py`는 공개 원문과 기존 초안·검수 영수증의 digest/인용을
+다시 대조하는 무LLM 검사다. 이 검사도 의미 품질 통과를 부여하지 않는다.
+
 ## 공식 문서
 
 - [API 키 생성과 사용](https://developers.openai.com/api/docs/quickstart)

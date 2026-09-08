@@ -284,7 +284,7 @@ function ResearchCard({
           <h2 className="mt-2 text-base font-semibold leading-6 text-ink sm:text-lg">
             {(hasReviewedBrief(item) && item.analysis?.brief.title_ko) || item.title}
           </h2>
-          {item.analysis && <p className="mt-1 text-xs leading-5 text-ink-muted" lang="en">{item.title}</p>}
+          {hasReviewedBrief(item) && item.analysis?.brief.title_ko !== item.title && <p className="mt-1 text-xs leading-5 text-ink-muted" lang="en">{item.title}</p>}
           {authors && <p className="mt-1 text-xs text-ink-muted">{authors}</p>}
           <ResearchBrief item={item} />
 
