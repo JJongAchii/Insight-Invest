@@ -46,7 +46,7 @@ const LANE_OPTIONS = [
   {
     value: "core",
     label: "핵심 연구",
-    description: "공식 원문에서 읽을 수 있는 퀀트 아이디어·분석·논문",
+    description: "퀀트 방법·실증 연구와 구체적인 운용 아이디어",
     icon: Sparkles,
   },
   {
@@ -54,6 +54,12 @@ const LANE_OPTIONS = [
     label: "발견함",
     description: "초록·연구 모음과 한국어 분석을 기다리는 자료",
     icon: Radar,
+  },
+  {
+    value: "context",
+    label: "시장·배경",
+    description: "시장 전망·기관의 해석과 배경 자료",
+    icon: BookOpen,
   },
   {
     value: "updates",
@@ -84,6 +90,13 @@ const TYPE_LABELS = {
   preprint: "프리프린트 · 미검증",
   research_digest: "연구 모음",
   evidence_update: "데이터·도구 업데이트",
+} as const;
+
+const CONTENT_LABELS = {
+  research: "방법·실증 연구",
+  practitioner: "운용 아이디어·실무",
+  market_commentary: "시장 전망·해석",
+  other: "기타 자료",
 } as const;
 
 const EVIDENCE_LABELS: Record<ResearchEvidenceDimension, string> = {
@@ -164,7 +177,7 @@ function ResearchCard({
       ? "핵심"
       : item.research_lane === "discovery"
         ? "발견"
-        : item.research_lane === "updates" ? "업데이트" : "기록";
+        : item.research_lane === "updates" ? "업데이트" : "시장·배경";
   const relevance = item.relevance_terms.slice(0, 2).join(" · ");
   const schemaThreeEvidence =
     item.record_schema_version === 3 && item.item_type === "evidence_update";
@@ -246,6 +259,9 @@ function ResearchCard({
             {item.record_schema_version === 4 && (
               <>
                 {item.item_type && <span className="badge-neutral">{TYPE_LABELS[item.item_type]}</span>}
+                {item.analysis?.brief.content_kind && (
+                  <span className="badge-neutral">{CONTENT_LABELS[item.analysis.brief.content_kind]}</span>
+                )}
                 {item.content_provenance && <span>{PROVENANCE_LABELS[item.content_provenance]}</span>}
               </>
             )}
@@ -536,7 +552,7 @@ export default function ResearchPage() {
         </div>
       )}
 
-      <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label="리서치 자료 유형">
+      <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5" aria-label="리서치 자료 유형">
         {LANE_OPTIONS.map((option) => {
           const Icon = option.icon;
           const active = lane === option.value;
@@ -571,7 +587,8 @@ export default function ResearchPage() {
 
       <p className="-mt-3 px-1 text-xs leading-5 text-ink-muted">
         사이드바 배지와 iPhone 알림은 새 핵심 연구에 표시됩니다.
-        초록·연구 모음·데이터 업데이트는 별도로 보존하며, 초기 자료 채우기와 요약 수정은 다시 알리지 않습니다.
+        시장 전망·초록·연구 모음·데이터 업데이트도 별도로 읽고 보관할 수 있습니다.
+        초기 자료 채우기와 요약 수정은 다시 알리지 않습니다.
       </p>
 
       <div className="grid gap-5 xl:grid-cols-[15rem_minmax(0,1fr)] xl:items-start">

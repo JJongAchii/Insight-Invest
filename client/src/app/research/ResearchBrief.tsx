@@ -3,7 +3,7 @@ import type { ResearchEntry } from "@/state/api";
 const POINTS = [
   ["question", "다루는 질문"],
   ["method_data", "방법·데이터"],
-  ["finding", "저자가 보고한 결과"],
+  ["finding", "저자의 설명·주장"],
   ["why_read", "읽어볼 이유"],
   ["limitation", "원문이 밝힌 한계"],
 ] as const;
@@ -33,14 +33,18 @@ export default function ResearchBrief({ item }: { item: ResearchEntry }) {
         {POINTS.map(([field, label]) => {
           const point = analysis.brief[field];
           if (!point) return null;
+          const pointLabel = field !== "finding" ? label
+            : analysis.brief.content_kind === "research" ? "저자가 보고한 결과"
+            : analysis.brief.content_kind === "market_commentary" ? "저자의 전망·해석"
+            : label;
           return (
             <div key={field} className="grid gap-1 sm:grid-cols-[7.5rem_1fr] sm:gap-3">
-              <dt className="text-xs font-medium leading-6 text-ink-muted">{label}</dt>
+              <dt className="text-xs font-medium leading-6 text-ink-muted">{pointLabel}</dt>
               <dd className="min-w-0 text-sm leading-6 text-ink-secondary">
                 <p>{point.text_ko}</p>
                 <details className="mt-1 text-xs text-ink-muted">
                   <summary className="w-fit cursor-pointer rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-400">
-                    근거 문장 보기
+                    원문 근거 펼치기
                   </summary>
                   <blockquote className="mt-2 border-l-2 border-edge pl-3 leading-5" lang={/[가-힣]/.test(point.evidence) ? "ko" : "en"}>
                     {point.evidence}
@@ -52,7 +56,7 @@ export default function ResearchBrief({ item }: { item: ResearchEntry }) {
         })}
       </dl>
       <div className="border-t border-edge pt-3 text-xs leading-5 text-ink-muted">
-        <p><span className="font-medium text-ink-secondary">리서치 메모 · AI 해석</span> {analysis.brief.reviewer_note}</p>
+        <p><span className="font-medium text-ink-secondary">더 읽어볼 점 · AI 메모</span> {analysis.brief.reviewer_note}</p>
         <p className="mt-1">원문 일부에 근거한 읽기 도움말입니다. 독립 재현·성과 검증 결과가 아닙니다.</p>
       </div>
     </div>

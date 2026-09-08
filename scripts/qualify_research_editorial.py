@@ -31,7 +31,7 @@ ENABLED_SOURCES = tuple(
     name for name in CHANNELS if name not in {"man-systematic-insights", "kjfs-current"}
 )
 # This comparison selector exists only in the isolated manual runner. Production
-# remains on its configured nano model; no environment-driven fallback is added.
+# remains on its configured model; no environment-driven fallback is added.
 MODEL_PRICES = {"gpt-5-nano": (50, 400), "gpt-5-mini": (250, 2000)}
 
 
@@ -56,7 +56,7 @@ def validate_environment() -> tuple[int, list[str], str]:
     )
     if any(name not in ENABLED_SOURCES for name in sources):
         raise ValueError("source is outside the approved enabled editorial bundle")
-    model = os.environ.get("RESEARCH_QUALIFICATION_MODEL", "gpt-5-nano")
+    model = os.environ.get("RESEARCH_QUALIFICATION_MODEL", research_analysis.MODEL)
     if model not in MODEL_PRICES:
         raise ValueError("qualification model is not approved")
     if model == "gpt-5-mini" and not 1 <= maximum <= min(3, len(sources)):

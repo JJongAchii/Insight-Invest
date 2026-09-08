@@ -667,6 +667,7 @@ export interface ResearchAnalysis {
   scope: string;
   brief: {
     title_ko: string;
+    content_kind?: "research" | "practitioner" | "market_commentary" | "other";
     question: ResearchBriefPoint | null;
     method_data: ResearchBriefPoint | null;
     finding: ResearchBriefPoint | null;
@@ -746,7 +747,7 @@ export interface ResearchStatusResponse {
 }
 
 export type ResearchView = "all" | "unread" | "read" | "saved";
-export type ResearchLane = "core" | "discovery" | "updates" | "all";
+export type ResearchLane = "core" | "discovery" | "context" | "updates" | "all";
 
 export interface ResearchFeedParams {
   sourceId?: string;

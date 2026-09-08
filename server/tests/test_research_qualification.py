@@ -24,7 +24,7 @@ def configured(monkeypatch):
 
 
 def test_isolated_environment_contract(configured):
-    assert qualification.validate_environment() == (1, ["aqr-research"], "gpt-5-nano")
+    assert qualification.validate_environment() == (1, ["aqr-research"], "gpt-5-mini")
 
 
 @pytest.mark.parametrize(
@@ -81,7 +81,7 @@ def test_mini_comparison_is_bounded_and_uses_correct_rates(configured, monkeypat
     monkeypatch.setenv("RESEARCH_MAX_ITEMS", "3")
     assert qualification.validate_environment()[2] == "gpt-5-mini"
     assert qualification.MODEL_PRICES["gpt-5-mini"] == (250, 2000)
-    assert qualification.research_analysis.MODEL == "gpt-5-nano"
+    assert qualification.research_analysis.MODEL == "gpt-5-mini"
     monkeypatch.setenv("RESEARCH_MAX_ITEMS", "4")
     with pytest.raises(ValueError, match="three distinct sources"):
         qualification.validate_environment()
@@ -111,7 +111,7 @@ def test_previous_ready_model_is_not_a_completed_comparison(monkeypatch):
     }
     item["analysis"] = {"fingerprint": qualification.research_analysis.cache_key(item)}
     assert qualification.current_analysis(item)
-    monkeypatch.setattr(qualification.research_analysis, "MODEL", "gpt-5-mini")
+    monkeypatch.setattr(qualification.research_analysis, "MODEL", "gpt-5-nano")
     assert not qualification.current_analysis(item)
 
 
@@ -126,7 +126,7 @@ def test_prefilter_skip_is_not_counted_as_a_model_comparison():
     )  # Keep the exclusion in the evidence, not silently delete it.
 
 
-def test_runner_sets_mini_prices_and_restores_defaults_without_io(
+def test_runner_sets_comparison_prices_and_restores_defaults_without_io(
     configured, monkeypatch, tmp_path
 ):
     import json
@@ -137,8 +137,10 @@ def test_runner_sets_mini_prices_and_restores_defaults_without_io(
         module.INPUT_NANOUSD_PER_TOKEN,
         module.OUTPUT_NANOUSD_PER_TOKEN,
     )
-    reservation = module._request_reservation("source text " * 100, "Test")
-    monkeypatch.setenv("RESEARCH_QUALIFICATION_MODEL", "gpt-5-mini")
+    reservation = module._request_reservation(
+        "A complete source sentence. " * 100, "Test"
+    )
+    monkeypatch.setenv("RESEARCH_QUALIFICATION_MODEL", "gpt-5-nano")
     observed = []
 
     class EmptyProbe(list):
@@ -153,17 +155,19 @@ def test_runner_sets_mini_prices_and_restores_defaults_without_io(
             )
         )
         assert (
-            module._request_reservation("source text " * 100, "Test") == reservation * 5
+            module._request_reservation("A complete source sentence. " * 100, "Test")
+            * 5
+            == reservation
         )
         return EmptyProbe()
 
     monkeypatch.setattr(qualification, "discover_publications", collect)
     report_path = tmp_path / "qualification.json"
     assert qualification.run(report_path) == 1  # No readable sample; no API call.
-    assert observed == [("gpt-5-mini", 250, 2000)]
+    assert observed == [("gpt-5-nano", 50, 400)]
     report = json.loads(report_path.read_text())
-    assert report["model"] == "gpt-5-mini"
-    assert report["pricing_nanousd_per_token"] == {"input": 250, "output": 2000}
+    assert report["model"] == "gpt-5-nano"
+    assert report["pricing_nanousd_per_token"] == {"input": 50, "output": 400}
     assert report["analysis_runs"] == [] and not report["production_modified"]
     assert (
         module.MODEL,

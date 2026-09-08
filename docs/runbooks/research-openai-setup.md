@@ -1,8 +1,9 @@
 # Research 요약 API 설정
 
 2026-09-08: 사용자가 키 등록을 완료했고 GitHub secret 이름을 확인했다.
-실제 GPT-5 nano 호출과 구조화 응답 생성은 확인했다. AQR 원문 대조에서 용어 오역과
-근거 연결 문제가 남아 의미 품질 인수는 미통과이며, 운영 배포는 하지 않았다.
+실제 nano/mini 비교 후 사용자가 근거·분류·한국어 보완과 mini 반영을 승인했다.
+작업 브랜치 기본 모델은 GPT-5 mini다. 실제 수정 재시험과 다양한 원문 대조가 필요하며,
+main/AWS/Vercel 운영 배포는 하지 않았다.
 
 ## 사용자가 한 번 설정할 것
 
@@ -20,7 +21,9 @@
 
 ## 연결과 비용 경계
 
-- 모델은 사용자가 승인한 `gpt-5-nano` 하나다. Qwen·Anthropic·상위 모델로 자동 전환하지 않는다.
+- 모델은 사용자가 승인한 `gpt-5-mini` 하나다. Qwen·Anthropic·상위 모델로 자동 전환하지 않는다.
+  [공식 단가](https://developers.openai.com/api/docs/models/gpt-5-mini)는 100만 토큰당
+  입력 $0.25 / 출력 $2다. 비용 예약과 사용량 정산 모두 mini 단가를 적용한다.
 - `deploy.yml` → CloudFormation `OpenAIApiKey` (`NoEcho`) →
   `insight-invest-research-poller`의 `OPENAI_API_KEY`로만 전달한다.
   브라우저·API 서빙 함수·뉴스 폴러에는 이 키를 추가하지 않는다.
@@ -55,9 +58,9 @@
 위 1의 키/연결 확인은 완료했다. 2의 실제 요약 품질 인수와 운영 main/AWS/Vercel 배포는
 미완료다. Actions 34179045960과 34185928307이 `api_contract_qualified`를 기록했지만,
 두 AQR 요약 모두 원문 대조에서 품질 문제가 확인되어 릴리스 근거로 사용하지 않는다.
-현재 작업 브랜치는 같은 nano에 `reasoning.effort=low`를 사용하고 추론 설정도 캐시
-식별자에 넣는다. 사용자는 2026-09-08 mini 3편 비교를 승인했다. 이것은 격리 시험만
-승인한 것으로 운영 모델 선택이나 배포 승인이 아니다.
+이후 mini 3편 비교에서 개선을 확인했고, 사용자는 근거·분류 보완과 mini 반영을 승인했다.
+현재 브랜치는 mini, `reasoning.effort=low`, v5 문장 근거/자료 유형 계약을 사용한다.
+모델과 프롬프트·추론 설정은 캐시 식별자에 포함된다. 코드 반영과 실제 배포 완료는 별개다.
 
 ### 키를 꺼내지 않는 실제 API 시험
 
@@ -77,26 +80,30 @@ gh workflow run deploy.yml --repo JJongAchii/Insight-Invest \
 `research-qualification-<run>-<attempt>` artifact의 원문 링크·한국어 요약·근거를 대조한다.
 `api_contract_qualified`는 연결/출력 계약의 통과이며, 의미 품질이나 리서치 결과의 검증이 아니다.
 
-### 승인된 mini 3편 비교
+### mini 비교와 수정 재시험
 
 `research_model=gpt-5-mini`, `research_max_items=3`,
 `research_sources=aqr-research,robeco-quant-insights,cfm-research`를 위 수동 시험에 넘긴다.
-mini는 최대 3개 출처에서 한 편씩만 허용하고, nano와 같은 입력/프롬프트/추론 설정을
-사용한다. 출처별 최신 공개 본문을 먼저 선택해 ID·digest를 API 호출 전에 기록한다.
-이전 nano 캐시의 ready 상태는 mini 완료로 세지 않는다. 원문이 달라졌다면 직접적인
-모델 우열 비교라고 하지 않는다. 단가는 시험 프로세스 안에서만 mini에 맞춰 적용하고
-종료 시 복원한다. 운영 모듈 기본값·CloudFormation 모델 설정은 바꾸지 않는다.
+mini 시험은 최대 3개 출처에서 한 편씩만 허용한다. 출처별 최신 공개 본문을 먼저 선택해
+ID·digest를 API 호출 전에 기록한다. 다른 모델/프롬프트의 ready 캐시는 현재 시험의
+완료로 세지 않는다. 처음 v4 비교는 nano/mini가 같은 입력·프롬프트·추론을 사용했지만,
+v5 재시험은 근거와 분류 계약도 바뀌므로 모델만의 비교라고 부르지 않는다.
+시험 프로세스의 선택 모델·단가는 종료 시 앱 기본값으로 복원한다. 이 수동 작업은
+CloudFormation 배포와 운영 피드/상태를 변경하지 않는다.
 
 2026-09-08 결과: Actions 34187026159와 34187850601에서 AQR·CFM·Robeco의 실제
 mini 요약 3편을 만들었다. 첫 실행의 Robeco AI 소개글은 사전 필터에서 제외되어 호출하지
 않았으며, 다음 실행은 앞의 두 mini 캐시를 유지하고 Robeco 채권 글 한 편만 추가했다.
 세 편 비용 추정 합계는 $0.008815, 기존 실패 예약을 포함한 시험 누적 예약은 $0.0245597이다.
 API 출력 계약은 통과했지만 근거 문장 잘림과 자료 유형 분류 보완이 남았다. mini는
-우선 후보라는 편집 판단만 기록했으며 운영 모델·main·배포는 바꾸지 않았다.
+우선 후보라는 편집 판단만 기록했으며 당시 운영 모델·main·배포는 바꾸지 않았다.
+그다음 사용자의 “응 진행해줘”로 v5 수정과 앱 기본 mini 반영을 진행한다. 원문 대조의
+합격 여부는 새 실제 응답으로 별도 기록하며 기존 실패/예약/캐시는 그대로 보존한다.
 
 ## 공식 문서
 
 - [API 키 생성과 사용](https://developers.openai.com/api/docs/quickstart)
 - [GPT-5 nano 기능·단가](https://developers.openai.com/api/docs/models/gpt-5-nano)
+- [GPT-5 mini 기능·단가](https://developers.openai.com/api/docs/models/gpt-5-mini)
 - [Structured Outputs와 미완료/거절 처리](https://developers.openai.com/api/docs/guides/structured-outputs)
 - [추론 토큰과 비용 제한](https://developers.openai.com/api/docs/guides/reasoning)

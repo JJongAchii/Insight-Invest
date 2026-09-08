@@ -1,4 +1,4 @@
-"""Offline GPT-5 nano brief/projection contracts; no real API calls."""
+"""Offline GPT-5 mini brief/projection contracts; no real API calls."""
 
 import hashlib
 import io
@@ -40,13 +40,14 @@ class Records:
         return {"Body": io.BytesIO(json.dumps(self.record).encode())}
 
 
-def brief(*, relevant=True):
+def brief(*, relevant=True, kind="research"):
     point = {
         "text_ko": "저자는 팩터 포트폴리오 구성 방법을 살펴봅니다.",
         "evidence": "We examine factor portfolio construction using empirical return data.",
     }
     return {
         "title_ko": "팩터 포트폴리오 연구",
+        "content_kind": kind,
         "question": point,
         "method_data": point,
         "finding": None,
@@ -62,7 +63,7 @@ def wire_brief():
     result = brief()
     for field in analysis.FIELDS:
         if result[field] is not None:
-            result[field] = {"text_ko": result[field]["text_ko"], "evidence_id": 0}
+            result[field] = {"text_ko": result[field]["text_ko"], "evidence_ids": [0]}
     return result
 
 
@@ -184,7 +185,7 @@ def test_backfill_and_topic_mismatch_never_notify(
     assert not item["notification_eligible"]
 
 
-def test_model_request_uses_gpt5_nano_strict_schema_without_storage(monkeypatch):
+def test_model_request_uses_gpt5_mini_strict_schema_without_storage(monkeypatch):
     captured = {}
 
     class Response:
@@ -216,7 +217,7 @@ def test_model_request_uses_gpt5_nano_strict_schema_without_storage(monkeypatch)
         "input_tokens": 100,
         "output_tokens": 80,
     }
-    assert payload["model"] == "gpt-5-nano" and payload["store"] is False
+    assert payload["model"] == "gpt-5-mini" and payload["store"] is False
     assert payload["text"]["format"]["type"] == "json_schema"
     assert payload["text"]["format"]["strict"] is True
     assert payload["max_output_tokens"] == analysis.MAX_OUTPUT_TOKENS
@@ -240,7 +241,7 @@ def test_budget_is_reserved_before_call_and_cache_avoids_second_call(source):
 
     result = analysis.enrich(now=NOW, text_loader=lambda _item: TEXT, model_call=model)
     assert result["completed"] == 1
-    assert result["reserved_nanousd"] == 37_000
+    assert result["reserved_nanousd"] == 185_000
     assert research.load_feed()["items"][0]["research_lane"] == "core"
     assert (
         analysis.enrich(now=NOW, text_loader=lambda _item: TEXT, model_call=model)[
@@ -480,16 +481,151 @@ def test_quotes_are_attached_by_code_not_rewritten_by_the_model():
     )
     assert value["method_data"]["evidence"] in TEXT
     bad = wire_brief()
-    bad["method_data"]["evidence_id"] = 999999
+    bad["method_data"]["evidence_ids"] = [999999]
     with pytest.raises(analysis.AnalysisContractError, match="unknown source passage"):
         analysis._ground_response(bad, TEXT)
 
 
 def test_passages_are_bounded_verbatim_even_with_unicode_and_a_short_tail():
     text = ("한국어 원문 근거를 그대로 연결합니다. " * 40) + "끝"
-    for passage in analysis._source_passages(text):
-        assert 15 <= len(passage["text"]) <= 180
+    passages = analysis._source_passages(text)
+    for passage in passages:
         assert passage["text"] in analysis._normalize(text)
+        if passage["citable"]:
+            assert 15 <= len(passage["text"]) <= analysis.MAX_EVIDENCE_CHARS
+            assert passage["text"].endswith(".")
+    assert passages[-1] == {"id": 40, "text": "끝", "citable": False}
+
+
+def test_evidence_keeps_complete_sentences_across_a_method_explanation():
+    sentences = [
+        "The ranking engine orders issuers using valuation and momentum signals.",
+        "The construction engine then builds a portfolio subject to liquidity and risk constraints.",
+        "Analysts review exceptional events that the quantitative model may miss.",
+    ]
+    text = " ".join(sentences)
+    passages = analysis._source_passages(text)
+    assert [p["text"] for p in passages] == sentences
+    value = wire_brief()
+    value["method_data"]["evidence_ids"] = [0, 1]
+    grounded = analysis._ground_response(value, text)
+    assert grounded["method_data"]["evidence"] == " ".join(sentences[:2])
+
+
+@pytest.mark.parametrize("ids", [[], [True], [0, 0], [1, 0], [0, 2], [0, 1, 2, 3, 4]])
+def test_invalid_evidence_selection_cannot_publish(ids):
+    value = wire_brief()
+    value["method_data"]["evidence_ids"] = ids
+    with pytest.raises(analysis.AnalysisContractError):
+        analysis._ground_response(value, TEXT)
+
+
+def test_sentence_boundaries_preserve_decimals_abbreviations_and_numbered_lists():
+    sentences = [
+        "Dr. Lee evaluates U.S. bonds with a 2.5 percent yield, e.g. liquid credit.",
+        "Three effects are considered: 1. portfolio weights and valuation.",
+        "2. Company emissions enter a separate component.4",
+        "3. Interaction terms are reported separately.",
+        "The sample finishes in 2026.",
+        "The adjusted score is 2.5.",
+    ]
+    assert [
+        p["text"] for p in analysis._source_passages(" ".join(sentences))
+    ] == sentences
+
+
+@pytest.mark.parametrize(
+    "tail", ["The unfinished claim continues", "Long clause " * 110 + "."]
+)
+def test_incomplete_or_oversized_passages_are_context_only(tail):
+    text = "A complete sentence explains the investment method. " + tail
+    value = wire_brief()
+    value["method_data"]["evidence_ids"] = [1]
+    assert not analysis._source_passages(text)[1]["citable"]
+    with pytest.raises(analysis.AnalysisContractError, match="context only"):
+        analysis._ground_response(value, text)
+
+
+def test_combined_evidence_cannot_exceed_the_excerpt_limit():
+    text = ("A long sentence " + "with bounded words " * 35 + ". ") * 2
+    value = wire_brief()
+    value["method_data"]["evidence_ids"] = [0, 1]
+    with pytest.raises(analysis.AnalysisContractError, match="invalid excerpt length"):
+        analysis._ground_response(value, text)
+
+
+def test_unusable_sentence_extraction_stops_before_reservation_or_request(source):
+    research_feed.reconcile(s3=source, now=NOW)
+
+    def forbidden(*_args):
+        pytest.fail("unusable evidence must not incur an API request")
+
+    result = analysis.enrich(
+        now=NOW,
+        text_loader=lambda _item: "An unfinished source fragment",
+        model_call=forbidden,
+    )
+    assert result["failed"] == 1 and result["reserved_nanousd"] == 0
+    assert not storage.exists("research_analysis/budget-2026-09.json")
+
+
+@pytest.mark.parametrize(
+    "kind,expected_lane,notifiable",
+    [
+        ("research", "core", True),
+        ("practitioner", "core", True),
+        ("market_commentary", "context", False),
+        ("other", "context", False),
+        (None, "discovery", False),
+    ],
+)
+def test_document_kind_controls_core_without_deleting_or_rewriting_library(
+    source, tmp_path, kind, expected_lane, notifiable
+):
+    research_feed.reconcile(s3=source, now=NOW)
+    entry_id = source.record["entry_id_sha256"]
+    research.set_read(entry_id, read=True)
+    research.set_saved(entry_id, saved=True)
+    research.save_seen_through(NOW)
+    before = {
+        name: (tmp_path / name).read_bytes()
+        for name in (research.READ_STATE_FILE, research.SEEN_STATE_FILE)
+    }
+    feed = research.load_feed()
+    value = brief(kind=kind)
+    if kind is None:
+        del value["content_kind"]  # A v4 cache must remain readable, not count as v5.
+    feed["items"][0].update(
+        analysis_status="ready",
+        analysis={"brief": value, "analyzed_at": NOW.isoformat()},
+    )
+    research_feed.apply_editorial_analysis(feed["items"][0])
+    research.save_feed(feed)
+    item = research.load_feed()["items"][0]
+    assert item["entry_id"] == entry_id
+    assert item["analysis"]["brief"] == value
+    assert item["research_lane"] == expected_lane
+    assert item["notification_eligible"] is notifiable
+    assert len(research.load_feed()["items"]) == 1
+    assert before == {name: (tmp_path / name).read_bytes() for name in before}
+
+
+def test_unknown_or_missing_content_kind_is_not_a_new_valid_brief():
+    for kind in (None, "research_paper", ["research"]):
+        with pytest.raises(analysis.AnalysisContractError, match="content_kind"):
+            analysis.validate_brief(brief(kind=kind), TEXT)
+    old = brief()
+    del old["content_kind"]
+    with pytest.raises(analysis.AnalysisContractError, match="fields differ"):
+        analysis.validate_brief(old, TEXT)
+
+
+def test_prompt_requires_finance_terms_attribution_and_conditions():
+    # Real linguistic/semantic quality is checked separately against real sources.
+    assert "시스템 기반 크레딧 투자" in analysis.SYSTEM
+    assert "금융배출량" in analysis.SYSTEM
+    assert "Preserve material conditions on numerical claims" in analysis.SYSTEM
+    assert "an expected benefit is not a measured result" in analysis.SYSTEM
 
 
 def test_reasoning_change_does_not_reuse_old_analysis_cache(monkeypatch):

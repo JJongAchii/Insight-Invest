@@ -47,7 +47,10 @@ def run(*, s3: Any | None = None) -> dict:
         if record.get("record_schema_version") == 4 and record.get(
             "notification_candidate"
         ):
-            if item.get("analysis_status") != "ready":
+            if (
+                item.get("analysis_status") != "ready"
+                or item.get("relevance_reason") == "classification_pending"
+            ):
                 deferred += 1
                 continue
         if item.get("notification_eligible"):

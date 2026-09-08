@@ -112,15 +112,23 @@ def apply_editorial_analysis(item: dict, *, target: dict | None = None) -> None:
     candidate = item.get("editorial_candidate_lane", item.get("research_lane"))
     brief = item.get("analysis", {}).get("brief")
     if brief and item.get("analysis_status") == "ready":
+        kind = brief.get("content_kind")
         relevant = (
             brief.get("quant_relevant") is True and brief.get("substantive") is True
         )
-        target["research_lane"] = candidate if relevant else "context"
-        target["relevance_reason"] = (
-            "grounded_reading_brief" if relevant else "editorial_topic_mismatch"
-        )
+        if kind not in {"research", "practitioner", "market_commentary", "other"}:
+            # Old briefs stay readable, but cannot bypass the new classification.
+            lane, reason = "discovery", "classification_pending"
+        elif kind == "market_commentary":
+            lane, reason = "context", "market_commentary"
+        elif relevant and kind in {"research", "practitioner"}:
+            lane, reason = candidate, "grounded_reading_brief"
+        else:
+            lane, reason = "context", "editorial_topic_mismatch"
+        target["research_lane"] = lane
+        target["relevance_reason"] = reason
         target["notification_eligible"] = bool(
-            relevant and candidate == "core" and item.get("notification_candidate")
+            lane == "core" and item.get("notification_candidate")
         )
         if target["notification_eligible"] and not item.get("available_at"):
             target["available_at"] = item["analysis"]["analyzed_at"]

@@ -297,6 +297,34 @@ def test_lane_filter_defaults_to_core_and_preserves_full_archive(monkeypatch, tm
     assert _get(lane="all")["unread"] == 2
 
 
+def test_market_background_view_keeps_search_saved_and_mark_all_read(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("APP_DATA", str(tmp_path))
+    first_id, second_id = "a" * 64, "b" * 64
+    feed = _feed(first_id, second_id)
+    feed["items"][1].update(
+        research_lane="context",
+        notification_eligible=False,
+        analysis={
+            "brief": {
+                "title_ko": "브로커 시장 전망",
+                "content_kind": "market_commentary",
+            }
+        },
+    )
+    research_store.save_feed(feed)
+    research_store.set_saved(second_id, saved=True)
+    result = _get(lane="context", view="saved", q="시장 전망")
+    assert [item["entry_id"] for item in result["items"]] == [second_id]
+    assert result["items"][0]["is_saved"]
+    assert [item["entry_id"] for item in _get()["items"]] == [first_id]
+    assert research.mark_all_research_read(lane="context")["updated"] == 1
+    assert _get(lane="context", view="read")["total"] == 1
+    assert _get()["unread"] == 1
+    assert _get(lane="all")["total"] == 2
+
+
 def test_research_status_baselines_existing_feed_then_counts_only_new_entries(
     monkeypatch, tmp_path
 ):

@@ -35,7 +35,7 @@ on:
         description: Isolated qualification model only; mini is limited to 3 distinct sources
         type: choice
         options: [gpt-5-nano, gpt-5-mini]
-        default: gpt-5-nano
+        default: gpt-5-mini
 
 env:
   AWS_REGION: ap-northeast-2

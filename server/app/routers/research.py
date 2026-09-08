@@ -12,7 +12,7 @@ from datastore import research as research_store
 router = APIRouter(prefix="/research", tags=["Research"])
 ENTRY_ID = re.compile(r"^[0-9a-f]{64}$")
 RESEARCH_VIEWS = frozenset({"all", "unread", "read", "saved"})
-RESEARCH_LANE_FILTERS = frozenset({"core", "discovery", "updates", "all"})
+RESEARCH_LANE_FILTERS = frozenset({"core", "discovery", "context", "updates", "all"})
 MAX_QUERY_LENGTH = 200
 
 

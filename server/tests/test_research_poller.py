@@ -111,6 +111,36 @@ def test_analysis_outage_does_not_prevent_settlement_of_ready_items(monkeypatch)
     assert result["pending_deleted"] == 1 and captured["events"]
 
 
+def test_classification_migration_defers_then_suppresses_market_outlook_push(
+    monkeypatch,
+):
+    captured = _arrange(
+        monkeypatch,
+        {"enabled": True, "subscriptions": 1, "sent": 0, "failed": 0, "disabled": 0},
+    )
+    key, record = _pending()[0]
+    record.update(
+        record_schema_version=4,
+        notification_candidate=True,
+        notification_eligible=False,
+        analysis_status="ready",
+        relevance_reason="classification_pending",
+    )
+    monkeypatch.setattr(
+        research_feed, "pending_records", lambda **_kwargs: [(key, record)]
+    )
+    monkeypatch.setattr(
+        research_poller.research_store, "load_feed", lambda: {"items": [record]}
+    )
+    result = research_poller.run(s3=object())
+    assert result["pending_deferred"] == 1 and result["pending_deleted"] == 0
+    assert not captured["events"]
+    record.update(research_lane="context", relevance_reason="market_commentary")
+    result = research_poller.run(s3=object())
+    assert result["pending_suppressed"] == 1 and result["pending_deleted"] == 1
+    assert not captured["events"]
+
+
 def test_poller_discards_legacy_or_context_pending_without_push(monkeypatch):
     captured = {"deleted": [], "events": None}
     monkeypatch.setattr(
