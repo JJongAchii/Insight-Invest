@@ -9,12 +9,16 @@ const reportPath = process.argv[2];
 assert.ok(reportPath, "Pass a local qualification-report.json, never credentials");
 const report = JSON.parse(await readFile(reportPath, "utf8"));
 assert.equal(report.production_modified, false);
-assert.ok(["api_contract_qualified", "needs_diagnosis"].includes(report.status));
-const originalItems = report.items.filter((item) =>
+report.checked_at ??= report.captured_at;
+const academicProbe = report.status === "probe_completed" && report.llm_calls === 0;
+assert.ok(academicProbe || ["api_contract_qualified", "needs_diagnosis"].includes(report.status));
+const originalItems = academicProbe ? report.items.slice(0, 3).map((item) => ({
+  ...item, entry_id: item.entry_id_sha256, record_schema_version: item.schema_version,
+})) : report.items.filter((item) =>
   item.analysis?.prompt_version === report.prompt_version,
 );
 assert.ok(originalItems.length >= 1 && originalItems.length <= 3, "Use a bounded actual sample");
-assert.ok(report.review_prompt_version, "Use actual source-review outcomes, never mark drafts reviewed in the fixture");
+assert.ok(academicProbe || report.review_prompt_version, "Use actual source-review outcomes, never mark drafts reviewed in the fixture");
 const reviewed = (item) => item.analysis_status === "ready" && item.editorial_review_status === "accepted";
 const baseURL = process.env.UI_BASE_URL || "http://127.0.0.1:3118";
 assert.ok(["127.0.0.1", "localhost"].includes(new URL(baseURL).hostname));
@@ -98,9 +102,15 @@ try {
       if (!reviewed(item)) {
         assert.equal(await card.locator("dl").count(), 0, "Do not display a rejected Korean draft as an approved summary");
         assert.ok(await card.getByText(item.title, { exact: true }).count());
-        const label = item.editorial_review_status === "rejected" ? "요약 검수 보류"
+        const label = academicProbe ? item.original_access_status?.startsWith("verified_") && item.access_status !== "abstract_only" ? "공개 원문 확인" : "초록 확인"
+          : item.editorial_review_status === "rejected" ? "요약 검수 보류"
           : item.analysis_status === "retry_pending" ? "요약 재시도 대기" : "요약 원문 대조 중";
         assert.ok(await card.getByText(label, { exact: false }).count());
+        if (academicProbe) {
+          assert.ok(await card.getByText(item.publisher, { exact: true }).count());
+          assert.ok(await card.getByText("에서 발견", { exact: false }).count());
+          assert.equal(await card.getByText("한국어 요약 준비 중", { exact: false }).count(), 0);
+        }
         continue;
       }
       assert.ok(await card.getByText("원문 대조 완료", { exact: false }).count());

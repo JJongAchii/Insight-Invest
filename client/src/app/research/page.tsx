@@ -99,6 +99,11 @@ const CONTENT_LABELS = {
   other: "기타 자료",
 } as const;
 
+const ACADEMIC_TOPIC_LABELS: Record<string, string> = {
+  momentum: "모멘텀", portfolio: "포트폴리오 구성",
+  "asset-pricing": "자산가격·팩터", microstructure: "거래비용·미시구조",
+};
+
 const EVIDENCE_LABELS: Record<ResearchEvidenceDimension, string> = {
   method: "방법",
   data: "데이터",
@@ -178,7 +183,7 @@ function ResearchCard({
       : item.research_lane === "discovery"
         ? "발견"
         : item.research_lane === "updates" ? "업데이트" : "시장·배경";
-  const relevance = item.relevance_terms.slice(0, 2).join(" · ");
+  const relevance = item.relevance_terms.slice(0, 2).map((term) => ACADEMIC_TOPIC_LABELS[term] || term).join(" · ");
   const schemaThreeEvidence =
     item.record_schema_version === 3 && item.item_type === "evidence_update";
 
@@ -222,7 +227,7 @@ function ResearchCard({
         />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
-            <span className="badge-neutral">{item.source_name}</span>
+            <span className="badge-neutral">{item.publisher || item.source_name}</span>
             <span
               title={relevance || undefined}
               className={`rounded-full px-2 py-0.5 font-medium ${
@@ -264,6 +269,11 @@ function ResearchCard({
                 )}
                 {item.content_provenance && <span>{PROVENANCE_LABELS[item.content_provenance]}</span>}
               </>
+            )}
+            {item.discovered_by?.some((route) => route.provider !== "official") && (
+              <span title={item.discovered_by.map((route) => `${route.provider} · ${route.query_id}`).join(" / ")}>
+                {Array.from(new Set(item.discovered_by.filter((route) => route.provider !== "official").map((route) => route.provider === "openalex" ? "OpenAlex" : route.provider === "arxiv" ? "arXiv" : route.provider))).join(" · ")}에서 발견
+              </span>
             )}
             {!item.is_read && (
               <span className="rounded-full bg-primary-500/15 px-2 py-0.5 font-medium text-primary-400">

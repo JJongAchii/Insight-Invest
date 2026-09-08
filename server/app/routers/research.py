@@ -44,6 +44,9 @@ def _matches_query(item: dict, query: str) -> bool:
         item.get("title", ""),
         item.get("summary", ""),
         item.get("source_name", ""),
+        item.get("publisher", ""),
+        item.get("doi", ""),
+        str(item.get("discovered_by", [])),
         str(item.get("analysis", {})),
         " ".join(str(author) for author in authors if author),
     ]

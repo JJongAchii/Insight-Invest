@@ -99,17 +99,48 @@ def _publication_fields(payload: dict, *, key: str) -> dict:
         "summary_kind",
         "validation_status",
         "discovery_sources",
+        "discovered_by",
+        "identity_aliases",
+        "first_discovered_at",
+        "updated_at",
+        "index_updated_at",
+        "publisher",
+        "original_access_status",
+        "original_access_error",
+        "open_access_url",
+        "arxiv_version",
+        "crossref",
     )
     result = {name: payload.get(name) for name in fields}
     result["record_schema_version"] = 4
     result["editorial_candidate_lane"] = payload.get("editorial_candidate_lane", lane)
     result["notification_candidate"] = payload.get("notification_candidate", notifiable)
+    if payload.get("quality_profile") == "academic-discovery-v1":
+        # Index metadata/original retrieval qualification does not authorize paid
+        # summarization or a core alert. Register the readable source immediately.
+        result.update(
+            research_lane="discovery",
+            editorial_candidate_lane="discovery",
+            notification_eligible=False,
+            notification_candidate=False,
+            analysis_status="not_requested",
+        )
     apply_editorial_analysis({**payload, **result}, target=result)
     return result
 
 
 def apply_editorial_analysis(item: dict, *, target: dict | None = None) -> None:
     target = item if target is None else target
+    if item.get("quality_profile") == "academic-discovery-v1":
+        target.update(
+            research_lane="discovery",
+            editorial_candidate_lane="discovery",
+            notification_eligible=False,
+            notification_candidate=False,
+            analysis_status="not_requested",
+            editorial_review_status="pending",
+        )
+        return
     candidate = item.get("editorial_candidate_lane", item.get("research_lane"))
     brief = item.get("analysis", {}).get("brief")
     review_state = research_review.state(item)

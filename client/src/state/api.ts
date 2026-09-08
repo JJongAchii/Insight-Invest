@@ -692,6 +692,7 @@ export interface ResearchEntry {
   discovered_at: string;
   record_schema_version: 1 | 2 | 3 | 4;
   quality_profile: string;
+  summary_kind?: string;
   research_lane: "core" | "discovery" | "updates" | "context";
   relevance_reason: string;
   relevance_terms: string[];
@@ -700,6 +701,11 @@ export interface ResearchEntry {
   content_provenance?: "release_detail" | "full_body" | "full_article" | "full_pdf" | "pdf_excerpt" | "abstract";
   pdf_url?: string;
   access_status?: "open_full" | "open_pdf" | "abstract_only";
+  publisher?: string;
+  original_access_status?: string;
+  discovered_by?: { provider: string; provider_work_id: string; query_id: string; query_version: string; discovered_at: string }[];
+  updated_at?: string;
+  arxiv_version?: string;
   date_precision?: "day" | "month";
   analysis_status?: string;
   editorial_review_status?: "pending" | "accepted" | "rejected";
