@@ -129,7 +129,16 @@ def run(output: Path) -> int:
         with ThreadPoolExecutor(max_workers=4) as pool:
             for health, records in pool.map(collect, sources):
                 report["sources"].append(health)
-                for record in records:
+                # Listings can pin an old abstract first. A one-card connection
+                # check should prefer a recent accessible body from that source.
+                for record in sorted(
+                    records,
+                    key=lambda record: (
+                        record["analysis_scope"] != "abstract",
+                        record["published_at"],
+                    ),
+                    reverse=True,
+                ):
                     # This is a backfill qualification, not a live push candidate.
                     record["notification_eligible"] = False
                     records_by_id.setdefault(record["entry_id_sha256"], record)

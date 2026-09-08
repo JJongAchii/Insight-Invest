@@ -425,3 +425,27 @@ def test_research_deployment_uses_separate_openai_key_not_news_key():
     assert "AnthropicApiKey" not in poller
     assert "OPENAI_API_KEY: !Ref OpenAIApiKey" in poller
     assert 'RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "1.90"' in poller
+
+
+def test_contract_failure_records_only_a_safe_diagnosis(source):
+    research_feed.reconcile(s3=source, now=NOW)
+
+    def failed(*_args):
+        raise analysis.AnalysisContractError(
+            "analysis response was incomplete: max_output_tokens"
+        )
+
+    analysis.enrich(now=NOW, text_loader=lambda _item: TEXT, model_call=failed)
+    retry = research.load_feed()["items"][0]["analysis_retry"]
+    assert (
+        retry["error_reason"] == "analysis response was incomplete: max_output_tokens"
+    )
+    assert "api_key" not in retry and "response" not in retry
+
+
+def test_request_limits_are_part_of_the_cache_identity(source, monkeypatch):
+    research_feed.reconcile(s3=source, now=NOW)
+    item = research.load_feed()["items"][0]
+    before = analysis.cache_key(item)
+    monkeypatch.setattr(analysis, "MAX_OUTPUT_TOKENS", 3600)
+    assert analysis.cache_key(item) != before

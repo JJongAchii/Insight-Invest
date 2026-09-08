@@ -74,6 +74,10 @@ BRIEF_SCHEMA = {
 }
 
 
+class AnalysisContractError(ValueError):
+    """Non-secret diagnosis from our own output contract, safe to persist."""
+
+
 def _normalize(text: str) -> str:
     return " ".join(text.split())
 
@@ -81,39 +85,45 @@ def _normalize(text: str) -> str:
 def validate_brief(value: dict, text: str) -> dict:
     expected = {*FIELDS, "title_ko", "reviewer_note", "quant_relevant", "substantive"}
     if not isinstance(value, dict) or set(value) != expected:
-        raise ValueError("analysis JSON fields differ from the brief contract")
+        raise AnalysisContractError(
+            "analysis JSON fields differ from the brief contract"
+        )
     for name, limit in (("title_ko", 160), ("reviewer_note", 400)):
         if (
             not isinstance(value[name], str)
             or not value[name].strip()
             or len(value[name]) > limit
         ):
-            raise ValueError(f"invalid brief {name}")
+            raise AnalysisContractError(f"invalid brief {name}")
     for name in ("quant_relevant", "substantive"):
         if not isinstance(value[name], bool):
-            raise ValueError(f"invalid brief {name}")
+            raise AnalysisContractError(f"invalid brief {name}")
     original = _normalize(text)
     for name in FIELDS:
         item = value[name]
         if item is None:
             continue
         if not isinstance(item, dict) or set(item) != {"text_ko", "evidence"}:
-            raise ValueError(f"invalid structured brief {name}")
+            raise AnalysisContractError(f"invalid structured brief {name}")
         claim, evidence = item["text_ko"], item["evidence"]
         if not isinstance(claim, str) or not claim.strip() or len(claim) > 360:
-            raise ValueError(f"invalid claim length: {name}")
+            raise AnalysisContractError(f"invalid claim length: {name}")
         if (
             not isinstance(evidence, str)
             or len(_normalize(evidence)) < 15
             or len(evidence) > 180
         ):
-            raise ValueError(f"invalid excerpt length: {name}")
+            raise AnalysisContractError(f"invalid excerpt length: {name}")
         if _normalize(evidence) not in original:
-            raise ValueError(f"brief excerpt is not in the analyzed source: {name}")
+            raise AnalysisContractError(
+                f"brief excerpt is not in the analyzed source: {name}"
+            )
     if value["substantive"] and (
         not value["question"] or not (value["method_data"] or value["finding"])
     ):
-        raise ValueError("substantive brief lacks grounded question/method/finding")
+        raise AnalysisContractError(
+            "substantive brief lacks grounded question/method/finding"
+        )
     return value
 
 
@@ -125,6 +135,8 @@ def cache_key(item: dict) -> str:
         item["title"],
         MODEL,
         PROMPT_VERSION,
+        MAX_INPUT_CHARS,
+        MAX_OUTPUT_TOKENS,
     ]
     return hashlib.sha256(json.dumps(identity, ensure_ascii=False).encode()).hexdigest()
 
@@ -202,18 +214,26 @@ def _model_call(text: str, title: str, api_key: str) -> tuple[dict, dict]:
     response.raise_for_status()
     payload = response.json()
     if payload.get("status") != "completed":
-        raise ValueError("analysis response was incomplete")
+        reason = (payload.get("incomplete_details") or {}).get("reason")
+        reason = (
+            reason if reason in {"max_output_tokens", "content_filter"} else "unknown"
+        )
+        raise AnalysisContractError(f"analysis response was incomplete: {reason}")
     raw = _output_text(payload)
     if not raw:
-        raise ValueError("analysis response contained no output text")
+        raise AnalysisContractError("analysis response contained no output text")
     usage = payload.get("usage", {})
     measured = {
         "input_tokens": usage.get("input_tokens"),
         "output_tokens": usage.get("output_tokens"),
     }
     if any(type(value) is not int or value <= 0 for value in measured.values()):
-        raise ValueError("analysis response omitted valid token usage")
-    return validate_brief(json.loads(raw), text), measured
+        raise AnalysisContractError("analysis response omitted valid token usage")
+    try:
+        brief = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise AnalysisContractError("analysis response was not valid JSON") from exc
+    return validate_brief(brief, text), measured
 
 
 def enrich(
@@ -338,6 +358,8 @@ def enrich(
                 "retry_at": (now + timedelta(minutes=30)).isoformat(),
                 "error_type": type(exc).__name__,
             }
+            if isinstance(exc, AnalysisContractError):
+                item["analysis_retry"]["error_reason"] = str(exc)
             if isinstance(exc, httpx.HTTPStatusError):
                 item["analysis_retry"]["http_status"] = exc.response.status_code
                 try:
