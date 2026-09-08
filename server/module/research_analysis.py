@@ -19,7 +19,7 @@ import httpx
 from datastore import research, storage
 
 MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-brief-openai-v5-sentences-and-kind"
+PROMPT_VERSION = "reading-brief-openai-v6-separated-evidence"
 REASONING_EFFORT = "low"
 MAX_OUTPUT_TOKENS = 8192  # Visible output AND reasoning; real PDFs exceeded 4096.
 MAX_INPUT_CHARS = 24000
@@ -69,9 +69,11 @@ decomposition components and assumptions. Omit the number if these cannot fit fa
 The source_passages cover ONE document in reading order, split at sentence boundaries.
 Some PDF extraction or bounded-input fragments have citable=false: read them only as
 context, never select them as evidence. For each non-null point choose evidence_ids:
-the smallest set of 1 to 4 consecutive citable passages (at most 1200 characters total)
+the smallest set of 1 to 4 citable passages (at most 1200 characters total)
 that directly supports every factual part of text_ko. A shared topic is not support.
 Include the next sentence if the explanation/list continues there, or narrow the claim.
+The passages need not be adjacent. The application displays separated selections as
+separate quotes, never as a fabricated continuous sentence.
 Chart source credits, units, and generic legal disclaimers are not evidence for
 analytical conclusions or useful document-specific limitations.
 The application will attach its verbatim text; never generate a quote yourself.
@@ -196,15 +198,21 @@ def _ground_response(value: dict, text: str) -> dict:
             or any(type(n) is not int or not 0 <= n < len(passages) for n in numbers)
         ):
             raise AnalysisContractError(f"unknown source passage: {field}")
-        if numbers != list(range(numbers[0], numbers[0] + len(numbers))):
-            raise AnalysisContractError(
-                f"evidence passages must be consecutive: {field}"
-            )
+        numbers = sorted(set(numbers))  # Source order, without repeated citations.
         if any(not passages[n]["citable"] for n in numbers):
             raise AnalysisContractError(f"source passage is context only: {field}")
+        excerpts = []
+        previous = -2
+        for number in numbers:
+            if number == previous + 1:
+                excerpts[-1] += " " + passages[number]["text"]
+            else:
+                excerpts.append(passages[number]["text"])
+            previous = number
         result[field] = {
             "text_ko": point["text_ko"],
-            "evidence": " ".join(passages[n]["text"] for n in numbers),
+            "evidence": " […] ".join(excerpts),  # Explicit gaps for older clients.
+            "evidence_excerpts": excerpts,
         }
     return validate_brief(result, text)
 
@@ -239,20 +247,32 @@ def validate_brief(value: dict, text: str) -> dict:
         item = value[name]
         if item is None:
             continue
-        if not isinstance(item, dict) or set(item) != {"text_ko", "evidence"}:
+        if not isinstance(item, dict) or set(item) not in (
+            {"text_ko", "evidence"},
+            {"text_ko", "evidence", "evidence_excerpts"},
+        ):
             raise AnalysisContractError(f"invalid structured brief {name}")
         claim, evidence = item["text_ko"], item["evidence"]
         if not isinstance(claim, str) or not claim.strip() or len(claim) > 360:
             raise AnalysisContractError(f"invalid claim length: {name}")
+        excerpts = item.get("evidence_excerpts", [evidence])
         if (
-            not isinstance(evidence, str)
-            or len(_normalize(evidence)) < 15
-            or len(evidence) > MAX_EVIDENCE_CHARS
+            not isinstance(excerpts, list)
+            or not 1 <= len(excerpts) <= MAX_EVIDENCE_PASSAGES
         ):
+            raise AnalysisContractError(f"invalid excerpt list: {name}")
+        for excerpt in excerpts:
+            if not isinstance(excerpt, str) or len(_normalize(excerpt)) < 15:
+                raise AnalysisContractError(f"invalid excerpt length: {name}")
+            if _normalize(excerpt) not in original:
+                raise AnalysisContractError(
+                    f"brief excerpt is not in the analyzed source: {name}"
+                )
+        if sum(map(len, excerpts)) > MAX_EVIDENCE_CHARS:
             raise AnalysisContractError(f"invalid excerpt length: {name}")
-        if _normalize(evidence) not in original:
+        if evidence != " […] ".join(excerpts):
             raise AnalysisContractError(
-                f"brief excerpt is not in the analyzed source: {name}"
+                f"excerpt display differs from source excerpts: {name}"
             )
     if value["substantive"] and not (value["method_data"] or value["finding"]):
         raise AnalysisContractError("substantive brief lacks grounded method/finding")

@@ -657,6 +657,7 @@ export type ResearchEvidenceDimension = "method" | "data" | "validation" | "resu
 export interface ResearchBriefPoint {
   text_ko: string;
   evidence: string;
+  evidence_excerpts?: string[];
 }
 
 export interface ResearchAnalysis {

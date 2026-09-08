@@ -46,9 +46,14 @@ export default function ResearchBrief({ item }: { item: ResearchEntry }) {
                   <summary className="w-fit cursor-pointer rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-400">
                     원문 근거 펼치기
                   </summary>
-                  <blockquote className="mt-2 border-l-2 border-edge pl-3 leading-5" lang={/[가-힣]/.test(point.evidence) ? "ko" : "en"}>
-                    {point.evidence}
-                  </blockquote>
+                  {(point.evidence_excerpts ?? [point.evidence]).map((excerpt, index) => (
+                    <div key={index} className="mt-2">
+                      {index > 0 && <p className="mb-1 pl-3 text-[11px]">중간 원문 생략 · 다음 근거</p>}
+                      <blockquote className="break-words border-l-2 border-edge pl-3 leading-5" lang={/[가-힣]/.test(excerpt) ? "ko" : "en"}>
+                        {excerpt}
+                      </blockquote>
+                    </div>
+                  ))}
                 </details>
               </dd>
             </div>

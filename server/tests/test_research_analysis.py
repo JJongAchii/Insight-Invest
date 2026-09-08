@@ -512,12 +512,36 @@ def test_evidence_keeps_complete_sentences_across_a_method_explanation():
     assert grounded["method_data"]["evidence"] == " ".join(sentences[:2])
 
 
-@pytest.mark.parametrize("ids", [[], [True], [0, 0], [1, 0], [0, 2], [0, 1, 2, 3, 4]])
+@pytest.mark.parametrize("ids", [[], [True], [-1], [999999], [0, 1, 2, 3, 4]])
 def test_invalid_evidence_selection_cannot_publish(ids):
     value = wire_brief()
     value["method_data"]["evidence_ids"] = ids
     with pytest.raises(analysis.AnalysisContractError):
         analysis._ground_response(value, TEXT)
+
+
+def test_nonadjacent_evidence_stays_separate_verbatim_with_explicit_gaps():
+    sentences = [
+        "The method ranks bonds using a systematic model.",
+        "An unrelated discussion appears between the two source statements.",
+        "Analysts review events that the model does not capture.",
+    ]
+    text = " ".join(sentences)
+    value = wire_brief()
+    value["method_data"]["evidence_ids"] = [2, 0, 2]
+    result = analysis._ground_response(value, text)
+    grounded = result["method_data"]
+    assert grounded["evidence_excerpts"] == [sentences[0], sentences[2]]
+    assert grounded["evidence"] == sentences[0] + " […] " + sentences[2]
+    assert sentences[1] not in grounded["evidence"]
+    assert analysis.validate_brief(result, text)
+    grounded["evidence_excerpts"][1] = (
+        "Invented implementation assumption absent from the source."
+    )
+    with pytest.raises(
+        analysis.AnalysisContractError, match="not in the analyzed source"
+    ):
+        analysis.validate_brief(result, text)
 
 
 def test_sentence_boundaries_preserve_decimals_abbreviations_and_numbered_lists():
