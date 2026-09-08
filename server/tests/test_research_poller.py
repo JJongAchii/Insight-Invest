@@ -92,6 +92,9 @@ def test_editorial_pending_waits_for_brief_then_delivers_once(monkeypatch):
     assert result["pending_deferred"] == 1 and result["pending_deleted"] == 0
     assert not captured["events"]
     record.update(analysis_status="ready", notification_eligible=True)
+    monkeypatch.setattr(
+        research_poller.research_review, "state", lambda _item: "accepted"
+    )
     result = research_poller.run(s3=object())
     assert result["pending_eligible"] == 1 and result["pending_deleted"] == 1
 
@@ -136,9 +139,35 @@ def test_classification_migration_defers_then_suppresses_market_outlook_push(
     assert result["pending_deferred"] == 1 and result["pending_deleted"] == 0
     assert not captured["events"]
     record.update(research_lane="context", relevance_reason="market_commentary")
+    monkeypatch.setattr(
+        research_poller.research_review, "state", lambda _item: "accepted"
+    )
     result = research_poller.run(s3=object())
     assert result["pending_suppressed"] == 1 and result["pending_deleted"] == 1
     assert not captured["events"]
+
+
+@pytest.mark.parametrize("state", ["pending", "rejected"])
+def test_unreviewed_or_rejected_ready_flag_cannot_push(monkeypatch, state):
+    captured = _arrange(
+        monkeypatch, {"enabled": True, "subscriptions": 1, "failed": 0, "disabled": 0}
+    )
+    key, record = _pending()[0]
+    record.update(
+        record_schema_version=4, notification_candidate=True, analysis_status="ready"
+    )
+    monkeypatch.setattr(
+        research_feed, "pending_records", lambda **_kwargs: [(key, record)]
+    )
+    # Without a real receipt even forged ready/eligible flags fail closed.
+    if state == "rejected":
+        monkeypatch.setattr(
+            research_poller.research_review, "state", lambda _item: state
+        )
+    result = research_poller.run(s3=object())
+    assert not captured["events"]
+    assert result["pending_suppressed"] == (state == "rejected")
+    assert result["pending_deferred"] == (state == "pending")
 
 
 def test_poller_discards_legacy_or_context_pending_without_push(monkeypatch):

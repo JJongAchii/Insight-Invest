@@ -11,6 +11,7 @@ import pytest
 from datastore import research, storage
 from module import research_analysis as analysis, research_feed
 from qdata.radar_editorial import publication_record
+from research_review_fixtures import attach_review, checks_for
 
 NOW = datetime(2026, 9, 7, 12, tzinfo=UTC)
 TEXT = (
@@ -102,6 +103,7 @@ def apply_test_brief(*, now=NOW, relevant=True):
             "brief": analysis.validate_brief(brief(relevant=relevant), TEXT),
         }
         item["analysis_status"] = "ready"
+        attach_review(item, TEXT, now)
         research_feed.apply_editorial_analysis(item)
     research.save_feed(feed)
 
@@ -133,7 +135,7 @@ def test_projection_waits_for_a_brief_and_retains_it_on_unchanged_source(source)
     item = research.load_feed()["items"][0]
     assert item["research_lane"] == "core" and item["notification_eligible"]
     assert item["available_at"] == NOW.isoformat()
-    assert item["relevance_reason"] == "grounded_reading_brief"
+    assert item["relevance_reason"] == "source_checked_reading_brief"
     research_feed.reconcile(s3=source, now=NOW + timedelta(hours=1))
     assert research.load_feed()["items"][0]["analysis"] == item["analysis"]
 
@@ -242,6 +244,16 @@ def test_budget_is_reserved_before_call_and_cache_avoids_second_call(source):
     result = analysis.enrich(now=NOW, text_loader=lambda _item: TEXT, model_call=model)
     assert result["completed"] == 1
     assert result["reserved_nanousd"] == 185_000
+    assert research.load_feed()["items"][0]["research_lane"] == "discovery"
+    reviewed = analysis.enrich(
+        now=NOW,
+        text_loader=lambda _item: TEXT,
+        review_call=lambda _text, _title, value, _key: (
+            checks_for(value),
+            {"input_tokens": 100, "output_tokens": 80},
+        ),
+    )
+    assert reviewed["reviewed"] == 1 and reviewed["reserved_nanousd"] == 370_000
     assert research.load_feed()["items"][0]["research_lane"] == "core"
     assert (
         analysis.enrich(now=NOW, text_loader=lambda _item: TEXT, model_call=model)[
@@ -383,7 +395,7 @@ def test_persisted_cache_recovers_projection_without_another_request(source):
     recovered = analysis.enrich(now=NOW, text_loader=forbidden, model_call=forbidden)
     assert recovered["completed"] == 1
     assert recovered["reserved_nanousd"] == result["reserved_nanousd"]
-    assert research.load_feed()["items"][0]["research_lane"] == "core"
+    assert research.load_feed()["items"][0]["research_lane"] == "discovery"
 
 
 def test_source_input_is_bounded_before_reserving_and_sending(source):
@@ -436,7 +448,7 @@ def test_research_deployment_uses_separate_openai_key_not_news_key():
     assert "ANTHROPIC_API_KEY" not in poller
     assert "AnthropicApiKey" not in poller
     assert "OPENAI_API_KEY: !Ref OpenAIApiKey" in poller
-    assert 'RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "1.90"' in poller
+    assert 'RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "1.50"' in poller
 
 
 def test_contract_failure_records_only_a_safe_diagnosis(source):
@@ -621,8 +633,14 @@ def test_document_kind_controls_core_without_deleting_or_rewriting_library(
         del value["content_kind"]  # A v4 cache must remain readable, not count as v5.
     feed["items"][0].update(
         analysis_status="ready",
-        analysis={"brief": value, "analyzed_at": NOW.isoformat()},
+        analysis={
+            "brief": value,
+            "source_digest": feed["items"][0]["source_digest"],
+            "analyzed_at": NOW.isoformat(),
+        },
     )
+    if kind is not None:
+        attach_review(feed["items"][0], TEXT, NOW)
     research_feed.apply_editorial_analysis(feed["items"][0])
     research.save_feed(feed)
     item = research.load_feed()["items"][0]

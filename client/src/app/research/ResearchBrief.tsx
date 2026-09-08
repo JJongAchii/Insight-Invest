@@ -8,14 +8,25 @@ const POINTS = [
   ["limitation", "원문이 밝힌 한계"],
 ] as const;
 
+export function hasReviewedBrief(item: ResearchEntry) {
+  return !!item.analysis && item.analysis_status === "ready"
+    && item.editorial_review_status === "accepted";
+}
+
 export default function ResearchBrief({ item }: { item: ResearchEntry }) {
   const analysis = item.analysis;
-  if (!analysis) {
+  if (!analysis || !hasReviewedBrief(item)) {
+    const status = item.editorial_review_status === "rejected"
+      ? "요약 검수 보류 · 원문에서 확인해 주세요"
+      : item.analysis_status === "held" ? "요약 확인 필요"
+      : item.analysis_status === "not_requested" ? "요약 대상 아님"
+      : item.analysis_status === "retry_pending" ? "요약 재시도 대기"
+      : analysis ? "요약 원문 대조 중" : "한국어 요약 준비 중";
     return (
       <div className="mt-3 space-y-2">
         {item.record_schema_version === 4 && (
           <p className="text-xs text-ink-muted">
-            원문 발췌 · {item.analysis_status === "held" ? "요약 확인 필요" : item.analysis_status === "not_requested" ? "요약 대상 아님" : item.analysis_status === "retry_pending" ? "요약 재시도 대기" : "한국어 요약 준비 중"}
+            원문 발췌 · {status}
           </p>
         )}
         <p className="text-sm leading-6 text-ink-secondary">
@@ -27,7 +38,7 @@ export default function ResearchBrief({ item }: { item: ResearchEntry }) {
   return (
     <div className="mt-4 space-y-3">
       <p className="text-xs text-ink-muted">
-        AI 읽기 요약 · 원문 {analysis.analyzed_chars.toLocaleString("ko-KR")}자 분석
+        AI 읽기 요약 · 원문 대조 완료 · 원문 {analysis.analyzed_chars.toLocaleString("ko-KR")}자 분석
       </p>
       <dl className="space-y-3">
         {POINTS.map(([field, label]) => {
@@ -62,7 +73,7 @@ export default function ResearchBrief({ item }: { item: ResearchEntry }) {
       </dl>
       <div className="border-t border-edge pt-3 text-xs leading-5 text-ink-muted">
         <p><span className="font-medium text-ink-secondary">더 읽어볼 점 · AI 메모</span> {analysis.brief.reviewer_note}</p>
-        <p className="mt-1">원문 일부에 근거한 읽기 도움말입니다. 독립 재현·성과 검증 결과가 아닙니다.</p>
+        <p className="mt-1">AI가 원문 일부와 요약을 대조한 읽기 도움말입니다. 오류가 남을 수 있으며, 독립 재현·성과 검증 결과가 아닙니다.</p>
       </div>
     </div>
   );

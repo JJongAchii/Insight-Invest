@@ -17,7 +17,7 @@ spec.loader.exec_module(qualification)
 def configured(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "offline-test-key")
     monkeypatch.setenv("APP_DATA", qualification.QUALIFICATION_ROOT)
-    monkeypatch.setenv("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0.10")
+    monkeypatch.setenv("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0.50")
     monkeypatch.setenv("RESEARCH_MAX_ITEMS", "1")
     monkeypatch.setenv("RESEARCH_SOURCES", "aqr-research")
     monkeypatch.delenv("RESEARCH_QUALIFICATION_MODEL", raising=False)
@@ -32,7 +32,7 @@ def test_isolated_environment_contract(configured):
     [
         ("OPENAI_API_KEY", ""),
         ("APP_DATA", "s3://insight-invest-datalake/app"),
-        ("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0.11"),
+        ("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0.51"),
         ("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0"),
         ("RESEARCH_MAX_ITEMS", "31"),
         ("RESEARCH_SOURCES", "man-systematic-insights"),
@@ -63,7 +63,7 @@ def test_workflow_is_manual_serialized_non_deploy_and_within_combined_budget():
     run = next(step for step in steps if "Qualify real" in step.get("name", ""))
     assert run["env"]["APP_DATA"] == qualification.QUALIFICATION_ROOT
     assert Decimal(run["env"]["RADAR_ANALYSIS_MONTHLY_BUDGET_USD"]) + Decimal(
-        "1.90"
+        "1.50"
     ) == Decimal("2")
     assert "inputs.mode != 'research-qualify'" in workflow["jobs"]["deploy"]["if"]
     assert not any(
@@ -110,7 +110,20 @@ def test_previous_ready_model_is_not_a_completed_comparison(monkeypatch):
         "analysis_status": "ready",
     }
     item["analysis"] = {"fingerprint": qualification.research_analysis.cache_key(item)}
+    assert not qualification.current_analysis(item)  # A draft alone cannot pass.
+    monkeypatch.setattr(
+        qualification.research_review, "state", lambda _item: "accepted"
+    )
     assert qualification.current_analysis(item)
+    monkeypatch.setattr(
+        qualification.research_review, "state", lambda _item: "rejected"
+    )
+    assert qualification.current_review(item) and not qualification.current_analysis(
+        item
+    )
+    monkeypatch.setattr(
+        qualification.research_review, "state", lambda _item: "accepted"
+    )
     monkeypatch.setattr(qualification.research_analysis, "MODEL", "gpt-5-nano")
     assert not qualification.current_analysis(item)
 

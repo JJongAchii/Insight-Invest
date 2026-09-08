@@ -4,7 +4,7 @@
 #   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY  — ECR push + CFN deploy 권한
 #   GH_PAT                                     — quant-data(private) 읽기용 PAT
 #   API_TOKEN                                  — X-API-Key 앱 토큰
-#   OPENAI_API_KEY                             — Research GPT-5 nano 요약
+#   OPENAI_API_KEY                             — Research GPT-5 mini 요약·원문 검수
 #   WEB_PUSH_PUBLIC_KEY / WEB_PUSH_PRIVATE_KEY  — VAPID 키 (없으면 Push 비활성)
 
 name: deploy-api
@@ -80,7 +80,7 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           APP_DATA: s3://insight-invest-datalake/research-radar/qualification/openai
-          RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "0.10"
+          RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "0.50"
           RESEARCH_MAX_ITEMS: ${{ inputs.research_max_items }}
           RESEARCH_SOURCES: ${{ inputs.research_sources }}
           RESEARCH_QUALIFICATION_MODEL: ${{ inputs.research_model }}

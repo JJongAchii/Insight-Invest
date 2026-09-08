@@ -23,7 +23,7 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
 
 from datastore import research, storage  # noqa: E402
-from module import research_analysis, research_feed  # noqa: E402
+from module import research_analysis, research_feed, research_review  # noqa: E402
 from qdata.radar_editorial import CHANNELS, discover_publications  # noqa: E402
 
 QUALIFICATION_ROOT = "s3://insight-invest-datalake/research-radar/qualification/openai"
@@ -41,9 +41,9 @@ def validate_environment() -> tuple[int, list[str], str]:
     if storage.app_data_root() != QUALIFICATION_ROOT:
         raise ValueError("qualification requires its isolated APP_DATA prefix")
     budget = Decimal(os.environ.get("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0"))
-    if not Decimal("0") < budget <= Decimal("0.10"):
+    if not Decimal("0") < budget <= Decimal("0.50"):
         raise ValueError(
-            "qualification monthly budget must be positive and at most $0.10"
+            "qualification monthly budget must be positive and at most $0.50"
         )
     maximum = int(os.environ.get("RESEARCH_MAX_ITEMS", "1"))
     if not 1 <= maximum <= 30:
@@ -87,10 +87,19 @@ def analysis_candidates(records: list[dict]) -> list[dict]:
 
 
 def current_analysis(item: dict) -> bool:
-    # A ready nano brief is not a completed mini comparison on the same source.
-    return item.get("analysis_status") == "ready" and item.get("analysis", {}).get(
-        "fingerprint"
-    ) == research_analysis.cache_key(item)
+    return (
+        item.get("analysis_status") == "ready"
+        and current_review(item)
+        and research_review.state(item) == "accepted"
+    )
+
+
+def current_review(item: dict) -> bool:
+    # A completed draft is not a reviewed brief. A semantic rejection is a valid
+    # review outcome, but not a ready/core publication or human quality acceptance.
+    return research_review.state(item) in {"accepted", "rejected"} and item.get(
+        "analysis", {}
+    ).get("fingerprint") == research_analysis.cache_key(item)
 
 
 class RecordSnapshot:
@@ -132,6 +141,8 @@ def run(output: Path) -> int:
         "workflow_run": os.environ.get("GITHUB_RUN_ID"),
         "model": research_analysis.MODEL,
         "prompt_version": research_analysis.PROMPT_VERSION,
+        "review_model": research_review.MODEL,
+        "review_prompt_version": research_review.PROMPT_VERSION,
         "dependencies": {
             name: version(name) for name in ("beautifulsoup4", "pypdf", "httpx")
         },
@@ -162,7 +173,13 @@ def run(output: Path) -> int:
             "output": MODEL_PRICES[model][1],
         }
         report["max_items"] = maximum
-        report["monthly_qualification_limit_usd"] = "0.10"
+        report["monthly_qualification_limit_usd"] = os.environ[
+            "RADAR_ANALYSIS_MONTHLY_BUDGET_USD"
+        ]
+        report["review_pricing_nanousd_per_token"] = {
+            "input": research_review.INPUT_NANOUSD_PER_TOKEN,
+            "output": research_review.OUTPUT_NANOUSD_PER_TOKEN,
+        }
 
         def collect(name):
             try:
@@ -234,7 +251,9 @@ def run(output: Path) -> int:
         ]
         research.save_feed(feed)  # Dedicated qualification prefix ONLY.
 
-        for _ in range(len(records)):
+        # At most one paid stage per enrich call; an old cache recovery can also
+        # occupy a step. Review-only migration does not regenerate the v7 drafts.
+        for _ in range(3 * len(records)):
             result = research_analysis.enrich(max_items=1)
             report["analysis_runs"].append(result)
             report["items"] = research.load_feed()["items"]
@@ -247,7 +266,7 @@ def run(output: Path) -> int:
                 for item in report["items"]
                 if item.get("analysis_status") != "not_requested"
             ]
-            if all(current_analysis(item) for item in requested):
+            if all(current_review(item) for item in requested):
                 break
         requested = [
             item
@@ -256,12 +275,17 @@ def run(output: Path) -> int:
         ]
         report["requested"] = len(requested)
         report["ready"] = sum(current_analysis(item) for item in requested)
+        report["reviewed"] = sum(current_review(item) for item in requested)
+        report["review_rejected"] = sum(
+            current_review(item) and research_review.state(item) == "rejected"
+            for item in requested
+        )
         report["core"] = sum(
             current_analysis(item) and item.get("research_lane") == "core"
             for item in report["items"]
         )
-        # This qualifies transport/structure/grounding, not semantic quality or alpha.
-        if requested and report["ready"] == len(requested):
+        # This qualifies transport/structure/binding, not reviewer correctness or alpha.
+        if requested and report["reviewed"] == len(requested):
             report["status"] = "api_contract_qualified"
         else:
             report["status"] = "needs_diagnosis"
@@ -279,7 +303,15 @@ def run(output: Path) -> int:
         json.dumps(
             {
                 key: report.get(key)
-                for key in ("status", "requested", "ready", "core", "error_type")
+                for key in (
+                    "status",
+                    "requested",
+                    "ready",
+                    "reviewed",
+                    "review_rejected",
+                    "core",
+                    "error_type",
+                )
             }
         ),
         flush=True,

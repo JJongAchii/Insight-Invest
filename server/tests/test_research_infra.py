@@ -35,7 +35,7 @@ def test_research_poller_role_is_prefix_scoped():
         "  ResearchPollerSchedule:", 1
     )[0]
     assert "OPENAI_API_KEY: !Ref OpenAIApiKey" in poller
-    assert 'RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "1.90"' in poller
+    assert 'RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "1.50"' in poller
     assert "ANTHROPIC_API_KEY" not in poller
     assert "app/notification_subscriptions.parquet" in body
     assert "app/notification_deliveries.parquet" in body

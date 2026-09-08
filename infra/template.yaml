@@ -459,7 +459,7 @@ Resources:
           RADAR_RECORD_PREFIX: research-radar/public/records/
           RADAR_PENDING_PREFIX: research-radar/realtime/pending/
           OPENAI_API_KEY: !Ref OpenAIApiKey
-          RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "1.90"
+          RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "1.50"
           WEB_PUSH_PUBLIC_KEY: !Ref WebPushPublicKey
           WEB_PUSH_PRIVATE_KEY: !Ref WebPushPrivateKey
           WEB_PUSH_SUBJECT: !Ref WebPushSubject

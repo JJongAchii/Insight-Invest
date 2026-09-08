@@ -702,6 +702,7 @@ export interface ResearchEntry {
   access_status?: "open_full" | "open_pdf" | "abstract_only";
   date_precision?: "day" | "month";
   analysis_status?: string;
+  editorial_review_status?: "pending" | "accepted" | "rejected";
   analysis?: ResearchAnalysis;
   evidence_dimensions?: ResearchEvidenceDimension[];
   evidence_excerpts?: Partial<Record<ResearchEvidenceDimension, string[]>>;

@@ -17,6 +17,7 @@ from decimal import Decimal
 import httpx
 
 from datastore import research, storage
+from module import research_review
 
 MODEL = "gpt-5-mini"
 PROMPT_VERSION = "reading-brief-openai-v7-korean-editorial"
@@ -364,24 +365,28 @@ def _request_payload(text: str, title: str) -> dict:
 
 
 def _request_reservation(text: str, title: str) -> int:
+    return _reserve_payload(
+        _request_payload(text, title), INPUT_NANOUSD_PER_TOKEN, OUTPUT_NANOUSD_PER_TOKEN
+    )
+
+
+def _reserve_payload(payload: dict, input_rate: int, output_rate: int) -> int:
     # Include the schema and JSON escaping, not just the document. UTF-8 bytes
     # conservatively bound text tokens; extra headroom covers message framing.
-    request_bytes = len(
-        json.dumps(_request_payload(text, title), ensure_ascii=False).encode()
-    )
-    return (
-        request_bytes + 4000
-    ) * INPUT_NANOUSD_PER_TOKEN + MAX_OUTPUT_TOKENS * OUTPUT_NANOUSD_PER_TOKEN
+    request_bytes = len(json.dumps(payload, ensure_ascii=False).encode())
+    return (request_bytes + 4000) * input_rate + payload[
+        "max_output_tokens"
+    ] * output_rate
 
 
-def _model_call(text: str, title: str, api_key: str) -> tuple[dict, dict]:
+def _response_call(request: dict, api_key: str) -> tuple[dict, dict]:
     response = httpx.post(
         "https://api.openai.com/v1/responses",
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         },
-        json=_request_payload(text, title),
+        json=request,
         timeout=60,
     )
     response.raise_for_status()
@@ -420,7 +425,12 @@ def _model_call(text: str, title: str, api_key: str) -> tuple[dict, dict]:
         brief = json.loads(raw)
     except json.JSONDecodeError as exc:
         raise AnalysisContractError("analysis response was not valid JSON") from exc
-    return _ground_response(brief, text), measured
+    return brief, measured
+
+
+def _model_call(text: str, title: str, api_key: str) -> tuple[dict, dict]:
+    brief, usage = _response_call(_request_payload(text, title), api_key)
+    return _ground_response(brief, text), usage
 
 
 def enrich(
@@ -428,6 +438,7 @@ def enrich(
     now: datetime | None = None,
     text_loader=_public_text,
     model_call=_model_call,
+    review_call=research_review.model_call,
     max_items: int = 1,
 ) -> dict:
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
@@ -435,7 +446,7 @@ def enrich(
         return {"enabled": False, "reason": "missing_api_key", "completed": 0}
     now = (now or datetime.now(UTC)).astimezone(UTC)
     limit = int(
-        Decimal(os.environ.get("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "1.90"))
+        Decimal(os.environ.get("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "1.50"))
         * 1_000_000_000
     )
     if limit <= 0:
@@ -457,7 +468,7 @@ def enrich(
             "limit_nanousd": limit,
         }
     feed = research.load_feed()
-    completed = failed = attempted = 0
+    completed = failed = attempted = drafted = reviewed = rejected = 0
     changed = False
     reason = "settled"
     for item in feed["items"]:
@@ -467,18 +478,37 @@ def enrich(
         ):
             continue
         fingerprint = cache_key(item)
-        if item.get("analysis", {}).get("fingerprint") == fingerprint:
-            continue
         cache_path = f"research_analysis/cache/{fingerprint}.json"
-        if storage.exists(cache_path):
+        draft_current = item.get("analysis", {}).get("fingerprint") == fingerprint
+        recovered_draft = not draft_current and storage.exists(cache_path)
+        if recovered_draft:
             item["analysis"] = storage.read_json(cache_path)
-            item["analysis_status"] = "ready"
+            item["analysis_status"] = "review_pending"
+            draft_current = True
+            changed = True
+            completed += 1
+        stage = "review" if draft_current else "draft"
+        if draft_current:
+            fingerprint = research_review.cache_key(item, item["analysis"])
+            cache_path = f"research_analysis/reviews/{fingerprint}.json"
+            if research_review.state(item) == "pending" and storage.exists(cache_path):
+                item["analysis"]["review"] = storage.read_json(cache_path)
+                if research_review.state(item) != "pending":
+                    completed += 1
+                    changed = True
+            state = research_review.state(item)
+            status = {"accepted": "ready", "rejected": "review_rejected"}.get(state)
+            if status and item.get("analysis_status") != status:
+                item["analysis_status"] = status
+                changed = True
+            elif not status and item.get("analysis_status") == "ready":
+                item["analysis_status"] = "review_pending"
+                changed = True
             from module.research_feed import apply_editorial_analysis
 
             apply_editorial_analysis(item)
-            changed = True
-            completed += 1
-            continue
+            if status or recovered_draft:
+                continue
         retry = item.get("analysis_retry", {})
         if retry.get("fingerprint") != fingerprint:
             retry = {}
@@ -492,18 +522,56 @@ def enrich(
             text = text_loader(item)[:MAX_INPUT_CHARS]
             if not text.strip():
                 raise ValueError("source text is empty")
-            reservation = _request_reservation(text, item["title"])
+            if stage == "review":
+                payload = research_review.request_payload(
+                    text, item["title"], item["analysis"]["brief"]
+                )
+                input_rate = research_review.INPUT_NANOUSD_PER_TOKEN
+                output_rate = research_review.OUTPUT_NANOUSD_PER_TOKEN
+            else:
+                payload = _request_payload(text, item["title"])
+                input_rate, output_rate = (
+                    INPUT_NANOUSD_PER_TOKEN,
+                    OUTPUT_NANOUSD_PER_TOKEN,
+                )
+            reservation = _reserve_payload(payload, input_rate, output_rate)
             if budget["reserved_nanousd"] + reservation > limit:
                 reason = "monthly_budget_reached"
                 break
             budget["reserved_nanousd"] += reservation
             budget["updated_at"] = now.isoformat()
             storage.write_json(budget, budget_path)
-            brief, usage = model_call(text, item["title"], api_key)
-            validate_brief(brief, text)
+            if stage == "review":
+                checks, usage = review_call(
+                    text, item["title"], item["analysis"]["brief"], api_key
+                )
+                result = research_review.receipt(
+                    item, item["analysis"], checks, text, now.isoformat()
+                )
+            else:
+                brief, usage = model_call(text, item["title"], api_key)
+                validate_brief(brief, text)
+                result = {
+                    "fingerprint": fingerprint,
+                    "model": MODEL,
+                    "prompt_version": PROMPT_VERSION,
+                    "reasoning_effort": REASONING_EFFORT,
+                    "source_digest": item["source_digest"],
+                    "analyzed_chars": len(text),
+                    "scope": "bounded_source_extract",
+                    "analyzed_at": now.isoformat(),
+                    "brief": brief,
+                }
+            if any(
+                type(usage.get(name)) is not int or usage[name] <= 0
+                for name in ("input_tokens", "output_tokens")
+            ):
+                raise AnalysisContractError(
+                    "analysis response omitted valid token usage"
+                )
             actual_cost = (
-                usage["input_tokens"] * INPUT_NANOUSD_PER_TOKEN
-                + usage["output_tokens"] * OUTPUT_NANOUSD_PER_TOKEN
+                usage["input_tokens"] * input_rate
+                + usage["output_tokens"] * output_rate
             )
             if actual_cost < 0 or actual_cost > reservation:
                 budget["reserved_nanousd"] = max(limit, budget["reserved_nanousd"])
@@ -511,25 +579,19 @@ def enrich(
                 raise ValueError("model usage exceeded the conservative reservation")
             budget["reserved_nanousd"] += actual_cost - reservation
             storage.write_json(budget, budget_path)
-            analysis = {
-                "fingerprint": fingerprint,
-                "model": MODEL,
-                "prompt_version": PROMPT_VERSION,
-                "reasoning_effort": REASONING_EFFORT,
-                "source_digest": item["source_digest"],
-                "analyzed_chars": len(text),
-                "scope": "bounded_source_extract",
-                "analyzed_at": now.isoformat(),
-                "usage": usage,
-                "cost_nanousd": actual_cost,
-                "brief": brief,
-            }
-            storage.write_json(analysis, cache_path)
-            item.update(
-                analysis=analysis,
-                analysis_status="ready",
-                analysis_updated_at=now.isoformat(),
-            )
+            result.update(usage=usage, cost_nanousd=actual_cost)
+            storage.write_json(result, cache_path)
+            if stage == "review":
+                item["analysis"]["review"] = result
+                item["analysis_status"] = (
+                    "ready" if result["verdict"] == "accepted" else "review_rejected"
+                )
+                reviewed += 1
+                rejected += result["verdict"] == "rejected"
+            else:
+                item.update(analysis=result, analysis_status="review_pending")
+                drafted += 1
+            item["analysis_updated_at"] = now.isoformat()
             from module.research_feed import apply_editorial_analysis
 
             apply_editorial_analysis(item)
@@ -542,6 +604,7 @@ def enrich(
             )
             item["analysis_retry"] = {
                 "fingerprint": fingerprint,
+                "stage": stage,
                 "attempts": attempts,
                 "retry_at": (now + timedelta(minutes=30)).isoformat(),
                 "error_type": type(exc).__name__,
@@ -581,6 +644,9 @@ def enrich(
     return {
         "enabled": True,
         "completed": completed,
+        "drafted": drafted,
+        "reviewed": reviewed,
+        "rejected": rejected,
         "failed": failed,
         "reason": reason,
         "reserved_nanousd": budget["reserved_nanousd"],

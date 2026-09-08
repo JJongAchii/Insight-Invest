@@ -14,6 +14,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from datastore import research as research_store
+from module import research_review
 
 DEFAULT_BUCKET = "insight-invest-datalake"
 DEFAULT_RECORD_PREFIX = "research-radar/public/records/"
@@ -111,7 +112,9 @@ def apply_editorial_analysis(item: dict, *, target: dict | None = None) -> None:
     target = item if target is None else target
     candidate = item.get("editorial_candidate_lane", item.get("research_lane"))
     brief = item.get("analysis", {}).get("brief")
-    if brief and item.get("analysis_status") == "ready":
+    review_state = research_review.state(item)
+    target["editorial_review_status"] = review_state
+    if brief:
         kind = brief.get("content_kind")
         relevant = (
             brief.get("quant_relevant") is True and brief.get("substantive") is True
@@ -119,19 +122,26 @@ def apply_editorial_analysis(item: dict, *, target: dict | None = None) -> None:
         if kind not in {"research", "practitioner", "market_commentary", "other"}:
             # Old briefs stay readable, but cannot bypass the new classification.
             lane, reason = "discovery", "classification_pending"
+        elif review_state != "accepted" or item.get("analysis_status") != "ready":
+            lane = "discovery" if candidate == "core" else candidate
+            reason = (
+                "review_rejected" if review_state == "rejected" else "review_pending"
+            )
         elif kind == "market_commentary":
             lane, reason = "context", "market_commentary"
         elif relevant and kind in {"research", "practitioner"}:
-            lane, reason = candidate, "grounded_reading_brief"
+            lane, reason = candidate, "source_checked_reading_brief"
         else:
             lane, reason = "context", "editorial_topic_mismatch"
         target["research_lane"] = lane
         target["relevance_reason"] = reason
         target["notification_eligible"] = bool(
-            lane == "core" and item.get("notification_candidate")
+            lane == "core"
+            and review_state == "accepted"
+            and item.get("notification_candidate")
         )
         if target["notification_eligible"] and not item.get("available_at"):
-            target["available_at"] = item["analysis"]["analyzed_at"]
+            target["available_at"] = item["analysis"]["review"]["checked_at"]
     elif candidate == "core":
         target["research_lane"] = "discovery"
         target["relevance_reason"] = "analysis_pending"

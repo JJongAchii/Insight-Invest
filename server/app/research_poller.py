@@ -6,7 +6,7 @@ import logging
 import os
 from typing import Any
 
-from module import action_push, research_analysis, research_feed
+from module import action_push, research_analysis, research_feed, research_review
 from datastore import research as research_store
 
 logger = logging.getLogger(__name__)
@@ -47,8 +47,13 @@ def run(*, s3: Any | None = None) -> dict:
         if record.get("record_schema_version") == 4 and record.get(
             "notification_candidate"
         ):
+            state = research_review.state(item)
+            if state == "rejected":
+                suppressed_keys.append(key)
+                continue
             if (
-                item.get("analysis_status") != "ready"
+                state != "accepted"
+                or item.get("analysis_status") != "ready"
                 or item.get("relevance_reason") == "classification_pending"
             ):
                 deferred += 1

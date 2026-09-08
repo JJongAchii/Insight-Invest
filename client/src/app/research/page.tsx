@@ -17,7 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import ResearchBrief from "./ResearchBrief";
+import ResearchBrief, { hasReviewedBrief } from "./ResearchBrief";
 
 import EmptyState from "@/components/ui/EmptyState";
 import ErrorState from "@/components/ui/ErrorState";
@@ -259,7 +259,7 @@ function ResearchCard({
             {item.record_schema_version === 4 && (
               <>
                 {item.item_type && <span className="badge-neutral">{TYPE_LABELS[item.item_type]}</span>}
-                {item.analysis?.brief.content_kind && (
+                {hasReviewedBrief(item) && item.analysis?.brief.content_kind && (
                   <span className="badge-neutral">{CONTENT_LABELS[item.analysis.brief.content_kind]}</span>
                 )}
                 {item.content_provenance && <span>{PROVENANCE_LABELS[item.content_provenance]}</span>}
@@ -282,7 +282,7 @@ function ResearchCard({
           </div>
 
           <h2 className="mt-2 text-base font-semibold leading-6 text-ink sm:text-lg">
-            {item.analysis?.brief.title_ko || item.title}
+            {(hasReviewedBrief(item) && item.analysis?.brief.title_ko) || item.title}
           </h2>
           {item.analysis && <p className="mt-1 text-xs leading-5 text-ink-muted" lang="en">{item.title}</p>}
           {authors && <p className="mt-1 text-xs text-ink-muted">{authors}</p>}
