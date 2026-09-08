@@ -1414,6 +1414,82 @@ export interface InsightSignalsResponse {
 
 export type InsightSectorPeriod = "1d" | "1w" | "1m" | "3m" | "ytd";
 
+export type MarketGroupKind = "sector" | "theme";
+export type MarketGroupMarket = InsightMarket | "ALL";
+export interface MarketGroupQuery {
+  kind: MarketGroupKind;
+  market: MarketGroupMarket;
+  period: InsightSectorPeriod;
+}
+export interface MarketGroupSummary {
+  id: string;
+  kind: MarketGroupKind;
+  market: MarketGroupMarket;
+  name: string;
+  description: string;
+  period: InsightSectorPeriod;
+  as_of: string;
+  start_date: string | null;
+  classification_as_of: string | null;
+  source_as_of: string | null;
+  reviewed_at: string | null;
+  sources: { label: string; url: string }[];
+  history_basis: "dated_classification" | "current_representatives";
+  return_pct: number | null;
+  benchmark_return_pct: number | null;
+  excess_pp: number | null;
+  benchmark_name: string;
+  ret_1d: number | null;
+  member_count: number;
+  price_covered_count: number;
+  daily_covered_count: number;
+  period_covered_count: number;
+  advancing_count: number;
+  declining_count: number;
+  unchanged_count: number;
+  advancing_pct: number | null;
+  median_return_pct: number | null;
+  market_cap: number | null;
+  market_weight_pct: number | null;
+  top3_weight_pct: number | null;
+  frgn_net: number | null;
+  inst_net: number | null;
+  frgn_covered_count: number;
+  inst_covered_count: number;
+  flow_days: number;
+  flows_as_of: string | null;
+  fundamentals_as_of: string | null;
+}
+export interface MarketGroupMember {
+  ticker: string;
+  name: string;
+  meta_id: number | null;
+  market: InsightMarket | null;
+  sector: string | null;
+  close: number | null;
+  price_as_of: string | null;
+  weight_pct: number | null;
+  return_pct: number | null;
+  ret_1d: number | null;
+  contribution_1d_pp: number | null;
+  value: number | null;
+  relative_value20: number | null;
+  frgn_net: number | null;
+  frgn_days: number | null;
+  inst_net: number | null;
+  inst_days: number | null;
+  per: number | null;
+  pbr: number | null;
+  div: number | null;
+  valuation_as_of: string | null;
+  basis: string;
+}
+export interface MarketGroupDetail {
+  summary: MarketGroupSummary | null;
+  members: MarketGroupMember[];
+  history: { date: string; group_pct: number | null; benchmark_pct: number | null }[];
+}
+
 export interface InsightSectorHeatmapRow {
   market: InsightMarket;
   sector: string;
@@ -1423,7 +1499,7 @@ export interface InsightSectorHeatmapRow {
   ret_3m: number | null;
   ret_ytd: number | null;
   n_stocks: number;
-  /** Sector's share of market cap within its market (0–1). */
+  /** Sector's share of market cap within its market, in percent (0–100). */
   mktcap_weight: number;
 }
 
@@ -2108,6 +2184,14 @@ export const api = createApi({
     fetchIntradayMarket: builder.query<IntradayMarketResponse, void>({
       query: () => "intraday/market",
     }),
+    fetchMarketGroups: builder.query<
+      { as_of: string | null; rows: MarketGroupSummary[] }, MarketGroupQuery
+    >({
+      query: (args) => `/insight/groups?${new URLSearchParams({ ...args })}`,
+    }),
+    fetchMarketGroupDetail: builder.query<MarketGroupDetail, MarketGroupQuery & { group: string }>({
+      query: (args) => `/insight/groups/detail?${new URLSearchParams({ ...args })}`,
+    }),
     fetchInsightSectorHeatmap: builder.query<InsightSectorHeatmapResponse, void>(
       {
         query: () => "/insight/sector/heatmap",
@@ -2282,6 +2366,8 @@ export const {
   useFetchInsightIndexQuery,
   useFetchIntradayMarketQuery,
   useFetchInsightSectorHeatmapQuery,
+  useFetchMarketGroupsQuery,
+  useFetchMarketGroupDetailQuery,
   useFetchInsightSectorRotationQuery,
   useFetchInsightValuationQuery,
   useFetchInsightSignalStudyQuery,

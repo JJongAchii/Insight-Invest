@@ -10,7 +10,7 @@ import math
 import os
 import sys
 from functools import lru_cache
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 import pandas as pd
 from fastapi import APIRouter, Query
@@ -188,6 +188,45 @@ async def get_sector_heatmap():
         return {"as_of": None, "rows": []}
     rows = df.drop(columns=["as_of"]).to_dict(orient="records")
     return _round2({"as_of": _as_of(df), "rows": rows})
+
+
+@router.get("/groups")
+async def get_market_groups(
+    kind: Literal["sector", "theme"] = "sector",
+    market: Literal["KOSPI", "KOSDAQ", "ALL"] = "KOSPI",
+    period: Literal["1d", "1w", "1m", "3m", "ytd"] = "1m",
+):
+    """Small summary projection; detail JSON is not loaded for the overview."""
+    df = _read(
+        "market_groups.parquet",
+        columns=["as_of", "summary_json"],
+        filters=[("kind", "==", kind), ("market", "==", market), ("period", "==", period)],
+    )
+    if df is None or df.empty:
+        return {"as_of": None, "rows": []}
+    return {"as_of": _as_of(df), "rows": [json.loads(s) for s in df["summary_json"]]}
+
+
+@router.get("/groups/detail")
+async def get_market_group_detail(
+    group: str = Query(..., min_length=1, max_length=120),
+    kind: Literal["sector", "theme"] = "sector",
+    market: Literal["KOSPI", "KOSDAQ", "ALL"] = "KOSPI",
+    period: Literal["1d", "1w", "1m", "3m", "ytd"] = "1m",
+):
+    df = _read(
+        "market_groups.parquet",
+        columns=["detail_json"],
+        filters=[
+            ("kind", "==", kind),
+            ("market", "==", market),
+            ("period", "==", period),
+            ("group_id", "==", group),
+        ],
+    )
+    if df is None or df.empty:
+        return {"summary": None, "members": [], "history": []}
+    return json.loads(df["detail_json"].iloc[0])
 
 
 @router.get("/sector/rotation")
