@@ -450,7 +450,7 @@ Resources:
       Role: !GetAtt ResearchPollerRole.Arn
       Architectures: [x86_64]
       MemorySize: 1024
-      Timeout: 180
+      Timeout: 300
       ReservedConcurrentExecutions: 1
       Environment:
         Variables:

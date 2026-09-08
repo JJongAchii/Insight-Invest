@@ -243,6 +243,7 @@ def run(output: Path) -> int:
         ]
         save_report()  # Record the sample before the first paid call.
 
+        research_analysis.preserve_retries(research.load_feed()["items"])
         research_feed.reconcile(s3=RecordSnapshot(records), now=now)
         feed = research.load_feed()
         selected_ids = {record["entry_id_sha256"] for record in records}

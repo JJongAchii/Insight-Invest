@@ -40,6 +40,7 @@ def test_review_request_is_separate_bounded_untrusted_and_structured(monkeypatch
     captured = {}
 
     def post(url, **kwargs):
+        assert kwargs["timeout"] == 120
         captured.update(kwargs["json"])
         return httpx.Response(
             200,
@@ -310,3 +311,43 @@ def test_new_year_facts_in_unquoted_note_are_not_cleared_by_elsewhere_source():
     assert checked["reviewer_note"]["guard_issues"] == [
         "note_years_absent_from_grounded_points:2018"
     ]
+
+
+def test_subset_replacement_does_not_reset_failed_review_backoff(source):
+    draft(source)
+
+    def timeout(*_args):
+        raise httpx.ReadTimeout("offline timeout")
+
+    analysis.enrich(now=NOW, text_loader=lambda _item: TEXT, review_call=timeout)
+    retry = research.load_feed()["items"][0]["analysis_retry"]
+    path = f"research_analysis/retries/{retry['fingerprint']}.json"
+    assert storage.read_json(path) == retry
+    research.save_feed(
+        {"schema_version": 1, "generated_at": NOW.isoformat(), "items": []}
+    )
+    research_feed.reconcile(s3=source, now=NOW)
+    # Recover the original draft, then the separately persisted retry/backoff.
+    analysis.enrich(
+        now=NOW, text_loader=forbidden, model_call=forbidden, review_call=forbidden
+    )
+    result = analysis.enrich(
+        now=NOW + timedelta(minutes=10),
+        text_loader=forbidden,
+        model_call=forbidden,
+        review_call=forbidden,
+    )
+    assert result["completed"] == 0 and storage.read_json(path) == retry
+
+
+def test_legacy_retry_migration_does_not_overwrite_newer_durable_receipt(source):
+    draft(source)
+    fingerprint = "c" * 64
+    old = {"fingerprint": fingerprint, "attempts": 1, "retry_at": NOW.isoformat()}
+    analysis.preserve_retries([{"analysis_retry": old}])
+    path = f"research_analysis/retries/{fingerprint}.json"
+    assert storage.read_json(path) == old
+    newer = {**old, "attempts": 3}
+    storage.write_json(newer, path)
+    analysis.preserve_retries([{"analysis_retry": old}])
+    assert storage.read_json(path) == newer

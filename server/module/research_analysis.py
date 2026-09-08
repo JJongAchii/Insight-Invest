@@ -379,7 +379,9 @@ def _reserve_payload(payload: dict, input_rate: int, output_rate: int) -> int:
     ] * output_rate
 
 
-def _response_call(request: dict, api_key: str) -> tuple[dict, dict]:
+def _response_call(
+    request: dict, api_key: str, *, timeout: int = 60
+) -> tuple[dict, dict]:
     response = httpx.post(
         "https://api.openai.com/v1/responses",
         headers={
@@ -387,7 +389,7 @@ def _response_call(request: dict, api_key: str) -> tuple[dict, dict]:
             "Content-Type": "application/json",
         },
         json=request,
-        timeout=60,
+        timeout=timeout,
     )
     response.raise_for_status()
     payload = response.json()
@@ -433,6 +435,21 @@ def _model_call(text: str, title: str, api_key: str) -> tuple[dict, dict]:
     return _ground_response(brief, text), usage
 
 
+def preserve_retries(items: list[dict]) -> None:
+    """Migrate existing retry receipts before a qualification subset is replaced.
+
+    A removed/re-added source must not silently reset its stage retry budget.
+    Never overwrite an already durable receipt during migration.
+    """
+    for item in items:
+        retry = item.get("analysis_retry") or {}
+        fingerprint = retry.get("fingerprint", "")
+        if isinstance(fingerprint, str) and re.fullmatch(r"[a-f0-9]{64}", fingerprint):
+            path = f"research_analysis/retries/{fingerprint}.json"
+            if not storage.exists(path):
+                storage.write_json(retry, path)
+
+
 def enrich(
     *,
     now: datetime | None = None,
@@ -468,6 +485,7 @@ def enrich(
             "limit_nanousd": limit,
         }
     feed = research.load_feed()
+    preserve_retries(feed["items"])
     completed = failed = attempted = drafted = reviewed = rejected = 0
     changed = False
     reason = "settled"
@@ -510,6 +528,9 @@ def enrich(
             if status or recovered_draft:
                 continue
         retry = item.get("analysis_retry", {})
+        retry_path = f"research_analysis/retries/{fingerprint}.json"
+        if storage.exists(retry_path):
+            retry = storage.read_json(retry_path)
         if retry.get("fingerprint") != fingerprint:
             retry = {}
         retry_at = research.parse_timestamp(retry.get("retry_at"))
@@ -630,6 +651,7 @@ def enrich(
                     "billing_hard_limit_reached",
                 }:
                     item["analysis_retry"]["provider_error_code"] = code
+            storage.write_json(item["analysis_retry"], retry_path)
             changed = True
             failed += 1
             if isinstance(exc, (TypeError, httpx.HTTPStatusError)):

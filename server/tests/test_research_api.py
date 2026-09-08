@@ -77,6 +77,35 @@ def _get(**overrides):
     return research.get_research_feed(**arguments)
 
 
+def test_api_does_not_wait_for_poller_to_demote_unreviewed_core(monkeypatch, tmp_path):
+    from test_research_analysis import brief
+
+    monkeypatch.setenv("APP_DATA", str(tmp_path))
+    entry_id = "a" * 64
+    feed = _feed(entry_id, "b" * 64)
+    feed["items"] = feed["items"][:1]
+    feed["items"][0].update(
+        record_schema_version=4,
+        analysis_status="ready",
+        editorial_candidate_lane="core",
+        notification_candidate=True,
+        editorial_review_status="accepted",
+        analysis={"brief": brief(), "source_digest": "1" * 64},
+    )
+    research_store.save_feed(feed)
+    research_store.save_seen_through(
+        research_store.parse_timestamp("2026-09-01T00:00:00Z")
+    )
+    research_store.set_saved(entry_id, saved=True)
+    before = {path: path.read_bytes() for path in tmp_path.iterdir() if path.is_file()}
+    assert _get()["total"] == 0
+    assert research.get_research_status()["unseen"] == 0
+    found = _get(lane="all")["items"][0]
+    assert found["editorial_review_status"] == "pending" and found["is_saved"]
+    assert found["analysis"]["brief"] == feed["items"][0]["analysis"]["brief"]
+    assert before == {path: path.read_bytes() for path in before}
+
+
 def test_feed_filters_and_read_state(monkeypatch, tmp_path):
     monkeypatch.setenv("APP_DATA", str(tmp_path))
     first_id = "a" * 64

@@ -15,7 +15,7 @@ def test_research_poller_is_bounded_and_offset_from_radar():
         "  ResearchPollerSchedule:", 1
     )[0]
     assert "ReservedConcurrentExecutions: 1" in poller
-    assert "Timeout: 180" in poller
+    assert "Timeout: 300" in poller
     assert "ResearchPollerLogGroup:" in body
     assert "RetentionInDays: 14" in body
     assert "RADAR_RECORD_PREFIX: research-radar/public/records/" in body

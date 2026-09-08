@@ -14,6 +14,7 @@ MODEL = "gpt-5-mini"
 PROMPT_VERSION = "reading-review-openai-v2-point-bound"
 REASONING_EFFORT = "high"
 MAX_OUTPUT_TOKENS = 8192
+REQUEST_TIMEOUT_SECONDS = 120
 INPUT_NANOUSD_PER_TOKEN = 250
 OUTPUT_NANOUSD_PER_TOKEN = 2000
 POINTS = ("question", "method_data", "finding", "why_read", "limitation")
@@ -278,7 +279,9 @@ def validate_checks(value: dict, text: str, brief: dict) -> dict:
 def model_call(text: str, title: str, brief: dict, api_key: str) -> tuple[dict, dict]:
     from module.research_analysis import _response_call
 
-    value, usage = _response_call(request_payload(text, title, brief), api_key)
+    value, usage = _response_call(
+        request_payload(text, title, brief), api_key, timeout=REQUEST_TIMEOUT_SECONDS
+    )
     return (
         value,
         usage,
