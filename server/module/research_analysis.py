@@ -19,7 +19,7 @@ from datastore import research, storage
 
 MODEL = "gpt-5-nano"
 PROMPT_VERSION = "reading-brief-openai-v2"
-MAX_OUTPUT_TOKENS = 1800  # Visible output AND reasoning tokens.
+MAX_OUTPUT_TOKENS = 4096  # Visible output AND reasoning; 1800 truncated real briefs.
 MAX_INPUT_CHARS = 24000
 MAX_ATTEMPTS = 3
 INPUT_NANOUSD_PER_TOKEN = 50
@@ -181,6 +181,7 @@ def _request_payload(text: str, title: str) -> dict:
             ensure_ascii=False,
         ),
         "text": {
+            "verbosity": "low",
             "format": {
                 "type": "json_schema",
                 "name": "research_reading_brief",
@@ -210,7 +211,7 @@ def _model_call(text: str, title: str, api_key: str) -> tuple[dict, dict]:
             "Content-Type": "application/json",
         },
         json=_request_payload(text, title),
-        timeout=35,
+        timeout=60,
     )
     response.raise_for_status()
     payload = response.json()
