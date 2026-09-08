@@ -11,7 +11,6 @@ import TimeSeriesChart from "@/components/charts/TimeSeriesChart";
 import LoadingState from "@/components/ui/LoadingState";
 import ErrorState from "@/components/ui/ErrorState";
 import EmptyState from "@/components/ui/EmptyState";
-import InfoTip from "@/components/ui/InfoTip";
 import GroupMembersTable from "./GroupMembersTable";
 import { fmtEok, fmtJo, fmtPct, signClass } from "./format";
 import { fmtPp, plainPct, updateGroupView } from "./groupView";
@@ -97,13 +96,21 @@ export default function SectorSection() {
     if (selected && !requestedGroup) updateGroupView({ group: selected.id }, true);
   }, [selected, requestedGroup]);
   useEffect(() => {
-    if (detail?.summary && data?.as_of && detail.summary.as_of !== data.as_of) void refetch();
-  }, [detail, data?.as_of, refetch]);
+    if (!detail?.summary || !data?.as_of || detail.summary.as_of === data.as_of) return;
+    // Each query can hold an older cached response across a daily publication.
+    // Refresh the older side; repeatedly refreshing the newer list cannot fix it.
+    if (detail.summary.as_of < data.as_of) {
+      if (!detailFetching && !detailError) void refetchDetail();
+    } else if (!isFetching && !error) void refetch();
+  }, [detail, data?.as_of, detailFetching, detailError, isFetching, error, refetch, refetchDetail]);
   const scale = Math.max(...rows.map((row) => Math.abs(score(row, metric) ?? 0)), 1);
   const selectGroup = (id: string) => {
     updateGroupView({ group: id, group_page: null, group_q: null });
     if (window.matchMedia("(max-width: 767px)").matches) {
-      requestAnimationFrame(() => detailRef.current?.scrollIntoView({ block: "start", behavior: "instant" }));
+      requestAnimationFrame(() => {
+        detailRef.current?.focus({ preventScroll: true });
+        detailRef.current?.scrollIntoView({ block: "start", behavior: "instant" });
+      });
     }
   };
   const changeScope = (values: Record<string, string>) => updateGroupView({ ...values, group: null, group_page: null, group_q: null });
@@ -145,7 +152,7 @@ export default function SectorSection() {
       : rows.length === 0 ? <EmptyState title="이 시장의 분석 자료가 아직 없습니다" hint="다른 시장을 선택하거나 정산 데이터 갱신 후 다시 확인하세요." />
       : <>
         <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <section className="min-w-0 overflow-hidden rounded-2xl border border-edge bg-surface" aria-label="섹터·테마 지도">
+          <section className="min-w-0 self-start overflow-hidden rounded-2xl border border-edge bg-surface" aria-label="섹터·테마 지도">
             <div className="flex items-center justify-between gap-2 border-b border-edge px-4 py-4">
               <h3 className="flex items-center gap-2 font-semibold"><Layers3 size={16} className="text-primary-300" />{kind === "theme" ? "테마 탐색" : "섹터 탐색"}<span className="num text-xs font-normal text-ink-muted">{rows.length}</span></h3>
               <div className="flex gap-1">
@@ -172,7 +179,7 @@ export default function SectorSection() {
             </div>
             <p className="border-t border-edge px-4 py-3 text-[10px] leading-5 text-ink-muted">{METRICS.find((item) => item.id === metric)?.label} 순 정렬 · 색 농도는 현재 목록 안의 상대 크기{metric !== "frgn_net" && metric !== "inst_net" ? " · 작은 막대는 상승 종목 비율" : " · 기간 수급이 모두 확인된 종목만 합산"}. 타일 면적은 동일합니다.</p>
           </section>
-          <section ref={detailRef} className="min-w-0 scroll-mt-24 rounded-2xl border border-edge bg-surface p-5" aria-label="선택 그룹 분석" aria-busy={detailFetching}>
+          <section ref={detailRef} tabIndex={-1} className="min-w-0 scroll-mt-24 rounded-2xl border border-edge bg-surface p-5" aria-label="선택 그룹 분석" aria-busy={detailFetching}>
             {!selected ? <EmptyState title="선택한 분류가 이 시장에 없습니다" hint="지도에서 섹터나 테마를 선택하세요." />
               : detailError ? <ErrorState message="구성 종목과 추이를 불러오지 못했습니다" onRetry={refetchDetail} />
               : summary && <>
@@ -196,7 +203,7 @@ export default function SectorSection() {
         </div>
         {selected && detail?.summary && !detailError && <GroupMembersTable members={detail.members} summary={detail.summary} />}
         {summary && <details className="rounded-xl border border-edge bg-surface px-5 py-4 text-xs text-ink-secondary">
-          <summary className="cursor-pointer font-medium text-ink">계산 기준 · 구성 근거와 출처 <InfoTip helpKey="sector.heatmap" /></summary>
+          <summary className="cursor-pointer font-medium text-ink">계산 기준 · 구성 근거와 출처</summary>
           <div className="mt-4 grid gap-5 leading-6 md:grid-cols-2">
             <div><p>그룹 수익률은 전일 시총으로 가중한 일별 가격 변화입니다. 현금배당은 포함하지 않습니다. 종목별 기여도는 선택 기간과 별개로 <strong>당일 %p</strong>입니다.</p>
               <p className="mt-2">가격 확인 {summary.price_covered_count}/{summary.member_count}종목 · 당일 등락 확인 {summary.daily_covered_count}/{summary.member_count}종목 · 시총 {fmtJo(summary.market_cap)}</p>

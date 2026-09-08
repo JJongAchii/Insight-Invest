@@ -21,6 +21,7 @@ const SORTS = [
 const number = (value: number | null, suffix = "") => value == null ? "—" : `${value.toFixed(2)}${suffix}`;
 const columns: Record<View, { key: keyof MarketGroupMember; label: string; format: (n: number | null) => string; signed?: boolean }[]> = {
   price: [
+    { key: "close", label: "정산 종가", format: (n) => n == null ? "—" : `${n.toLocaleString("ko-KR")}원` },
     { key: "return_pct", label: "기간 수익률", format: fmtPct, signed: true },
     { key: "contribution_1d_pp", label: "당일 기여도", format: fmtPp, signed: true },
     { key: "value", label: "당일 거래대금", format: fmtJo },
