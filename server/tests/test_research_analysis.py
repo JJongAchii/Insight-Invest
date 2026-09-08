@@ -220,7 +220,7 @@ def test_model_request_uses_gpt5_nano_strict_schema_without_storage(monkeypatch)
     assert payload["text"]["format"]["type"] == "json_schema"
     assert payload["text"]["format"]["strict"] is True
     assert payload["max_output_tokens"] == analysis.MAX_OUTPUT_TOKENS
-    assert payload["reasoning"] == {"effort": "minimal"}
+    assert payload["reasoning"] == {"effort": "low"}
     source = json.loads(payload["input"])
     assert source["source_passages"][0]["text"] in TEXT
     assert "source_text" not in source
@@ -490,3 +490,10 @@ def test_passages_are_bounded_verbatim_even_with_unicode_and_a_short_tail():
     for passage in analysis._source_passages(text):
         assert 15 <= len(passage["text"]) <= 180
         assert passage["text"] in analysis._normalize(text)
+
+
+def test_reasoning_change_does_not_reuse_old_analysis_cache(monkeypatch):
+    item = {"source_digest": "a" * 64, "title": "Same source"}
+    original = analysis.cache_key(item)
+    monkeypatch.setattr(analysis, "REASONING_EFFORT", "minimal")
+    assert analysis.cache_key(item) != original

@@ -19,7 +19,8 @@ import httpx
 from datastore import research, storage
 
 MODEL = "gpt-5-nano"
-PROMPT_VERSION = "reading-brief-openai-v3-passages"
+PROMPT_VERSION = "reading-brief-openai-v4-precision"
+REASONING_EFFORT = "low"
 MAX_OUTPUT_TOKENS = 8192  # Visible output AND reasoning; real PDFs exceeded 4096.
 MAX_INPUT_CHARS = 24000
 MAX_ATTEMPTS = 3
@@ -37,16 +38,22 @@ substance is quantitative investment ideas, signals, portfolio/risk methodology,
 market microstructure, or empirical asset pricing. Firm announcements, generic AI
 opinions, software infrastructure, retirement policy without quantitative investment
 analysis, interviews, and promotional teasers are not substantive quant research.
-Write title_ko and text_ko in Korean. Keep each text_ko to one short sentence,
+Write title_ko and text_ko in precise, natural Korean. Preserve the source's technical
+meaning; keep an English term in parentheses when a Korean paraphrase is ambiguous.
+Do not substitute a related financial concept for the one actually discussed.
+Keep each text_ko to one short sentence,
 preferably under 120 characters. The five points describe the author's question,
 method/data, finding, concrete reading value, and explicitly stated limitation.
 The source_passages are consecutive excerpts of ONE document, in reading order.
 For each non-null point, choose the evidence_id of a supplied passage that directly
-supports text_ko. The application will attach its verbatim text; never generate a
-quote yourself. If no supplied passage supports the point, return null. Do not fill
-missing limitations from general knowledge. reviewer_note is a short Korean AI interpretation
-or question to check, clearly separate from the author's claims, not new factual
-evidence. It must acknowledge a partial extract when the input is incomplete.
+supports every factual part of text_ko. A shared topic is not sufficient support.
+Chart source credits, units, and generic legal disclaimers are not evidence for
+analytical conclusions. Narrow the claim to what the selected passage actually says.
+The application will attach its verbatim text; never generate a quote yourself.
+If no supplied passage supports the point, return null. Do not fill missing limitations
+from general knowledge. reviewer_note must acknowledge the partial extract and may
+ask one concrete question for further reading. It must not assert additional facts,
+causal effects, or criticisms that are absent from the grounded points.
 Practitioner articles need not state a formal research question; question may be null.
 method_data can describe a concrete framework or mechanism, not only an experiment.
 finding can describe a specific source-supported analytical conclusion, not only a
@@ -171,6 +178,7 @@ def cache_key(item: dict) -> str:
         item["title"],
         MODEL,
         PROMPT_VERSION,
+        REASONING_EFFORT,
         MAX_INPUT_CHARS,
         MAX_OUTPUT_TOKENS,
     ]
@@ -204,7 +212,7 @@ def _request_payload(text: str, title: str) -> dict:
     return {
         "model": MODEL,
         "store": False,
-        "reasoning": {"effort": "minimal"},
+        "reasoning": {"effort": REASONING_EFFORT},
         "max_output_tokens": MAX_OUTPUT_TOKENS,
         "instructions": SYSTEM,
         "input": json.dumps(
@@ -379,6 +387,7 @@ def enrich(
                 "fingerprint": fingerprint,
                 "model": MODEL,
                 "prompt_version": PROMPT_VERSION,
+                "reasoning_effort": REASONING_EFFORT,
                 "source_digest": item["source_digest"],
                 "analyzed_chars": len(text),
                 "scope": "bounded_source_extract",
