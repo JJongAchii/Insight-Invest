@@ -1,4 +1,5 @@
 import io
+import hashlib
 import json
 from datetime import UTC, datetime
 
@@ -18,7 +19,9 @@ class FakeS3:
     def list_objects_v2(self, *, Bucket, Prefix, ContinuationToken=None):  # noqa: N803, ARG002
         return {
             "Contents": [
-                {"Key": key} for key in sorted(self.objects) if key.startswith(Prefix)
+                {"Key": key, "ETag": hashlib.sha256(self.objects[key]).hexdigest()}
+                for key in sorted(self.objects)
+                if key.startswith(Prefix)
             ],
             "IsTruncated": False,
         }
@@ -94,10 +97,16 @@ def test_reconcile_fetches_only_membership_diff(monkeypatch, tmp_path):
     )
     feed = research_store.load_feed()
 
-    assert initial == {"records": 2, "added": 2, "removed": 0, "updated": True}
+    assert initial == {
+        "records": 2,
+        "added": 2,
+        "revised": 0,
+        "removed": 0,
+        "updated": True,
+    }
     assert [item["entry_id"] for item in feed["items"]] == [second_id, first_id]
-    assert all(item["research_lane"] == "core" for item in feed["items"])
-    assert all(item["notification_eligible"] is True for item in feed["items"])
+    assert all(item["research_lane"] == "updates" for item in feed["items"])
+    assert all(item["notification_eligible"] is False for item in feed["items"])
     assert all(item["record_schema_version"] == 3 for item in feed["items"])
     assert all(item["evidence_dimensions"][0] == "method" for item in feed["items"])
     initial_generated_at = feed["generated_at"]
@@ -108,7 +117,13 @@ def test_reconcile_fetches_only_membership_diff(monkeypatch, tmp_path):
         bucket="bucket",
         now=datetime(2026, 9, 2, 2, tzinfo=UTC),
     )
-    assert unchanged == {"records": 2, "added": 0, "removed": 0, "updated": False}
+    assert unchanged == {
+        "records": 2,
+        "added": 0,
+        "revised": 0,
+        "removed": 0,
+        "updated": False,
+    }
     assert s3.reads == []
     assert research_store.load_feed()["generated_at"] == initial_generated_at
 
@@ -118,7 +133,13 @@ def test_reconcile_fetches_only_membership_diff(monkeypatch, tmp_path):
     s3.reads.clear()
     changed = research_feed.reconcile(s3=s3, bucket="bucket")
 
-    assert changed == {"records": 2, "added": 1, "removed": 1, "updated": True}
+    assert changed == {
+        "records": 2,
+        "added": 1,
+        "revised": 0,
+        "removed": 1,
+        "updated": True,
+    }
     assert s3.reads == [third_key]
     assert [item["entry_id"] for item in research_store.load_feed()["items"]] == [
         third_id,
@@ -263,7 +284,7 @@ def test_reconcile_rejects_notifiable_non_core_record(monkeypatch, tmp_path):
         )
 
 
-@pytest.mark.parametrize("schema_version", [0, 4])
+@pytest.mark.parametrize("schema_version", [0, 5])
 def test_reconcile_rejects_unsupported_record_schema(
     monkeypatch, tmp_path, schema_version
 ):

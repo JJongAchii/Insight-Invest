@@ -654,6 +654,30 @@ export interface ActionCenterResponse {
 
 export type ResearchEvidenceDimension = "method" | "data" | "validation" | "result";
 
+export interface ResearchBriefPoint {
+  text_ko: string;
+  evidence: string;
+}
+
+export interface ResearchAnalysis {
+  fingerprint: string;
+  model: string;
+  analyzed_chars: number;
+  analyzed_at: string;
+  scope: string;
+  brief: {
+    title_ko: string;
+    question: ResearchBriefPoint | null;
+    method_data: ResearchBriefPoint | null;
+    finding: ResearchBriefPoint | null;
+    why_read: ResearchBriefPoint | null;
+    limitation: ResearchBriefPoint | null;
+    reviewer_note: string;
+    quant_relevant: boolean;
+    substantive: boolean;
+  };
+}
+
 export interface ResearchEntry {
   entry_id: string;
   source_id: string;
@@ -664,14 +688,19 @@ export interface ResearchEntry {
   url: string;
   published_at: string;
   discovered_at: string;
-  record_schema_version: 1 | 2 | 3;
+  record_schema_version: 1 | 2 | 3 | 4;
   quality_profile: string;
-  research_lane: "core" | "discovery" | "context";
+  research_lane: "core" | "discovery" | "updates" | "context";
   relevance_reason: string;
   relevance_terms: string[];
   notification_eligible: boolean;
-  item_type?: "evidence_update";
-  content_provenance?: "release_detail" | "full_body";
+  item_type?: "evidence_update" | "research_article" | "research_paper" | "preprint" | "research_digest";
+  content_provenance?: "release_detail" | "full_body" | "full_article" | "full_pdf" | "pdf_excerpt" | "abstract";
+  pdf_url?: string;
+  access_status?: "open_full" | "open_pdf" | "abstract_only";
+  date_precision?: "day" | "month";
+  analysis_status?: string;
+  analysis?: ResearchAnalysis;
   evidence_dimensions?: ResearchEvidenceDimension[];
   evidence_excerpts?: Partial<Record<ResearchEvidenceDimension, string[]>>;
   source_digest?: string;
@@ -700,7 +729,7 @@ export interface ResearchFeedResponse {
   saved: number;
   view: ResearchView;
   lane: ResearchLane;
-  lane_counts: Record<"core" | "discovery" | "context" | "all", number>;
+  lane_counts: Record<"core" | "discovery" | "updates" | "context" | "all", number>;
   query: string;
   offset: number;
   limit: number;
@@ -717,7 +746,7 @@ export interface ResearchStatusResponse {
 }
 
 export type ResearchView = "all" | "unread" | "read" | "saved";
-export type ResearchLane = "core" | "discovery" | "all";
+export type ResearchLane = "core" | "discovery" | "updates" | "all";
 
 export interface ResearchFeedParams {
   sourceId?: string;

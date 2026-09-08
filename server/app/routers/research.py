@@ -12,7 +12,7 @@ from datastore import research as research_store
 router = APIRouter(prefix="/research", tags=["Research"])
 ENTRY_ID = re.compile(r"^[0-9a-f]{64}$")
 RESEARCH_VIEWS = frozenset({"all", "unread", "read", "saved"})
-RESEARCH_LANE_FILTERS = frozenset({"core", "discovery", "all"})
+RESEARCH_LANE_FILTERS = frozenset({"core", "discovery", "updates", "all"})
 MAX_QUERY_LENGTH = 200
 
 
@@ -43,6 +43,7 @@ def _matches_query(item: dict, query: str) -> bool:
         item.get("title", ""),
         item.get("summary", ""),
         item.get("source_name", ""),
+        str(item.get("analysis", {})),
         " ".join(str(author) for author in authors if author),
     ]
     searchable = _normalise_search(" ".join(str(value) for value in values))
@@ -51,7 +52,7 @@ def _matches_query(item: dict, query: str) -> bool:
 
 def _item_lane(item: dict) -> str:
     lane = item.get("research_lane", "context")
-    return lane if lane in {"core", "discovery", "context"} else "context"
+    return lane if lane in {"core", "discovery", "updates", "context"} else "context"
 
 
 def _matches_lane(item: dict, lane: str) -> bool:
@@ -59,7 +60,9 @@ def _matches_lane(item: dict, lane: str) -> bool:
 
 
 def _research_status(feed: dict, seen_through: datetime | None) -> dict:
-    notifiable = [item for item in feed["items"] if item.get("notification_eligible") is True]
+    notifiable = [
+        item for item in feed["items"] if item.get("notification_eligible") is True
+    ]
     return {
         "schema_version": 1,
         "initialized": seen_through is not None,
@@ -78,7 +81,9 @@ def get_research_status():
 @router.put("/seen")
 def acknowledge_research_feed(request: ResearchSeenRequest):
     if request.through.tzinfo is None:
-        raise HTTPException(status_code=422, detail="research seen timestamp requires timezone")
+        raise HTTPException(
+            status_code=422, detail="research seen timestamp requires timezone"
+        )
     feed = research_store.load_feed()
     generated_at = research_store.parse_timestamp(feed.get("generated_at"))
     if generated_at is None:
@@ -105,7 +110,9 @@ def get_research_feed(
         raise HTTPException(status_code=422, detail="invalid research lane")
     if unread_only:
         if view not in {"all", "unread"}:
-            raise HTTPException(status_code=422, detail="conflicting research view filters")
+            raise HTTPException(
+                status_code=422, detail="conflicting research view filters"
+            )
         view = "unread"
     query = " ".join((q or "").split())
     if len(query) > MAX_QUERY_LENGTH:
@@ -127,7 +134,11 @@ def get_research_feed(
     for item in lane_items:
         source = sources.setdefault(
             item["source_id"],
-            {"source_id": item["source_id"], "source_name": item["source_name"], "count": 0},
+            {
+                "source_id": item["source_id"],
+                "source_name": item["source_name"],
+                "count": 0,
+            },
         )
         source["count"] += 1
     if entry_id:
@@ -157,6 +168,7 @@ def get_research_feed(
         "lane_counts": {
             "core": sum(_item_lane(item) == "core" for item in all_items),
             "discovery": sum(_item_lane(item) == "discovery" for item in all_items),
+            "updates": sum(_item_lane(item) == "updates" for item in all_items),
             "context": sum(_item_lane(item) == "context" for item in all_items),
             "all": len(all_items),
         },
@@ -174,7 +186,9 @@ def mark_all_research_read(lane: str = "core"):
     if lane not in RESEARCH_LANE_FILTERS:
         raise HTTPException(status_code=422, detail="invalid research lane")
     feed = research_store.load_feed()
-    entry_ids = [item["entry_id"] for item in feed["items"] if _matches_lane(item, lane)]
+    entry_ids = [
+        item["entry_id"] for item in feed["items"] if _matches_lane(item, lane)
+    ]
     updated = research_store.mark_all_read(entry_ids)
     return {"updated": updated, "total": len(entry_ids), "unread": 0, "lane": lane}
 

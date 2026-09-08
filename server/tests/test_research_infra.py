@@ -11,7 +11,11 @@ def test_research_poller_is_bounded_and_offset_from_radar():
     assert "FunctionName: insight-invest-research-poller" in body
     assert 'ImageConfig: { Command: ["app.research_poller.handler"] }' in body
     assert "ScheduleExpression: cron(2/10 * * * ? *)" in body
-    assert "ReservedConcurrentExecutions: 1" in body
+    poller = body.split("  ResearchPollerFunction:", 1)[1].split(
+        "  ResearchPollerSchedule:", 1
+    )[0]
+    assert "ReservedConcurrentExecutions: 1" in poller
+    assert "Timeout: 180" in poller
     assert "ResearchPollerLogGroup:" in body
     assert "RetentionInDays: 14" in body
     assert "RADAR_RECORD_PREFIX: research-radar/public/records/" in body
@@ -26,6 +30,13 @@ def test_research_poller_role_is_prefix_scoped():
     assert "app/research_feed.json" in body
     assert "app/research_read_state.parquet" in body
     assert "app/research_seen_state.json" in body
+    assert "app/research_analysis/*" in body
+    poller = body.split("  ResearchPollerFunction:", 1)[1].split(
+        "  ResearchPollerSchedule:", 1
+    )[0]
+    assert "OPENAI_API_KEY: !Ref OpenAIApiKey" in poller
+    assert 'RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "1.90"' in poller
+    assert "ANTHROPIC_API_KEY" not in poller
     assert "app/notification_subscriptions.parquet" in body
     assert "app/notification_deliveries.parquet" in body
     assert "s3:*" not in body
@@ -39,7 +50,7 @@ def test_release_smoke_requires_projection_api_and_active_push():
     assert "(.projection.records > 0)" in body
     assert '"$URL/research?lane=all&limit=1"' in body
     assert '.lane == "core"' in body
-    assert '.lane_counts.all > 0' in body
-    assert '.notification_eligible | type' in body
+    assert ".lane_counts.all > 0" in body
+    assert ".notification_eligible | type" in body
     assert '"$URL/research/status"' in body
     assert '.paths["/research/seen"].put' in body

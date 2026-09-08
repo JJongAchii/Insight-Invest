@@ -283,7 +283,13 @@ def test_lane_filter_defaults_to_core_and_preserves_full_archive(monkeypatch, tm
         second_id,
         legacy_id,
     }
-    assert archive["lane_counts"] == {"core": 1, "discovery": 1, "context": 1, "all": 3}
+    assert archive["lane_counts"] == {
+        "core": 1,
+        "discovery": 1,
+        "updates": 0,
+        "context": 1,
+        "all": 3,
+    }
 
     marked = research.mark_all_research_read(lane="core")
     assert marked == {"updated": 1, "total": 1, "unread": 0, "lane": "core"}

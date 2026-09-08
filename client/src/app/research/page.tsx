@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import ResearchBrief from "./ResearchBrief";
 
 import EmptyState from "@/components/ui/EmptyState";
 import ErrorState from "@/components/ui/ErrorState";
@@ -45,14 +46,20 @@ const LANE_OPTIONS = [
   {
     value: "core",
     label: "핵심 연구",
-    description: "본문·정량 주제·방법 근거·해결 확인을 모두 통과",
+    description: "공식 원문에서 읽을 수 있는 퀀트 아이디어·분석·논문",
     icon: Sparkles,
   },
   {
     value: "discovery",
     label: "발견함",
-    description: "본문과 근거는 충분하지만 해결 상태가 아직 미확인",
+    description: "초록·연구 모음과 한국어 분석을 기다리는 자료",
     icon: Radar,
+  },
+  {
+    value: "updates",
+    label: "데이터·도구",
+    description: "데이터 수정, 코드 이슈와 구현 변경 기록",
+    icon: RefreshCw,
   },
   {
     value: "all",
@@ -65,6 +72,18 @@ const LANE_OPTIONS = [
 const PROVENANCE_LABELS = {
   release_detail: "릴리스 상세",
   full_body: "전체 본문",
+  full_article: "공개 본문",
+  full_pdf: "공개 PDF",
+  pdf_excerpt: "PDF 일부 추출",
+  abstract: "초록만 확보",
+} as const;
+
+const TYPE_LABELS = {
+  research_article: "연구 글",
+  research_paper: "논문·연구보고서",
+  preprint: "프리프린트 · 미검증",
+  research_digest: "연구 모음",
+  evidence_update: "데이터·도구 업데이트",
 } as const;
 
 const EVIDENCE_LABELS: Record<ResearchEvidenceDimension, string> = {
@@ -145,7 +164,7 @@ function ResearchCard({
       ? "핵심"
       : item.research_lane === "discovery"
         ? "발견"
-        : "기록";
+        : item.research_lane === "updates" ? "업데이트" : "기록";
   const relevance = item.relevance_terms.slice(0, 2).join(" · ");
   const schemaThreeEvidence =
     item.record_schema_version === 3 && item.item_type === "evidence_update";
@@ -225,6 +244,12 @@ function ResearchCard({
                 ))}
               </>
             )}
+            {item.record_schema_version === 4 && (
+              <>
+                {item.item_type && <span className="badge-neutral">{TYPE_LABELS[item.item_type]}</span>}
+                {item.content_provenance && <span>{PROVENANCE_LABELS[item.content_provenance]}</span>}
+              </>
+            )}
             {!item.is_read && (
               <span className="rounded-full bg-primary-500/15 px-2 py-0.5 font-medium text-primary-400">
                 새 자료
@@ -237,17 +262,16 @@ function ResearchCard({
             )}
             <span className="inline-flex items-center gap-1 sm:ml-auto">
               <Clock3 size={13} aria-hidden />
-              {formatDate(item.published_at || item.discovered_at)}
+              {item.date_precision === "month" ? `${item.published_at.slice(0, 7)} 발행호` : formatDate(item.published_at || item.discovered_at)}
             </span>
           </div>
 
           <h2 className="mt-2 text-base font-semibold leading-6 text-ink sm:text-lg">
-            {item.title}
+            {item.analysis?.brief.title_ko || item.title}
           </h2>
+          {item.analysis && <p className="mt-1 text-xs leading-5 text-ink-muted" lang="en">{item.title}</p>}
           {authors && <p className="mt-1 text-xs text-ink-muted">{authors}</p>}
-          <p className="mt-3 text-sm leading-6 text-ink-secondary">
-            {item.summary || "공개 출처에 별도 요약이 없습니다. 원문에서 내용을 확인해 주세요."}
-          </p>
+          <ResearchBrief item={item} />
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <a
@@ -259,6 +283,12 @@ function ResearchCard({
             >
               원문 열기 <ExternalLink size={15} aria-hidden />
             </a>
+            {item.pdf_url && item.pdf_url !== item.url && (
+              <a href={item.pdf_url} target="_blank" rel="noopener noreferrer" onClick={markReadOnOpen}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-edge px-3 py-2 text-xs font-semibold text-ink-secondary hover:bg-raised">
+                PDF 열기 <ExternalLink size={15} aria-hidden />
+              </a>
+            )}
             <button
               type="button"
               className="btn-ghost inline-flex items-center gap-1.5 px-3 py-2 text-xs"
@@ -436,7 +466,7 @@ export default function ResearchPage() {
       <PageHeader
         eyebrow="Research library"
         title="리서치"
-        description="독립 심사를 통과한 출처에서 본문·정량 주제·방법 근거·해결 상태를 확인한 업데이트만 핵심으로 보여줍니다."
+        description="퀀트 기관과 연구자의 공식 원문을 모아 읽고, 아이디어를 발견하고, 내 서재에 보관하세요."
         meta={
           <>
             <span>안 읽음 {data?.unread ?? 0}</span>
@@ -491,7 +521,7 @@ export default function ResearchPage() {
         </div>
       )}
 
-      <section className="grid gap-2 sm:grid-cols-3" aria-label="리서치 품질 레인">
+      <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label="리서치 자료 유형">
         {LANE_OPTIONS.map((option) => {
           const Icon = option.icon;
           const active = lane === option.value;
@@ -525,8 +555,8 @@ export default function ResearchPage() {
       </section>
 
       <p className="-mt-3 px-1 text-xs leading-5 text-ink-muted">
-        사이드바 배지와 iPhone 알림은 해결이 확인된 신규 근거 업데이트에만 표시됩니다.
-        기존 기록과 미해결 발견 항목은 보존되지만 알림에는 포함되지 않습니다.
+        사이드바 배지와 iPhone 알림은 새 핵심 연구에 표시됩니다.
+        초록·연구 모음·데이터 업데이트는 별도로 보존하며, 초기 자료 채우기와 요약 수정은 다시 알리지 않습니다.
       </p>
 
       <div className="grid gap-5 xl:grid-cols-[15rem_minmax(0,1fr)] xl:items-start">

@@ -77,7 +77,10 @@ def unseen_entry_count(items: list[dict], seen_through: datetime | None) -> int:
         return 0
     return sum(
         discovered_at is not None and discovered_at > seen_through
-        for discovered_at in (parse_timestamp(item.get("discovered_at")) for item in items)
+        for discovered_at in (
+            parse_timestamp(item.get("available_at") or item.get("discovered_at"))
+            for item in items
+        )
     )
 
 
@@ -139,9 +142,13 @@ def set_saved(entry_id: str, *, saved: bool) -> None:
 def mark_all_read(entry_ids: list[str]) -> int:
     unique_ids = list(dict.fromkeys(entry_ids))
     frame = list_read_state()
-    state_by_id = {str(row.entry_id): row._asdict() for row in frame.itertuples(index=False)}
+    state_by_id = {
+        str(row.entry_id): row._asdict() for row in frame.itertuples(index=False)
+    }
     previously_read = {
-        entry_id for entry_id, state in state_by_id.items() if pd.notna(state.get("read_at"))
+        entry_id
+        for entry_id, state in state_by_id.items()
+        if pd.notna(state.get("read_at"))
     }
     now = datetime.now(timezone.utc)
     for entry_id in unique_ids:

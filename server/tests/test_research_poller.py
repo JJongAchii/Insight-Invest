@@ -4,6 +4,16 @@ from app import research_poller
 from module import action_push, research_feed
 
 
+@pytest.fixture(autouse=True)
+def isolated_analysis(monkeypatch):
+    monkeypatch.setattr(
+        research_poller.research_analysis, "enrich", lambda: {"completed": 0}
+    )
+    monkeypatch.setattr(
+        research_poller.research_store, "load_feed", lambda: {"items": []}
+    )
+
+
 def _pending():
     entry_id = "a" * 64
     return [
@@ -60,6 +70,47 @@ def test_poller_batches_research_push_and_deletes_settled_pending(monkeypatch):
     }
 
 
+def test_editorial_pending_waits_for_brief_then_delivers_once(monkeypatch):
+    captured = _arrange(
+        monkeypatch,
+        {"enabled": True, "subscriptions": 1, "sent": 1, "failed": 0, "disabled": 0},
+    )
+    key, record = _pending()[0]
+    record.update(
+        record_schema_version=4,
+        notification_candidate=True,
+        notification_eligible=False,
+        analysis_status="pending",
+    )
+    monkeypatch.setattr(
+        research_feed, "pending_records", lambda **_kwargs: [(key, record)]
+    )
+    monkeypatch.setattr(
+        research_poller.research_store, "load_feed", lambda: {"items": [record]}
+    )
+    result = research_poller.run(s3=object())
+    assert result["pending_deferred"] == 1 and result["pending_deleted"] == 0
+    assert not captured["events"]
+    record.update(analysis_status="ready", notification_eligible=True)
+    result = research_poller.run(s3=object())
+    assert result["pending_eligible"] == 1 and result["pending_deleted"] == 1
+
+
+def test_analysis_outage_does_not_prevent_settlement_of_ready_items(monkeypatch):
+    captured = _arrange(
+        monkeypatch,
+        {"enabled": True, "subscriptions": 1, "sent": 1, "failed": 0, "disabled": 0},
+    )
+
+    def unavailable():
+        raise OSError("storage unavailable")
+
+    monkeypatch.setattr(research_poller.research_analysis, "enrich", unavailable)
+    result = research_poller.run(s3=object())
+    assert result["analysis"]["reason"] == "OSError"
+    assert result["pending_deleted"] == 1 and captured["events"]
+
+
 def test_poller_discards_legacy_or_context_pending_without_push(monkeypatch):
     captured = {"deleted": [], "events": None}
     monkeypatch.setattr(
@@ -108,19 +159,37 @@ def test_poller_discards_legacy_or_context_pending_without_push(monkeypatch):
     ("push", "expected_ok", "expected_ready", "expected_deleted"),
     [
         (
-            {"enabled": True, "subscriptions": 2, "sent": 1, "failed": 1, "disabled": 0},
+            {
+                "enabled": True,
+                "subscriptions": 2,
+                "sent": 1,
+                "failed": 1,
+                "disabled": 0,
+            },
             False,
             True,
             0,
         ),
         (
-            {"enabled": True, "subscriptions": 2, "sent": 1, "failed": 1, "disabled": 1},
+            {
+                "enabled": True,
+                "subscriptions": 2,
+                "sent": 1,
+                "failed": 1,
+                "disabled": 1,
+            },
             True,
             True,
             1,
         ),
         (
-            {"enabled": True, "subscriptions": 0, "sent": 0, "failed": 0, "disabled": 0},
+            {
+                "enabled": True,
+                "subscriptions": 0,
+                "sent": 0,
+                "failed": 0,
+                "disabled": 0,
+            },
             True,
             False,
             1,
