@@ -115,6 +115,18 @@ jobs:
           curl -sf --max-time 110 \
             -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
             -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
+            "$URL/intraday/market" >/tmp/intraday-market.json
+          jq -e '(.active | type) == "boolean" and (.is_open | type) == "boolean"
+            and (if .active then (.indices | type) == "array"
+              and (.as_of | test("^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$"))
+            else .unavailable_reason == "stale" or .unavailable_reason == "missing"
+              or .unavailable_reason == "empty" or .unavailable_reason == "inconsistent"
+            end)' /tmp/intraday-market.json
+          jq '{active, is_open, as_of, trade_date, unavailable_reason}' \
+            /tmp/intraday-market.json >/tmp/intraday-availability.json
+          curl -sf --max-time 110 \
+            -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
+            -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
             "$URL/insight/groups?kind=theme&market=ALL&period=1m" >/tmp/market-themes.json
           jq -e '(.rows | length) > 0 and (.rows | all(
             .kind == "theme" and .member_count > 0 and (.sources | length) > 0
@@ -200,4 +212,11 @@ jobs:
         with:
           name: market-groups-snapshot
           path: /tmp/market-groups-snapshot.json
+          if-no-files-found: error
+
+      - name: Record deployed intraday availability
+        uses: actions/upload-artifact@v4
+        with:
+          name: intraday-availability
+          path: /tmp/intraday-availability.json
           if-no-files-found: error

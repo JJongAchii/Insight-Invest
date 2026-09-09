@@ -21,6 +21,15 @@ _STOCK_COLS = ["ticker", "name", "close", "chg_pct", "value"]
 ETF_LATEST_KEY = "kr_intraday_etf_latest.parquet"
 
 
+def _inactive(reason: str, as_of: str | None = None, trade_date: str | None = None):
+    """Keep the freshness guard while explaining unavailable snapshots to the UI."""
+    result = {"active": False, "unavailable_reason": reason,
+              "is_open": ki.is_open_kst(datetime.now(ki.KST))}
+    if as_of is not None:
+        result.update(as_of=as_of, trade_date=trade_date)
+    return result
+
+
 def _r(x, nd: int = 2) -> Optional[float]:
     """유한한 float만 round, 그 외 None (holdings.py `_r()` 관례).
 
@@ -108,17 +117,17 @@ def get_market():
         return _build()
     except Exception as e:  # noqa: BLE001 — 어떤 실패든 강등 (Global Constraint)
         logger.warning(f"intraday 조립 실패 — inactive 강등: {e}")
-        return {"active": False}
+        return _inactive("error")
 
 
 def _build():
     if not (storage.exists("kr_intraday_latest.parquet")
             and storage.exists("kr_intraday_timeline.parquet")):
-        return {"active": False}
+        return _inactive("missing")
     latest = storage.read_parquet("kr_intraday_latest.parquet")
     timeline = storage.read_parquet("kr_intraday_timeline.parquet")
     if latest.empty or timeline.empty:
-        return {"active": False}
+        return _inactive("empty")
 
     as_of = str(latest["as_of"].iloc[0])
     trade_date = str(latest["trade_date"].iloc[0])
@@ -128,14 +137,14 @@ def _build():
     # 통째로 버린다.
     timeline = timeline[timeline["trade_date"] == trade_date]
     if timeline.empty:
-        return {"active": False}
+        return _inactive("inconsistent", as_of, trade_date)
     # EventBridge는 at-least-once고 수동 재호출도 있다 — 같은 (as_of, kind, key)
     # 중복 행이 섹터 리스트·스파크라인에 중복 React key로 새어나가지 않도록 제거.
     timeline = timeline.drop_duplicates(subset=["as_of", "kind", "key"], keep="last")
 
     now = datetime.now(ki.KST)
     if not ki.snapshot_active(trade_date, as_of, now):
-        return {"active": False}
+        return _inactive("stale", as_of, trade_date)
 
     def hhmm(s: str) -> str:
         return s[-5:]
