@@ -188,6 +188,69 @@ jobs:
             "$URL/overview" >/tmp/market-overview.json
           jq -e '.data_status | length == 5' /tmp/market-overview.json
           jq '{data_status}' /tmp/market-overview.json >/tmp/market-data-status.json
+          curl -sf --max-time 110 \
+            -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
+            -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
+            "$URL/intraday/market" >/tmp/intraday-market.json
+          jq -e '(.active | type) == "boolean" and (.is_open | type) == "boolean"
+            and (if .active then (.indices | type) == "array"
+              and (.as_of | test("^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$"))
+            else .unavailable_reason == "stale" or .unavailable_reason == "missing"
+              or .unavailable_reason == "empty" or .unavailable_reason == "inconsistent"
+            end)' /tmp/intraday-market.json
+          jq '{active, is_open, as_of, trade_date, unavailable_reason}' \
+            /tmp/intraday-market.json >/tmp/intraday-availability.json
+          INTRADAY_SECTOR=$(jq -r '.sectors[0].name // "기타"' /tmp/intraday-market.json)
+          curl -sfG --max-time 110 \
+            -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
+            -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
+            --data-urlencode "sector=$INTRADAY_SECTOR" \
+            "$URL/intraday/market" >/tmp/intraday-sector-members.json
+          jq -e --arg sector "$INTRADAY_SECTOR" '
+            if .active then
+              .sector_detail.name == $sector
+              and (.sector_detail.members | type) == "array"
+              and (.sector_detail.members | all(
+                (.ticker | type) == "string" and (.market == "KOSPI" or .market == "KOSDAQ")))
+              and (.sector_detail.members | length) ==
+                ([.sectors[] | select(.name == $sector) | .n][0] // 0)
+            else .unavailable_reason == "stale" or .unavailable_reason == "missing"
+              or .unavailable_reason == "empty" or .unavailable_reason == "inconsistent"
+            end' /tmp/intraday-sector-members.json
+          jq --arg sector "$INTRADAY_SECTOR" '{active, as_of, trade_date, unavailable_reason,
+            sector: .sector_detail.name, member_count: (.sector_detail.members | length),
+            summary: [.sectors[]? | select(.name == $sector)],
+            sample_members: .sector_detail.members[:3]}' \
+            /tmp/intraday-sector-members.json >/tmp/intraday-members-snapshot.json
+          curl -sf --max-time 110 \
+            -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
+            -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
+            "$URL/insight/groups?kind=theme&market=ALL&period=1m" >/tmp/market-themes.json
+          jq -e '(.rows | length) > 0 and (.rows | all(
+            .kind == "theme" and .member_count > 0 and (.sources | length) > 0
+            and .history_basis == "current_representatives"))' /tmp/market-themes.json
+          GROUP_ID=$(jq -r '.rows[0].id | @uri' /tmp/market-themes.json)
+          curl -sf --max-time 110 \
+            -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
+            -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
+            "$URL/insight/groups/detail?kind=theme&market=ALL&period=1m&group=$GROUP_ID" >/tmp/market-theme-detail.json
+          jq -e --slurpfile overview /tmp/market-themes.json '
+            .summary == $overview[0].rows[0]
+            and (.members | length) == .summary.member_count
+            and (.members | all(.meta_id != null and .ticker != null))
+            and (.history | length) > 0' /tmp/market-theme-detail.json
+          curl -sf --max-time 110 \
+            -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
+            -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
+            "$URL/insight/groups?kind=sector&market=KOSPI&period=1d" >/tmp/market-sectors.json
+          jq -e '(.rows | length) > 0 and (.rows | all(
+            .kind == "sector" and .member_count > 0
+            and .history_basis == "dated_classification"))' /tmp/market-sectors.json
+          jq --slurpfile sectors /tmp/market-sectors.json '{
+            as_of, theme_count: (.rows | length),
+            themes: [.rows[] | {id, name, member_count, period_covered_count}],
+            kospi_sector_count: ($sectors[0].rows | length)
+          }' /tmp/market-themes.json >/tmp/market-groups-snapshot.json
           curl -sf -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
             -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
             "$URL/research?lane=all&limit=1" | jq -e \
@@ -220,7 +283,8 @@ jobs:
               '.paths["/research/{entry_id}/saved"].put
                and .paths["/research/read/all"].put
                and .paths["/research/status"].get
-               and .paths["/research/seen"].put'
+               and .paths["/research/seen"].put
+               and (.paths["/intraday/market"].get.parameters | any(.name == "sector"))'
 
       - name: Record deployed macro snapshot
         uses: actions/upload-artifact@v4
@@ -241,4 +305,25 @@ jobs:
         with:
           name: regime-us-snapshot
           path: /tmp/regime-us-snapshot.json
+          if-no-files-found: error
+
+      - name: Record deployed sector and theme snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-groups-snapshot
+          path: /tmp/market-groups-snapshot.json
+          if-no-files-found: error
+
+      - name: Record deployed intraday availability
+        uses: actions/upload-artifact@v4
+        with:
+          name: intraday-availability
+          path: /tmp/intraday-availability.json
+          if-no-files-found: error
+
+      - name: Record deployed intraday sector members
+        uses: actions/upload-artifact@v4
+        with:
+          name: intraday-members-snapshot
+          path: /tmp/intraday-members-snapshot.json
           if-no-files-found: error

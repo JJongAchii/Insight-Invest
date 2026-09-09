@@ -741,6 +741,40 @@ def build_sector_perf() -> pd.DataFrame:
     return df
 
 
+def build_market_groups() -> pd.DataFrame:
+    """EC2 일일 배치: 섹터·테마 요약/종목/추이를 같은 파일로 원자적 발행."""
+    from module import market_groups
+
+    recent = qdata_api.load_krx_prices(
+        start=(pd.Timestamp.today() - pd.Timedelta(days=14)).strftime("%Y-%m-%d"),
+        columns=["close"],
+    )
+    as_of = pd.Timestamp(recent["date"].max())
+    start = (pd.Timestamp(as_of.year, 1, 1) - pd.Timedelta(days=120)).strftime("%Y-%m-%d")
+    end = as_of.strftime("%Y-%m-%d")
+    px = qdata_api.load_krx_prices(
+        start=start, end=end,
+        columns=["market", "close", "adj_close", "mktcap", "value"],
+    )
+    sec = qdata_api.load_krx_sector(
+        start=(pd.Timestamp(start) - pd.Timedelta(days=45)).strftime("%Y-%m-%d"), end=end
+    )
+    current = qdata_api.load_krx_stock_master(asof=end)
+    ids = meta.meta_df()
+    ids = ids[ids["iso_code"].eq("KR") & ids["security_type"].str.upper().eq("STOCK")]
+    current = current.merge(ids[["ticker", "meta_id"]], on="ticker", how="left", validate="one_to_one")
+    flows = qdata_api.load_krx_flows(start=start, end=end)
+    try:
+        fund = qdata_api.load_krx_fundamental(
+            start=(as_of - pd.Timedelta(days=31)).strftime("%Y-%m-%d"), end=end,
+            columns=["per", "pbr", "div"],
+        )
+    except FileNotFoundError:
+        fund = pd.DataFrame()
+    indices = qdata_api.load_krx_index_prices(start=start, end=end, codes=["1001", "2001"])
+    return market_groups.build_snapshots(px, sec, current, flows, fund, indices, market_groups.load_themes())
+
+
 def build_valuation_daily():
     """시장별 일별 밸류에이션과 산출 커버리지.
 
@@ -2130,6 +2164,7 @@ BUILDERS = [
     ("insight/flows_signals.parquet", build_flows_signals, {}),
     ("insight/sector_index.parquet", build_sector_index, {}),
     ("insight/sector_perf.parquet", build_sector_perf, {}),
+    ("insight/market_groups.parquet", build_market_groups, {"row_group_size": 1}),
     ("insight/valuation_daily.parquet", build_valuation_daily, {}),
     ("insight/signal_study.parquet", build_signal_study, {}),  # Track B: 신호 이벤트 스터디
     ("insight/factor_returns.parquet", build_factor_returns, {}),  # Track B: 팩터 렌즈

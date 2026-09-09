@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "policy": "운용사 공개자료에서 관련성이 확인된 일부 대표 종목을 수동 선정한다. 전체 테마 유니버스나 현재 ETF 구성·비중이 아니다. 가격·수급은 매일 갱신하며 이 구성표 변경 시에는 출처와 검토일을 갱신한다.",
+  "themes": [
+    {
+      "id": "ai-infrastructure", "name": "AI 인프라",
+      "description": "반도체·클라우드·데이터센터와 연결된 대표 기업의 흐름을 함께 봅니다.",
+      "reviewed_at": "2026-09-08", "source_as_of": "2026-08-24",
+      "sources": [{"label": "삼성자산운용 · 코리아소버린AI 공개 구성자료", "url": "https://www.samsungfund.com/etf/product/view.do?id=2ETFS6"}],
+      "members": [
+        {"ticker": "005930", "name": "삼성전자"}, {"ticker": "000660", "name": "SK하이닉스"},
+        {"ticker": "035420", "name": "NAVER"}, {"ticker": "018260", "name": "삼성에스디에스"},
+        {"ticker": "042700", "name": "한미반도체"}, {"ticker": "007660", "name": "이수페타시스"},
+        {"ticker": "010120", "name": "LS ELECTRIC"}, {"ticker": "017670", "name": "SK텔레콤"}
+      ]
+    },
+    {
+      "id": "power-grid", "name": "전력 설비",
+      "description": "변압기·전선 등 전력망 설비 관련 대표 종목을 비교합니다.",
+      "reviewed_at": "2026-09-08", "source_as_of": "2026-03-31",
+      "sources": [{"label": "삼성자산운용 · AI전력핵심설비 공개 구성자료", "url": "https://www.samsungfund.com/upload/kodex/newsroom/20260416171916907.pdf"}],
+      "members": [
+        {"ticker": "010120", "name": "LS ELECTRIC"}, {"ticker": "298040", "name": "효성중공업"},
+        {"ticker": "267260", "name": "HD현대일렉트릭"}, {"ticker": "006260", "name": "LS"},
+        {"ticker": "001440", "name": "대한전선"}, {"ticker": "062040", "name": "산일전기"},
+        {"ticker": "103590", "name": "일진전기"}, {"ticker": "033100", "name": "제룡전기"}
+      ]
+    },
+    {
+      "id": "defense-aerospace", "name": "방산·우주",
+      "description": "항공우주·지상무기·방산전자·해양방산 관련 대표 기업을 묶어 봅니다.",
+      "reviewed_at": "2026-09-08", "source_as_of": "2026-08-18",
+      "sources": [{"label": "한화자산운용 · PLUS K방산 공개 구성자료", "url": "https://www.plusetf.co.kr/insight/report/detail?n=2024"}],
+      "members": [
+        {"ticker": "012450", "name": "한화에어로스페이스"}, {"ticker": "042660", "name": "한화오션"},
+        {"ticker": "079550", "name": "LIG 디펜스앤에어로스페이스"}, {"ticker": "064350", "name": "현대로템"},
+        {"ticker": "047810", "name": "한국항공우주"}, {"ticker": "272210", "name": "한화시스템"},
+        {"ticker": "103140", "name": "풍산"}, {"ticker": "077970", "name": "STX엔진"}
+      ]
+    },
+    {
+      "id": "batteries", "name": "2차전지",
+      "description": "배터리 제조와 소재를 포함한 대표 기업들의 가격·수급을 비교합니다.",
+      "reviewed_at": "2026-09-08", "source_as_of": "2026-07-21",
+      "sources": [{"label": "삼성자산운용 · 2차전지산업 공개 구성자료", "url": "https://m.samsungfund.com/etf/product/view.do?id=2ETFB1"}],
+      "members": [
+        {"ticker": "373220", "name": "LG에너지솔루션"}, {"ticker": "006400", "name": "삼성SDI"},
+        {"ticker": "005490", "name": "POSCO홀딩스"}, {"ticker": "051910", "name": "LG화학"},
+        {"ticker": "247540", "name": "에코프로비엠"}, {"ticker": "086520", "name": "에코프로"},
+        {"ticker": "003670", "name": "포스코퓨처엠"}, {"ticker": "066970", "name": "엘앤에프"}
+      ]
+    },
+    {
+      "id": "robotics", "name": "로봇·자동화",
+      "description": "로봇과 자동화 관련 대표 종목의 움직임이 얼마나 함께 나타나는지 봅니다.",
+      "reviewed_at": "2026-09-08", "source_as_of": "2026-08-11",
+      "sources": [{"label": "삼성자산운용 · 로봇액티브 공개 구성자료", "url": "https://www.samsungfund.com/eng/etf/product/view.do?id=2ETFH5"}],
+      "members": [
+        {"ticker": "108490", "name": "로보티즈"}, {"ticker": "277810", "name": "레인보우로보틱스"},
+        {"ticker": "454910", "name": "두산로보틱스"}, {"ticker": "058610", "name": "에스피지"},
+        {"ticker": "348340", "name": "뉴로메카"}, {"ticker": "466100", "name": "클로봇"},
+        {"ticker": "056080", "name": "유진로봇"}, {"ticker": "388720", "name": "유일로보틱스"}
+      ]
+    },
+    {
+      "id": "shipbuilding", "name": "조선·선박엔진",
+      "description": "조선사와 선박 엔진 관련 대표 기업의 흐름을 함께 살펴봅니다.",
+      "reviewed_at": "2026-09-08", "source_as_of": "2026-02-27",
+      "sources": [{"label": "삼성자산운용 · 조선TOP10 공개 구성자료", "url": "https://www.samsungfund.com/upload/kodex/newsroom/20260325170636388.pdf"}],
+      "members": [
+        {"ticker": "042660", "name": "한화오션"}, {"ticker": "329180", "name": "HD현대중공업"},
+        {"ticker": "009540", "name": "HD한국조선해양"}, {"ticker": "010140", "name": "삼성중공업"},
+        {"ticker": "082740", "name": "한화엔진"}, {"ticker": "071970", "name": "HD현대마린엔진"}
+      ]
+    }
+  ]
+}

@@ -68,7 +68,10 @@ def _write_etf_snapshot(as_of=None, trade_date=None):
 def test_missing_files_inactive(app_data):
     r = client.get("/intraday/market")
     assert r.status_code == 200
-    assert r.json() == {"active": False}
+    body = r.json()
+    assert body["active"] is False and body["unavailable_reason"] == "missing"
+    assert isinstance(body["is_open"], bool)
+    assert "indices" not in body and "as_of" not in body
 
 
 def test_assembled_response(app_data):
@@ -207,7 +210,10 @@ def test_timeline_trade_date_mismatch_inactive(app_data):
 
     r = client.get("/intraday/market")
     assert r.status_code == 200
-    assert r.json() == {"active": False}
+    body = r.json()
+    assert body["active"] is False and body["unavailable_reason"] == "inconsistent"
+    assert body["trade_date"] == _now_kst().strftime("%Y-%m-%d")
+    assert "indices" not in body
 
 
 def test_duplicate_as_of_rows_deduped(app_data):
@@ -230,7 +236,10 @@ def test_stale_snapshot_inactive(app_data):
     old = _now_kst() - timedelta(days=7)
     _write_snapshot(as_of=old.strftime("%Y-%m-%d %H:%M"),
                     trade_date=old.strftime("%Y-%m-%d"))
-    assert client.get("/intraday/market").json() == {"active": False}
+    body = client.get("/intraday/market").json()
+    assert body["active"] is False and body["unavailable_reason"] == "stale"
+    assert body["as_of"] == old.strftime("%Y-%m-%d %H:%M")
+    assert "indices" not in body
 
 
 def test_corrupt_file_returns_inactive_not_500(app_data, tmp_path):
@@ -238,7 +247,27 @@ def test_corrupt_file_returns_inactive_not_500(app_data, tmp_path):
     (tmp_path / "kr_intraday_timeline.parquet").write_text("not parquet")
     r = client.get("/intraday/market")
     assert r.status_code == 200
-    assert r.json() == {"active": False}
+    body = r.json()
+    assert body["active"] is False and body["unavailable_reason"] == "error"
+    assert "not parquet" not in r.text and "indices" not in body
+
+
+def test_empty_snapshot_explains_unavailable_state(app_data):
+    storage.write_parquet(pd.DataFrame(), "kr_intraday_latest.parquet")
+    storage.write_parquet(pd.DataFrame(), "kr_intraday_timeline.parquet")
+    body = client.get("/intraday/market").json()
+    assert body["active"] is False and body["unavailable_reason"] == "empty"
+
+
+def test_delayed_intraday_keeps_last_observation_but_hides_stale_quotes(app_data, monkeypatch):
+    monkeypatch.setattr(ki, "is_open_kst", lambda now: True)
+    old = _now_kst() - timedelta(minutes=ki.STALE_MINUTES + 1)
+    _write_snapshot(as_of=old.strftime("%Y-%m-%d %H:%M"))
+    body = client.get("/intraday/market").json()
+    assert body["active"] is False and body["unavailable_reason"] == "stale"
+    assert body["as_of"] == old.strftime("%Y-%m-%d %H:%M")
+    assert body["is_open"] is True
+    assert not {"indices", "breadth", "sectors", "top_value", "my"} & body.keys()
 
 
 def test_my_join_failure_degrades_only_my_section(app_data, monkeypatch):
@@ -258,3 +287,97 @@ def test_my_join_failure_degrades_only_my_section(app_data, monkeypatch):
     # 나머지 섹션은 정상 조립돼야 한다
     assert body["top_value"][0]["ticker"] == "005930"
     assert body["breadth"]["advancers"] == 1
+
+
+def test_sector_detail_keeps_complete_snapshot_members_and_missing_values(app_data, monkeypatch):
+    _write_snapshot()
+    latest = storage.read_parquet("kr_intraday_latest.parquet")
+    latest["sector"] = "전기전자"
+    latest.loc[1, "chg_pct"] = float("nan")
+    # A small-cap constituent below the top-mover thresholds must still appear.
+    storage.write_parquet(latest, "kr_intraday_latest.parquet")
+    as_of, date = latest.iloc[0][["as_of", "trade_date"]]
+    tl = storage.read_parquet("kr_intraday_timeline.parquet")
+    tl = pd.concat([tl[tl["kind"] != "sector"], ki.sector_rows(latest, as_of, date)])
+    storage.write_parquet(tl, "kr_intraday_timeline.parquet")
+    import app.routers.intraday as intraday_mod
+
+    def broken_meta():
+        raise RuntimeError("metadata unavailable")
+
+    monkeypatch.setattr(intraday_mod.meta_store, "meta_df", broken_meta)
+    body = client.get("/intraday/market", params={"sector": "전기전자"}).json()
+    detail = body["sector_detail"]
+    assert body["active"] is True and body["as_of"] == as_of
+    assert detail["name"] == "전기전자"
+    assert len(detail["members"]) == body["sectors"][0]["n"] == 2
+    assert [r["ticker"] for r in detail["members"]] == ["005930", "035720"]
+    assert {r["market"] for r in detail["members"]} == {"KOSPI", "KOSDAQ"}
+    assert detail["members"][1]["chg_pct"] is None
+    assert sum(r["value"] for r in detail["members"]) == body["sectors"][0]["value_krw"]
+    assert "sector_detail" not in client.get("/intraday/market").json()
+
+
+def test_sector_detail_filters_literal_name_and_excludes_other_sectors(app_data):
+    _write_snapshot()
+    latest = storage.read_parquet("kr_intraday_latest.parquet")
+    sector = "IT 서비스/장비 & 부품"
+    latest.loc[0, "sector"] = sector
+    storage.write_parquet(latest, "kr_intraday_latest.parquet")
+    tl = storage.read_parquet("kr_intraday_timeline.parquet")
+    tl.loc[tl["key"] == "전기전자", "key"] = sector
+    storage.write_parquet(tl, "kr_intraday_timeline.parquet")
+    body = client.get("/intraday/market", params={"sector": sector}).json()
+    assert body["sector_detail"]["name"] == sector
+    assert [r["ticker"] for r in body["sector_detail"]["members"]] == ["005930"]
+    unknown = client.get("/intraday/market", params={"sector": "없는 업종"}).json()
+    assert unknown["active"] is True
+    assert unknown["sector_detail"] == {"name": "없는 업종", "members": []}
+
+
+def test_sector_detail_does_not_bypass_freshness_guard(app_data):
+    old = _now_kst() - timedelta(days=7)
+    _write_snapshot(as_of=old.strftime("%Y-%m-%d %H:%M"),
+                    trade_date=old.strftime("%Y-%m-%d"))
+    body = client.get("/intraday/market", params={"sector": "전기전자"}).json()
+    assert body["unavailable_reason"] == "stale"
+    assert "sector_detail" not in body
+
+
+def test_same_day_previous_poll_cannot_back_newer_constituents(app_data):
+    _write_snapshot()
+    tl = storage.read_parquet("kr_intraday_timeline.parquet")
+    old = _now_kst() - timedelta(minutes=10)
+    tl["as_of"] = old.strftime("%Y-%m-%d %H:%M")
+    storage.write_parquet(tl, "kr_intraday_timeline.parquet")
+    body = client.get("/intraday/market", params={"sector": "전기전자"}).json()
+    assert body["unavailable_reason"] == "inconsistent"
+    assert "sector_detail" not in body and "sectors" not in body
+
+
+def test_timeline_read_after_next_poll_is_cut_at_snapshot_time(app_data):
+    _write_snapshot()
+    tl = storage.read_parquet("kr_intraday_timeline.parquet")
+    future = tl.copy()
+    future["as_of"] = (_now_kst() + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M")
+    future["chg_pct"] = 999
+    future["n"] = 999
+    storage.write_parquet(pd.concat([tl, future]), "kr_intraday_timeline.parquet")
+    body = client.get("/intraday/market", params={"sector": "전기전자"}).json()
+    assert body["active"] is True
+    selected = next(s for s in body["sectors"] if s["name"] == "전기전자")
+    assert selected["n"] == len(body["sector_detail"]["members"]) == 1
+    assert selected["chg_pct"] == body["sector_detail"]["members"][0]["chg_pct"] == 4
+    assert all(len(index["sparkline"]) == 1 for index in body["indices"])
+
+
+@pytest.mark.parametrize("missing_kind", ["index", "breadth", "sector"])
+def test_partial_current_poll_does_not_mix_with_older_summary(app_data, missing_kind):
+    _write_snapshot()
+    tl = storage.read_parquet("kr_intraday_timeline.parquet")
+    tl.loc[tl["kind"] == missing_kind, "as_of"] = (
+        _now_kst() - timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M")
+    storage.write_parquet(tl, "kr_intraday_timeline.parquet")
+    body = client.get("/intraday/market", params={"sector": "전기전자"}).json()
+    assert body["unavailable_reason"] == "inconsistent"
+    assert "sector_detail" not in body
