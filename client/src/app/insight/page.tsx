@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { InsightMarket, useFetchIntradayMarketQuery } from "@/state/api";
 import PageHeader from "@/components/ui/PageHeader";
 import LoadingState from "@/components/ui/LoadingState";
+import EmptyState from "@/components/ui/EmptyState";
+import ErrorState from "@/components/ui/ErrorState";
 import IndexBreadthStrip from "./IndexBreadthStrip";
 import FlowsSection from "./FlowsSection";
 import SectorSection from "./SectorSection";
@@ -51,9 +53,14 @@ const SECTIONS = [
 
 function InsightContent() {
   const params = useSearchParams();
-  const { data: intraday } = useFetchIntradayMarketQuery(undefined, {
+  const {
+    data: intraday, isLoading: intradayLoading, isFetching: intradayFetching,
+    error: intradayError, refetch: refetchIntraday,
+  } = useFetchIntradayMarketQuery(undefined, {
     pollingInterval: 5 * 60 * 1000,
     skipPollingIfUnfocused: true,
+    refetchOnFocus: true,
+    refetchOnReconnect: true,
   });
   const market: InsightMarket =
     params.get("market") === "KOSDAQ" ? "KOSDAQ" : "KOSPI";
@@ -68,15 +75,21 @@ function InsightContent() {
       !params.has("section") &&
       intraday?.active &&
       intraday.is_open);
-  const showLive = Boolean(live && intraday?.active);
+  // Explicit navigation must survive loading, missing data and failed refreshes.
+  const showLive = Boolean(live);
   const updateView = (values: Record<string, string>) => {
     const url = new URL(window.location.href);
     Object.entries(values).forEach(([key, value]) =>
       url.searchParams.set(key, value),
     );
-    window.history.pushState(null, "", url);
+    if (url.href !== window.location.href) window.history.pushState(null, "", url);
   };
   const changeMarket = (value: InsightMarket) => updateView({ market: value });
+  const unavailableHint = intraday?.unavailable_reason === "stale"
+    ? "최근 자료가 유효시간을 지나 새 스냅샷을 기다리고 있습니다. 오래된 값을 현재 시세로 표시하지 않습니다."
+    : intraday?.unavailable_reason === "inconsistent"
+      ? "종목과 추이 자료의 기준일을 맞추는 중입니다. 잠시 후 다시 조회해 주세요."
+      : "장중 스냅샷이 아직 준비되지 않았거나 유효시간이 지났습니다. 장 시작 직후에는 지연 시세 제공까지 시간이 걸릴 수 있습니다.";
 
   return (
     <div className="flex flex-col gap-6 pb-10">
@@ -107,19 +120,39 @@ function InsightContent() {
           <button
             type="button"
             aria-pressed={showLive}
-            disabled={!intraday?.active}
-            onClick={() => updateView({ tab: "intraday" })}
+            onClick={() => {
+              updateView({ tab: "intraday" });
+              if (!intradayFetching) void refetchIntraday();
+            }}
           >
             {intraday?.is_open ? "장중 흐름 · 지연" : "최근 장중 스냅샷"}
           </button>
         </div>
-        {live && intraday && !intraday.active && (
-          <p className="text-xs text-ink-muted">
-            장중 스냅샷이 없어 정산 데이터를 표시합니다.
-          </p>
-        )}
-        {showLive && intraday ? (
-          <IntradayTab data={intraday} />
+        {showLive ? (
+          <section className="space-y-4" aria-label="장중 스냅샷" aria-busy={intradayFetching}>
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-ink-muted">
+              <span>KRX 지연 시세 · 10분 간격 수집</span>
+              <button type="button" className="btn-secondary" disabled={intradayFetching}
+                onClick={() => void refetchIntraday()} aria-label="장중 스냅샷 새로고침">
+                {intradayFetching ? "조회 중…" : "새로고침"}
+              </button>
+            </div>
+            {intradayLoading || (intradayFetching && !intraday?.active) ? (
+              <LoadingState label="장중 스냅샷을 확인하고 있습니다…" />
+            ) : intradayError || intraday?.unavailable_reason === "error" ? (
+              <div className="card"><ErrorState message="장중 스냅샷을 불러오지 못했습니다" onRetry={refetchIntraday} /></div>
+            ) : intraday?.active ? (
+              <IntradayTab data={intraday} />
+            ) : (
+              <div className="card" role="status">
+                <EmptyState title="현재 표시할 장중 스냅샷이 없습니다" hint={unavailableHint} />
+                {intraday?.as_of && <p className="text-center text-xs text-ink-muted">마지막 관측 {intraday.as_of}</p>}
+                <div className="mt-4 flex justify-center">
+                  <button type="button" className="btn-primary" onClick={() => void refetchIntraday()}>다시 조회</button>
+                </div>
+              </div>
+            )}
+          </section>
         ) : (
           <>
             <nav className="flex flex-wrap gap-2" aria-label="시장 분석 항목">

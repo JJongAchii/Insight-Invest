@@ -1704,6 +1704,7 @@ export interface IntradaySectorRow {
 
 export interface IntradayMarketResponse {
   active: boolean;
+  unavailable_reason?: "missing" | "empty" | "inconsistent" | "stale" | "error";
   is_open?: boolean;
   as_of?: string;
   trade_date?: string;

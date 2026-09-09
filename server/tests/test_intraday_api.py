@@ -68,7 +68,10 @@ def _write_etf_snapshot(as_of=None, trade_date=None):
 def test_missing_files_inactive(app_data):
     r = client.get("/intraday/market")
     assert r.status_code == 200
-    assert r.json() == {"active": False}
+    body = r.json()
+    assert body["active"] is False and body["unavailable_reason"] == "missing"
+    assert isinstance(body["is_open"], bool)
+    assert "indices" not in body and "as_of" not in body
 
 
 def test_assembled_response(app_data):
@@ -207,7 +210,10 @@ def test_timeline_trade_date_mismatch_inactive(app_data):
 
     r = client.get("/intraday/market")
     assert r.status_code == 200
-    assert r.json() == {"active": False}
+    body = r.json()
+    assert body["active"] is False and body["unavailable_reason"] == "inconsistent"
+    assert body["trade_date"] == _now_kst().strftime("%Y-%m-%d")
+    assert "indices" not in body
 
 
 def test_duplicate_as_of_rows_deduped(app_data):
@@ -230,7 +236,10 @@ def test_stale_snapshot_inactive(app_data):
     old = _now_kst() - timedelta(days=7)
     _write_snapshot(as_of=old.strftime("%Y-%m-%d %H:%M"),
                     trade_date=old.strftime("%Y-%m-%d"))
-    assert client.get("/intraday/market").json() == {"active": False}
+    body = client.get("/intraday/market").json()
+    assert body["active"] is False and body["unavailable_reason"] == "stale"
+    assert body["as_of"] == old.strftime("%Y-%m-%d %H:%M")
+    assert "indices" not in body
 
 
 def test_corrupt_file_returns_inactive_not_500(app_data, tmp_path):
@@ -238,7 +247,27 @@ def test_corrupt_file_returns_inactive_not_500(app_data, tmp_path):
     (tmp_path / "kr_intraday_timeline.parquet").write_text("not parquet")
     r = client.get("/intraday/market")
     assert r.status_code == 200
-    assert r.json() == {"active": False}
+    body = r.json()
+    assert body["active"] is False and body["unavailable_reason"] == "error"
+    assert "not parquet" not in r.text and "indices" not in body
+
+
+def test_empty_snapshot_explains_unavailable_state(app_data):
+    storage.write_parquet(pd.DataFrame(), "kr_intraday_latest.parquet")
+    storage.write_parquet(pd.DataFrame(), "kr_intraday_timeline.parquet")
+    body = client.get("/intraday/market").json()
+    assert body["active"] is False and body["unavailable_reason"] == "empty"
+
+
+def test_delayed_intraday_keeps_last_observation_but_hides_stale_quotes(app_data, monkeypatch):
+    monkeypatch.setattr(ki, "is_open_kst", lambda now: True)
+    old = _now_kst() - timedelta(minutes=ki.STALE_MINUTES + 1)
+    _write_snapshot(as_of=old.strftime("%Y-%m-%d %H:%M"))
+    body = client.get("/intraday/market").json()
+    assert body["active"] is False and body["unavailable_reason"] == "stale"
+    assert body["as_of"] == old.strftime("%Y-%m-%d %H:%M")
+    assert body["is_open"] is True
+    assert not {"indices", "breadth", "sectors", "top_value", "my"} & body.keys()
 
 
 def test_my_join_failure_degrades_only_my_section(app_data, monkeypatch):
