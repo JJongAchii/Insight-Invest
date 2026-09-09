@@ -106,6 +106,20 @@ def test_api_does_not_wait_for_poller_to_demote_unreviewed_core(monkeypatch, tmp
     assert before == {path: path.read_bytes() for path in before}
 
 
+@pytest.mark.parametrize("enabled", [False, True])
+def test_feed_reports_editorial_release_without_mutating_library(
+    monkeypatch, tmp_path, enabled
+):
+    monkeypatch.setenv("APP_DATA", str(tmp_path))
+    monkeypatch.setenv("RADAR_ANALYSIS_ENABLED", str(enabled).lower())
+    research_store.save_feed(_feed("a" * 64, "b" * 64))
+    before = {path: path.read_bytes() for path in tmp_path.iterdir() if path.is_file()}
+    assert _get()["editorial_enabled"] is enabled
+    assert before == {
+        path: path.read_bytes() for path in tmp_path.iterdir() if path.is_file()
+    }
+
+
 def test_feed_filters_and_read_state(monkeypatch, tmp_path):
     monkeypatch.setenv("APP_DATA", str(tmp_path))
     first_id = "a" * 64

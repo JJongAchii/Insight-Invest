@@ -54,6 +54,7 @@ try {
         );
         payload = {
           schema_version: 1, generated_at: report.checked_at, total: selected.length,
+          editorial_enabled: !originalProbe,
           unread: inLane.filter((item) => !item.is_read).length,
           read: inLane.filter((item) => item.is_read).length,
           saved: inLane.filter((item) => item.is_saved).length,
@@ -95,6 +96,14 @@ try {
     }
     assert.equal(await page.locator("article[id^='research-']").count(), items.filter((item) => item.research_lane === "core").length);
     await page.screenshot({ path: `${output}/core-${viewport.width}.png`, fullPage: true });
+    if (originalProbe) {
+      await page.getByText("원문 우선 공개 중입니다.", { exact: false }).waitFor();
+      await page.getByRole("button", { name: "발견한 원문 보기", exact: true }).click();
+      await page.waitForURL((url) => url.searchParams.get("lane") === "discovery");
+      for (const item of items.filter((value) => value.research_lane === "discovery")) {
+        await page.locator(`#research-${item.entry_id}`).waitFor();
+      }
+    }
     await page.getByRole("button", { name: /^전체 기록/ }).click();
     for (const item of items) {
       const card = page.locator(`#research-${item.entry_id}`);

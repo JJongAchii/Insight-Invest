@@ -595,11 +595,23 @@ export default function ResearchPage() {
         })}
       </section>
 
-      <p className="-mt-3 px-1 text-xs leading-5 text-ink-muted">
-        사이드바 배지와 iPhone 알림은 새 핵심 연구에 표시됩니다.
-        시장 전망·초록·연구 모음·데이터 업데이트도 별도로 읽고 보관할 수 있습니다.
-        초기 자료 채우기와 요약 수정은 다시 알리지 않습니다.
-      </p>
+      {data?.editorial_enabled === false ? (
+        <div className="rounded-xl border border-edge bg-surface px-4 py-3 text-sm leading-6 text-ink-secondary" role="status">
+          <p>원문 우선 공개 중입니다. 한국어 자동 요약과 신규 핵심 알림은 검증이 끝날 때까지 꺼져 있습니다.</p>
+          <p className="text-xs text-ink-muted">기관의 원문·초록·PDF는 발견함과 전체 기록에서 읽고 보관할 수 있습니다.</p>
+          {lane === "core" && data.lane_counts.discovery > 0 && (
+            <button type="button" className="btn-secondary mt-3" onClick={() => selectLane("discovery")}>
+              발견한 원문 보기
+            </button>
+          )}
+        </div>
+      ) : (
+        <p className="-mt-3 px-1 text-xs leading-5 text-ink-muted">
+          사이드바 배지와 iPhone 알림은 새 핵심 연구에 표시됩니다.
+          시장 전망·초록·연구 모음·데이터 업데이트도 별도로 읽고 보관할 수 있습니다.
+          초기 자료 채우기와 요약 수정은 다시 알리지 않습니다.
+        </p>
+      )}
 
       <div className="grid gap-5 xl:grid-cols-[15rem_minmax(0,1fr)] xl:items-start">
         <aside className="rounded-2xl border border-edge bg-surface p-4 xl:sticky xl:top-28">

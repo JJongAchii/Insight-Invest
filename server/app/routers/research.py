@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from datastore import research as research_store
+from module import research_review
 from module.research_feed import apply_editorial_analysis
 
 router = APIRouter(prefix="/research", tags=["Research"])
@@ -177,6 +178,7 @@ def get_research_feed(
     return {
         "schema_version": 1,
         "generated_at": feed["generated_at"],
+        "editorial_enabled": research_review.enabled(),
         "total": len(filtered),
         "unread": sum(not item["is_read"] for item in lane_items),
         "read": sum(item["is_read"] for item in lane_items),

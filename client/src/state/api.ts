@@ -732,6 +732,7 @@ export interface ResearchSource {
 export interface ResearchFeedResponse {
   schema_version: 1;
   generated_at: string | null;
+  editorial_enabled?: boolean;
   total: number;
   unread: number;
   read: number;

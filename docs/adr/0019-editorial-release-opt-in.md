@@ -1,6 +1,6 @@
 # ADR-0019: 원문 피드와 자동 요약 릴리스를 분리
 
-날짜: 2026-09-09 · 상태: 작업 브랜치 구현, 운영 미배포
+날짜: 2026-09-09 · 상태: 원문 우선 배포 승인, 운영 반영 준비
 
 ## 배경
 
@@ -11,7 +11,8 @@
 
 따라서 등록된 API 키와 main 배포가 검증되지 않은 요약 기능을 자동으로 켜서는 안 된다.
 원문 수집/읽기/서재 상태와 자동 요약의 운영 권한은 분리한다. 이는 완전한 Research
-릴리스의 인수 기준을 낮춘 것이 아니며, 원문 우선 단계적 배포 여부는 사용자 선택을 기다린다.
+릴리스의 인수 기준을 낮춘 것이 아니다. 사용자는 원문 우선 배포 제안에
+“그래 진행해줘봐”로 승인했다 (`user-20260909-original-feed-first-release`).
 
 ## 결정
 
@@ -25,6 +26,8 @@
   source-bound receipt 자체는 삭제하지 않는다. 대기 알림은 보존한다.
 - 기본 핵심 탭을 전체 자료로 몰래 바꾸지 않는다. 원문 우선 단계에서는 발견함/전체 기록에서
   자료를 읽는다. 요약 보류를 연구 논문 자체의 부적합/성과 실패로 표시하지 않는다.
+- API는 현재 `editorial_enabled`를 읽기 전용으로 알려준다. 웹은 비활성 상태를 명시하고
+  핵심 탭에서 ‘발견한 원문 보기’를 제공한다. 배포된 실제 플래그와 다른 알림 안내를 하지 않는다.
 - 격리된 수동 `research-qualify` Actions만 명시적으로 이 플래그를 켠다. 기존 S3
   qualification prefix, 정확한 producer commit, 월 $0.50 상한, 단일 실행 규칙은 유지한다.
   운영 예산은 월 $1.50이며 둘의 예약 합계 상한 $2를 유지한다. 추가 유료 호출은 중단했다.
@@ -41,3 +44,12 @@
 
 main/AWS/Vercel은 아직 바꾸지 않았다. 요약 기능을 켜려면 별도 의미 정확성 인수를
 완료해야 한다. API 호출 성공이나 모든 회귀/빌드의 통과만으로 활성화하지 않는다.
+
+## 함께 적용하는 보안 패치
+
+배포 대상의 알려진 취약점을 제거하기 위해 Next / eslint-config-next 16.3.3,
+sharp 0.35.4, js-yaml 4.3.2, postcss-selector-parser 6.1.4를 lockfile에 반영했다.
+주요 버전 변경이나 기능 확장이 아니며 `npm ci` 감사는 취약점 0건이다.
+근거: [Next 공식 권고](https://github.com/vercel/next.js/security/advisories/GHSA-2xp9-vwfh-vxw4),
+[sharp 공식 권고](https://github.com/lovell/sharp/security/advisories/GHSA-rgj7-g3m4-5g8c),
+[js-yaml 공식 권고](https://github.com/nodeca/js-yaml/security/advisories/GHSA-2883-xcg3-v3hh).
