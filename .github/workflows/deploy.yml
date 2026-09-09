@@ -80,6 +80,7 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           APP_DATA: s3://insight-invest-datalake/research-radar/qualification/openai
+          RADAR_ANALYSIS_ENABLED: "true"
           RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "0.50"
           RESEARCH_MAX_ITEMS: ${{ inputs.research_max_items }}
           RESEARCH_SOURCES: ${{ inputs.research_sources }}

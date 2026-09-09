@@ -142,6 +142,17 @@ def apply_editorial_analysis(item: dict, *, target: dict | None = None) -> None:
         )
         return
     candidate = item.get("editorial_candidate_lane", item.get("research_lane"))
+    if not research_review.enabled() and item.get("analysis_status") != "not_requested":
+        # Preserve drafts/receipts and library identity. A key or old ready cache
+        # must not turn an unqualified editorial feature into a release.
+        target.update(
+            editorial_candidate_lane=candidate,
+            research_lane="discovery" if candidate == "core" else candidate,
+            relevance_reason="editorial_release_pending",
+            editorial_review_status="pending",
+            notification_eligible=False,
+        )
+        return
     brief = item.get("analysis", {}).get("brief")
     review_state = research_review.state(item)
     target["editorial_review_status"] = review_state

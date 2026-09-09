@@ -42,6 +42,25 @@ def test_research_poller_role_is_prefix_scoped():
     assert "s3:*" not in body
 
 
+def test_editorial_release_is_default_off_and_shared_with_read_api():
+    body = TEMPLATE.read_text()
+    parameter = body.split("  ResearchAnalysisEnabled:", 1)[1].split(
+        "  WebPushPublicKey:", 1
+    )[0]
+    assert 'Default: "false"' in parameter
+    assert 'AllowedValues: ["false", "true"]' in parameter
+    flag = "RADAR_ANALYSIS_ENABLED: !Ref ResearchAnalysisEnabled"
+    assert body.count(flag) == 2
+    assert flag in body.split("  ApiFunction:", 1)[1].split("  ApiUrl:", 1)[0]
+    assert (
+        flag
+        in body.split("  ResearchPollerFunction:", 1)[1].split(
+            "  ResearchPollerSchedule:", 1
+        )[0]
+    )
+    assert "ResearchAnalysisEnabled=true" not in DEPLOY.read_text()
+
+
 def test_release_smoke_requires_projection_api_and_active_push():
     body = DEPLOY.read_text()
 

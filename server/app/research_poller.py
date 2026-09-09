@@ -47,6 +47,9 @@ def run(*, s3: Any | None = None) -> dict:
         if record.get("record_schema_version") == 4 and record.get(
             "notification_candidate"
         ):
+            if not research_review.enabled():
+                deferred += 1
+                continue
             state = research_review.state(item)
             if state == "rejected":
                 suppressed_keys.append(key)

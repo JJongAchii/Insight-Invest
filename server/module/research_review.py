@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 
 MODEL = "gpt-5-mini"
@@ -108,6 +109,11 @@ SCHEMA = {
     "required": list(FIELDS),
     "additionalProperties": False,
 }
+
+
+def enabled() -> bool:
+    """Release permission is separate from API credentials or cached receipts."""
+    return os.environ.get("RADAR_ANALYSIS_ENABLED", "false") == "true"
 
 
 def digest(value) -> str:

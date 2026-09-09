@@ -458,6 +458,8 @@ def enrich(
     review_call=research_review.model_call,
     max_items: int = 1,
 ) -> dict:
+    if not research_review.enabled():
+        return {"enabled": False, "reason": "editorial_release_pending", "completed": 0}
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
     if not api_key:
         return {"enabled": False, "reason": "missing_api_key", "completed": 0}

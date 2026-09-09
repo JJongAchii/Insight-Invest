@@ -72,6 +72,7 @@ def wire_brief():
 def source(monkeypatch, tmp_path):
     monkeypatch.setenv("APP_DATA", str(tmp_path))
     monkeypatch.setenv("OPENAI_API_KEY", "test-key-never-used-over-network")
+    monkeypatch.setenv("RADAR_ANALYSIS_ENABLED", "true")
     monkeypatch.setenv("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "2")
     record = publication_record(
         {
@@ -106,6 +107,54 @@ def apply_test_brief(*, now=NOW, relevant=True):
         attach_review(item, TEXT, now)
         research_feed.apply_editorial_analysis(item)
     research.save_feed(feed)
+
+
+def test_default_off_does_not_read_storage_or_call_provider(monkeypatch):
+    monkeypatch.delenv("RADAR_ANALYSIS_ENABLED", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "configured-but-not-release-approval")
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("release hold must stop before any I/O")
+
+    monkeypatch.setattr(storage, "exists", forbidden)
+    monkeypatch.setattr(research, "load_feed", forbidden)
+    assert analysis.enrich(
+        now=NOW, text_loader=forbidden, model_call=forbidden, review_call=forbidden
+    ) == {"enabled": False, "reason": "editorial_release_pending", "completed": 0}
+
+
+def test_release_hold_hides_cached_brief_without_mutating_library(
+    source, tmp_path, monkeypatch
+):
+    from app.routers import research as api
+
+    research_feed.reconcile(s3=source, now=NOW)
+    apply_test_brief()
+    entry_id = source.record["entry_id_sha256"]
+    research.set_read(entry_id, read=True)
+    research.set_saved(entry_id, saved=True)
+    before = {path: path.read_bytes() for path in tmp_path.iterdir() if path.is_file()}
+    monkeypatch.delenv("RADAR_ANALYSIS_ENABLED", raising=False)
+    response = api.get_research_feed(
+        source_id=None,
+        unread_only=False,
+        view="all",
+        lane="all",
+        q=None,
+        entry_id=None,
+        offset=0,
+        limit=100,
+    )
+    item = response["items"][0]
+    assert item["entry_id"] == entry_id and item["is_read"] and item["is_saved"]
+    assert item["research_lane"] == "discovery"
+    assert item["editorial_candidate_lane"] == "core"
+    assert item["editorial_review_status"] == "pending"
+    assert item["relevance_reason"] == "editorial_release_pending"
+    assert not item["notification_eligible"]
+    assert api.get_research_status()["unseen"] == 0
+    assert item["analysis"] == research.load_feed()["items"][0]["analysis"]
+    assert before == {path: path.read_bytes() for path in before}
 
 
 def test_grounding_rejects_fabricated_quotes_and_wrong_types():

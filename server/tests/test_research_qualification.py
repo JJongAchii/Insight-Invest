@@ -17,6 +17,7 @@ spec.loader.exec_module(qualification)
 def configured(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "offline-test-key")
     monkeypatch.setenv("APP_DATA", qualification.QUALIFICATION_ROOT)
+    monkeypatch.setenv("RADAR_ANALYSIS_ENABLED", "true")
     monkeypatch.setenv("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0.50")
     monkeypatch.setenv("RESEARCH_MAX_ITEMS", "1")
     monkeypatch.setenv("RESEARCH_SOURCES", "aqr-research")
@@ -32,6 +33,7 @@ def test_isolated_environment_contract(configured):
     [
         ("OPENAI_API_KEY", ""),
         ("APP_DATA", "s3://insight-invest-datalake/app"),
+        ("RADAR_ANALYSIS_ENABLED", "false"),
         ("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0.51"),
         ("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0"),
         ("RESEARCH_MAX_ITEMS", "31"),
@@ -62,6 +64,7 @@ def test_workflow_is_manual_serialized_non_deploy_and_within_combined_budget():
     steps = job["steps"]
     run = next(step for step in steps if "Qualify real" in step.get("name", ""))
     assert run["env"]["APP_DATA"] == qualification.QUALIFICATION_ROOT
+    assert run["env"]["RADAR_ANALYSIS_ENABLED"] == "true"
     assert Decimal(run["env"]["RADAR_ANALYSIS_MONTHLY_BUDGET_USD"]) + Decimal(
         "1.50"
     ) == Decimal("2")

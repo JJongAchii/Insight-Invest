@@ -43,6 +43,11 @@ Parameters:
     NoEcho: true
     Default: ""
     Description: Research 읽기 요약용 OpenAI API 키 (없으면 원문 피드만 제공)
+  ResearchAnalysisEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues: ["false", "true"]
+    Description: Research 요약·핵심 승격·알림의 명시적 릴리스 스위치 (의미 품질 인수 후에만 활성화)
   WebPushPublicKey:
     Type: String
     Default: ""
@@ -110,6 +115,7 @@ Resources:
           QDATA_LAKE: !Sub s3://${DataBucket}/qdata
           APP_DATA: !Sub s3://${DataBucket}/app
           API_TOKEN: !Ref ApiToken
+          RADAR_ANALYSIS_ENABLED: !Ref ResearchAnalysisEnabled
           SITE_ACCESS_HASH: !Ref SiteAccessHash
           WEB_PUSH_PUBLIC_KEY: !Ref WebPushPublicKey
           WEB_PUSH_PRIVATE_KEY: !Ref WebPushPrivateKey
@@ -459,6 +465,7 @@ Resources:
           RADAR_RECORD_PREFIX: research-radar/public/records/
           RADAR_PENDING_PREFIX: research-radar/realtime/pending/
           OPENAI_API_KEY: !Ref OpenAIApiKey
+          RADAR_ANALYSIS_ENABLED: !Ref ResearchAnalysisEnabled
           RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "1.50"
           WEB_PUSH_PUBLIC_KEY: !Ref WebPushPublicKey
           WEB_PUSH_PRIVATE_KEY: !Ref WebPushPrivateKey

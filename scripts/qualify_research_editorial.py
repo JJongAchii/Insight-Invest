@@ -40,6 +40,8 @@ def validate_environment() -> tuple[int, list[str], str]:
         raise ValueError("OPENAI_API_KEY is not configured")
     if storage.app_data_root() != QUALIFICATION_ROOT:
         raise ValueError("qualification requires its isolated APP_DATA prefix")
+    if not research_review.enabled():
+        raise ValueError("isolated qualification requires explicit analysis opt-in")
     budget = Decimal(os.environ.get("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0"))
     if not Decimal("0") < budget <= Decimal("0.50"):
         raise ValueError(

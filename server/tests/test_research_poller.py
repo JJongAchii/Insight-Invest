@@ -6,6 +6,7 @@ from module import action_push, research_feed
 
 @pytest.fixture(autouse=True)
 def isolated_analysis(monkeypatch):
+    monkeypatch.setenv("RADAR_ANALYSIS_ENABLED", "true")
     monkeypatch.setattr(
         research_poller.research_analysis, "enrich", lambda: {"completed": 0}
     )
@@ -97,6 +98,27 @@ def test_editorial_pending_waits_for_brief_then_delivers_once(monkeypatch):
     )
     result = research_poller.run(s3=object())
     assert result["pending_eligible"] == 1 and result["pending_deleted"] == 1
+
+
+def test_release_hold_keeps_pending_and_never_pushes_even_accepted_cache(monkeypatch):
+    captured = _arrange(
+        monkeypatch,
+        {"enabled": True, "subscriptions": 1, "sent": 0, "failed": 0, "disabled": 0},
+    )
+    key, record = _pending()[0]
+    record.update(
+        record_schema_version=4, notification_candidate=True, analysis_status="ready"
+    )
+    monkeypatch.setattr(
+        research_feed, "pending_records", lambda **_kwargs: [(key, record)]
+    )
+    monkeypatch.setattr(
+        research_poller.research_review, "state", lambda _item: "accepted"
+    )
+    monkeypatch.delenv("RADAR_ANALYSIS_ENABLED", raising=False)
+    result = research_poller.run(s3=object())
+    assert result["pending_deferred"] == 1 and result["pending_deleted"] == 0
+    assert not captured["events"] and not captured["deleted"]
 
 
 def test_analysis_outage_does_not_prevent_settlement_of_ready_items(monkeypatch):
