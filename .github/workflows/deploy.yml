@@ -124,6 +124,28 @@ jobs:
             end)' /tmp/intraday-market.json
           jq '{active, is_open, as_of, trade_date, unavailable_reason}' \
             /tmp/intraday-market.json >/tmp/intraday-availability.json
+          INTRADAY_SECTOR=$(jq -r '.sectors[0].name // "기타"' /tmp/intraday-market.json)
+          curl -sfG --max-time 110 \
+            -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
+            -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
+            --data-urlencode "sector=$INTRADAY_SECTOR" \
+            "$URL/intraday/market" >/tmp/intraday-sector-members.json
+          jq -e --arg sector "$INTRADAY_SECTOR" '
+            if .active then
+              .sector_detail.name == $sector
+              and (.sector_detail.members | type) == "array"
+              and (.sector_detail.members | all(
+                (.ticker | type) == "string" and (.market == "KOSPI" or .market == "KOSDAQ")))
+              and (.sector_detail.members | length) ==
+                ([.sectors[] | select(.name == $sector) | .n][0] // 0)
+            else .unavailable_reason == "stale" or .unavailable_reason == "missing"
+              or .unavailable_reason == "empty" or .unavailable_reason == "inconsistent"
+            end' /tmp/intraday-sector-members.json
+          jq --arg sector "$INTRADAY_SECTOR" '{active, as_of, trade_date, unavailable_reason,
+            sector: .sector_detail.name, member_count: (.sector_detail.members | length),
+            summary: [.sectors[]? | select(.name == $sector)],
+            sample_members: .sector_detail.members[:3]}' \
+            /tmp/intraday-sector-members.json >/tmp/intraday-members-snapshot.json
           curl -sf --max-time 110 \
             -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
             -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
@@ -184,7 +206,8 @@ jobs:
               '.paths["/research/{entry_id}/saved"].put
                and .paths["/research/read/all"].put
                and .paths["/research/status"].get
-               and .paths["/research/seen"].put'
+               and .paths["/research/seen"].put
+               and (.paths["/intraday/market"].get.parameters | any(.name == "sector"))'
 
       - name: Record deployed macro snapshot
         uses: actions/upload-artifact@v4
@@ -219,4 +242,11 @@ jobs:
         with:
           name: intraday-availability
           path: /tmp/intraday-availability.json
+          if-no-files-found: error
+
+      - name: Record deployed intraday sector members
+        uses: actions/upload-artifact@v4
+        with:
+          name: intraday-members-snapshot
+          path: /tmp/intraday-members-snapshot.json
           if-no-files-found: error

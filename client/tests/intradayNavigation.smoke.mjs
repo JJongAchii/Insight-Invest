@@ -122,7 +122,7 @@ try {
       mode = "inconsistent";
       await panel().getByRole("button", { name: "장중 스냅샷 새로고침" }).click();
       await empty(); await selected();
-      await panel().getByText(/종목과 추이 자료의 기준일을 맞추는 중/).waitFor();
+      await panel().getByText(/종목과 추이 자료의 기준일/).waitFor();
       mode = "closed";
       await panel().getByRole("button", { name: "다시 조회", exact: true }).click();
       await active(); await selected();

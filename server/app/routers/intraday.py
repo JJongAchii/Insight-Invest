@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import pandas as pd
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from datastore import holdings as holdings_store
 from datastore import meta as meta_store
@@ -112,15 +112,15 @@ def _with_fresh_etfs(
 
 
 @router.get("/market")
-def get_market():
+def get_market(sector: str | None = Query(default=None, min_length=1, max_length=100)):
     try:
-        return _build()
+        return _build(sector)
     except Exception as e:  # noqa: BLE001 — 어떤 실패든 강등 (Global Constraint)
         logger.warning(f"intraday 조립 실패 — inactive 강등: {e}")
         return _inactive("error")
 
 
-def _build():
+def _build(sector: str | None = None):
     if not (storage.exists("kr_intraday_latest.parquet")
             and storage.exists("kr_intraday_timeline.parquet")):
         return _inactive("missing")
@@ -141,6 +141,12 @@ def _build():
     # EventBridge는 at-least-once고 수동 재호출도 있다 — 같은 (as_of, kind, key)
     # 중복 행이 섹터 리스트·스파크라인에 중복 React key로 새어나가지 않도록 제거.
     timeline = timeline.drop_duplicates(subset=["as_of", "kind", "key"], keep="last")
+    # A poll writes latest and timeline separately. Match the exact stock poll,
+    # including on the same day, so tiles and their constituents share one time.
+    timeline = timeline[timeline["as_of"] <= as_of]
+    current = timeline[timeline["as_of"] == as_of]
+    if not {"index", "breadth", "sector"}.issubset(set(current["kind"])):
+        return _inactive("inconsistent", as_of, trade_date)
 
     now = datetime.now(ki.KST)
     if not ki.snapshot_active(trade_date, as_of, now):
@@ -174,7 +180,7 @@ def _build():
                                  for f in flow.itertuples()]})
 
     up, down = ki.top_movers(latest)
-    return {
+    result = {
         "active": True, "is_open": ki.is_open_kst(now),
         "as_of": as_of, "trade_date": trade_date,
         "indices": indices, "breadth": breadth, "sectors": sectors,
@@ -182,3 +188,14 @@ def _build():
         "top_movers": {"up": _stock_rows(up), "down": _stock_rows(down)},
         "my": _my_block(_with_fresh_etfs(latest, trade_date, as_of, now)),
     }
+    if sector is not None:
+        # Use this snapshot's classification and complete membership, never
+        # top-mover eligibility or the settled analysis's sector taxonomy.
+        members = latest[latest["sector"] == sector].sort_values(
+            ["value", "ticker"], ascending=[False, True], na_position="last")
+        result["sector_detail"] = {
+            "name": sector,
+            "members": [{**row, "market": str(market)}
+                        for row, market in zip(_stock_rows(members), members["market"])],
+        }
+    return result

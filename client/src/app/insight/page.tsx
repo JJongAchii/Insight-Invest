@@ -53,14 +53,16 @@ const SECTIONS = [
 
 function InsightContent() {
   const params = useSearchParams();
+  const intradaySector = params.get("live_sector") || null;
   const {
     data: intraday, isLoading: intradayLoading, isFetching: intradayFetching,
     error: intradayError, refetch: refetchIntraday,
-  } = useFetchIntradayMarketQuery(undefined, {
+  } = useFetchIntradayMarketQuery(intradaySector ? { sector: intradaySector } : undefined, {
     pollingInterval: 5 * 60 * 1000,
     skipPollingIfUnfocused: true,
     refetchOnFocus: true,
     refetchOnReconnect: true,
+    refetchOnMountOrArgChange: true,
   });
   const market: InsightMarket =
     params.get("market") === "KOSDAQ" ? "KOSDAQ" : "KOSPI";
@@ -88,7 +90,7 @@ function InsightContent() {
   const unavailableHint = intraday?.unavailable_reason === "stale"
     ? "최근 자료가 유효시간을 지나 새 스냅샷을 기다리고 있습니다. 오래된 값을 현재 시세로 표시하지 않습니다."
     : intraday?.unavailable_reason === "inconsistent"
-      ? "종목과 추이 자료의 기준일을 맞추는 중입니다. 잠시 후 다시 조회해 주세요."
+      ? "종목과 추이 자료의 기준일·시각을 맞추는 중입니다. 잠시 후 다시 조회해 주세요."
       : "장중 스냅샷이 아직 준비되지 않았거나 유효시간이 지났습니다. 장 시작 직후에는 지연 시세 제공까지 시간이 걸릴 수 있습니다.";
 
   return (
@@ -142,7 +144,9 @@ function InsightContent() {
             ) : intradayError || intraday?.unavailable_reason === "error" ? (
               <div className="card"><ErrorState message="장중 스냅샷을 불러오지 못했습니다" onRetry={refetchIntraday} /></div>
             ) : intraday?.active ? (
-              <IntradayTab data={intraday} />
+              <IntradayTab data={intraday} selectedSector={intradaySector}
+                isFetching={intradayFetching} onRetry={refetchIntraday}
+                onSelectSector={(sector) => updateView({ tab: "intraday", live_sector: sector })} />
             ) : (
               <div className="card" role="status">
                 <EmptyState title="현재 표시할 장중 스냅샷이 없습니다" hint={unavailableHint} />

@@ -1696,10 +1696,15 @@ export interface IntradayStockRow {
 
 export interface IntradaySectorRow {
   name: string;
-  chg_pct: number;
+  chg_pct: number | null;
   value_krw: number;
   n: number;
-  flow: { t: string; chg_pct: number }[];
+  flow: { t: string; chg_pct: number | null }[];
+}
+
+export interface IntradaySectorDetail {
+  name: string;
+  members: (IntradayStockRow & { market: string })[];
 }
 
 export interface IntradayMarketResponse {
@@ -1716,6 +1721,8 @@ export interface IntradayMarketResponse {
   }[];
   breadth?: { advancers: number; decliners: number; unchanged: number };
   sectors?: IntradaySectorRow[];
+  /** Optional drilldown, from the same snapshot as the overview. */
+  sector_detail?: IntradaySectorDetail;
   top_value?: IntradayStockRow[];
   top_movers?: { up: IntradayStockRow[]; down: IntradayStockRow[] };
   my?: { watchlist: IntradayStockRow[]; holdings: IntradayStockRow[] };
@@ -2182,8 +2189,10 @@ export const api = createApi({
     fetchInsightIndex: builder.query<InsightIndexResponse, { days?: number }>({
       query: ({ days = 365 }) => `/insight/index?days=${days}`,
     }),
-    fetchIntradayMarket: builder.query<IntradayMarketResponse, void>({
-      query: () => "intraday/market",
+    fetchIntradayMarket: builder.query<IntradayMarketResponse, { sector: string } | void>({
+      query: (args) => args?.sector
+        ? `intraday/market?${new URLSearchParams({ sector: args.sector })}`
+        : "intraday/market",
     }),
     fetchMarketGroups: builder.query<
       { as_of: string | null; rows: MarketGroupSummary[] }, MarketGroupQuery
