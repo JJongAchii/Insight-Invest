@@ -143,6 +143,10 @@ npm run dev                 # http://localhost:3000
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | ECR push + CFN deploy |
 | `GH_PAT` | quant-data(private) 설치용 — Contents read-only면 충분 |
 | `API_TOKEN` | X-API-Key 값 (Vercel `NEXT_PUBLIC_API_KEY`와 동일) |
+| `OPENAI_API_KEY` | Research GPT-5 nano 요약 전용 — 미등록 시 원문 피드는 유지하고 요약은 대기 |
+
+Research 키의 등록 위치·비용 상한·배포 전 인수 절차는
+[Research OpenAI 설정](docs/runbooks/research-openai-setup.md)을 따른다.
 
 수동 배포는 `infra/template.yaml` 헤더의 명령 참조. 참고: 2025-10부터 신규 Lambda
 Function URL은 `lambda:InvokeFunctionUrl` + `lambda:InvokeFunction`(`InvokedViaFunctionUrl`

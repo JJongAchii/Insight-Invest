@@ -4,6 +4,7 @@
 #   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY  — ECR push + CFN deploy 권한
 #   GH_PAT                                     — quant-data(private) 읽기용 PAT
 #   API_TOKEN                                  — X-API-Key 앱 토큰
+#   OPENAI_API_KEY                             — Research GPT-5 mini 요약·원문 검수
 #   WEB_PUSH_PUBLIC_KEY / WEB_PUSH_PRIVATE_KEY  — VAPID 키 (없으면 Push 비활성)
 
 name: deploy-api
@@ -13,13 +14,88 @@ on:
     branches: [main]
     paths: ["server/**", "infra/**", ".github/workflows/deploy.yml"]
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Deploy production, or qualify research without deploying
+        type: choice
+        options: [deploy, research-qualify]
+        default: deploy
+      qdata_ref:
+        description: Exact quant-data commit for research qualification (40 hex characters)
+        type: string
+      research_max_items:
+        description: Maximum qualification cards (1 to 30)
+        type: string
+        default: "1"
+      research_sources:
+        description: Approved source IDs, comma separated; blank uses all enabled editorial sources
+        type: string
+        default: "aqr-research"
+      research_model:
+        description: Isolated qualification model only; mini is limited to 3 distinct sources
+        type: choice
+        options: [gpt-5-nano, gpt-5-mini]
+        default: gpt-5-mini
 
 env:
   AWS_REGION: ap-northeast-2
   ECR_REPO: insight-invest-api
 
 jobs:
+  research-qualification:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'research-qualify'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    concurrency:
+      group: research-openai-qualification
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate pinned producer reference
+        env:
+          QDATA_REF: ${{ inputs.qdata_ref }}
+        run: '[[ "$QDATA_REF" =~ ^[0-9a-f]{40}$ ]]'
+      - uses: actions/checkout@v4
+        with:
+          repository: JJongAchii/quant-data
+          ref: ${{ inputs.qdata_ref }}
+          token: ${{ secrets.GH_PAT }}
+          path: qualification-qdata
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install qualification dependencies
+        run: pip install './qualification-qdata[s3]' httpx
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Qualify real reading briefs in an isolated prefix
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          APP_DATA: s3://insight-invest-datalake/research-radar/qualification/openai
+          RADAR_ANALYSIS_ENABLED: "true"
+          RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "0.50"
+          RESEARCH_MAX_ITEMS: ${{ inputs.research_max_items }}
+          RESEARCH_SOURCES: ${{ inputs.research_sources }}
+          RESEARCH_QUALIFICATION_MODEL: ${{ inputs.research_model }}
+          QDATA_REF: ${{ inputs.qdata_ref }}
+        run: python scripts/qualify_research_editorial.py --output qualification-report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: research-qualification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: qualification-report.json
+          retention-days: 14
+          if-no-files-found: warn
   deploy:
+    if: github.event_name == 'push' || inputs.mode != 'research-qualify'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,6 +144,7 @@ jobs:
             --parameter-overrides ImageUri=$IMAGE_URI ApiToken=${{ secrets.API_TOKEN }} \
               KrxId=${{ secrets.KRX_ID }} KrxPw=${{ secrets.KRX_PW }} \
               AnthropicApiKey=${{ secrets.ANTHROPIC_API_KEY }} \
+              OpenAIApiKey=${{ secrets.OPENAI_API_KEY }} \
               WebPushPublicKey=${{ secrets.WEB_PUSH_PUBLIC_KEY }} \
               WebPushPrivateKey=${{ secrets.WEB_PUSH_PRIVATE_KEY }} \
               WebPushSubject=https://insight-invest-ten.vercel.app \
@@ -183,7 +260,8 @@ jobs:
                and (.items[0].is_saved | type) == "boolean"
                and (.items[0].research_lane == "core"
                     or .items[0].research_lane == "discovery"
-                    or .items[0].research_lane == "context")'
+                    or .items[0].research_lane == "context"
+                    or .items[0].research_lane == "updates")'
           curl -sf -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
             -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
             "$URL/research?limit=1" | jq -e \

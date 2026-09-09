@@ -8,11 +8,13 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from datastore import research as research_store
+from module import research_review
+from module.research_feed import apply_editorial_analysis
 
 router = APIRouter(prefix="/research", tags=["Research"])
 ENTRY_ID = re.compile(r"^[0-9a-f]{64}$")
 RESEARCH_VIEWS = frozenset({"all", "unread", "read", "saved"})
-RESEARCH_LANE_FILTERS = frozenset({"core", "discovery", "all"})
+RESEARCH_LANE_FILTERS = frozenset({"core", "discovery", "context", "updates", "all"})
 MAX_QUERY_LENGTH = 200
 
 
@@ -43,6 +45,10 @@ def _matches_query(item: dict, query: str) -> bool:
         item.get("title", ""),
         item.get("summary", ""),
         item.get("source_name", ""),
+        item.get("publisher", ""),
+        item.get("doi", ""),
+        str(item.get("discovered_by", [])),
+        str(item.get("analysis", {})),
         " ".join(str(author) for author in authors if author),
     ]
     searchable = _normalise_search(" ".join(str(value) for value in values))
@@ -51,15 +57,30 @@ def _matches_query(item: dict, query: str) -> bool:
 
 def _item_lane(item: dict) -> str:
     lane = item.get("research_lane", "context")
-    return lane if lane in {"core", "discovery", "context"} else "context"
+    return lane if lane in {"core", "discovery", "updates", "context"} else "context"
 
 
 def _matches_lane(item: dict, lane: str) -> bool:
     return lane == "all" or _item_lane(item) == lane
 
 
+def _read_feed() -> dict:
+    # Fail closed immediately after a review-version rollout, even before the
+    # next scheduled projection. This read-only view never rewrites user state.
+    feed = research_store.load_feed()
+    items = []
+    for item in feed["items"]:
+        item = dict(item)
+        if item.get("record_schema_version") == 4:
+            apply_editorial_analysis(item)
+        items.append(item)
+    return {**feed, "items": items}
+
+
 def _research_status(feed: dict, seen_through: datetime | None) -> dict:
-    notifiable = [item for item in feed["items"] if item.get("notification_eligible") is True]
+    notifiable = [
+        item for item in feed["items"] if item.get("notification_eligible") is True
+    ]
     return {
         "schema_version": 1,
         "initialized": seen_through is not None,
@@ -71,15 +92,17 @@ def _research_status(feed: dict, seen_through: datetime | None) -> dict:
 
 @router.get("/status")
 def get_research_status():
-    feed = research_store.load_feed()
+    feed = _read_feed()
     return _research_status(feed, research_store.load_seen_through())
 
 
 @router.put("/seen")
 def acknowledge_research_feed(request: ResearchSeenRequest):
     if request.through.tzinfo is None:
-        raise HTTPException(status_code=422, detail="research seen timestamp requires timezone")
-    feed = research_store.load_feed()
+        raise HTTPException(
+            status_code=422, detail="research seen timestamp requires timezone"
+        )
+    feed = _read_feed()
     generated_at = research_store.parse_timestamp(feed.get("generated_at"))
     if generated_at is None:
         return _research_status(feed, research_store.load_seen_through())
@@ -105,14 +128,16 @@ def get_research_feed(
         raise HTTPException(status_code=422, detail="invalid research lane")
     if unread_only:
         if view not in {"all", "unread"}:
-            raise HTTPException(status_code=422, detail="conflicting research view filters")
+            raise HTTPException(
+                status_code=422, detail="conflicting research view filters"
+            )
         view = "unread"
     query = " ".join((q or "").split())
     if len(query) > MAX_QUERY_LENGTH:
         raise HTTPException(status_code=422, detail="research query is too long")
     if entry_id:
         _validate_entry_id(entry_id)
-    feed = research_store.load_feed()
+    feed = _read_feed()
     states = research_store.entry_states()
     all_items = [
         {
@@ -127,7 +152,11 @@ def get_research_feed(
     for item in lane_items:
         source = sources.setdefault(
             item["source_id"],
-            {"source_id": item["source_id"], "source_name": item["source_name"], "count": 0},
+            {
+                "source_id": item["source_id"],
+                "source_name": item["source_name"],
+                "count": 0,
+            },
         )
         source["count"] += 1
     if entry_id:
@@ -149,6 +178,7 @@ def get_research_feed(
     return {
         "schema_version": 1,
         "generated_at": feed["generated_at"],
+        "editorial_enabled": research_review.enabled(),
         "total": len(filtered),
         "unread": sum(not item["is_read"] for item in lane_items),
         "read": sum(item["is_read"] for item in lane_items),
@@ -157,6 +187,7 @@ def get_research_feed(
         "lane_counts": {
             "core": sum(_item_lane(item) == "core" for item in all_items),
             "discovery": sum(_item_lane(item) == "discovery" for item in all_items),
+            "updates": sum(_item_lane(item) == "updates" for item in all_items),
             "context": sum(_item_lane(item) == "context" for item in all_items),
             "all": len(all_items),
         },
@@ -173,8 +204,10 @@ def get_research_feed(
 def mark_all_research_read(lane: str = "core"):
     if lane not in RESEARCH_LANE_FILTERS:
         raise HTTPException(status_code=422, detail="invalid research lane")
-    feed = research_store.load_feed()
-    entry_ids = [item["entry_id"] for item in feed["items"] if _matches_lane(item, lane)]
+    feed = _read_feed()
+    entry_ids = [
+        item["entry_id"] for item in feed["items"] if _matches_lane(item, lane)
+    ]
     updated = research_store.mark_all_read(entry_ids)
     return {"updated": updated, "total": len(entry_ids), "unread": 0, "lane": lane}
 
@@ -182,7 +215,7 @@ def mark_all_research_read(lane: str = "core"):
 @router.put("/{entry_id}/read")
 def set_research_read_state(entry_id: str, request: ResearchReadRequest):
     _validate_entry_id(entry_id)
-    feed = research_store.load_feed()
+    feed = _read_feed()
     if not any(item.get("entry_id") == entry_id for item in feed["items"]):
         raise HTTPException(status_code=404, detail="research entry not found")
     research_store.set_read(entry_id, read=request.read)
@@ -192,7 +225,7 @@ def set_research_read_state(entry_id: str, request: ResearchReadRequest):
 @router.put("/{entry_id}/saved")
 def set_research_saved_state(entry_id: str, request: ResearchSavedRequest):
     _validate_entry_id(entry_id)
-    feed = research_store.load_feed()
+    feed = _read_feed()
     if not any(item.get("entry_id") == entry_id for item in feed["items"]):
         raise HTTPException(status_code=404, detail="research entry not found")
     research_store.set_saved(entry_id, saved=request.saved)

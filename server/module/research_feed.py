@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import hashlib
 import json
 import os
 import re
@@ -10,8 +11,10 @@ import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlsplit
 
 from datastore import research as research_store
+from module import research_review
 
 DEFAULT_BUCKET = "insight-invest-datalake"
 DEFAULT_RECORD_PREFIX = "research-radar/public/records/"
@@ -28,6 +31,163 @@ QUALITY_GATE_FIELDS = frozenset(
     {"transport", "content", "topic", "evidence", "notification"}
 )
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
+PUBLICATION_TYPES = frozenset(
+    {"research_article", "research_paper", "preprint", "research_digest"}
+)
+
+
+def _publication_fields(payload: dict, *, key: str) -> dict:
+    lane = payload.get("research_lane")
+    scope = payload.get("analysis_scope")
+    if payload.get("item_type") not in PUBLICATION_TYPES or lane not in RESEARCH_LANES:
+        raise ValueError(f"invalid publication type/lane: {key}")
+    if scope not in {"full_article", "full_pdf", "pdf_excerpt", "abstract"}:
+        raise ValueError(f"invalid publication access scope: {key}")
+    for name in (
+        "document_identity",
+        "source_digest",
+        "published_at",
+        "summary",
+        "parser_version",
+    ):
+        if not isinstance(payload.get(name), str) or not payload[name].strip():
+            raise ValueError(f"missing publication {name}: {key}")
+    if not SHA256.fullmatch(payload["source_digest"]):
+        raise ValueError(f"invalid publication digest: {key}")
+    if not isinstance(payload.get("authors"), list) or not payload["authors"]:
+        raise ValueError(f"publication authors missing: {key}")
+    if research_store.parse_timestamp(payload["published_at"]) is None:
+        raise ValueError(f"invalid publication timestamp: {key}")
+    for field in ("url", "pdf_url"):
+        value = payload.get(field)
+        if value and (
+            urlsplit(value).scheme not in {"https", "http"}
+            or not urlsplit(value).hostname
+        ):
+            raise ValueError(f"invalid publication {field}: {key}")
+    notifiable = payload.get("notification_eligible")
+    terms = payload.get("relevance_terms")
+    if not isinstance(notifiable, bool) or not isinstance(terms, list):
+        raise ValueError(f"invalid publication eligibility: {key}")
+    if lane == "core" and (
+        scope == "abstract"
+        or payload.get("item_type") == "research_digest"
+        or not terms
+        or payload.get("source_chars", 0) < 1000
+    ):
+        raise ValueError(f"publication lacks readable core content: {key}")
+    if notifiable and lane != "core":
+        raise ValueError(f"non-core publication cannot notify: {key}")
+    fields = (
+        "quality_profile",
+        "research_lane",
+        "relevance_reason",
+        "relevance_terms",
+        "notification_eligible",
+        "item_type",
+        "content_provenance",
+        "source_digest",
+        "document_identity",
+        "pdf_url",
+        "doi",
+        "date_precision",
+        "source_chars",
+        "parser_version",
+        "access_status",
+        "analysis_scope",
+        "analysis_status",
+        "summary_kind",
+        "validation_status",
+        "discovery_sources",
+        "discovered_by",
+        "identity_aliases",
+        "first_discovered_at",
+        "updated_at",
+        "index_updated_at",
+        "publisher",
+        "original_access_status",
+        "original_access_error",
+        "open_access_url",
+        "arxiv_version",
+        "crossref",
+    )
+    result = {name: payload.get(name) for name in fields}
+    result["record_schema_version"] = 4
+    result["editorial_candidate_lane"] = payload.get("editorial_candidate_lane", lane)
+    result["notification_candidate"] = payload.get("notification_candidate", notifiable)
+    if payload.get("quality_profile") == "academic-discovery-v1":
+        # Index metadata/original retrieval qualification does not authorize paid
+        # summarization or a core alert. Register the readable source immediately.
+        result.update(
+            research_lane="discovery",
+            editorial_candidate_lane="discovery",
+            notification_eligible=False,
+            notification_candidate=False,
+            analysis_status="not_requested",
+        )
+    apply_editorial_analysis({**payload, **result}, target=result)
+    return result
+
+
+def apply_editorial_analysis(item: dict, *, target: dict | None = None) -> None:
+    target = item if target is None else target
+    if item.get("quality_profile") == "academic-discovery-v1":
+        target.update(
+            research_lane="discovery",
+            editorial_candidate_lane="discovery",
+            notification_eligible=False,
+            notification_candidate=False,
+            analysis_status="not_requested",
+            editorial_review_status="pending",
+        )
+        return
+    candidate = item.get("editorial_candidate_lane", item.get("research_lane"))
+    if not research_review.enabled() and item.get("analysis_status") != "not_requested":
+        # Preserve drafts/receipts and library identity. A key or old ready cache
+        # must not turn an unqualified editorial feature into a release.
+        target.update(
+            editorial_candidate_lane=candidate,
+            research_lane="discovery" if candidate == "core" else candidate,
+            relevance_reason="editorial_release_pending",
+            editorial_review_status="pending",
+            notification_eligible=False,
+        )
+        return
+    brief = item.get("analysis", {}).get("brief")
+    review_state = research_review.state(item)
+    target["editorial_review_status"] = review_state
+    if brief:
+        kind = brief.get("content_kind")
+        relevant = (
+            brief.get("quant_relevant") is True and brief.get("substantive") is True
+        )
+        if kind not in {"research", "practitioner", "market_commentary", "other"}:
+            # Old briefs stay readable, but cannot bypass the new classification.
+            lane, reason = "discovery", "classification_pending"
+        elif review_state != "accepted" or item.get("analysis_status") != "ready":
+            lane = "discovery" if candidate == "core" else candidate
+            reason = (
+                "review_rejected" if review_state == "rejected" else "review_pending"
+            )
+        elif kind == "market_commentary":
+            lane, reason = "context", "market_commentary"
+        elif relevant and kind in {"research", "practitioner"}:
+            lane, reason = candidate, "source_checked_reading_brief"
+        else:
+            lane, reason = "context", "editorial_topic_mismatch"
+        target["research_lane"] = lane
+        target["relevance_reason"] = reason
+        target["notification_eligible"] = bool(
+            lane == "core"
+            and review_state == "accepted"
+            and item.get("notification_candidate")
+        )
+        if target["notification_eligible"] and not item.get("available_at"):
+            target["available_at"] = item["analysis"]["review"]["checked_at"]
+    elif candidate == "core":
+        target["research_lane"] = "discovery"
+        target["relevance_reason"] = "analysis_pending"
+        target["notification_eligible"] = False
 
 
 def _topic_concept(term: str) -> str:
@@ -65,22 +225,26 @@ def _prefix(value: str) -> str:
     return value.strip("/") + "/"
 
 
-def _list_keys(s3: Any, *, bucket: str, prefix: str) -> list[str]:
-    keys: list[str] = []
+def _list_objects(s3: Any, *, bucket: str, prefix: str) -> list[dict]:
+    objects: list[dict] = []
     token = ""
     while True:
         kwargs = {"Bucket": bucket, "Prefix": _prefix(prefix)}
         if token:
             kwargs["ContinuationToken"] = token
         response = s3.list_objects_v2(**kwargs)
-        keys.extend(
-            item["Key"]
+        objects.extend(
+            item
             for item in response.get("Contents", [])
             if item["Key"].endswith(".json")
         )
         if not response.get("IsTruncated"):
-            return sorted(keys)
+            return sorted(objects, key=lambda item: item["Key"])
         token = response["NextContinuationToken"]
+
+
+def _list_keys(s3: Any, *, bucket: str, prefix: str) -> list[str]:
+    return [item["Key"] for item in _list_objects(s3, bucket=bucket, prefix=prefix)]
 
 
 def _record_id(key: str) -> str:
@@ -89,6 +253,8 @@ def _record_id(key: str) -> str:
 
 def _quality_fields(payload: dict, *, key: str) -> dict:
     schema_version = payload.get("schema_version", 1)
+    if schema_version == 4:
+        return _publication_fields(payload, key=key)
     if isinstance(schema_version, bool) or schema_version not in {1, 2, 3}:
         raise ValueError(f"지원하지 않는 Radar record schema_version이다: {key}")
     if schema_version in {1, 2}:
@@ -203,17 +369,18 @@ def _quality_fields(payload: dict, *, key: str) -> dict:
     return {
         "record_schema_version": 3,
         "quality_profile": quality_profile,
-        "research_lane": research_lane,
+        "research_lane": "updates",
+        "evidence_lane": research_lane,
         "relevance_reason": relevance_reason,
         "relevance_terms": relevance_terms,
-        "notification_eligible": notification_eligible,
+        "notification_eligible": False,
         "item_type": item_type,
         "content_provenance": content_provenance,
         "evidence_dimensions": evidence_dimensions,
         "evidence_excerpts": evidence_excerpts,
         "source_digest": source_digest,
         "resolution_status": resolution_status,
-        "quality_gates": quality_gates,
+        "quality_gates": {**quality_gates, "notification": False},
     }
 
 
@@ -244,10 +411,26 @@ def _normalize_projected_item(item: dict) -> dict:
         ):
             normalized.pop(field, None)
         return normalized
+    if schema_version == 4:
+        normalized.update(
+            _publication_fields(
+                {**normalized, "schema_version": 4}, key="projected item"
+            )
+        )
+        return normalized
     if schema_version != 3:
         raise ValueError("research feed item record_schema_version이 유효하지 않다")
     normalized.update(
-        _quality_fields({**normalized, "schema_version": 3}, key="projected item")
+        _quality_fields(
+            {
+                **normalized,
+                "schema_version": 3,
+                "research_lane": normalized.get(
+                    "evidence_lane", normalized.get("research_lane")
+                ),
+            },
+            key="projected item",
+        )
     )
     return normalized
 
@@ -258,6 +441,14 @@ def _read_record(s3: Any, *, bucket: str, key: str) -> dict:
     entry_id = _record_id(key)
     if payload.get("entry_id_sha256") != entry_id:
         raise ValueError(f"Radar record digest가 key와 다르다: {key}")
+    if (
+        payload.get("schema_version") == 4
+        and hashlib.sha256(
+            str(payload.get("document_identity", "")).encode()
+        ).hexdigest()
+        != entry_id
+    ):
+        raise ValueError(f"publication identity differs from key: {key}")
     required = ("source_id", "source_name", "title", "url", "discovered_at")
     if any(
         not isinstance(payload.get(field), str) or not payload[field]
@@ -320,7 +511,9 @@ def reconcile(
         "RADAR_RECORD_PREFIX", DEFAULT_RECORD_PREFIX
     )
     captured_at = (now or datetime.now(UTC)).astimezone(UTC)
-    keys = _list_keys(s3, bucket=bucket, prefix=record_prefix)
+    objects = _list_objects(s3, bucket=bucket, prefix=record_prefix)
+    keys = [item["Key"] for item in objects]
+    etags = {item["Key"]: item.get("ETag") for item in objects}
     canonical_ids = {_record_id(key) for key in keys}
 
     current = research_store.load_feed()
@@ -332,9 +525,36 @@ def reconcile(
         normalized = _normalize_projected_item(item)
         migrated = migrated or normalized != item
         current_items[normalized["entry_id"]] = normalized
-    missing_keys = [key for key in keys if _record_id(key) not in current_items]
-    added_items = _read_records(s3, bucket=bucket, keys=missing_keys)
-    for item in added_items:
+    refresh_keys = [
+        key
+        for key in keys
+        if not etags[key]
+        or current_items.get(_record_id(key), {}).get("source_etag") != etags[key]
+    ]
+    refreshed = _read_records(s3, bucket=bucket, keys=refresh_keys)
+    added = updated = 0
+    for key, item in zip(refresh_keys, refreshed, strict=True):
+        prior = current_items.get(item["entry_id"])
+        item["source_etag"] = etags[key]
+        if prior and prior.get("available_at"):
+            # A revised document remains the same library item, including its
+            # first core-availability timestamp. Reanalysis must not replay badges.
+            item["available_at"] = prior["available_at"]
+        if prior and prior.get("source_digest") == item.get("source_digest"):
+            for field in (
+                "analysis",
+                "analysis_status",
+                "analysis_updated_at",
+                "analysis_retry",
+            ):
+                if field in prior:
+                    item[field] = prior[field]
+            if item.get("record_schema_version") == 4:
+                apply_editorial_analysis(item)
+        if prior is None:
+            added += 1
+        elif prior != item:
+            updated += 1
         current_items[item["entry_id"]] = item
 
     removed = set(current_items) - canonical_ids
@@ -345,7 +565,9 @@ def reconcile(
         key=lambda item: (_timestamp(item), item["entry_id"]),
         reverse=True,
     )
-    changed = bool(added_items or removed or migrated or not current["generated_at"])
+    changed = bool(
+        added or updated or removed or migrated or not current["generated_at"]
+    )
     if changed:
         research_store.save_feed(
             {
@@ -356,7 +578,8 @@ def reconcile(
         )
     return {
         "records": len(items),
-        "added": len(added_items),
+        "added": added,
+        "revised": updated,
         "removed": len(removed),
         "updated": changed,
     }

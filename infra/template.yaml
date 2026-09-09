@@ -38,6 +38,16 @@ Parameters:
     NoEcho: true
     Default: ""
     Description: 뉴스 큐레이션용 Anthropic API 키 (뉴스 폴러 전용 — 없으면 규칙 폴백)
+  OpenAIApiKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Research 읽기 요약용 OpenAI API 키 (없으면 원문 피드만 제공)
+  ResearchAnalysisEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues: ["false", "true"]
+    Description: Research 요약·핵심 승격·알림의 명시적 릴리스 스위치 (의미 품질 인수 후에만 활성화)
   WebPushPublicKey:
     Type: String
     Default: ""
@@ -105,6 +115,7 @@ Resources:
           QDATA_LAKE: !Sub s3://${DataBucket}/qdata
           APP_DATA: !Sub s3://${DataBucket}/app
           API_TOKEN: !Ref ApiToken
+          RADAR_ANALYSIS_ENABLED: !Ref ResearchAnalysisEnabled
           SITE_ACCESS_HASH: !Ref SiteAccessHash
           WEB_PUSH_PUBLIC_KEY: !Ref WebPushPublicKey
           WEB_PUSH_PRIVATE_KEY: !Ref WebPushPrivateKey
@@ -410,6 +421,7 @@ Resources:
                   - !Sub arn:aws:s3:::${DataBucket}/research-radar/public/records/*
                   - !Sub arn:aws:s3:::${DataBucket}/research-radar/realtime/pending/*
                   - !Sub arn:aws:s3:::${DataBucket}/app/research_feed.json
+                  - !Sub arn:aws:s3:::${DataBucket}/app/research_analysis/*
                   - !Sub arn:aws:s3:::${DataBucket}/app/notification_subscriptions.parquet
                   - !Sub arn:aws:s3:::${DataBucket}/app/notification_deliveries.parquet
               - Sid: WriteProjectionAndNotificationState
@@ -417,6 +429,7 @@ Resources:
                 Action: [s3:PutObject]
                 Resource:
                   - !Sub arn:aws:s3:::${DataBucket}/app/research_feed.json
+                  - !Sub arn:aws:s3:::${DataBucket}/app/research_analysis/*
                   - !Sub arn:aws:s3:::${DataBucket}/app/notification_subscriptions.parquet
                   - !Sub arn:aws:s3:::${DataBucket}/app/notification_deliveries.parquet
               - Sid: SettlePendingResearchDelivery
@@ -443,7 +456,7 @@ Resources:
       Role: !GetAtt ResearchPollerRole.Arn
       Architectures: [x86_64]
       MemorySize: 1024
-      Timeout: 120
+      Timeout: 300
       ReservedConcurrentExecutions: 1
       Environment:
         Variables:
@@ -451,6 +464,9 @@ Resources:
           RADAR_BUCKET: !Ref DataBucket
           RADAR_RECORD_PREFIX: research-radar/public/records/
           RADAR_PENDING_PREFIX: research-radar/realtime/pending/
+          OPENAI_API_KEY: !Ref OpenAIApiKey
+          RADAR_ANALYSIS_ENABLED: !Ref ResearchAnalysisEnabled
+          RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "1.50"
           WEB_PUSH_PUBLIC_KEY: !Ref WebPushPublicKey
           WEB_PUSH_PRIVATE_KEY: !Ref WebPushPrivateKey
           WEB_PUSH_SUBJECT: !Ref WebPushSubject

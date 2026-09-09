@@ -77,6 +77,49 @@ def _get(**overrides):
     return research.get_research_feed(**arguments)
 
 
+def test_api_does_not_wait_for_poller_to_demote_unreviewed_core(monkeypatch, tmp_path):
+    from test_research_analysis import brief
+
+    monkeypatch.setenv("APP_DATA", str(tmp_path))
+    entry_id = "a" * 64
+    feed = _feed(entry_id, "b" * 64)
+    feed["items"] = feed["items"][:1]
+    feed["items"][0].update(
+        record_schema_version=4,
+        analysis_status="ready",
+        editorial_candidate_lane="core",
+        notification_candidate=True,
+        editorial_review_status="accepted",
+        analysis={"brief": brief(), "source_digest": "1" * 64},
+    )
+    research_store.save_feed(feed)
+    research_store.save_seen_through(
+        research_store.parse_timestamp("2026-09-01T00:00:00Z")
+    )
+    research_store.set_saved(entry_id, saved=True)
+    before = {path: path.read_bytes() for path in tmp_path.iterdir() if path.is_file()}
+    assert _get()["total"] == 0
+    assert research.get_research_status()["unseen"] == 0
+    found = _get(lane="all")["items"][0]
+    assert found["editorial_review_status"] == "pending" and found["is_saved"]
+    assert found["analysis"]["brief"] == feed["items"][0]["analysis"]["brief"]
+    assert before == {path: path.read_bytes() for path in before}
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_feed_reports_editorial_release_without_mutating_library(
+    monkeypatch, tmp_path, enabled
+):
+    monkeypatch.setenv("APP_DATA", str(tmp_path))
+    monkeypatch.setenv("RADAR_ANALYSIS_ENABLED", str(enabled).lower())
+    research_store.save_feed(_feed("a" * 64, "b" * 64))
+    before = {path: path.read_bytes() for path in tmp_path.iterdir() if path.is_file()}
+    assert _get()["editorial_enabled"] is enabled
+    assert before == {
+        path: path.read_bytes() for path in tmp_path.iterdir() if path.is_file()
+    }
+
+
 def test_feed_filters_and_read_state(monkeypatch, tmp_path):
     monkeypatch.setenv("APP_DATA", str(tmp_path))
     first_id = "a" * 64
@@ -283,12 +326,46 @@ def test_lane_filter_defaults_to_core_and_preserves_full_archive(monkeypatch, tm
         second_id,
         legacy_id,
     }
-    assert archive["lane_counts"] == {"core": 1, "discovery": 1, "context": 1, "all": 3}
+    assert archive["lane_counts"] == {
+        "core": 1,
+        "discovery": 1,
+        "updates": 0,
+        "context": 1,
+        "all": 3,
+    }
 
     marked = research.mark_all_research_read(lane="core")
     assert marked == {"updated": 1, "total": 1, "unread": 0, "lane": "core"}
     assert _get(lane="discovery")["unread"] == 1
     assert _get(lane="all")["unread"] == 2
+
+
+def test_market_background_view_keeps_search_saved_and_mark_all_read(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("APP_DATA", str(tmp_path))
+    first_id, second_id = "a" * 64, "b" * 64
+    feed = _feed(first_id, second_id)
+    feed["items"][1].update(
+        research_lane="context",
+        notification_eligible=False,
+        analysis={
+            "brief": {
+                "title_ko": "브로커 시장 전망",
+                "content_kind": "market_commentary",
+            }
+        },
+    )
+    research_store.save_feed(feed)
+    research_store.set_saved(second_id, saved=True)
+    result = _get(lane="context", view="saved", q="시장 전망")
+    assert [item["entry_id"] for item in result["items"]] == [second_id]
+    assert result["items"][0]["is_saved"]
+    assert [item["entry_id"] for item in _get()["items"]] == [first_id]
+    assert research.mark_all_research_read(lane="context")["updated"] == 1
+    assert _get(lane="context", view="read")["total"] == 1
+    assert _get()["unread"] == 1
+    assert _get(lane="all")["total"] == 2
 
 
 def test_research_status_baselines_existing_feed_then_counts_only_new_entries(
