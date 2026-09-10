@@ -157,6 +157,27 @@ def test_fixed_sample_never_substitutes_missing_source(configured, monkeypatch):
         qualification.validate_environment()
 
 
+def test_preserved_draft_replay_keeps_its_original_parser_identity(monkeypatch):
+    case = qualification.fixed_cases("v7-regression", ["aqr-research"])["aqr-research"]
+    record = {
+        **case,
+        "parser_version": "editorial-v2-reading-text",
+        "analysis_scope": "full_pdf",
+    }
+    replay = qualification.preserved_input(record, case)
+    monkeypatch.setattr(
+        qualification.research_analysis, "PROMPT_VERSION", qualification.V7_PROMPT
+    )
+    assert (
+        qualification.research_analysis.cache_key(replay)
+        == case["baseline_fingerprint"]
+    )
+    assert record["parser_version"] == "editorial-v2-reading-text"
+    for field, value in (("source_digest", "a" * 64), ("analysis_scope", "abstract")):
+        with pytest.raises(ValueError, match="body or analysis scope differs"):
+            qualification.preserved_input({**record, field: value}, case)
+
+
 def test_fixed_source_drift_stops_before_analysis(monkeypatch):
     from datetime import UTC, datetime
 

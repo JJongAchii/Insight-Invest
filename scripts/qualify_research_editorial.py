@@ -74,6 +74,20 @@ def fixed_publication(case: dict, now: datetime) -> tuple[dict, str]:
     return record, document["text"][: research_analysis.MAX_INPUT_CHARS]
 
 
+def preserved_input(record: dict, case: dict) -> dict:
+    """Replay historical input metadata only after its body/scope is revalidated.
+
+    The current parser is reported separately, not mislabelled as the old parser.
+    This isolated regression tests the preserved draft, never a replacement draft.
+    """
+    if (
+        record["source_digest"] != case["source_digest"]
+        or record["analysis_scope"] != case["baseline_analysis_scope"]
+    ):
+        raise ValueError("preserved source body or analysis scope differs")
+    return {**record, "parser_version": case["baseline_parser_version"]}
+
+
 def validate_environment() -> tuple[int, list[str], str]:
     if not os.environ.get("OPENAI_API_KEY", "").strip():
         raise ValueError("OPENAI_API_KEY is not configured")
@@ -319,6 +333,22 @@ def run(output: Path) -> int:
         ]
         save_report()  # Record the sample before the first paid call.
         if sample == "v7-regression":
+            report["preserved_input_replay"] = [
+                {
+                    "source_id": record["source_id"],
+                    "reparse_version": record["parser_version"],
+                    "baseline_parser_version": cases[record["source_id"]][
+                        "baseline_parser_version"
+                    ],
+                    "source_digest": record["source_digest"],
+                    "analysis_scope": record["analysis_scope"],
+                }
+                for record in records
+            ]
+            records = [
+                preserved_input(record, cases[record["source_id"]])
+                for record in records
+            ]
             for record in records:
                 fingerprint = research_analysis.cache_key(record)
                 if fingerprint != cases[record["source_id"]]["baseline_fingerprint"]:
