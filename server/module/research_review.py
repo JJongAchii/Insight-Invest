@@ -12,7 +12,7 @@ import os
 import re
 
 MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-review-openai-v3-contrast"
+PROMPT_VERSION = "reading-review-openai-v4-literal-guards"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 8192
 REQUEST_TIMEOUT_SECONDS = 120
@@ -257,6 +257,31 @@ def missing_years(claim: str, evidence: str) -> list[str]:
     return sorted(set(re.findall(pattern, claim)) - set(re.findall(pattern, evidence)))
 
 
+def literal_issues(claim: str, evidence: str) -> list[str]:
+    """Conservative traceability checks, not a replacement for semantic review.
+
+    Unit conversions and reconstructed PDF values intentionally require omission
+    or further review; the guard never edits the author's or model's numbers.
+    """
+
+    def numbers(value):
+        value = value.replace(",", "").replace("−", "-").replace("–", "-")
+        return set(re.findall(r"(?<![\w.])\d+(?:\.\d+)?(?![\d.])", value))
+
+    issues = []
+    if absent := numbers(claim) - numbers(evidence):
+        issues.append("numbers_absent_from_evidence:" + ",".join(sorted(absent)))
+    if re.search(r"[\u3040-\u30ff]", claim):
+        issues.append("unexpected_japanese_in_korean_brief")
+    if re.search(
+        r"재무화된\s*배출|자금조달배출|기후\s*인식\s*투자자|신규\s*발행\s*양보", claim
+    ):
+        issues.append("unqualified_financial_translation")
+    if "equity extension" in evidence.casefold() and "지수 확장" in claim:
+        issues.append("equity_extension_is_not_index_extension")
+    return issues
+
+
 def validate_checks(value: dict, text: str, brief: dict) -> dict:
     from module.research_analysis import AnalysisContractError, _source_passages
 
@@ -286,16 +311,20 @@ def validate_checks(value: dict, text: str, brief: dict) -> dict:
         issues = []
         if field in allowed:
             point = brief[field]
+            issues.extend(literal_issues(point["text_ko"], point["evidence"]))
             if check["status"] == "supported" and not set(ids) <= set(allowed[field]):
                 issues.append("review_cites_outside_point_evidence")
             if years := missing_years(point["text_ko"], point["evidence"]):
                 issues.append("years_absent_from_point_evidence:" + ",".join(years))
         elif field == "reviewer_note":
             cited = " ".join(brief[name]["evidence"] for name in POINTS if brief[name])
+            issues.extend(literal_issues(brief[field], cited))
             if years := missing_years(brief[field], cited):
                 issues.append(
                     "note_years_absent_from_grounded_points:" + ",".join(years)
                 )
+        elif field == "title_ko":
+            issues.extend(literal_issues(brief[field], text))
         grounded[field] = {
             "status": check["status"],
             "reason_ko": reason,

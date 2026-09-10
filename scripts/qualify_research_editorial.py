@@ -23,7 +23,7 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
 
 from datastore import research, storage  # noqa: E402
-from module import research_analysis, research_feed, research_review  # noqa: E402
+from module import research_analysis, research_feed, research_review, research_selection  # noqa: E402
 from qdata.radar_editorial import (  # noqa: E402
     CHANNELS,
     content_digest,
@@ -40,7 +40,7 @@ ENABLED_SOURCES = tuple(
 # This comparison selector exists only in the isolated manual runner. Production
 # remains on its configured model; no environment-driven fallback is added.
 MODEL_PRICES = {"gpt-5-nano": (50, 400), "gpt-5-mini": (250, 2000)}
-SAMPLES = ("latest", "reading-value-v1", "v7-regression")
+SAMPLES = ("latest", "reading-value-v1", "reading-value-v2", "v7-regression")
 V7_PROMPT = "reading-brief-openai-v7-korean-editorial"
 
 
@@ -390,9 +390,10 @@ def run(output: Path) -> int:
 
         # At most one paid stage per enrich call; an old cache recovery can also
         # occupy a step. Review-only migration does not regenerate the v7 drafts.
-        for _ in range(3 * len(records)):
+        for _ in range(4 * len(records)):
             result = research_analysis.enrich(
                 max_items=1,
+                **({"selection_call": None} if sample == "v7-regression" else {}),
                 **(
                     {"text_loader": lambda item: texts[item["entry_id"]]}
                     if texts
@@ -410,7 +411,10 @@ def run(output: Path) -> int:
                 for item in report["items"]
                 if item.get("analysis_status") != "not_requested"
             ]
-            if all(current_review(item) for item in requested):
+            if all(
+                current_review(item) or research_selection.state(item) == "context"
+                for item in requested
+            ):
                 break
         requested = [
             item
@@ -425,11 +429,26 @@ def run(output: Path) -> int:
             for item in requested
         )
         report["core"] = sum(
-            current_analysis(item) and item.get("research_lane") == "core"
-            for item in report["items"]
+            item.get("research_lane") == "core" for item in report["items"]
         )
+        report["selection_context"] = sum(
+            research_selection.state(item) == "context" for item in requested
+        )
+        report["selection_checks"] = [
+            {
+                "source_id": item["source_id"],
+                "expected": cases[item["source_id"]]["expected_content_kinds"],
+                "actual": item.get("editorial_selection", {})
+                .get("decision", {})
+                .get("content_kind"),
+            }
+            for item in requested
+            if item["source_id"] in cases and sample != "v7-regression"
+        ]
         # This qualifies transport/structure/binding, not reviewer correctness or alpha.
-        if requested and report["reviewed"] == len(requested):
+        if requested and report["reviewed"] + report["selection_context"] == len(
+            requested
+        ):
             report["status"] = "api_contract_qualified"
         else:
             report["status"] = "needs_diagnosis"

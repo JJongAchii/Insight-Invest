@@ -21,8 +21,8 @@ export default function ResearchBrief({ item }: { item: ResearchEntry }) {
       ? item.original_access_status?.startsWith("verified_") && item.access_status !== "abstract_only"
         ? "공개 원문 확인 · 한국어 요약은 아직 제공하지 않습니다"
         : "초록 확인 · 원문 열람 가능 여부는 링크에서 확인해 주세요"
-      : item.relevance_reason === "editorial_release_pending"
-      ? "한국어 요약 기능 검증 중 · 원문은 읽을 수 있습니다"
+      : item.editorial_selection_status === "context"
+      ? "시장·배경 자료 · 한국어 요약 대상에서 제외"
       : item.editorial_review_status === "rejected"
       ? "요약 검수 보류 · 원문에서 확인해 주세요"
       : item.analysis_status === "held" ? "요약 확인 필요"
@@ -33,6 +33,7 @@ export default function ResearchBrief({ item }: { item: ResearchEntry }) {
       <div className="mt-3 space-y-2">
         {item.record_schema_version === 4 && (
           <p className="text-xs text-ink-muted">
+            {item.editorial_selection_status === "core" && "원문 선별 완료 · "}
             {item.summary_kind === "publisher_description" ? "발행처 소개문"
               : item.content_provenance === "abstract" || item.summary_kind === "abstract_excerpt" ? "초록 발췌" : "원문 발췌"} · {status}
           </p>

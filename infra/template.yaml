@@ -47,7 +47,7 @@ Parameters:
     Type: String
     Default: "false"
     AllowedValues: ["false", "true"]
-    Description: Research 요약·핵심 승격·알림의 명시적 릴리스 스위치 (의미 품질 인수 후에만 활성화)
+    Description: Research 원문 선별·요약 API 처리 스위치 (기존 원문 노출·신규성 알림 판정과 독립)
   WebPushPublicKey:
     Type: String
     Default: ""
