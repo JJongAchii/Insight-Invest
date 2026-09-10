@@ -45,6 +45,16 @@ def test_source_check_keeps_semantic_acceptance_separate(source):
     assert result["items"][0]["review_state"] == "accepted"
 
 
+def test_new_draft_has_no_claim_of_preserved_baseline(source):
+    report, _baseline = reports(source)
+    result = verification.verify(report, text_loader=lambda _item: TEXT)
+    assert result["items"][0]["draft_unchanged"] is None
+    assert result["items"][0]["current_review"] is True
+    report["items"][0]["analysis"]["brief"]["title_ko"] = "Changed"
+    with pytest.raises(ValueError):
+        verification.verify(report, text_loader=lambda _item: TEXT)
+
+
 @pytest.mark.parametrize("change", ["draft", "input", "production", "guard"])
 def test_verification_rejects_changed_or_unbound_receipts(source, change):
     report, baseline = reports(source)
