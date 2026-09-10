@@ -21,6 +21,7 @@ from test_research_analysis import NOW, TEXT, brief, source as source
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 publisher = importlib.import_module("publish_research_qualification")
+verifier = importlib.import_module("verify_research_review")
 
 
 def report_for(record, *, kind="research"):
@@ -108,6 +109,27 @@ def test_context_seeds_only_selection_and_never_its_obsolete_brief(source):
     report["items"][0]["analysis"] = {"obsolete": "do not publish"}
     objects = publisher.plan(report, text_loader=lambda _: TEXT)
     assert len(objects) == 1 and "/selections/" in next(iter(objects))
+
+
+def test_code_only_recheck_keeps_actual_draft_and_model_evidence(source):
+    report = report_for(source.record)
+    report["items"][0]["analysis"]["review"].update(
+        usage={"input_tokens": 100, "output_tokens": 20}, cost_nanousd=65000
+    )
+    original = deepcopy(report)
+    result = verifier.recheck_code_guards(report, text_loader=lambda _: TEXT)
+    assert result["recheck_llm_calls"] == 0 and report == original
+    before = original["items"][0]["analysis"]
+    after = result["items"][0]["analysis"]
+    assert after["brief"] == before["brief"]
+    assert after["review"]["checks"] == before["review"]["checks"]
+    assert (
+        after["review"]["previous_review_fingerprint"]
+        == before["review"]["fingerprint"]
+    )
+    assert len(publisher.plan(result, text_loader=lambda _: TEXT)) == 3
+    with pytest.raises(ValueError, match="source input changed"):
+        verifier.recheck_code_guards(report, text_loader=lambda _: "Changed source")
 
 
 def test_prior_embedded_review_is_preserved_but_not_reused(source):

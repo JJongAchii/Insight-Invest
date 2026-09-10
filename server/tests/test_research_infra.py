@@ -65,7 +65,7 @@ def test_editorial_release_is_default_off_and_shared_with_read_api():
             "  ResearchPollerSchedule:", 1
         )[0]
     )
-    assert "ResearchAnalysisEnabled=true" not in DEPLOY.read_text()
+    assert "ResearchAnalysisEnabled=true" in DEPLOY.read_text()
 
 
 def test_release_smoke_requires_projection_api_and_active_push():
@@ -77,6 +77,8 @@ def test_release_smoke_requires_projection_api_and_active_push():
     assert '"$URL/research?lane=all&limit=1"' in body
     assert '.lane == "core"' in body
     assert ".lane_counts.all > 0" in body
+    assert ".total > 0 and .editorial_enabled == true" in body
+    assert "research-release-snapshot" in body
     assert ".notification_eligible | type" in body
     assert '"$URL/research/status"' in body
     assert '.paths["/research/seen"].put' in body

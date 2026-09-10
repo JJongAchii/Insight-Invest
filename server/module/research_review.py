@@ -13,6 +13,7 @@ import re
 
 MODEL = "gpt-5-mini"
 PROMPT_VERSION = "reading-review-openai-v8-qualifier-guard"
+CODE_GUARD_VERSION = "point-qualifiers-v1"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 8192
 REQUEST_TIMEOUT_SECONDS = 120
@@ -157,7 +158,7 @@ def digest(value) -> str:
     ).hexdigest()
 
 
-def cache_key(item: dict, analysis: dict) -> str:
+def cache_key(item: dict, analysis: dict, *, legacy_guards: bool = False) -> str:
     return digest(
         [
             item["source_digest"],
@@ -172,6 +173,7 @@ def cache_key(item: dict, analysis: dict) -> str:
             REASONING_EFFORT,
             MAX_OUTPUT_TOKENS,
         ]
+        + ([] if legacy_guards else [CODE_GUARD_VERSION])
     )
 
 
@@ -280,7 +282,9 @@ def missing_years(claim: str, evidence: str) -> list[str]:
     return sorted(set(re.findall(pattern, claim)) - set(re.findall(pattern, evidence)))
 
 
-def literal_issues(claim: str, evidence: str) -> list[str]:
+def literal_issues(
+    claim: str, evidence: str, *, point_conditions: bool = True
+) -> list[str]:
     """Conservative traceability checks, not a replacement for semantic review.
 
     Unit conversions and reconstructed PDF values intentionally require omission
@@ -346,8 +350,10 @@ def literal_issues(claim: str, evidence: str) -> list[str]:
         issues.append("unnamed_numeric_metric")
     # Frozen real failure: a generic "가정한다" is not the omitted assumption
     # that the optimizer's DESIGN is sound. This is deliberately narrow.
-    if re.search(r"assuming.{0,45}design is sound", evidence, re.I) and not re.search(
-        r"설계|design", claim, re.I
+    if (
+        point_conditions
+        and re.search(r"assuming.{0,45}design is sound", evidence, re.I)
+        and not re.search(r"설계|design", claim, re.I)
     ):
         issues.append("omitted_optimizer_design_assumption")
     return issues
@@ -389,13 +395,13 @@ def validate_checks(value: dict, text: str, brief: dict) -> dict:
                 issues.append("years_absent_from_point_evidence:" + ",".join(years))
         elif field == "reviewer_note":
             cited = " ".join(brief[name]["evidence"] for name in POINTS if brief[name])
-            issues.extend(literal_issues(brief[field], cited))
+            issues.extend(literal_issues(brief[field], cited, point_conditions=False))
             if years := missing_years(brief[field], cited):
                 issues.append(
                     "note_years_absent_from_grounded_points:" + ",".join(years)
                 )
         elif field == "title_ko":
-            issues.extend(literal_issues(brief[field], text))
+            issues.extend(literal_issues(brief[field], text, point_conditions=False))
         grounded[field] = {
             "status": check["status"],
             "reason_ko": reason,
@@ -424,6 +430,7 @@ def receipt(item: dict, analysis: dict, checks: dict, text: str, now: str) -> di
         "model": MODEL,
         "prompt_version": PROMPT_VERSION,
         "reasoning_effort": REASONING_EFFORT,
+        "code_guard_version": CODE_GUARD_VERSION,
         "source_digest": item["source_digest"],
         "draft_digest": digest(analysis["brief"]),
         "input_digest": digest(text),

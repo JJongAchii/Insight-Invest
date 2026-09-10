@@ -12,10 +12,71 @@ import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from copy import deepcopy
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
 
 from module import research_analysis as analysis, research_review as review  # noqa: E402
+
+
+def recheck_code_guards(report: dict, *, text_loader=analysis._public_text) -> dict:
+    """Reuse actual model checks after a code-only guard change; never ask an LLM.
+
+    Source, draft, model/prompt/settings and recorded evidence must still match.
+    Model status/reason/quotes are retained; only deterministic guard issues and
+    their resulting verdict/fingerprint are recomputed. The original is untouched.
+    """
+    if (
+        report.get("production_modified") is not False
+        or report.get("status") != "api_contract_qualified"
+    ):
+        raise ValueError("requires original isolated qualification")
+    result = deepcopy(report)
+    for item in result["items"]:
+        draft = item.get("analysis")
+        if not draft or draft.get("fingerprint") != analysis.cache_key(item):
+            continue  # An excluded context item may retain an obsolete draft.
+        old = draft["review"]
+        if old["fingerprint"] != review.cache_key(
+            item, draft, legacy_guards="code_guard_version" not in old
+        ):
+            raise ValueError("original review fingerprint differs")
+        if (
+            old["prompt_version"] != review.PROMPT_VERSION
+            or old["model"] != review.MODEL
+            or old["reasoning_effort"] != review.REASONING_EFFORT
+            or old["draft_digest"] != review.digest(draft["brief"])
+            or old["source_digest"] != item["source_digest"]
+        ):
+            raise ValueError("model/source/draft changed; not a code-only recheck")
+        text = text_loader(item)
+        if old["input_digest"] != review.digest(text):
+            raise ValueError("source input changed")
+        analysis.validate_brief(draft["brief"], text)
+        lookup = {p["text"]: p["id"] for p in reversed(analysis._source_passages(text))}
+        checks = {
+            name: {
+                "status": check["status"],
+                "reason_ko": check["reason_ko"],
+                "evidence_ids": [lookup[q] for q in check["evidence_excerpts"]],
+            }
+            for name, check in old["checks"].items()
+        }
+        new = review.receipt(item, draft, checks, text, datetime.now(UTC).isoformat())
+        new.update({key: old[key] for key in ("usage", "cost_nanousd")})
+        new.update(
+            code_guard_version=review.CODE_GUARD_VERSION,
+            recheck_llm_calls=0,
+            previous_review_fingerprint=old["fingerprint"],
+            provider_checked_at=old["checked_at"],
+        )
+        draft["review"] = new
+        item["analysis_status"] = (
+            "ready" if new["verdict"] == "accepted" else "review_rejected"
+        )
+        item["editorial_review_status"] = new["verdict"]
+    result.update(code_guard_recheck=True, recheck_llm_calls=0)
+    return result
 
 
 def verify(
@@ -122,7 +183,16 @@ if __name__ == "__main__":
     parser.add_argument("--report", required=True, type=Path)
     parser.add_argument("--baseline", type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--recheck-code-guards", action="store_true")
     args = parser.parse_args()
+    if args.recheck_code_guards:
+        result = recheck_code_guards(json.loads(args.report.read_text()))
+        result["qualification_origin_sha256"] = hashlib.sha256(
+            args.report.read_bytes()
+        ).hexdigest()
+        args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
+        print(json.dumps({"recheck_llm_calls": 0, "output": str(args.output)}))
+        raise SystemExit(0)
     result = verify(
         json.loads(args.report.read_text()),
         json.loads(args.baseline.read_text()) if args.baseline else None,
