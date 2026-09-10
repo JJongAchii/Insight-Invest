@@ -153,6 +153,7 @@ def test_literal_guard_allows_same_decimal_and_grouped_number():
 
 
 def test_writer_sees_only_preselected_field_evidence():
+    assert literal_issues("2/3", "around two -thirds") == []
     text = "We define a transparent portfolio weighting rule. Unselected outlook predicts a market crash."
     first = analysis._source_passages(text)[0]["text"]
     plan = {
@@ -169,3 +170,27 @@ def test_writer_sees_only_preselected_field_evidence():
     assert payload["text"]["format"]["schema"]["properties"]["method_data"]["anyOf"][1][
         "properties"
     ]["evidence_ids"]["items"]["enum"] == [0]
+
+
+def test_generation_cannot_add_an_unquoted_editorial_note():
+    from module import research_review as review
+    from research_review_fixtures import checks_for
+    from test_research_analysis import brief
+
+    assert analysis.BRIEF_SCHEMA["properties"]["reviewer_note"] == {
+        "type": "string",
+        "enum": [""],
+    }
+    value = brief()
+    value["reviewer_note"] = ""
+    analysis.validate_brief(value, TEXT)
+    checks = checks_for(value)
+    checks["reviewer_note"] = {
+        "status": "not_applicable",
+        "reason_ko": "",
+        "evidence_ids": [],
+    }
+    assert review._decision(checks, value) == "accepted"
+    assert literal_issues("활성 탄소 노출", "active carbon exposure") == [
+        "active_exposure_is_not_activation"
+    ]

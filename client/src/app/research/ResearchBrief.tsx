@@ -81,8 +81,7 @@ export default function ResearchBrief({ item }: { item: ResearchEntry }) {
         })}
       </dl>
       <div className="border-t border-edge pt-3 text-xs leading-5 text-ink-muted">
-        <p><span className="font-medium text-ink-secondary">더 읽어볼 점 · AI 메모</span> {analysis.brief.reviewer_note}</p>
-        <p className="mt-1">AI가 원문 일부와 요약을 대조한 읽기 도움말입니다. 오류가 남을 수 있으며, 독립 재현·성과 검증 결과가 아닙니다.</p>
+        <p>AI가 원문 일부와 요약을 대조한 읽기 도움말입니다. 오류가 남을 수 있으며, 독립 재현·성과 검증 결과가 아닙니다.</p>
       </div>
     </div>
   );

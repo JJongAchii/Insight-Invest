@@ -20,7 +20,7 @@ from datastore import research, storage
 from module import research_review, research_selection
 
 MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-brief-openai-v10-selected-evidence"
+PROMPT_VERSION = "reading-brief-openai-v11-no-ungrounded-note"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 8192  # Visible output AND reasoning; real PDFs exceeded 4096.
 MAX_INPUT_CHARS = 24000
@@ -51,6 +51,7 @@ Prefer a simple accurate sentence to a dense list. Keep uncertain technical term
 in the original English instead of inventing Korean financial terminology.
 Use 금융배출량 for financed emissions; 매출 for revenue; 채권 for fixed income;
 기후를 고려하는 투자자 for climate-aware investor; 분산 효과 for diversification.
+active carbon exposure = 벤치마크 대비 탄소 노출 (not 활성 탄소 노출).
 Equity extension is NOT index extension. Preserve metric names, signs, assumptions
 and attribution. Prefer qualitative findings; quote a number only when its exact
 digits, metric, period and conditions are supported by that point's selected evidence.
@@ -61,8 +62,8 @@ method_data = concrete approach/data/framework; finding = ONE specific author cl
 why_read = the concrete insight the reader can learn (not praise or profit promise);
 limitation = a document-specific caveat explicitly stated, otherwise null.
 title_ko conveys the actual subject in natural Korean, not a literal idiom translation.
-reviewer_note = one short reading checkpoint based only on grounded points.
-Do not suggest looking for facts the supplied source never says it contains.
+reviewer_note is always the empty string. No unquoted synthesis or further-reading
+claims: the interface supplies a fixed scope/validation disclaimer instead.
 
 Classify main purpose: research examines a method/mechanism/empirical finding;
 practitioner teaches a reusable investment process; market_commentary is principally
@@ -98,7 +99,7 @@ BRIEF_SCHEMA = {
         "title_ko": {"type": "string", "maxLength": 160},
         "content_kind": {"type": "string", "enum": list(CONTENT_KINDS)},
         **{name: POINT_SCHEMA for name in FIELDS},
-        "reviewer_note": {"type": "string", "maxLength": 400},
+        "reviewer_note": {"type": "string", "enum": [""]},
         "quant_relevant": {"type": "boolean"},
         "substantive": {"type": "boolean"},
     },
@@ -225,7 +226,7 @@ def validate_brief(value: dict, text: str) -> dict:
     for name, limit in (("title_ko", 160), ("reviewer_note", 400)):
         if (
             not isinstance(value[name], str)
-            or not value[name].strip()
+            or (name == "title_ko" and not value[name].strip())
             or len(value[name]) > limit
         ):
             raise AnalysisContractError(f"invalid brief {name}")

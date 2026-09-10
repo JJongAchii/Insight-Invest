@@ -12,7 +12,7 @@ import os
 import re
 
 MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-review-openai-v5-point-contract"
+PROMPT_VERSION = "reading-review-openai-v6-no-note"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 8192
 REQUEST_TIMEOUT_SECONDS = 120
@@ -37,7 +37,7 @@ evidence. Never rewrite the draft, invent source facts, or verify investment ret
 Check EVERY field independently. Return supported only if it is faithful; use
 unsupported for a concrete error and unclear if the bounded source cannot establish
 support. not_applicable is allowed ONLY for a null question/method_data/finding/
-why_read/limitation. Check null fields too, but do not require missing content to be
+why_read/limitation OR an empty reviewer_note. Check null fields too, but do not require missing content to be
 filled. A brief need not cover everything and a practitioner article needs no formal
 research question, hypothesis test, trading rule, or backtest.
 
@@ -171,7 +171,9 @@ def _decision(checks: dict, brief: dict) -> str:
         check = checks[field]
         if not isinstance(check, dict) or check.get("status") not in STATUSES:
             raise ValueError("invalid review check")
-        absent = field in POINTS and brief.get(field) is None
+        absent = (field in POINTS and brief.get(field) is None) or (
+            field == "reviewer_note" and brief.get(field) == ""
+        )
         if (check["status"] == "not_applicable") != absent:
             raise ValueError("review null-field applicability mismatch")
         rejected |= check["status"] in {"unsupported", "unclear"} or bool(
@@ -296,6 +298,19 @@ def literal_issues(claim: str, evidence: str) -> list[str]:
             for n, word in enumerate(words)
             if re.search(r"\b" + word + r"\b", value, re.I)
         )
+        fractions = {
+            "half": "2",
+            "halves": "2",
+            "third": "3",
+            "thirds": "3",
+            "quarter": "4",
+            "quarters": "4",
+        }
+        result.update(
+            n
+            for word, n in fractions.items()
+            if re.search(r"\b" + word + r"\b", value, re.I)
+        )
         if re.search(r"\ba (?:year|month|day|quarter)\b", value, re.I):
             result.add("1")
         return result
@@ -311,6 +326,8 @@ def literal_issues(claim: str, evidence: str) -> list[str]:
         issues.append("unqualified_financial_translation")
     if "equity extension" in evidence.casefold() and "지수 확장" in claim:
         issues.append("equity_extension_is_not_index_extension")
+    if "active" in evidence.casefold() and re.search(r"활성.{0,12}노출", claim):
+        issues.append("active_exposure_is_not_activation")
     return issues
 
 
