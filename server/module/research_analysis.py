@@ -577,7 +577,7 @@ def enrich(
         if retry.get("attempts", 0) >= MAX_ATTEMPTS or (retry_at and now < retry_at):
             continue
         if attempted >= min(max_items, 3):
-            break
+            continue  # Still recover already-paid caches later in the feed.
         attempted += 1
         try:
             text = text_loader(item)[:MAX_INPUT_CHARS]
@@ -611,7 +611,7 @@ def enrich(
             reservation = _reserve_payload(payload, input_rate, output_rate)
             if budget["reserved_nanousd"] + reservation > limit:
                 reason = "monthly_budget_reached"
-                break
+                continue  # A paid-work hold must not hide verified cached originals.
             budget["reserved_nanousd"] += reservation
             budget["updated_at"] = now.isoformat()
             storage.write_json(budget, budget_path)

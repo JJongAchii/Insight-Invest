@@ -40,7 +40,13 @@ ENABLED_SOURCES = tuple(
 # This comparison selector exists only in the isolated manual runner. Production
 # remains on its configured model; no environment-driven fallback is added.
 MODEL_PRICES = {"gpt-5-nano": (50, 400), "gpt-5-mini": (250, 2000)}
-SAMPLES = ("latest", "reading-value-v1", "reading-value-v2", "v7-regression")
+SAMPLES = (
+    "latest",
+    "reading-value-v1",
+    "reading-value-v2",
+    "reading-diversity-v1",
+    "v7-regression",
+)
 V7_PROMPT = "reading-brief-openai-v7-korean-editorial"
 
 

@@ -4,6 +4,42 @@
   "note": "Public metadata and content hashes only. Never replace a changed source with the next latest article. Editorial reading labels are not scientific validity judgments.",
   "items": [
     {
+      "samples": ["reading-diversity-v1"],
+      "source_id": "deshaw-library",
+      "title": "Machine Teaching: What I Learned From My Optimizer",
+      "url": "https://www.deshaw.com/library/machine-teaching",
+      "pdf_url": "",
+      "authors": ["The D. E. Shaw Group"],
+      "published_at": "2023-12-11T00:00:00+00:00",
+      "source_digest": "7e7c14fc4e892dcbcf3dffbd53e0879f11c63d2b422d9ada12092f126ad8eac2",
+      "reading_check": "Investment-method practitioner essay: optimizer sensitivity, uncertainty, sizing and risk. Do not mistake portfolio optimization for software infrastructure or claim independently replicated performance.",
+      "expected_content_kinds": ["practitioner", "research"]
+    },
+    {
+      "samples": ["reading-diversity-v1"],
+      "source_id": "cfm-research",
+      "title": "The Hidden Beta in Dip Trade",
+      "url": "https://www.cfm.com/the-hidden-beta-in-dip-trade",
+      "pdf_url": "",
+      "authors": ["CFM"],
+      "published_at": "2026-07-15T07:35:01+00:00",
+      "source_digest": "0fc6720c574b3b69976adb44a230e53bc7edaf39796d2db5aa6ea7ea84dcf9e1",
+      "reading_check": "Concrete dip-buying and short-volatility research separating passive beta from timing skill. Costs are explicitly not included, and the two trades and their benchmarks must not be conflated.",
+      "expected_content_kinds": ["research", "practitioner"]
+    },
+    {
+      "samples": ["reading-diversity-v1"],
+      "source_id": "syzygy-insights",
+      "title": "Alignment in the Time of Dispersion: Introducing Syzygy Asset Management",
+      "url": "https://www.syzygyassetmanagement.com/insights/publications/articles/1124-cio-insights-alignment-in-the-time-of-dispersion",
+      "pdf_url": "https://media.syzygyassetmanagement.com/1124_cio_insights_alignment_in_the_time_of_dispersion_d96c8bfea2.pdf",
+      "authors": ["Jim Masturzo, CFA"],
+      "published_at": "2026-09-08T07:00:00+00:00",
+      "source_digest": "934ab8e422332f094f74b7489e5e249bd174d4262495c7543743e8c3bfd4891f",
+      "reading_check": "Firm introduction and current dispersion outlook; the presence of quant terminology and market charts does not make its primary purpose investment-method research. Context, no summary call.",
+      "expected_content_kinds": ["other", "market_commentary"]
+    },
+    {
       "samples": [
         "reading-value-v1",
         "v7-regression"
