@@ -11,6 +11,7 @@ import pytest
 from datastore import research, storage
 from module import research_analysis as analysis, research_feed
 from qdata.radar_editorial import publication_record
+from qdata.radar_notifications import origin
 from research_review_fixtures import attach_review, checks_for
 
 NOW = datetime(2026, 9, 7, 12, tzinfo=UTC)
@@ -52,7 +53,7 @@ def brief(*, relevant=True, kind="research"):
         "question": point,
         "method_data": point,
         "finding": None,
-        "why_read": None,
+        "why_read": point,
         "limitation": None,
         "reviewer_note": "AI 해석: 원문에서 비용 가정을 확인할 수 있습니다.",
         "quant_relevant": relevant,
@@ -89,6 +90,9 @@ def source(monkeypatch, tmp_path):
         },
         source_id="robeco-quant-insights",
         now=NOW,
+    )
+    record["notification_origin"] = origin(
+        record, baseline=NOW - timedelta(days=1), now=NOW
     )
     return Records(record)
 
@@ -719,6 +723,37 @@ def test_prompt_requires_finance_terms_attribution_and_conditions():
     assert "운용 인력의 점검·감독" in analysis.SYSTEM
     assert "Preserve material conditions on numerical claims" in analysis.SYSTEM
     assert "an expected benefit is not a measured result" in analysis.SYSTEM
+    assert "READING VALUE, NOT PAPER FORMAT" in analysis.SYSTEM
+    assert list(analysis.POINT_SCHEMA["anyOf"][1]["properties"]) == [
+        "evidence_ids",
+        "text_ko",
+    ]
+
+
+def test_accepted_topic_without_concrete_reading_value_stays_in_discovery(source):
+    research_feed.reconcile(s3=source, now=NOW)
+    item = research.load_feed()["items"][0]
+    value = brief()
+    value["why_read"] = None
+    item.update(
+        analysis_status="ready",
+        analysis={"source_digest": item["source_digest"], "brief": value},
+    )
+    attach_review(item, TEXT, NOW)
+    research_feed.apply_editorial_analysis(item)
+    assert item["research_lane"] == "discovery"
+    assert item["relevance_reason"] == "reading_value_missing"
+    assert not item["notification_eligible"]
+
+
+def test_accepted_historical_brief_can_be_read_in_core_but_never_badged(source):
+    research_feed.reconcile(s3=source, now=NOW)
+    apply_test_brief()
+    item = research.load_feed()["items"][0]
+    item.pop("notification_origin")
+    research_feed.apply_editorial_analysis(item)
+    assert item["research_lane"] == "core"
+    assert not item["notification_eligible"]
 
 
 def test_reasoning_change_does_not_reuse_old_analysis_cache(monkeypatch):

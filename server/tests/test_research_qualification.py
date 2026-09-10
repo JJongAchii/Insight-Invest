@@ -22,6 +22,7 @@ def configured(monkeypatch):
     monkeypatch.setenv("RESEARCH_MAX_ITEMS", "1")
     monkeypatch.setenv("RESEARCH_SOURCES", "aqr-research")
     monkeypatch.delenv("RESEARCH_QUALIFICATION_MODEL", raising=False)
+    monkeypatch.delenv("RESEARCH_SAMPLE", raising=False)
 
 
 def test_isolated_environment_contract(configured):
@@ -40,6 +41,7 @@ def test_isolated_environment_contract(configured):
         ("RESEARCH_SOURCES", "man-systematic-insights"),
         ("RESEARCH_SOURCES", "unknown-source"),
         ("RESEARCH_QUALIFICATION_MODEL", "unapproved-model"),
+        ("RESEARCH_SAMPLE", "unapproved-sample"),
     ],
 )
 def test_unsafe_qualification_inputs_stop_before_io(
@@ -140,6 +142,35 @@ def test_prefilter_skip_is_not_counted_as_a_model_comparison():
     assert (
         len(records) == 2
     )  # Keep the exclusion in the evidence, not silently delete it.
+
+
+def test_fixed_sample_never_substitutes_missing_source(configured, monkeypatch):
+    cases = qualification.fixed_cases(
+        "reading-value-v1", ["aqr-research", "rafi-publications"]
+    )
+    assert cases["aqr-research"]["title"] == "Investing in a Warming World"
+    assert len(cases["aqr-research"]["source_digest"]) == 64
+    assert len(cases["aqr-research"]["baseline_brief_digest"]) == 64
+    monkeypatch.setenv("RESEARCH_SAMPLE", "reading-value-v1")
+    monkeypatch.setenv("RESEARCH_SOURCES", "cfm-research")
+    with pytest.raises(ValueError, match="does not cover"):
+        qualification.validate_environment()
+
+
+def test_fixed_source_drift_stops_before_analysis(monkeypatch):
+    from datetime import UTC, datetime
+
+    case = qualification.fixed_cases("reading-value-v1", ["aqr-research"])[
+        "aqr-research"
+    ]
+    monkeypatch.setattr(qualification, "_fetch_bytes", lambda url: b"public source")
+    monkeypatch.setattr(
+        qualification,
+        "parse_publication",
+        lambda *a, **k: {"text": "Changed document.", "title": case["title"]},
+    )
+    with pytest.raises(ValueError, match="fixed source changed"):
+        qualification.fixed_publication(case, datetime.now(UTC))
 
 
 def test_runner_sets_comparison_prices_and_restores_defaults_without_io(

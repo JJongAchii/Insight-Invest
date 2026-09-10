@@ -83,6 +83,8 @@ def collect(s3, record):
     spec = SimpleNamespace(
         source_id="robeco-quant-insights",
         kind="editorial",
+        url="https://www.robeco.com/en-int/insights/",
+        canonical_url="https://www.robeco.com/en-int/insights/",
         cadence_minutes=60,
         realtime_enabled=True,
     )
@@ -220,6 +222,8 @@ def test_legacy_original_upgrade_preserves_user_state_and_one_card(
             SimpleNamespace(
                 source_id="verdad-research",
                 kind="editorial",
+                url="https://verdadcap.com/archive",
+                canonical_url="https://verdadcap.com/archive",
                 cadence_minutes=60,
                 realtime_enabled=True,
             )

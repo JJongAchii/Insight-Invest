@@ -8,6 +8,7 @@ from typing import Any
 
 from module import action_push, research_analysis, research_feed, research_review
 from datastore import research as research_store
+from qdata.radar_notifications import is_incremental
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +43,18 @@ def run(*, s3: Any | None = None) -> dict:
         s3=s3, bucket=bucket, pending_prefix=pending_prefix
     )
     eligible, suppressed_keys, deferred = [], [], 0
+    quarantined = 0
     for key, record in pending:
         item = projected.get(record["entry_id"], record)
+        if record.get("record_schema_version") == 4 and not (
+            is_incremental(record)
+            and is_incremental(item)
+            and record.get("notification_origin") == item.get("notification_origin")
+        ):
+            # Preserve unproven historical pending objects for audit, even when
+            # an accepted summary or an old eligible flag exists. Never replay.
+            quarantined += 1
+            continue
         if record.get("record_schema_version") == 4 and record.get(
             "notification_candidate"
         ):
@@ -89,6 +100,7 @@ def run(*, s3: Any | None = None) -> dict:
         "pending_eligible": len(eligible),
         "pending_suppressed": len(suppressed_keys),
         "pending_deferred": deferred,
+        "pending_quarantined": quarantined,
         "pending_deleted": len(deleted_keys),
         "push": push,
     }
