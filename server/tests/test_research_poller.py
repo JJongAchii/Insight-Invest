@@ -172,6 +172,36 @@ def test_analysis_outage_does_not_prevent_settlement_of_ready_items(monkeypatch)
     assert result["pending_deleted"] == 1 and captured["events"]
 
 
+def test_pending_and_projection_must_share_the_same_discovery_proof(monkeypatch):
+    captured = _arrange(
+        monkeypatch, {"enabled": True, "subscriptions": 1, "failed": 0, "disabled": 0}
+    )
+    key, record = _pending()[0]
+    record.update(
+        record_schema_version=4, notification_candidate=True, analysis_status="ready"
+    )
+    projected = {
+        **record,
+        "notification_origin": {
+            **record["notification_origin"],
+            "baseline_at": "2026-09-08T10:00:00+00:00",
+        },
+    }
+    assert research_poller.is_incremental(record)
+    assert research_poller.is_incremental(projected)
+    monkeypatch.setattr(research_feed, "pending_records", lambda **k: [(key, record)])
+    monkeypatch.setattr(
+        research_poller.research_store, "load_feed", lambda: {"items": [projected]}
+    )
+    monkeypatch.setattr(
+        research_poller.research_review, "state", lambda item: "accepted"
+    )
+    result = research_poller.run(s3=object())
+    assert result["pending_quarantined"] == 1
+    assert result["pending_deleted"] == result["pending_eligible"] == 0
+    assert not captured["events"] and not captured["deleted"]
+
+
 def test_classification_migration_defers_then_suppresses_market_outlook_push(
     monkeypatch,
 ):
