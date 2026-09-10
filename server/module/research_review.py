@@ -12,7 +12,7 @@ import os
 import re
 
 MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-review-openai-v7-self-contained"
+PROMPT_VERSION = "reading-review-openai-v8-qualifier-guard"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 8192
 REQUEST_TIMEOUT_SECONDS = 120
@@ -344,6 +344,12 @@ def literal_issues(claim: str, evidence: str) -> list[str]:
         r"샤프|Sharpe|비율|수익률|상관|베타|변동성|%|bp", claim, re.I
     ):
         issues.append("unnamed_numeric_metric")
+    # Frozen real failure: a generic "가정한다" is not the omitted assumption
+    # that the optimizer's DESIGN is sound. This is deliberately narrow.
+    if re.search(r"assuming.{0,45}design is sound", evidence, re.I) and not re.search(
+        r"설계|design", claim, re.I
+    ):
+        issues.append("omitted_optimizer_design_assumption")
     return issues
 
 

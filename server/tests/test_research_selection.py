@@ -198,3 +198,15 @@ def test_generation_cannot_add_an_unquoted_editorial_note():
         "지표가 0.38로 줄었다", "Shrinks to 0.38."
     )
     assert literal_issues("샤프 지표가 0.38로 줄었다", "Sharpe shrinks to 0.38.") == []
+    condition = (
+        "Assuming the optimizer’s design is sound, the gap may reflect input errors."
+    )
+    assert literal_issues("차이는 입력 오류라고 가정한다.", condition) == [
+        "omitted_optimizer_design_assumption"
+    ]
+    assert (
+        literal_issues(
+            "최적화기 설계가 타당하다면 차이는 입력 오류일 수 있다.", condition
+        )
+        == []
+    )
