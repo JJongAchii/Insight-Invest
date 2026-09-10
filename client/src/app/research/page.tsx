@@ -597,7 +597,7 @@ export default function ResearchPage() {
 
       {data?.editorial_enabled === false ? (
         <div className="rounded-xl border border-edge bg-surface px-4 py-3 text-sm leading-6 text-ink-secondary" role="status">
-          <p>원문 우선 공개 중입니다. 한국어 자동 요약과 신규 핵심 알림은 검증이 끝날 때까지 꺼져 있습니다.</p>
+          <p>한국어 자동 요약 처리가 일시 중지되어 있습니다. 선별된 핵심 원문은 요약 상태와 관계없이 읽을 수 있습니다.</p>
           <p className="text-xs text-ink-muted">기관의 원문·초록·PDF는 발견함과 전체 기록에서 읽고 보관할 수 있습니다.</p>
           {lane === "core" && data.lane_counts.discovery > 0 && (
             <button type="button" className="btn-secondary mt-3" onClick={() => selectLane("discovery")}>

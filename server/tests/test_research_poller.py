@@ -104,7 +104,7 @@ def test_editorial_pending_waits_for_brief_then_delivers_once(monkeypatch):
     assert not captured["events"]
     record.update(analysis_status="ready", notification_eligible=True)
     monkeypatch.setattr(
-        research_poller.research_review, "state", lambda _item: "accepted"
+        research_poller.research_selection, "state", lambda _item: "core"
     )
     result = research_poller.run(s3=object())
     assert result["pending_eligible"] == 1 and result["pending_deleted"] == 1
@@ -123,7 +123,7 @@ def test_release_hold_keeps_pending_and_never_pushes_even_accepted_cache(monkeyp
         research_feed, "pending_records", lambda **_kwargs: [(key, record)]
     )
     monkeypatch.setattr(
-        research_poller.research_review, "state", lambda _item: "accepted"
+        research_poller.research_selection, "state", lambda _item: "pending"
     )
     monkeypatch.delenv("RADAR_ANALYSIS_ENABLED", raising=False)
     result = research_poller.run(s3=object())
@@ -149,7 +149,7 @@ def test_historical_pending_is_preserved_without_push_even_if_summary_accepted(
         research_poller.research_store, "load_feed", lambda: {"items": [record]}
     )
     monkeypatch.setattr(
-        research_poller.research_review, "state", lambda item: "accepted"
+        research_poller.research_selection, "state", lambda item: "core"
     )
     result = research_poller.run(s3=object())
     assert result["pending_quarantined"] == 1
@@ -194,7 +194,7 @@ def test_pending_and_projection_must_share_the_same_discovery_proof(monkeypatch)
         research_poller.research_store, "load_feed", lambda: {"items": [projected]}
     )
     monkeypatch.setattr(
-        research_poller.research_review, "state", lambda item: "accepted"
+        research_poller.research_selection, "state", lambda item: "core"
     )
     result = research_poller.run(s3=object())
     assert result["pending_quarantined"] == 1
@@ -228,14 +228,14 @@ def test_classification_migration_defers_then_suppresses_market_outlook_push(
     assert not captured["events"]
     record.update(research_lane="context", relevance_reason="market_commentary")
     monkeypatch.setattr(
-        research_poller.research_review, "state", lambda _item: "accepted"
+        research_poller.research_selection, "state", lambda _item: "context"
     )
     result = research_poller.run(s3=object())
     assert result["pending_suppressed"] == 1 and result["pending_deleted"] == 1
     assert not captured["events"]
 
 
-@pytest.mark.parametrize("state", ["pending", "rejected"])
+@pytest.mark.parametrize("state", ["pending", "context"])
 def test_unreviewed_or_rejected_ready_flag_cannot_push(monkeypatch, state):
     captured = _arrange(
         monkeypatch, {"enabled": True, "subscriptions": 1, "failed": 0, "disabled": 0}
@@ -248,13 +248,13 @@ def test_unreviewed_or_rejected_ready_flag_cannot_push(monkeypatch, state):
         research_feed, "pending_records", lambda **_kwargs: [(key, record)]
     )
     # Without a real receipt even forged ready/eligible flags fail closed.
-    if state == "rejected":
+    if state == "context":
         monkeypatch.setattr(
-            research_poller.research_review, "state", lambda _item: state
+            research_poller.research_selection, "state", lambda _item: state
         )
     result = research_poller.run(s3=object())
     assert not captured["events"]
-    assert result["pending_suppressed"] == (state == "rejected")
+    assert result["pending_suppressed"] == (state == "context")
     assert result["pending_deferred"] == (state == "pending")
 
 

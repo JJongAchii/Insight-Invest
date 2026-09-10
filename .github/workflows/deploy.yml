@@ -39,7 +39,7 @@ on:
       research_sample:
         description: Fixed public-source regression or reading-value sample; no silent replacement
         type: choice
-        options: [latest, reading-value-v1, v7-regression]
+        options: [latest, reading-value-v1, reading-value-v2, reading-diversity-v1, v7-regression]
         default: latest
 
 env:
@@ -151,6 +151,7 @@ jobs:
               KrxId=${{ secrets.KRX_ID }} KrxPw=${{ secrets.KRX_PW }} \
               AnthropicApiKey=${{ secrets.ANTHROPIC_API_KEY }} \
               OpenAIApiKey=${{ secrets.OPENAI_API_KEY }} \
+              ResearchAnalysisEnabled=true \
               WebPushPublicKey=${{ secrets.WEB_PUSH_PUBLIC_KEY }} \
               WebPushPrivateKey=${{ secrets.WEB_PUSH_PRIVATE_KEY }} \
               WebPushSubject=https://insight-invest-ten.vercel.app \
@@ -270,10 +271,16 @@ jobs:
                     or .items[0].research_lane == "updates")'
           curl -sf -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
             -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
-            "$URL/research?limit=1" | jq -e \
-              '.lane == "core"
+            "$URL/research?limit=10" >/tmp/research-core.json
+          jq -e '.lane == "core" and .total > 0 and .editorial_enabled == true
                and (.items | all(.research_lane == "core"
-                                  and (.notification_eligible | type) == "boolean"))'
+                                  and .editorial_selection_status == "core"
+                                  and (.notification_eligible | type) == "boolean"))' \
+            /tmp/research-core.json
+          jq '{total, editorial_enabled, lane_counts, items: [.items[] | {
+            entry_id, title, source_id, url, analysis_status, editorial_review_status,
+            editorial_selection_status, notification_eligible
+          }]}' /tmp/research-core.json >/tmp/research-core-snapshot.json
           curl -sf -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
             -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
             "$URL/research?view=saved&q=__deployment_smoke_no_match__&limit=1" | jq -e \
@@ -292,6 +299,15 @@ jobs:
                and .paths["/research/status"].get
                and .paths["/research/seen"].put
                and (.paths["/intraday/market"].get.parameters | any(.name == "sector"))'
+
+      - name: Record research release and historical-alert safety
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-release-snapshot
+          path: |
+            /tmp/research-poller.json
+            /tmp/research-core-snapshot.json
+          if-no-files-found: error
 
       - name: Record deployed macro snapshot
         uses: actions/upload-artifact@v4

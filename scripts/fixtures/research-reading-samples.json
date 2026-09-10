@@ -4,12 +4,53 @@
   "note": "Public metadata and content hashes only. Never replace a changed source with the next latest article. Editorial reading labels are not scientific validity judgments.",
   "items": [
     {
-      "samples": ["reading-value-v1", "v7-regression"],
+      "samples": ["reading-diversity-v1"],
+      "source_id": "deshaw-library",
+      "title": "Machine Teaching: What I Learned From My Optimizer",
+      "url": "https://www.deshaw.com/library/machine-teaching",
+      "pdf_url": "",
+      "authors": ["The D. E. Shaw Group"],
+      "published_at": "2023-12-11T00:00:00+00:00",
+      "source_digest": "7e7c14fc4e892dcbcf3dffbd53e0879f11c63d2b422d9ada12092f126ad8eac2",
+      "reading_check": "Investment-method practitioner essay: optimizer sensitivity, uncertainty, sizing and risk. Do not mistake portfolio optimization for software infrastructure or claim independently replicated performance.",
+      "expected_content_kinds": ["practitioner", "research"]
+    },
+    {
+      "samples": ["reading-diversity-v1"],
+      "source_id": "cfm-research",
+      "title": "The Hidden Beta in Dip Trade",
+      "url": "https://www.cfm.com/the-hidden-beta-in-dip-trade",
+      "pdf_url": "",
+      "authors": ["CFM"],
+      "published_at": "2026-07-15T07:35:01+00:00",
+      "source_digest": "0fc6720c574b3b69976adb44a230e53bc7edaf39796d2db5aa6ea7ea84dcf9e1",
+      "reading_check": "Concrete dip-buying and short-volatility research separating passive beta from timing skill. Costs are explicitly not included, and the two trades and their benchmarks must not be conflated.",
+      "expected_content_kinds": ["research", "practitioner"]
+    },
+    {
+      "samples": ["reading-diversity-v1"],
+      "source_id": "syzygy-insights",
+      "title": "Alignment in the Time of Dispersion: Introducing Syzygy Asset Management",
+      "url": "https://www.syzygyassetmanagement.com/insights/publications/articles/1124-cio-insights-alignment-in-the-time-of-dispersion",
+      "pdf_url": "https://media.syzygyassetmanagement.com/1124_cio_insights_alignment_in_the_time_of_dispersion_d96c8bfea2.pdf",
+      "authors": ["Jim Masturzo, CFA"],
+      "published_at": "2026-09-08T07:00:00+00:00",
+      "source_digest": "934ab8e422332f094f74b7489e5e249bd174d4262495c7543743e8c3bfd4891f",
+      "reading_check": "Firm introduction and current dispersion outlook; the presence of quant terminology and market charts does not make its primary purpose investment-method research. Context, no summary call.",
+      "expected_content_kinds": ["other", "market_commentary"]
+    },
+    {
+      "samples": [
+        "reading-value-v1",
+        "v7-regression"
+      ],
       "source_id": "aqr-research",
       "title": "Investing in a Warming World",
       "url": "https://www.aqr.com/Insights/Research/White-Papers/Investing-in-a-Warming-World",
       "pdf_url": "https://www.aqr.com/-/media/AQR/Documents/White-Papers/Investing-in-a-Warming-World-How-Market-Driven-Valuation-Effects-Can-Impact-Portfolio-Decarbonization.pdf?hash=BA80DCF11FE32D528AAFE7DEE7A34DFC&sc_lang=en",
-      "authors": ["Steffen Bixby"],
+      "authors": [
+        "Steffen Bixby"
+      ],
       "published_at": "2026-09-01T00:00:00+00:00",
       "source_digest": "cb21a2134a2e7490f2abeaa9fafec84f68bfe8e0dcac4f6929e46830df3f4931",
       "baseline_fingerprint": "b425e1d65c3fd7fa3056bc8baaf31172ace130c4f3e0b72b265a61c9fe45d42a",
@@ -17,16 +58,30 @@
       "baseline_analysis_scope": "full_pdf",
       "baseline_brief_digest": "2259eeb1b8c8d88a819a62681bed74751d254901798d936d81afa00a941d22c1",
       "reading_check": "Useful quantitative measurement research. Preserve attribution and conditions; do not confuse equity extension with index extension or combine properties of different carbon metrics.",
-      "expected_content_kinds": ["research", "practitioner"],
-      "known_bad_v7_fields": ["why_read", "limitation"]
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "known_bad_v7_fields": [
+        "why_read",
+        "limitation"
+      ]
     },
     {
-      "samples": ["reading-value-v1", "v7-regression"],
+      "samples": [
+        "reading-value-v1",
+        "v7-regression"
+      ],
       "source_id": "robeco-quant-insights",
       "title": "Finding value in global credit markets",
       "url": "https://www.robeco.com/en-int/insights/2026/09/finding-value-in-global-credit-markets",
       "pdf_url": "",
-      "authors": ["Matthew Jackson", "Michael Booth", "Alexis Duvernay", "Jessica Monkivitch"],
+      "authors": [
+        "Matthew Jackson",
+        "Michael Booth",
+        "Alexis Duvernay",
+        "Jessica Monkivitch"
+      ],
       "published_at": "2026-09-08T00:00:00+00:00",
       "source_digest": "01bcd64dc250982c54d5c5c9ac8a06648f486c19f2ba93276845886827751ec5",
       "baseline_fingerprint": "1af3a526bb97cefe12fec9b2ce4272a5475db27b1cce0356ad6c11151609385e",
@@ -34,27 +89,40 @@
       "baseline_analysis_scope": "full_article",
       "baseline_brief_digest": "63953f93f94827791b9f508aacb8ddebae9ef7ca5f216e3f49377ca97325b584",
       "reading_check": "Mostly current credit-market positioning, not a quantitative investment method. Background reading remains available.",
-      "expected_content_kinds": ["market_commentary"]
+      "expected_content_kinds": [
+        "market_commentary"
+      ]
     },
     {
-      "samples": ["reading-value-v1"],
+      "samples": [
+        "reading-value-v1"
+      ],
       "source_id": "rafi-publications",
       "title": "Reading Between the Lines: NLP for Long-Horizon Factor Investing (Part 1 of 2) | RAFI Indices",
       "url": "https://www.rafi.com/research/publications/articles/1117-nlp-for-long-horizon-factor-investing",
       "pdf_url": "https://awesome-light-4e4ac6b0e4.media.strapiapp.com/1117_nlp_for_long_horizon_factor_investing_d39e26f476.pdf",
-      "authors": ["Que Nguyen", "Joseph Shim, CFA"],
+      "authors": [
+        "Que Nguyen",
+        "Joseph Shim, CFA"
+      ],
       "published_at": "2026-06-02T15:15:00+00:00",
       "source_digest": "c78fdf4ce87600a245b31f312bbb8c5db613615ced31d5befb56abebb0fda805",
       "reading_check": "Concrete filing-similarity signal, universe, rebalance rules and factor comparisons. Do not claim costs or independent replication were verified.",
-      "expected_content_kinds": ["research"]
+      "expected_content_kinds": [
+        "research"
+      ]
     },
     {
-      "samples": ["v7-regression"],
+      "samples": [
+        "v7-regression"
+      ],
       "source_id": "cfm-research",
       "title": "The Wisdom of Crowds? – A Mid Year Review",
       "url": "https://www.cfm.com/the-wisdom-of-crowds-a-mid-year-review",
       "pdf_url": "",
-      "authors": ["CFM"],
+      "authors": [
+        "CFM"
+      ],
       "published_at": "2026-07-23T08:56:35+00:00",
       "source_digest": "8bbda83a7f86d4bd2d766d9351a82524a11a4def1291a6bcba0ef41bf3925ae5",
       "baseline_fingerprint": "0209a1500e7ec397efa8698d5756d4bc051bad506638a42827d52179ae42108d",
@@ -62,7 +130,73 @@
       "baseline_analysis_scope": "full_article",
       "baseline_brief_digest": "77f70c85a9e798c424c26faa49394f054d1102db6dd48f022fd609f7a826a757",
       "reading_check": "Market outlook synthesis; using LLMs to summarize broker consensus does not make it quant strategy research.",
-      "expected_content_kinds": ["market_commentary"]
+      "expected_content_kinds": [
+        "market_commentary"
+      ]
+    },
+    {
+      "samples": [
+        "reading-value-v2"
+      ],
+      "source_id": "aqr-research",
+      "title": "Investing in a Warming World",
+      "url": "https://www.aqr.com/Insights/Research/White-Papers/Investing-in-a-Warming-World",
+      "pdf_url": "https://www.aqr.com/-/media/AQR/Documents/White-Papers/Investing-in-a-Warming-World-How-Market-Driven-Valuation-Effects-Can-Impact-Portfolio-Decarbonization.pdf?hash=BA80DCF11FE32D528AAFE7DEE7A34DFC&sc_lang=en",
+      "authors": [
+        "Steffen Bixby"
+      ],
+      "published_at": "2026-09-01T00:00:00+00:00",
+      "source_digest": "cb21a2134a2e7490f2abeaa9fafec84f68bfe8e0dcac4f6929e46830df3f4931",
+      "reading_check": "Useful quantitative measurement research. Preserve attribution and conditions; do not confuse equity extension with index extension or combine properties of different carbon metrics.",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "parser_version": "editorial-v3-pdf-layout"
+    },
+    {
+      "samples": [
+        "reading-value-v2"
+      ],
+      "source_id": "robeco-quant-insights",
+      "title": "Finding value in global credit markets",
+      "url": "https://www.robeco.com/en-int/insights/2026/09/finding-value-in-global-credit-markets",
+      "pdf_url": "",
+      "authors": [
+        "Matthew Jackson",
+        "Michael Booth",
+        "Alexis Duvernay",
+        "Jessica Monkivitch"
+      ],
+      "published_at": "2026-09-08T00:00:00+00:00",
+      "source_digest": "01bcd64dc250982c54d5c5c9ac8a06648f486c19f2ba93276845886827751ec5",
+      "reading_check": "Mostly current credit-market positioning, not a quantitative investment method. Background reading remains available.",
+      "expected_content_kinds": [
+        "market_commentary"
+      ],
+      "parser_version": "editorial-v3-pdf-layout"
+    },
+    {
+      "samples": [
+        "reading-value-v2"
+      ],
+      "source_id": "rafi-publications",
+      "title": "Reading Between the Lines: NLP for Long-Horizon Factor Investing (Part 1 of 2) | RAFI Indices",
+      "url": "https://www.rafi.com/research/publications/articles/1117-nlp-for-long-horizon-factor-investing",
+      "pdf_url": "https://awesome-light-4e4ac6b0e4.media.strapiapp.com/1117_nlp_for_long_horizon_factor_investing_d39e26f476.pdf",
+      "authors": [
+        "Que Nguyen",
+        "Joseph Shim, CFA"
+      ],
+      "published_at": "2026-06-02T15:15:00+00:00",
+      "source_digest": "a7f289afc320a783f3912677fc53e4c6ca92bb2ac822dbfbff317a092b323de2",
+      "reading_check": "Concrete filing-similarity signal, universe, rebalance rules and factor comparisons. Do not claim costs or independent replication were verified.",
+      "expected_content_kinds": [
+        "research"
+      ],
+      "parser_version": "editorial-v3-pdf-layout",
+      "analysis_scope": "pdf_excerpt",
+      "extraction_note": "Public PDF page 2 onward, pypdf layout; cover sidebar omitted explicitly. Broken numeric passages remain non-citable. Original v1 failure fixture is unchanged."
     }
   ]
 }

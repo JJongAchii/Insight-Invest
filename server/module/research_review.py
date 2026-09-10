@@ -12,7 +12,8 @@ import os
 import re
 
 MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-review-openai-v3-contrast"
+PROMPT_VERSION = "reading-review-openai-v8-qualifier-guard"
+CODE_GUARD_VERSION = "point-qualifiers-v1"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 8192
 REQUEST_TIMEOUT_SECONDS = 120
@@ -37,7 +38,7 @@ evidence. Never rewrite the draft, invent source facts, or verify investment ret
 Check EVERY field independently. Return supported only if it is faithful; use
 unsupported for a concrete error and unclear if the bounded source cannot establish
 support. not_applicable is allowed ONLY for a null question/method_data/finding/
-why_read/limitation. Check null fields too, but do not require missing content to be
+why_read/limitation OR an empty reviewer_note. Check null fields too, but do not require missing content to be
 filled. A brief need not cover everything and a practitioner article needs no formal
 research question, hypothesis test, trading rule, or backtest.
 
@@ -110,6 +111,18 @@ not practitioner quant research merely because it mentions risk, ratios or AI.
 Check why_read against the attached evidence: it must tell the reader WHAT they
 will learn, not repeat a topic or promise that a strategy works. A conceptual
 framework is not an empirical test or a reproducible strategy specification.
+
+Each displayed point must be interpretable on its own. A decimal described only as
+"the metric" without identifying what is measured is unclear, even if the same
+digits occur in a quote. Do not silently turn a Sharpe ratio or beta-adjusted result
+into a raw return. Context elsewhere cannot fix missing metric/baseline in the
+displayed point. Material assumptions in the cited clause must survive translation:
+"assuming the optimizer is correctly designed, disagreement may reflect bad inputs"
+does not support the unconditional "disagreement reflects bad inputs". Likewise,
+"all else equal and without slippage constraints" is a necessary condition, not
+optional detail. Conciseness may omit whole topics but must preserve qualifications
+of the particular claim it DOES make. Mark these cases unclear/unsupported rather
+than praising the draft for containing a related topic.
 """
 
 CHECK_SCHEMA = {
@@ -145,7 +158,7 @@ def digest(value) -> str:
     ).hexdigest()
 
 
-def cache_key(item: dict, analysis: dict) -> str:
+def cache_key(item: dict, analysis: dict, *, legacy_guards: bool = False) -> str:
     return digest(
         [
             item["source_digest"],
@@ -160,6 +173,7 @@ def cache_key(item: dict, analysis: dict) -> str:
             REASONING_EFFORT,
             MAX_OUTPUT_TOKENS,
         ]
+        + ([] if legacy_guards else [CODE_GUARD_VERSION])
     )
 
 
@@ -171,7 +185,9 @@ def _decision(checks: dict, brief: dict) -> str:
         check = checks[field]
         if not isinstance(check, dict) or check.get("status") not in STATUSES:
             raise ValueError("invalid review check")
-        absent = field in POINTS and brief.get(field) is None
+        absent = (field in POINTS and brief.get(field) is None) or (
+            field == "reviewer_note" and brief.get(field) == ""
+        )
         if (check["status"] == "not_applicable") != absent:
             raise ValueError("review null-field applicability mismatch")
         rejected |= check["status"] in {"unsupported", "unclear"} or bool(
@@ -202,6 +218,15 @@ def request_payload(text: str, title: str, brief: dict) -> dict:
     from module.research_analysis import _source_passages, validate_brief
 
     validate_brief(brief, text)
+    allowed = point_evidence_ids(text, brief)
+    schema = json.loads(json.dumps(SCHEMA))
+    for field, ids in allowed.items():
+        if ids:
+            schema["properties"][field]["properties"]["evidence_ids"]["items"][
+                "enum"
+            ] = ids
+        else:
+            schema["properties"][field]["properties"]["evidence_ids"]["maxItems"] = 0
     return {
         "model": MODEL,
         "store": False,
@@ -224,7 +249,7 @@ def request_payload(text: str, title: str, brief: dict) -> dict:
                 "type": "json_schema",
                 "name": "research_source_review",
                 "strict": True,
-                "schema": SCHEMA,
+                "schema": schema,
             },
         },
     }
@@ -257,6 +282,83 @@ def missing_years(claim: str, evidence: str) -> list[str]:
     return sorted(set(re.findall(pattern, claim)) - set(re.findall(pattern, evidence)))
 
 
+def literal_issues(
+    claim: str, evidence: str, *, point_conditions: bool = True
+) -> list[str]:
+    """Conservative traceability checks, not a replacement for semantic review.
+
+    Unit conversions and reconstructed PDF values intentionally require omission
+    or further review; the guard never edits the author's or model's numbers.
+    """
+
+    def numbers(value):
+        value = value.replace(",", "").replace("−", "-").replace("–", "-")
+        result = set(re.findall(r"(?<![\w.])\d+(?:\.\d+)?(?!\d|\.\d)", value))
+        words = (
+            "zero",
+            "one",
+            "two",
+            "three",
+            "four",
+            "five",
+            "six",
+            "seven",
+            "eight",
+            "nine",
+            "ten",
+            "eleven",
+            "twelve",
+        )
+        result.update(
+            str(n)
+            for n, word in enumerate(words)
+            if re.search(r"\b" + word + r"\b", value, re.I)
+        )
+        fractions = {
+            "half": "2",
+            "halves": "2",
+            "third": "3",
+            "thirds": "3",
+            "quarter": "4",
+            "quarters": "4",
+        }
+        result.update(
+            n
+            for word, n in fractions.items()
+            if re.search(r"\b" + word + r"\b", value, re.I)
+        )
+        if re.search(r"\ba (?:year|month|day|quarter)\b", value, re.I):
+            result.add("1")
+        return result
+
+    issues = []
+    if absent := numbers(claim) - numbers(evidence):
+        issues.append("numbers_absent_from_evidence:" + ",".join(sorted(absent)))
+    if re.search(r"[\u3040-\u30ff]", claim):
+        issues.append("unexpected_japanese_in_korean_brief")
+    if re.search(
+        r"재무화된\s*배출|자금조달배출|기후\s*인식\s*투자자|신규\s*발행\s*양보", claim
+    ):
+        issues.append("unqualified_financial_translation")
+    if "equity extension" in evidence.casefold() and "지수 확장" in claim:
+        issues.append("equity_extension_is_not_index_extension")
+    if "active" in evidence.casefold() and re.search(r"활성.{0,12}노출", claim):
+        issues.append("active_exposure_is_not_activation")
+    if re.search(r"지표.{0,16}\d+\.\d+", claim) and not re.search(
+        r"샤프|Sharpe|비율|수익률|상관|베타|변동성|%|bp", claim, re.I
+    ):
+        issues.append("unnamed_numeric_metric")
+    # Frozen real failure: a generic "가정한다" is not the omitted assumption
+    # that the optimizer's DESIGN is sound. This is deliberately narrow.
+    if (
+        point_conditions
+        and re.search(r"assuming.{0,45}design is sound", evidence, re.I)
+        and not re.search(r"설계|design", claim, re.I)
+    ):
+        issues.append("omitted_optimizer_design_assumption")
+    return issues
+
+
 def validate_checks(value: dict, text: str, brief: dict) -> dict:
     from module.research_analysis import AnalysisContractError, _source_passages
 
@@ -286,16 +388,20 @@ def validate_checks(value: dict, text: str, brief: dict) -> dict:
         issues = []
         if field in allowed:
             point = brief[field]
+            issues.extend(literal_issues(point["text_ko"], point["evidence"]))
             if check["status"] == "supported" and not set(ids) <= set(allowed[field]):
                 issues.append("review_cites_outside_point_evidence")
             if years := missing_years(point["text_ko"], point["evidence"]):
                 issues.append("years_absent_from_point_evidence:" + ",".join(years))
         elif field == "reviewer_note":
             cited = " ".join(brief[name]["evidence"] for name in POINTS if brief[name])
+            issues.extend(literal_issues(brief[field], cited, point_conditions=False))
             if years := missing_years(brief[field], cited):
                 issues.append(
                     "note_years_absent_from_grounded_points:" + ",".join(years)
                 )
+        elif field == "title_ko":
+            issues.extend(literal_issues(brief[field], text, point_conditions=False))
         grounded[field] = {
             "status": check["status"],
             "reason_ko": reason,
@@ -324,6 +430,7 @@ def receipt(item: dict, analysis: dict, checks: dict, text: str, now: str) -> di
         "model": MODEL,
         "prompt_version": PROMPT_VERSION,
         "reasoning_effort": REASONING_EFFORT,
+        "code_guard_version": CODE_GUARD_VERSION,
         "source_digest": item["source_digest"],
         "draft_digest": digest(analysis["brief"]),
         "input_digest": digest(text),

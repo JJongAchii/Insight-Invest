@@ -1,6 +1,23 @@
 """Synthetic checks for offline state-machine tests, NEVER semantic acceptance."""
 
-from module import research_review
+from module import research_review, research_selection
+
+
+def selection_for(item, text, now, *, kind="research", relevant=True):
+    return research_selection.receipt(
+        item,
+        {
+            "content_kind": kind,
+            "investment_focus": relevant,
+            "transferable_insight": {"evidence_ids": [0]} if relevant else None,
+            "reason": "Synthetic original-selection fixture, not a semantic qualification.",
+            "reading_points": {
+                name: {"evidence_ids": [0]} for name in research_selection.POINT_NAMES
+            },
+        },
+        text,
+        now.isoformat(),
+    )
 
 
 def checks_for(brief):

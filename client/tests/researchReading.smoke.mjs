@@ -15,9 +15,7 @@ const originalProbe = report.status === "original_feed_checked" && report.llm_ca
 assert.ok(academicProbe || originalProbe || ["api_contract_qualified", "needs_diagnosis"].includes(report.status));
 const originalItems = academicProbe ? report.items.slice(0, 3).map((item) => ({
   ...item, entry_id: item.entry_id_sha256, record_schema_version: item.schema_version,
-})) : originalProbe ? report.items : report.items.filter((item) =>
-  item.analysis?.prompt_version === report.prompt_version,
-);
+})) : report.items;
 assert.ok(originalItems.length >= 1 && originalItems.length <= 3, "Use a bounded actual sample");
 assert.ok(academicProbe || originalProbe || report.review_prompt_version, "Use actual source-review outcomes, never mark drafts reviewed in the fixture");
 const reviewed = (item) => item.analysis_status === "ready" && item.editorial_review_status === "accepted";
@@ -91,13 +89,13 @@ try {
     page.on("dialog", (dialog) => dialog.accept());
     await page.goto("/research");
     for (const item of items.filter((value) => value.research_lane === "core")) {
-      assert.ok(reviewed(item), "Core requires an accepted actual review");
+      assert.equal(item.editorial_selection_status, "core", "Core requires source-only selection, not a Korean brief");
       await page.locator(`#research-${item.entry_id}`).waitFor();
     }
     assert.equal(await page.locator("article[id^='research-']").count(), items.filter((item) => item.research_lane === "core").length);
     await page.screenshot({ path: `${output}/core-${viewport.width}.png`, fullPage: true });
     if (originalProbe) {
-      await page.getByText("원문 우선 공개 중입니다.", { exact: false }).waitFor();
+      await page.getByText("한국어 자동 요약 처리가 일시 중지되어 있습니다.", { exact: false }).waitFor();
       await page.getByRole("button", { name: "발견한 원문 보기", exact: true }).click();
       await page.waitForURL((url) => url.searchParams.get("lane") === "discovery");
       for (const item of items.filter((value) => value.research_lane === "discovery")) {
@@ -113,10 +111,11 @@ try {
         assert.equal(await card.locator("dl").count(), 0, "Do not display a rejected Korean draft as an approved summary");
         assert.ok(await card.getByText(item.title, { exact: true }).count());
         const label = academicProbe ? item.original_access_status?.startsWith("verified_") && item.access_status !== "abstract_only" ? "공개 원문 확인" : "초록 확인"
-          : item.relevance_reason === "editorial_release_pending" ? "한국어 요약 기능 검증 중"
+          : item.editorial_selection_status === "context" ? "한국어 요약 대상에서 제외"
           : item.analysis_status === "not_requested" ? "요약 대상 아님"
           : item.editorial_review_status === "rejected" ? "요약 검수 보류"
-          : item.analysis_status === "retry_pending" ? "요약 재시도 대기" : "요약 원문 대조 중";
+          : item.analysis_status === "retry_pending" ? "요약 재시도 대기"
+          : item.analysis ? "요약 원문 대조 중" : "한국어 요약 준비 중";
         assert.ok(await card.getByText(label, { exact: false }).count());
         if (originalProbe) {
           const provenance = item.summary_kind === "publisher_description" ? "발행처 소개문"

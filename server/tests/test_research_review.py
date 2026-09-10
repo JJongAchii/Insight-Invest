@@ -115,8 +115,7 @@ def test_semantic_rejection_keeps_original_and_library_without_automatic_retry(
     draft(source)
     item = research.load_feed()["items"][0]
     assert (
-        item["analysis_status"] == "review_pending"
-        and item["research_lane"] == "discovery"
+        item["analysis_status"] == "review_pending" and item["research_lane"] == "core"
     )
     research.set_read(item["entry_id"], read=True)
     research.set_saved(item["entry_id"], saved=True)
@@ -145,7 +144,7 @@ def test_semantic_rejection_keeps_original_and_library_without_automatic_retry(
         held["analysis_status"] == "review_rejected"
         and review.state(held) == "rejected"
     )
-    assert held["research_lane"] == "discovery" and not held["notification_eligible"]
+    assert held["research_lane"] == "core" and held["notification_eligible"]
     assert held["summary"] == item["summary"] and held["url"] == item["url"]
     assert (
         held["analysis"]["brief"] == item["analysis"]["brief"]
@@ -181,7 +180,11 @@ def test_passing_receipt_cannot_be_reused_after_changes(source, monkeypatch, cha
         item["analysis"]["review"]["checks"]["method_data"]["status"] = "unsupported"
     assert review.state(item) == "pending"
     research_feed.apply_editorial_analysis(item)
-    assert item["research_lane"] == "discovery" and not item["notification_eligible"]
+    assert item["editorial_review_status"] == "pending"
+    assert item["research_lane"] == (
+        "discovery" if change in {"source", "title"} else "core"
+    )
+    assert item["notification_eligible"] is (change not in {"source", "title"})
 
 
 def test_new_budget_preserves_old_reservations_and_resumes_cached_draft(
@@ -217,7 +220,7 @@ def test_new_budget_preserves_old_reservations_and_resumes_cached_draft(
     )
     item = research.load_feed()["items"][0]
     assert item["analysis_status"] == "ready" and item["notification_eligible"]
-    assert item["available_at"] == (NOW + timedelta(minutes=10)).isoformat()
+    assert item["available_at"] == NOW.isoformat()
 
 
 def test_review_cache_recovers_lost_projection_without_api_or_source_fetch(source):
@@ -255,7 +258,7 @@ def test_review_transport_failure_keeps_reservation_and_draft_then_retries_only_
     item = research.load_feed()["items"][0]
     assert result["failed"] == 1 and result["reserved_nanousd"] > 185_000
     assert item["analysis"] == prior and item["analysis_retry"]["stage"] == "review"
-    assert not item["notification_eligible"]
+    assert item["notification_eligible"]
     analysis.enrich(
         now=NOW + timedelta(hours=1),
         text_loader=lambda _item: TEXT,
@@ -277,7 +280,7 @@ def test_unchanged_etag_migration_demotes_unreviewed_ready_without_key(
     monkeypatch.delenv("OPENAI_API_KEY")
     research_feed.reconcile(s3=source, now=NOW)
     item = research.load_feed()["items"][0]
-    assert item["research_lane"] == "discovery" and not item["notification_eligible"]
+    assert item["research_lane"] == "core" and item["notification_eligible"]
     assert item["analysis"]["brief"] == feed["items"][0]["analysis"]["brief"]
 
 
@@ -294,6 +297,7 @@ def test_reviewer_cannot_borrow_other_fields_citations_or_hide_missing_years():
     method = grounded["method_data"]
     assert method["status"] == "supported"  # Preserve the raw model's false pass.
     assert method["guard_issues"] == [
+        "numbers_absent_from_evidence:2009,2025",
         "review_cites_outside_point_evidence",
         "years_absent_from_point_evidence:2009,2025",
     ]
@@ -309,7 +313,8 @@ def test_new_year_facts_in_unquoted_note_are_not_cleared_by_elsewhere_source():
         checks_for(value), TEXT + "The strategy started in 2018.", value
     )
     assert checked["reviewer_note"]["guard_issues"] == [
-        "note_years_absent_from_grounded_points:2018"
+        "numbers_absent_from_evidence:2018",
+        "note_years_absent_from_grounded_points:2018",
     ]
 
 

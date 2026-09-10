@@ -6,7 +6,7 @@ import logging
 import os
 from typing import Any
 
-from module import action_push, research_analysis, research_feed, research_review
+from module import action_push, research_analysis, research_feed, research_selection
 from datastore import research as research_store
 from qdata.radar_notifications import is_incremental
 
@@ -58,18 +58,11 @@ def run(*, s3: Any | None = None) -> dict:
         if record.get("record_schema_version") == 4 and record.get(
             "notification_candidate"
         ):
-            if not research_review.enabled():
-                deferred += 1
-                continue
-            state = research_review.state(item)
-            if state == "rejected":
+            state = research_selection.state(item)
+            if state == "context":
                 suppressed_keys.append(key)
                 continue
-            if (
-                state != "accepted"
-                or item.get("analysis_status") != "ready"
-                or item.get("relevance_reason") == "classification_pending"
-            ):
+            if state != "core":
                 deferred += 1
                 continue
         if item.get("notification_eligible"):

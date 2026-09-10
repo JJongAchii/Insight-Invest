@@ -709,6 +709,7 @@ export interface ResearchEntry {
   date_precision?: "day" | "month";
   analysis_status?: string;
   editorial_review_status?: "pending" | "accepted" | "rejected";
+  editorial_selection_status?: "pending" | "core" | "context";
   analysis?: ResearchAnalysis;
   evidence_dimensions?: ResearchEvidenceDimension[];
   evidence_excerpts?: Partial<Record<ResearchEvidenceDimension, string[]>>;

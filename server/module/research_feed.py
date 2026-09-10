@@ -14,7 +14,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from datastore import research as research_store
-from module import research_review
+from module import research_review, research_selection
 from qdata.radar_notifications import is_incremental
 
 DEFAULT_BUCKET = "insight-invest-datalake"
@@ -132,6 +132,7 @@ def _publication_fields(payload: dict, *, key: str) -> dict:
 
 
 def apply_editorial_analysis(item: dict, *, target: dict | None = None) -> None:
+    """An original's reading value is not conditional on a translated brief."""
     target = item if target is None else target
     if item.get("quality_profile") == "academic-discovery-v1":
         target.update(
@@ -141,59 +142,35 @@ def apply_editorial_analysis(item: dict, *, target: dict | None = None) -> None:
             notification_candidate=False,
             analysis_status="not_requested",
             editorial_review_status="pending",
+            editorial_selection_status="pending",
         )
         return
+    selection = research_selection.state(item)
+    target["editorial_selection_status"] = selection
+    target["editorial_review_status"] = (
+        research_review.state(item) if research_review.enabled() else "pending"
+    )
     candidate = item.get("editorial_candidate_lane", item.get("research_lane"))
-    if not research_review.enabled() and item.get("analysis_status") != "not_requested":
-        # Preserve drafts/receipts and library identity. A key or old ready cache
-        # must not turn an unqualified editorial feature into a release.
-        target.update(
-            editorial_candidate_lane=candidate,
-            research_lane="discovery" if candidate == "core" else candidate,
-            relevance_reason="editorial_release_pending",
-            editorial_review_status="pending",
-            notification_eligible=False,
-        )
-        return
-    brief = item.get("analysis", {}).get("brief")
-    review_state = research_review.state(item)
-    target["editorial_review_status"] = review_state
-    if brief:
-        kind = brief.get("content_kind")
-        relevant = (
-            brief.get("quant_relevant") is True and brief.get("substantive") is True
-        )
-        if kind not in {"research", "practitioner", "market_commentary", "other"}:
-            # Old briefs stay readable, but cannot bypass the new classification.
-            lane, reason = "discovery", "classification_pending"
-        elif review_state != "accepted" or item.get("analysis_status") != "ready":
-            lane = "discovery" if candidate == "core" else candidate
-            reason = (
-                "review_rejected" if review_state == "rejected" else "review_pending"
-            )
-        elif kind == "market_commentary":
-            lane, reason = "context", "market_commentary"
-        elif relevant and kind in {"research", "practitioner"}:
-            if not brief.get("why_read"):
-                lane, reason = "discovery", "reading_value_missing"
-            else:
-                lane, reason = candidate, "source_checked_reading_brief"
-        else:
-            lane, reason = "context", "editorial_topic_mismatch"
-        target["research_lane"] = lane
-        target["relevance_reason"] = reason
-        target["notification_eligible"] = bool(
-            lane == "core"
-            and review_state == "accepted"
-            and item.get("notification_candidate")
-            and is_incremental(item)
-        )
-        if target["notification_eligible"] and not item.get("available_at"):
-            target["available_at"] = item["analysis"]["review"]["checked_at"]
-    elif candidate == "core":
-        target["research_lane"] = "discovery"
-        target["relevance_reason"] = "analysis_pending"
-        target["notification_eligible"] = False
+    lane = (
+        selection
+        if selection != "pending"
+        else ("discovery" if candidate == "core" else candidate)
+    )
+    target["research_lane"] = lane
+    target["relevance_reason"] = (
+        "source_selected_original"
+        if selection == "core"
+        else "source_selected_context"
+        if selection == "context"
+        else "original_selection_pending"
+    )
+    target["notification_eligible"] = bool(
+        selection == "core"
+        and item.get("notification_candidate")
+        and is_incremental(item)
+    )
+    if target["notification_eligible"] and not item.get("available_at"):
+        target["available_at"] = item["editorial_selection"]["checked_at"]
 
 
 def _topic_concept(term: str) -> str:
@@ -548,6 +525,7 @@ def reconcile(
             item["available_at"] = prior["available_at"]
         if prior and prior.get("source_digest") == item.get("source_digest"):
             for field in (
+                "editorial_selection",
                 "analysis",
                 "analysis_status",
                 "analysis_updated_at",

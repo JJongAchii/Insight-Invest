@@ -9,10 +9,10 @@ import httpx
 import pytest
 
 from datastore import research, storage
-from module import research_analysis as analysis, research_feed
+from module import research_analysis as analysis, research_feed, research_selection
 from qdata.radar_editorial import publication_record
 from qdata.radar_notifications import origin
-from research_review_fixtures import attach_review, checks_for
+from research_review_fixtures import attach_review, checks_for, selection_for
 
 NOW = datetime(2026, 9, 7, 12, tzinfo=UTC)
 TEXT = (
@@ -94,6 +94,10 @@ def source(monkeypatch, tmp_path):
     record["notification_origin"] = origin(
         record, baseline=NOW - timedelta(days=1), now=NOW
     )
+    storage.write_json(
+        selection_for(record, TEXT, NOW),
+        f"research_analysis/selections/{research_selection.cache_key(record)}.json",
+    )
     return Records(record)
 
 
@@ -101,6 +105,7 @@ def apply_test_brief(*, now=NOW, relevant=True):
     """Synthetic fixture, not a provider or end-to-end API acceptance claim."""
     feed = research.load_feed()
     for item in feed["items"]:
+        item["editorial_selection"] = selection_for(item, TEXT, now, relevant=relevant)
         item["analysis"] = {
             "model": "offline-test-fixture",
             "analyzed_at": now.isoformat(),
@@ -151,11 +156,11 @@ def test_release_hold_hides_cached_brief_without_mutating_library(
     )
     item = response["items"][0]
     assert item["entry_id"] == entry_id and item["is_read"] and item["is_saved"]
-    assert item["research_lane"] == "discovery"
+    assert item["research_lane"] == "core"
     assert item["editorial_candidate_lane"] == "core"
     assert item["editorial_review_status"] == "pending"
-    assert item["relevance_reason"] == "editorial_release_pending"
-    assert not item["notification_eligible"]
+    assert item["relevance_reason"] == "source_selected_original"
+    assert item["notification_eligible"]
     assert api.get_research_status()["unseen"] == 0
     assert item["analysis"] == research.load_feed()["items"][0]["analysis"]
     assert before == {path: path.read_bytes() for path in before}
@@ -188,7 +193,7 @@ def test_projection_waits_for_a_brief_and_retains_it_on_unchanged_source(source)
     item = research.load_feed()["items"][0]
     assert item["research_lane"] == "core" and item["notification_eligible"]
     assert item["available_at"] == NOW.isoformat()
-    assert item["relevance_reason"] == "source_checked_reading_brief"
+    assert item["relevance_reason"] == "source_selected_original"
     research_feed.reconcile(s3=source, now=NOW + timedelta(hours=1))
     assert research.load_feed()["items"][0]["analysis"] == item["analysis"]
 
@@ -297,7 +302,7 @@ def test_budget_is_reserved_before_call_and_cache_avoids_second_call(source):
     result = analysis.enrich(now=NOW, text_loader=lambda _item: TEXT, model_call=model)
     assert result["completed"] == 1
     assert result["reserved_nanousd"] == 185_000
-    assert research.load_feed()["items"][0]["research_lane"] == "discovery"
+    assert research.load_feed()["items"][0]["research_lane"] == "core"
     reviewed = analysis.enrich(
         now=NOW,
         text_loader=lambda _item: TEXT,
@@ -403,9 +408,11 @@ def test_failed_requests_keep_reservation_and_stop_after_three_attempts(source):
         )
     assert len(calls) == 3
     item = research.load_feed()["items"][0]
-    assert item["analysis_status"] == "held" and not item["notification_eligible"]
+    assert item["analysis_status"] == "held" and item["notification_eligible"]
     assert result["reserved_nanousd"] == 3 * analysis._request_reservation(
-        TEXT, item["title"]
+        TEXT,
+        item["title"],
+        evidence_plan=item["editorial_selection"]["decision"]["reading_points"],
     )
 
 
@@ -427,7 +434,7 @@ def test_provider_auth_error_pauses_requests_without_fallback(source):
         )
         assert result["reason"] == "provider_paused"
     assert len(calls) == 1
-    assert not research.load_feed()["items"][0]["notification_eligible"]
+    assert research.load_feed()["items"][0]["notification_eligible"]
 
 
 def test_persisted_cache_recovers_projection_without_another_request(source):
@@ -448,7 +455,7 @@ def test_persisted_cache_recovers_projection_without_another_request(source):
     recovered = analysis.enrich(now=NOW, text_loader=forbidden, model_call=forbidden)
     assert recovered["completed"] == 1
     assert recovered["reserved_nanousd"] == result["reserved_nanousd"]
-    assert research.load_feed()["items"][0]["research_lane"] == "discovery"
+    assert research.load_feed()["items"][0]["research_lane"] == "core"
 
 
 def test_source_input_is_bounded_before_reserving_and_sending(source):
@@ -459,7 +466,13 @@ def test_source_input_is_bounded_before_reserving_and_sending(source):
         assert text == long_text[: analysis.MAX_INPUT_CHARS]
         assert storage.read_json("research_analysis/budget-2026-09.json")[
             "reserved_nanousd"
-        ] == analysis._request_reservation(text, title)
+        ] == analysis._request_reservation(
+            text,
+            title,
+            evidence_plan=selection_for(source.record, TEXT, NOW)["decision"][
+                "reading_points"
+            ],
+        )
         return brief(), {"input_tokens": 100, "output_tokens": 80}
 
     assert (
@@ -487,7 +500,7 @@ def test_budget_write_failure_prevents_model_request(source, monkeypatch):
         now=NOW, text_loader=lambda _item: TEXT, model_call=forbidden
     )
     assert result["failed"] == 1
-    assert not research.load_feed()["items"][0]["notification_eligible"]
+    assert research.load_feed()["items"][0]["notification_eligible"]
 
 
 def test_research_deployment_uses_separate_openai_key_not_news_key():
@@ -693,6 +706,9 @@ def test_document_kind_controls_core_without_deleting_or_rewriting_library(
         },
     )
     if kind is not None:
+        feed["items"][0]["editorial_selection"] = selection_for(
+            feed["items"][0], TEXT, NOW, kind=kind
+        )
         attach_review(feed["items"][0], TEXT, NOW)
     research_feed.apply_editorial_analysis(feed["items"][0])
     research.save_feed(feed)
@@ -717,13 +733,11 @@ def test_unknown_or_missing_content_kind_is_not_a_new_valid_brief():
 
 def test_prompt_requires_finance_terms_attribution_and_conditions():
     # Real linguistic/semantic quality is checked separately against real sources.
-    assert "시스템 기반 크레딧 투자" in analysis.SYSTEM
     assert "금융배출량" in analysis.SYSTEM
-    assert "revenue = 매출" in analysis.SYSTEM
-    assert "운용 인력의 점검·감독" in analysis.SYSTEM
-    assert "Preserve material conditions on numerical claims" in analysis.SYSTEM
-    assert "an expected benefit is not a measured result" in analysis.SYSTEM
-    assert "READING VALUE, NOT PAPER FORMAT" in analysis.SYSTEM
+    assert "매출 for revenue" in analysis.SYSTEM
+    assert "independently reproduced" in analysis.SYSTEM
+    assert "Do not reconstruct broken PDF numbers" in analysis.SYSTEM
+    assert "current outlook/sector preference/positioning" in analysis.SYSTEM
     assert list(analysis.POINT_SCHEMA["anyOf"][1]["properties"]) == [
         "evidence_ids",
         "text_ko",
@@ -742,7 +756,7 @@ def test_accepted_topic_without_concrete_reading_value_stays_in_discovery(source
     attach_review(item, TEXT, NOW)
     research_feed.apply_editorial_analysis(item)
     assert item["research_lane"] == "discovery"
-    assert item["relevance_reason"] == "reading_value_missing"
+    assert item["relevance_reason"] == "original_selection_pending"
     assert not item["notification_eligible"]
 
 
