@@ -11,6 +11,9 @@ def selection_for(item, text, now, *, kind="research", relevant=True):
             "investment_focus": relevant,
             "transferable_insight": {"evidence_ids": [0]} if relevant else None,
             "reason": "Synthetic original-selection fixture, not a semantic qualification.",
+            "reading_points": {
+                name: {"evidence_ids": [0]} for name in research_selection.POINT_NAMES
+            },
         },
         text,
         now.isoformat(),

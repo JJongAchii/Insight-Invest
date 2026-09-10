@@ -12,7 +12,7 @@ import os
 import re
 
 MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-review-openai-v4-literal-guards"
+PROMPT_VERSION = "reading-review-openai-v5-point-contract"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 8192
 REQUEST_TIMEOUT_SECONDS = 120
@@ -202,6 +202,15 @@ def request_payload(text: str, title: str, brief: dict) -> dict:
     from module.research_analysis import _source_passages, validate_brief
 
     validate_brief(brief, text)
+    allowed = point_evidence_ids(text, brief)
+    schema = json.loads(json.dumps(SCHEMA))
+    for field, ids in allowed.items():
+        if ids:
+            schema["properties"][field]["properties"]["evidence_ids"]["items"][
+                "enum"
+            ] = ids
+        else:
+            schema["properties"][field]["properties"]["evidence_ids"]["maxItems"] = 0
     return {
         "model": MODEL,
         "store": False,
@@ -224,7 +233,7 @@ def request_payload(text: str, title: str, brief: dict) -> dict:
                 "type": "json_schema",
                 "name": "research_source_review",
                 "strict": True,
-                "schema": SCHEMA,
+                "schema": schema,
             },
         },
     }
@@ -266,7 +275,30 @@ def literal_issues(claim: str, evidence: str) -> list[str]:
 
     def numbers(value):
         value = value.replace(",", "").replace("−", "-").replace("–", "-")
-        return set(re.findall(r"(?<![\w.])\d+(?:\.\d+)?(?![\d.])", value))
+        result = set(re.findall(r"(?<![\w.])\d+(?:\.\d+)?(?!\d|\.\d)", value))
+        words = (
+            "zero",
+            "one",
+            "two",
+            "three",
+            "four",
+            "five",
+            "six",
+            "seven",
+            "eight",
+            "nine",
+            "ten",
+            "eleven",
+            "twelve",
+        )
+        result.update(
+            str(n)
+            for n, word in enumerate(words)
+            if re.search(r"\b" + word + r"\b", value, re.I)
+        )
+        if re.search(r"\ba (?:year|month|day|quarter)\b", value, re.I):
+            result.add("1")
+        return result
 
     issues = []
     if absent := numbers(claim) - numbers(evidence):

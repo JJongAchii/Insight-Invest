@@ -11,7 +11,7 @@ import json
 from module import research_review
 
 MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-selection-v1"
+PROMPT_VERSION = "reading-selection-v2-evidence-plan"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 4096
 SYSTEM = """Select originals for a personal quantitative investment reading feed.
@@ -35,13 +35,42 @@ Institutional reputation, PDF length and paper format are irrelevant to selectio
 
 investment_focus means quantitative investment, empirical asset pricing, signals,
 portfolio/risk construction or market microstructure is the main substance.
-For research/practitioner return a transferable_insight with 1-4 citable passage IDs
+For research/practitioner return a transferable_insight with ONE citable passage ID
 (at most 1200 characters total) showing the actual method/mechanism/finding taught.
 If all you can say is 'they use AI', 'they manage risk' or 'they like sector X',
 there is no transferable_insight: use null and market_commentary/other.
 reason is one concise English sentence explaining the purpose, not a quality score.
 Use null when uncertain. Do not invent missing facts or independent validation.
+
+For selected research/practitioner also choose reading_points: ONE self-contained
+citable passage per question, method_data, finding, why_read, limitation (or null).
+These passages will be the ONLY input to the Korean writer. Prefer an explanatory
+method/mechanism over an isolated numerical result requiring absent context.
+question = problem addressed; method_data = concrete method/data/framework;
+finding = author conclusion; why_read = specific transferable insight;
+limitation = explicit document-specific caveat. If a sentence cannot stand alone
+without additional assumptions or another sentence, choose another passage or null.
+For market_commentary/other all reading_points must be null. Do not summarize here.
 """
+POINT_NAMES = ("question", "method_data", "finding", "why_read", "limitation")
+EVIDENCE_SCHEMA = {
+    "anyOf": [
+        {"type": "null"},
+        {
+            "type": "object",
+            "properties": {
+                "evidence_ids": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "minItems": 1,
+                    "maxItems": 1,
+                }
+            },
+            "required": ["evidence_ids"],
+            "additionalProperties": False,
+        },
+    ]
+}
 SCHEMA = {
     "type": "object",
     "properties": {
@@ -60,7 +89,7 @@ SCHEMA = {
                             "type": "array",
                             "items": {"type": "integer"},
                             "minItems": 1,
-                            "maxItems": 4,
+                            "maxItems": 1,
                         },
                     },
                     "required": ["evidence_ids"],
@@ -69,13 +98,27 @@ SCHEMA = {
             ],
         },
         "reason": {"type": "string", "maxLength": 500},
+        "reading_points": {
+            "type": "object",
+            "properties": {name: EVIDENCE_SCHEMA for name in POINT_NAMES},
+            "required": list(POINT_NAMES),
+            "additionalProperties": False,
+        },
     },
-    "required": ["content_kind", "investment_focus", "transferable_insight", "reason"],
+    "required": [
+        "content_kind",
+        "investment_focus",
+        "transferable_insight",
+        "reason",
+        "reading_points",
+    ],
     "additionalProperties": False,
 }
 
 
 def cache_key(item: dict) -> str:
+    from module.research_analysis import MAX_INPUT_CHARS
+
     return research_review.digest(
         [
             item["source_digest"],
@@ -86,6 +129,7 @@ def cache_key(item: dict) -> str:
             PROMPT_VERSION,
             REASONING_EFFORT,
             MAX_OUTPUT_TOKENS,
+            MAX_INPUT_CHARS,
         ]
     )
 
@@ -119,8 +163,11 @@ def state(item: dict) -> str:
 
 
 def request_payload(text: str, title: str) -> dict:
-    from module.research_analysis import _source_passages
+    from module.research_analysis import AnalysisContractError, _source_passages
 
+    passages = _source_passages(text)
+    if not any(p["citable"] for p in passages):
+        raise AnalysisContractError("source lacks bounded sentence evidence")
     return {
         "model": MODEL,
         "store": False,
@@ -130,7 +177,7 @@ def request_payload(text: str, title: str) -> dict:
         "input": json.dumps(
             {
                 "source_title": title,
-                "source_passages": _source_passages(text),
+                "source_passages": passages,
                 "scope": "bounded_source_extract",
             },
             ensure_ascii=False,
@@ -174,7 +221,7 @@ def receipt(item: dict, value: dict, text: str, now: str) -> dict:
         ids = insight["evidence_ids"]
         if (
             not isinstance(ids, list)
-            or not 1 <= len(ids) <= 4
+            or len(ids) != 1
             or any(
                 type(n) is not int
                 or not 0 <= n < len(passages)
@@ -188,6 +235,30 @@ def receipt(item: dict, value: dict, text: str, now: str) -> dict:
         raise AnalysisContractError("selection evidence is too long")
     decision = {k: value[k] for k in ("content_kind", "investment_focus", "reason")}
     decision["evidence_excerpts"] = excerpts
+    plan = value["reading_points"]
+    if not isinstance(plan, dict) or set(plan) != set(POINT_NAMES):
+        raise AnalysisContractError("invalid reading evidence plan")
+    reading_points = {}
+    for name, point in plan.items():
+        if point is None:
+            reading_points[name] = None
+            continue
+        if (
+            not isinstance(point, dict)
+            or set(point) != {"evidence_ids"}
+            or not isinstance(point["evidence_ids"], list)
+            or len(point["evidence_ids"]) != 1
+        ):
+            raise AnalysisContractError("invalid reading point")
+        number = point["evidence_ids"][0]
+        if (
+            type(number) is not int
+            or not 0 <= number < len(passages)
+            or not passages[number]["citable"]
+        ):
+            raise AnalysisContractError("invalid reading point evidence")
+        reading_points[name] = [passages[number]["text"]]
+    decision["reading_points"] = reading_points
     return {
         "fingerprint": cache_key(item),
         "source_digest": item["source_digest"],

@@ -55,6 +55,10 @@ def test_source_only_selection_is_first_budgeted_stage(
             "investment_focus": True,
             "transferable_insight": {"evidence_ids": [0]} if insight else None,
             "reason": "Offline purpose fixture.",
+            "reading_points": {
+                name: {"evidence_ids": [0]} if insight else None
+                for name in selection.POINT_NAMES
+            },
         }, {"input_tokens": 100, "output_tokens": 80}
 
     result = analysis.enrich(
@@ -142,3 +146,26 @@ def test_literal_guard_preserves_known_bad_output_as_held(claim, evidence, issue
 
 def test_literal_guard_allows_same_decimal_and_grouped_number():
     assert literal_issues("1,000개와 1.76%", "1000 stocks and 1.76%.") == []
+    assert (
+        literal_issues("2025년, 3개, 1년", "Until 2025. Three buckets and a year.")
+        == []
+    )
+
+
+def test_writer_sees_only_preselected_field_evidence():
+    text = "We define a transparent portfolio weighting rule. Unselected outlook predicts a market crash."
+    first = analysis._source_passages(text)[0]["text"]
+    plan = {
+        name: [first] if name == "method_data" else None
+        for name in selection.POINT_NAMES
+    }
+    payload = analysis._request_payload(text, "Original", evidence_plan=plan)
+    sent = selection.json.loads(payload["input"])
+    assert "market crash" not in payload["input"]
+    assert sent["reading_points"]["method_data"] == [0]
+    assert payload["text"]["format"]["schema"]["properties"]["finding"] == {
+        "type": "null"
+    }
+    assert payload["text"]["format"]["schema"]["properties"]["method_data"]["anyOf"][1][
+        "properties"
+    ]["evidence_ids"]["items"]["enum"] == [0]

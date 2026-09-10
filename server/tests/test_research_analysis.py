@@ -410,7 +410,9 @@ def test_failed_requests_keep_reservation_and_stop_after_three_attempts(source):
     item = research.load_feed()["items"][0]
     assert item["analysis_status"] == "held" and item["notification_eligible"]
     assert result["reserved_nanousd"] == 3 * analysis._request_reservation(
-        TEXT, item["title"]
+        TEXT,
+        item["title"],
+        evidence_plan=item["editorial_selection"]["decision"]["reading_points"],
     )
 
 
@@ -464,7 +466,13 @@ def test_source_input_is_bounded_before_reserving_and_sending(source):
         assert text == long_text[: analysis.MAX_INPUT_CHARS]
         assert storage.read_json("research_analysis/budget-2026-09.json")[
             "reserved_nanousd"
-        ] == analysis._request_reservation(text, title)
+        ] == analysis._request_reservation(
+            text,
+            title,
+            evidence_plan=selection_for(source.record, TEXT, NOW)["decision"][
+                "reading_points"
+            ],
+        )
         return brief(), {"input_tokens": 100, "output_tokens": 80}
 
     assert (
