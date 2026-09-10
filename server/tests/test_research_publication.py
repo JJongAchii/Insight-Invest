@@ -2,6 +2,7 @@
 
 import importlib
 import io
+import json
 import sys
 from copy import deepcopy
 from pathlib import Path
@@ -107,6 +108,17 @@ def test_context_seeds_only_selection_and_never_its_obsolete_brief(source):
     report["items"][0]["analysis"] = {"obsolete": "do not publish"}
     objects = publisher.plan(report, text_loader=lambda _: TEXT)
     assert len(objects) == 1 and "/selections/" in next(iter(objects))
+
+
+def test_prior_embedded_review_is_preserved_but_not_reused(source):
+    objects = publisher.plan(report_for(source.record), text_loader=lambda _: TEXT)
+    client = CacheStore()
+    key = next(k for k in objects if "/cache/" in k)
+    old = json.dumps({**objects[key], "review": {"old": "preserve"}}).encode()
+    client.objects[key] = old
+    publisher.seed(objects, client, apply=True)
+    assert client.objects[key] == old
+    assert any("/reviews/" in k for k in client.writes)
 
 
 @pytest.mark.parametrize("change", ["input", "selection", "draft", "live"])

@@ -10,9 +10,11 @@ COPY requirements.txt ${LAMBDA_TASK_ROOT}/
 RUN pip install --no-cache-dir -r ${LAMBDA_TASK_ROOT}/requirements.txt
 
 # qdata는 private repo — BuildKit secret이라 토큰이 레이어·히스토리에 남지 않는다
+# Research source hashes/receipts must use the same producer as qualification.
+ARG QDATA_REF=050433aad2f06b9cf58a034cf1c3b4952583fcd7
 RUN --mount=type=secret,id=gh_token \
     pip install --no-cache-dir \
-    "qdata[s3] @ git+https://$(cat /run/secrets/gh_token)@github.com/JJongAchii/quant-data.git"
+    "qdata[s3] @ git+https://$(cat /run/secrets/gh_token)@github.com/JJongAchii/quant-data.git@${QDATA_REF}"
 
 ENV TZ=Asia/Seoul
 

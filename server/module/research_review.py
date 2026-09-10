@@ -12,7 +12,7 @@ import os
 import re
 
 MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-review-openai-v6-no-note"
+PROMPT_VERSION = "reading-review-openai-v7-self-contained"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 8192
 REQUEST_TIMEOUT_SECONDS = 120
@@ -110,6 +110,18 @@ not practitioner quant research merely because it mentions risk, ratios or AI.
 Check why_read against the attached evidence: it must tell the reader WHAT they
 will learn, not repeat a topic or promise that a strategy works. A conceptual
 framework is not an empirical test or a reproducible strategy specification.
+
+Each displayed point must be interpretable on its own. A decimal described only as
+"the metric" without identifying what is measured is unclear, even if the same
+digits occur in a quote. Do not silently turn a Sharpe ratio or beta-adjusted result
+into a raw return. Context elsewhere cannot fix missing metric/baseline in the
+displayed point. Material assumptions in the cited clause must survive translation:
+"assuming the optimizer is correctly designed, disagreement may reflect bad inputs"
+does not support the unconditional "disagreement reflects bad inputs". Likewise,
+"all else equal and without slippage constraints" is a necessary condition, not
+optional detail. Conciseness may omit whole topics but must preserve qualifications
+of the particular claim it DOES make. Mark these cases unclear/unsupported rather
+than praising the draft for containing a related topic.
 """
 
 CHECK_SCHEMA = {
@@ -328,6 +340,10 @@ def literal_issues(claim: str, evidence: str) -> list[str]:
         issues.append("equity_extension_is_not_index_extension")
     if "active" in evidence.casefold() and re.search(r"활성.{0,12}노출", claim):
         issues.append("active_exposure_is_not_activation")
+    if re.search(r"지표.{0,16}\d+\.\d+", claim) and not re.search(
+        r"샤프|Sharpe|비율|수익률|상관|베타|변동성|%|bp", claim, re.I
+    ):
+        issues.append("unnamed_numeric_metric")
     return issues
 
 

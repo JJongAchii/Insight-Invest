@@ -39,6 +39,21 @@ AQR 선별 근거 4문장 합계가 길이 제한을 넘었다. 실패 결과는
 그 선택된 근거만 받는다. 생성·검수 JSON schema의 인용 ID도 항목별 허용 목록에
 고정한다. 선택된 근거가 달라지면 생성 cache도 만료된다. 이는 검수 기준 완화가 아니다.
 
+실제 v10/v5에서는 AQR의 자유서술 AI 메모가 서로 다른 지표의 조건을 섞었고
+`active carbon exposure`를 `활성 탄소 노출`로 옮겼다. v11/v6는 근거 없는 메모를
+아예 생성·표시하지 않고, 용어 지침과 알려진 오역 가드를 추가한다.
+Actions 34441069534의 동일 고정 원문 재시험에서 AQR·RAFI는 선별 core 및 요약
+accepted, Robeco는 시장 전망 context였다. 두 요약을 직접 읽어 항목별 인용과
+대조했고, 1440px/390px 실제 화면의 읽음·저장·검색 회귀를 통과했다. 이 세 표본의
+의미 검토를 전체 출처/향후 모든 글에 대한 정확도 보장으로 확대하지 않는다.
+
+운영 인계는 `scripts/publish_research_qualification.py`로 정확한 report SHA를 입력해
+원문을 재취득·재검증한 뒤 selection/cache/reviews 객체만 조건부 추가한다.
+기존 객체가 다르면 덮어쓰지 않는다. 기본은 dry-run이며 feed·사용자 서재·seen·pending·
+budget은 쓰기 대상이 아니다. 최종 피드 반영은 단일 ResearchPoller가 담당한다.
+유료 단계 한도/월 예산 때문에 뒤쪽의 이미 검수된 캐시 복구가 막히지 않게 한다.
+본문 hash에 영향을 주는 qdata도 Docker에서 qualification과 같은 exact commit으로 고정한다.
+
 ## 비목표
 
 자동 백테스트·전략 채택·새 인프라·모델 변경·예산 인상·로그인/유료 장벽 우회 없음.

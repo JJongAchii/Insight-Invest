@@ -69,7 +69,9 @@ def plan(report: dict, *, text_loader=analysis._public_text) -> dict:
         ):
             raise ValueError("reading brief/review is not current")
         verify({**report, "items": [item]}, text_loader=lambda _: text)
-        objects[PREFIX + f"cache/{analysis.cache_key(item)}.json"] = item["analysis"]
+        objects[PREFIX + f"cache/{analysis.cache_key(item)}.json"] = {
+            key: value for key, value in item["analysis"].items() if key != "review"
+        }
         objects[PREFIX + f"reviews/{review.cache_key(item, item['analysis'])}.json"] = (
             item["analysis"]["review"]
         )
@@ -106,6 +108,10 @@ def seed(objects: dict, client, *, apply: bool = False) -> list[dict]:
                 existing = json.loads(
                     client.get_object(Bucket=BUCKET, Key=key)["Body"].read()
                 )
+                # Older seeded drafts can embed a prior review. Review versions
+                # have separate immutable keys; leave that old object untouched.
+                if "/cache/" in key:
+                    existing = {k: v for k, v in existing.items() if k != "review"}
                 if existing != value:
                     raise ValueError(
                         "existing cache differs; never overwrite it"

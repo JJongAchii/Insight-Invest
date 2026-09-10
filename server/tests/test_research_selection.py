@@ -194,3 +194,7 @@ def test_generation_cannot_add_an_unquoted_editorial_note():
     assert literal_issues("활성 탄소 노출", "active carbon exposure") == [
         "active_exposure_is_not_activation"
     ]
+    assert "unnamed_numeric_metric" in literal_issues(
+        "지표가 0.38로 줄었다", "Shrinks to 0.38."
+    )
+    assert literal_issues("샤프 지표가 0.38로 줄었다", "Sharpe shrinks to 0.38.") == []

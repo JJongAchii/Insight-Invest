@@ -1,8 +1,15 @@
 from pathlib import Path
+import re
 
 ROOT = Path(__file__).parents[2]
 TEMPLATE = ROOT / "infra/template.yaml"
 DEPLOY = ROOT / ".github/workflows/deploy.yml"
+
+
+def test_image_pins_the_qualified_source_parser():
+    docker = (ROOT / "server/Dockerfile").read_text()
+    assert re.search(r"^ARG QDATA_REF=[a-f0-9]{40}$", docker, re.M)
+    assert "quant-data.git@${QDATA_REF}" in docker
 
 
 def test_research_poller_is_bounded_and_offset_from_radar():
