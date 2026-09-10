@@ -36,6 +36,11 @@ on:
         type: choice
         options: [gpt-5-nano, gpt-5-mini]
         default: gpt-5-mini
+      research_sample:
+        description: Fixed public-source regression or reading-value sample; no silent replacement
+        type: choice
+        options: [latest, reading-value-v1, v7-regression]
+        default: latest
 
 env:
   AWS_REGION: ap-northeast-2
@@ -85,6 +90,7 @@ jobs:
           RESEARCH_MAX_ITEMS: ${{ inputs.research_max_items }}
           RESEARCH_SOURCES: ${{ inputs.research_sources }}
           RESEARCH_QUALIFICATION_MODEL: ${{ inputs.research_model }}
+          RESEARCH_SAMPLE: ${{ inputs.research_sample }}
           QDATA_REF: ${{ inputs.qdata_ref }}
         run: python scripts/qualify_research_editorial.py --output qualification-report.json
       - uses: actions/upload-artifact@v4

@@ -22,6 +22,7 @@ sys.path[:0] = [str(ROOT / "server"), str(ROOT / "server/tests")]
 
 from datastore import research as store  # noqa: E402
 from module import research_feed  # noqa: E402
+from qdata.radar_editorial import CHANNELS  # noqa: E402
 from qdata.radar_realtime import collect_due_sources  # noqa: E402
 from test_research_academic import S3  # noqa: E402
 
@@ -42,7 +43,12 @@ def run(probes: list[Path], legacy_path: Path) -> dict:
         raise ValueError("the actual legacy original must appear in the source probes")
     specs = [
         SimpleNamespace(
-            source_id=name, kind="editorial", cadence_minutes=60, realtime_enabled=True
+            source_id=name,
+            kind="editorial",
+            url=CHANNELS[name].url,
+            canonical_url=CHANNELS[name].url,
+            cadence_minutes=60,
+            realtime_enabled=True,
         )
         for name in groups
     ]

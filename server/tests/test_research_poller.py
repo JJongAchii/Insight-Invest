@@ -24,6 +24,16 @@ def _pending():
                 "entry_id": entry_id,
                 "title": "New quant paper",
                 "notification_eligible": True,
+                "source_id": "aqr-research",
+                "published_at": "2026-09-10T10:00:00+00:00",
+                "discovered_at": "2026-09-10T11:00:00+00:00",
+                "notification_origin": {
+                    "schema_version": 1,
+                    "basis": "incremental",
+                    "source_id": "aqr-research",
+                    "baseline_at": "2026-09-09T10:00:00+00:00",
+                    "observed_at": "2026-09-10T11:00:00+00:00",
+                },
             },
         )
     ]
@@ -121,6 +131,32 @@ def test_release_hold_keeps_pending_and_never_pushes_even_accepted_cache(monkeyp
     assert not captured["events"] and not captured["deleted"]
 
 
+@pytest.mark.parametrize("release_enabled", ["true", "false"])
+def test_historical_pending_is_preserved_without_push_even_if_summary_accepted(
+    monkeypatch, release_enabled
+):
+    captured = _arrange(
+        monkeypatch, {"enabled": True, "subscriptions": 1, "failed": 0, "disabled": 0}
+    )
+    key, record = _pending()[0]
+    record.update(
+        record_schema_version=4, notification_candidate=True, analysis_status="ready"
+    )
+    record.pop("notification_origin")
+    monkeypatch.setenv("RADAR_ANALYSIS_ENABLED", release_enabled)
+    monkeypatch.setattr(research_feed, "pending_records", lambda **k: [(key, record)])
+    monkeypatch.setattr(
+        research_poller.research_store, "load_feed", lambda: {"items": [record]}
+    )
+    monkeypatch.setattr(
+        research_poller.research_review, "state", lambda item: "accepted"
+    )
+    result = research_poller.run(s3=object())
+    assert result["pending_quarantined"] == 1
+    assert result["pending_deleted"] == result["pending_eligible"] == 0
+    assert not captured["events"] and not captured["deleted"]
+
+
 def test_analysis_outage_does_not_prevent_settlement_of_ready_items(monkeypatch):
     captured = _arrange(
         monkeypatch,
@@ -134,6 +170,36 @@ def test_analysis_outage_does_not_prevent_settlement_of_ready_items(monkeypatch)
     result = research_poller.run(s3=object())
     assert result["analysis"]["reason"] == "OSError"
     assert result["pending_deleted"] == 1 and captured["events"]
+
+
+def test_pending_and_projection_must_share_the_same_discovery_proof(monkeypatch):
+    captured = _arrange(
+        monkeypatch, {"enabled": True, "subscriptions": 1, "failed": 0, "disabled": 0}
+    )
+    key, record = _pending()[0]
+    record.update(
+        record_schema_version=4, notification_candidate=True, analysis_status="ready"
+    )
+    projected = {
+        **record,
+        "notification_origin": {
+            **record["notification_origin"],
+            "baseline_at": "2026-09-08T10:00:00+00:00",
+        },
+    }
+    assert research_poller.is_incremental(record)
+    assert research_poller.is_incremental(projected)
+    monkeypatch.setattr(research_feed, "pending_records", lambda **k: [(key, record)])
+    monkeypatch.setattr(
+        research_poller.research_store, "load_feed", lambda: {"items": [projected]}
+    )
+    monkeypatch.setattr(
+        research_poller.research_review, "state", lambda item: "accepted"
+    )
+    result = research_poller.run(s3=object())
+    assert result["pending_quarantined"] == 1
+    assert result["pending_deleted"] == result["pending_eligible"] == 0
+    assert not captured["events"] and not captured["deleted"]
 
 
 def test_classification_migration_defers_then_suppresses_market_outlook_push(

@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 
 from datastore import research as research_store
 from module import research_review
+from qdata.radar_notifications import is_incremental
 
 DEFAULT_BUCKET = "insight-invest-datalake"
 DEFAULT_RECORD_PREFIX = "research-radar/public/records/"
@@ -84,6 +85,7 @@ def _publication_fields(payload: dict, *, key: str) -> dict:
         "relevance_reason",
         "relevance_terms",
         "notification_eligible",
+        "notification_origin",
         "item_type",
         "content_provenance",
         "source_digest",
@@ -172,7 +174,10 @@ def apply_editorial_analysis(item: dict, *, target: dict | None = None) -> None:
         elif kind == "market_commentary":
             lane, reason = "context", "market_commentary"
         elif relevant and kind in {"research", "practitioner"}:
-            lane, reason = candidate, "source_checked_reading_brief"
+            if not brief.get("why_read"):
+                lane, reason = "discovery", "reading_value_missing"
+            else:
+                lane, reason = candidate, "source_checked_reading_brief"
         else:
             lane, reason = "context", "editorial_topic_mismatch"
         target["research_lane"] = lane
@@ -181,6 +186,7 @@ def apply_editorial_analysis(item: dict, *, target: dict | None = None) -> None:
             lane == "core"
             and review_state == "accepted"
             and item.get("notification_candidate")
+            and is_incremental(item)
         )
         if target["notification_eligible"] and not item.get("available_at"):
             target["available_at"] = item["analysis"]["review"]["checked_at"]

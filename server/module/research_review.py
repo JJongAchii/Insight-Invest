@@ -12,7 +12,7 @@ import os
 import re
 
 MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-review-openai-v2-point-bound"
+PROMPT_VERSION = "reading-review-openai-v3-contrast"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 8192
 REQUEST_TIMEOUT_SECONDS = 120
@@ -88,6 +88,29 @@ point_evidence_ids는 각 항목에 이미 붙은 인용의 허용 ID 목록이�
 reviewer_note의 사실·연도·고유명사도 별도로 점검하며, 요약 근거에 없는 새 사실을 추가한
 메모는 unsupported이다. 문체 취향과 의미 오류는 구분하고, null이나 간결한 요약 자체는
 결함으로 보지 않는다."""
+
+SYSTEM += """
+
+Contrast, do not rationalize. In reason_ko first give the SOURCE's meaning in your own
+words, then identify any different subject, condition or concept asserted by the
+DRAFT. Do not copy the draft's financial term as your source interpretation.
+For example, source 'Measure A changes with capital inflows; measure B changes with
+valuations' does NOT support 'Measures A and B change with inflows and valuations'.
+It DOES support 'Measure A changes with inflows; B changes with valuations'. Keeping
+the English name next to a wrong Korean name does not make a translation faithful.
+If the bounded source does not define an unfamiliar concept well enough for you to
+check the Korean wording, use unclear rather than repeating the wording as support.
+
+Evaluate reading value separately from document form. A short note or substantive
+interview about a concrete signal, portfolio principle, mechanism or methodological
+pitfall can qualify without a backtest. Current market/sector preferences, broad
+industry policy, a prominent author's biography or software engineering alone do not.
+An interview mainly discussing current credit-market positioning is market_commentary,
+not practitioner quant research merely because it mentions risk, ratios or AI.
+Check why_read against the attached evidence: it must tell the reader WHAT they
+will learn, not repeat a topic or promise that a strategy works. A conceptual
+framework is not an empirical test or a reproducible strategy specification.
+"""
 
 CHECK_SCHEMA = {
     "type": "object",

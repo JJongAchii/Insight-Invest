@@ -20,7 +20,7 @@ from datastore import research, storage
 from module import research_review
 
 MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-brief-openai-v7-korean-editorial"
+PROMPT_VERSION = "reading-brief-openai-v8-source-first"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 8192  # Visible output AND reasoning; real PDFs exceeded 4096.
 MAX_INPUT_CHARS = 24000
@@ -41,7 +41,7 @@ must never be described as independently verified. quant_relevant means the main
 substance is quantitative investment ideas, signals, portfolio/risk methodology,
 market microstructure, or empirical asset pricing. Firm announcements, generic AI
 opinions, software infrastructure, retirement policy without quantitative investment
-analysis, interviews, and promotional teasers are not substantive quant research.
+analysis, and promotional teasers are not substantive quant research.
 Classify content_kind by what the article mainly DOES, not the publisher's reputation,
 the presence of a chart, or a mention of AI/LLMs:
 - research: develops/examines an investment method, mechanism, or empirical finding;
@@ -107,21 +107,46 @@ climate-aware investor = 기후를 고려하는 투자자 (기후 인식 투자�
 출력 전에 각 한국어 문장의 모든 사실이 선택한 원문 인용으로 뒷받침되는지 확인한다.
 원문에 없는 우수성·성과를 추가하지 않는다. 매끄러운 번역보다 뜻의 정확성이 우선이다."""
 
+SYSTEM += """
+
+SOURCE-FIRST EDITING: select evidence_ids BEFORE writing text_ko. Each point should
+explain ONE useful idea with its necessary conditions, not compress a list of every
+detail in the document. Translate only what those selected passages say. A shorter
+faithful claim is better than a polished sentence joining several partially supported
+claims. In particular, properties belonging to different measures must remain separate.
+If a financial term cannot be translated confidently, keep the English term alone;
+do not invent a Korean label and append the English as apparent confirmation.
+When stating a negative correlation, say 음의 상관관계, not just 높은 상관관계.
+
+READING VALUE, NOT PAPER FORMAT: retain a short note or an interview if its main
+content explains a concrete investment signal, portfolio construction principle,
+market mechanism or methodological pitfall. A long PDF, famous author, chart or
+mention of portfolio risk does not establish relevance. Current sector preferences,
+market forecasts, careers and product descriptions alone are not quantitative research.
+Classify a portfolio-manager discussion mainly about current positioning as
+market_commentary even if it mentions AI tools or financial ratios. Conceptual
+investment frameworks can be practitioner; do not invent an empirical study.
+why_read must identify the specific insight the reader can learn from the selected
+passages, not generic praise such as 'useful for investors'. It is not a promise of
+profit, verified alpha, or a complete replication specification. If there is no
+concrete reading value grounded in the document, leave why_read null.
+"""
+
 POINT_SCHEMA = {
     "anyOf": [
         {"type": "null"},
         {
             "type": "object",
             "properties": {
-                "text_ko": {"type": "string", "maxLength": 360},
                 "evidence_ids": {
                     "type": "array",
                     "items": {"type": "integer", "minimum": 0},
                     "minItems": 1,
                     "maxItems": MAX_EVIDENCE_PASSAGES,
                 },
+                "text_ko": {"type": "string", "maxLength": 360},
             },
-            "required": ["text_ko", "evidence_ids"],
+            "required": ["evidence_ids", "text_ko"],
             "additionalProperties": False,
         },
     ]

@@ -18,20 +18,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
 from module import research_analysis as analysis, research_review as review  # noqa: E402
 
 
-def verify(report: dict, baseline: dict, *, text_loader=analysis._public_text) -> dict:
+def verify(
+    report: dict, baseline: dict | None = None, *, text_loader=analysis._public_text
+) -> dict:
     if report.get("production_modified") is not False:
         raise ValueError("only isolated qualification artifacts are accepted")
-    old = {item["entry_id"]: item for item in baseline["items"]}
+    old = {item["entry_id"]: item for item in baseline["items"]} if baseline else None
     checked = []
     for item in report["items"]:
         draft = item["analysis"]
-        prior = old[item["entry_id"]]
-        if (
-            draft["fingerprint"] != prior["analysis"]["fingerprint"]
-            or draft["brief"] != prior["analysis"]["brief"]
-            or item["source_digest"] != prior["source_digest"]
-        ):
-            raise ValueError("source or draft changed from the preserved baseline")
+        if old is not None:
+            prior = old[item["entry_id"]]
+            if (
+                draft["fingerprint"] != prior["analysis"]["fingerprint"]
+                or draft["brief"] != prior["analysis"]["brief"]
+                or item["source_digest"] != prior["source_digest"]
+            ):
+                raise ValueError("source or draft changed from the preserved baseline")
         text = text_loader(item)
         analysis.validate_brief(draft["brief"], text)
         quotes = [
@@ -81,7 +84,7 @@ def verify(report: dict, baseline: dict, *, text_loader=analysis._public_text) -
                 "source_digest": item["source_digest"],
                 "source_chars_checked": len(text),
                 "draft_digest": review.digest(draft["brief"]),
-                "draft_unchanged": True,
+                "draft_unchanged": True if old is not None else None,
                 "draft_quotes_checked": len(quotes),
                 "review_quotes_checked": len(check_quotes),
                 "current_review": current,
@@ -117,16 +120,18 @@ def verify(report: dict, baseline: dict, *, text_loader=analysis._public_text) -
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--report", required=True, type=Path)
-    parser.add_argument("--baseline", required=True, type=Path)
+    parser.add_argument("--baseline", type=Path)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
     result = verify(
-        json.loads(args.report.read_text()), json.loads(args.baseline.read_text())
+        json.loads(args.report.read_text()),
+        json.loads(args.baseline.read_text()) if args.baseline else None,
     )
     result.update(
         {
             name + "_sha256": hashlib.sha256(path.read_bytes()).hexdigest()
             for name, path in (("report", args.report), ("baseline", args.baseline))
+            if path is not None
         }
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
