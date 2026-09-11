@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Navbar from "./(components)/Navbar";
 import Sidebar from "./(components)/Sidebar";
 import MobileBottomNav from "./(components)/MobileBottomNav";
+import MarketTicker from "./(components)/MarketTicker";
 import PwaManager from "./(components)/PwaManager";
 import PullToRefresh from "./(components)/PullToRefresh";
 import StoreProvider, { useAppSelector } from "./redux";
@@ -84,14 +85,15 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
       )}
       <main
         className={`
-          app-main-safe flex min-h-screen min-w-0 w-full flex-col px-4 pb-24 pt-3
-          transition-[padding] duration-200 md:pb-6 md:pr-5 md:pt-5 lg:pr-8
+          app-main-safe flex min-h-screen min-w-0 w-full flex-col px-4 pt-3
+          transition-[padding] duration-200 md:pr-5 md:pt-5 lg:pr-8
           ${isSidebarCollapsed ? "md:pl-[5.75rem]" : "md:pl-[15.5rem]"}
         `}
       >
         <Navbar onMobileMenuOpen={() => setIsMobileSidebarOpen(true)} />
         <div className="mx-auto w-full max-w-[1560px] flex-grow">{children}</div>
       </main>
+      <MarketTicker />
       <MobileBottomNav
         researchUnseenCount={researchUnseenCount}
       />

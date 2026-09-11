@@ -54,6 +54,9 @@ body,
     --secondary-rgb: 56 189 248;
     --focus: #c4b5fd;
     --font-data: "SF Mono", ui-monospace, "Fira Code", monospace;
+    --market-ticker-height: 79px;
+    --mobile-nav-height: 63px;
+    --app-bottom-inset: calc(var(--market-ticker-height) + var(--mobile-nav-height) + env(safe-area-inset-bottom));
 
     --gains: #34d399;
     --gains-rgb: 52 211 153;
@@ -140,6 +143,7 @@ body,
 
   html {
     scroll-behavior: smooth;
+    scroll-padding-bottom: calc(var(--app-bottom-inset) + 1rem);
   }
 
   :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
@@ -148,12 +152,12 @@ body,
   }
 
   .app-main-safe {
-    padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+    padding-bottom: calc(var(--app-bottom-inset) + 1.5rem);
   }
 
   @media (min-width: 768px) {
-    .app-main-safe {
-      padding-bottom: 1.5rem;
+    :root {
+      --app-bottom-inset: calc(var(--market-ticker-height) + env(safe-area-inset-bottom));
     }
   }
 
