@@ -24,7 +24,9 @@
     },
     {
       "source_id": "robeco-quant-insights",
-      "title": "The agentic research desk",
+      "title": "AI in investment research: from faster summaries to stronger insights",
+      "original_feed_title": "The agentic research desk",
+      "checked_note": "2026-09-11: official parsed title differs from the preserved feed title; the exact same URL and full body digest were rechecked. First qualification stopped before any model call. No source substitution or relaxed binding.",
       "url": "https://www.robeco.com/en-int/insights/2026/09/the-agentic-research-desk",
       "pdf_url": "",
       "authors": [
