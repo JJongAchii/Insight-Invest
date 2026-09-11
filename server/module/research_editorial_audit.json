@@ -3,6 +3,22 @@
   "scope": "editorial_reading_only_not_strategy_validation",
   "editor": "codex_original_audit",
   "items": {
+    "4a2f1514e7a59cedd5002866e299eb974a359760ee1ebbf3185e389fa0326026": {
+      "entry_id": "4a2f1514e7a59cedd5002866e299eb974a359760ee1ebbf3185e389fa0326026",
+      "source_id": "robeco-quant-insights",
+      "source_digest": "9a4647426c6556c65a0bdda67efad724f5e138092e31b8cb8f1ec7f64037698d",
+      "title": "Active Emerging Markets ETF: Stock selection for core EM exposure",
+      "url": "https://www.robeco.com/en-int/insights/2026/09/active-emerging-markets-etf-stock-selection-for-core-em-exposure",
+      "pdf_url": "",
+      "parser_version": "editorial-v3-pdf-layout",
+      "analysis_scope": "full_article",
+      "draft_digest": "13bcf8ac8ea5e0b8d0da299f9f5b97b82112c34b76efe47ba466e8e07db89941",
+      "lane": "context",
+      "reason": "신흥국 ETF 상품·투자자 혜택 소개가 주목적이다. 소규모 액티브 비중과 수익·위험·지속가능성 동시 고려라는 개괄만으로 실질적 투자 방법 연구로 보지 않는다.",
+      "checked_at": "2026-09-11T07:19:33+00:00",
+      "audit_basis": "official_full_article_digest_verified_postdeploy; automatic_v5_core_mismatch_preserved",
+      "field_holds": {}
+    },
     "d15b6d67cbbf2759585044af73c8b01a7197699bafba6d9f8eb6882a1b5c0fc7": {
       "entry_id": "d15b6d67cbbf2759585044af73c8b01a7197699bafba6d9f8eb6882a1b5c0fc7",
       "source_id": "robeco-quant-insights",

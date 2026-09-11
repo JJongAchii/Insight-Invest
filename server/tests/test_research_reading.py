@@ -141,3 +141,16 @@ def test_duplicate_requires_both_exact_sources_and_identical_pdf_proof():
     items[1]["research_lane"] = "core"
     curation.mark_duplicates(items)
     assert "duplicate_of" not in items[1] and items[1]["research_lane"] == "core"
+
+
+def test_product_editor_correction_is_not_automatic_classifier_success(monkeypatch):
+    entry_id = "4a2f1514e7a59cedd5002866e299eb974a359760ee1ebbf3185e389fa0326026"
+    audit = curation._audits()[entry_id]
+    item = {"entry_id": entry_id, **{name: audit[name] for name in curation.BINDINGS}}
+    before = deepcopy(item)
+    # Simulate the separately preserved production mismatch, not an API receipt.
+    monkeypatch.setattr(selection, "model_state", lambda _: "core")
+    assert selection.model_state(item) == "core"
+    assert selection.state(item) == "context"
+    assert item == before
+    assert curation.original_audit({**item, "source_digest": "changed"}) is None
