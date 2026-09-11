@@ -170,7 +170,8 @@ try {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
     await page.screenshot({ path: `${output}/library-${viewport.width}.png`, fullPage: true });
     checks.push({ width: viewport.width, status: "passed", cards: items.length,
-      accepted: items.filter(reviewed).length, rejected: report.review_rejected });
+      displayed_reading_briefs: items.filter(reviewed).length,
+      partial_reading_briefs: items.filter(item => item.reading_brief?.status === "partial").length });
     console.log(`PASS ${viewport.width}px: actual review outcomes, held originals, lane, search, save, mark-all-read`);
     await context.close();
   }
