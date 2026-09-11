@@ -348,12 +348,6 @@ button.quoteDate {
   color: var(--secondary);
   font-size: 11px;
 }
-.globalTape {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-}
-.globalTape summary,
 .personalTools summary {
   display: flex;
   align-items: center;
@@ -363,7 +357,6 @@ button.quoteDate {
   color: var(--text-secondary);
   font-size: 13px;
 }
-.globalTape summary span,
 .personalTools summary span {
   margin-left: auto;
   font-size: 11px;

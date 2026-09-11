@@ -8,9 +8,7 @@ import {
   Search,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import TradingViewWidget from "@/app/(components)/TradingViewWidget";
-import { useAppSelector } from "@/app/redux";
+import { useState } from "react";
 import { personalNavigation } from "@/lib/navigation";
 import MarketOverview from "./MarketOverview";
 import FlowsTopCard from "./FlowsTopCard";
@@ -25,30 +23,7 @@ import SpotlightLane from "./SpotlightLane";
 import styles from "./marketBriefing.module.css";
 
 export default function Home() {
-  const isDarkMode = useAppSelector((state) => state.global.isDarkMode);
-  const [globalOpen, setGlobalOpen] = useState(false);
   const [personalOpen, setPersonalOpen] = useState(false);
-  const colorTheme = isDarkMode ? "dark" : "light";
-  const tickerTapeConfig = useMemo(
-    () => ({
-      symbols: [
-        { description: "S&P 500", proName: "VANTAGE:SP500" },
-        { description: "NASDAQ 100", proName: "NASDAQ:NDX" },
-        { description: "달러 인덱스", proName: "CAPITALCOM:DXY" },
-        { description: "금", proName: "OANDA:XAUUSD" },
-        { description: "WTI", proName: "TVC:USOIL" },
-        { description: "USD/JPY", proName: "FX:USDJPY" },
-        { proName: "BITSTAMP:BTCUSD", title: "Bitcoin" },
-      ],
-      showSymbolLogo: false,
-      isTransparent: false,
-      displayMode: "compact",
-      colorTheme,
-      locale: "kr",
-      scroll: true,
-    }),
-    [colorTheme],
-  );
 
   return (
     <div className={styles.page}>
@@ -93,28 +68,6 @@ export default function Home() {
       </section>
       <FlowsTopCard />
       <SpotlightLane />
-      <details
-        className={styles.globalTape}
-        onToggle={(event) => setGlobalOpen(event.currentTarget.open)}
-      >
-        <summary>
-          <Globe2 size={16} aria-hidden />
-          글로벌 지수 · 원자재<span>TradingView 제공</span>
-          <ChevronDown size={14} aria-hidden />
-        </summary>
-        {globalOpen && (
-          <>
-            <p className="px-5 pb-3 text-xs text-ink-muted">
-              외부 시세로, 거래소와 종목에 따라 지연될 수 있습니다.
-            </p>
-            <TradingViewWidget
-              key={colorTheme}
-              widgetScriptUrl="https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js"
-              widgetConfig={tickerTapeConfig}
-            />
-          </>
-        )}
-      </details>
       <details
         className={styles.personalTools}
         onToggle={(event) => setPersonalOpen(event.currentTarget.open)}
