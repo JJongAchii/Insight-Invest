@@ -514,7 +514,7 @@ def test_research_deployment_uses_separate_openai_key_not_news_key():
     assert "ANTHROPIC_API_KEY" not in poller
     assert "AnthropicApiKey" not in poller
     assert "OPENAI_API_KEY: !Ref OpenAIApiKey" in poller
-    assert 'RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "1.50"' in poller
+    assert 'RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "1.40"' in poller
 
 
 def test_contract_failure_records_only_a_safe_diagnosis(source):
