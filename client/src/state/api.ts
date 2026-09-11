@@ -711,6 +711,18 @@ export interface ResearchEntry {
   editorial_review_status?: "pending" | "accepted" | "rejected";
   editorial_selection_status?: "pending" | "core" | "context";
   analysis?: ResearchAnalysis;
+  duplicate_of?: string;
+  reading_brief?: {
+    policy_version: string;
+    source_digest: string;
+    draft_digest: string;
+    status: "ready" | "partial";
+    title_ko: string;
+    analyzed_chars: number;
+    points: Pick<ResearchAnalysis["brief"], "question" | "method_data" | "finding" | "why_read" | "limitation">;
+    held_fields: Partial<Record<"question" | "method_data" | "finding" | "why_read" | "limitation", string>>;
+    metadata_held: boolean;
+  } | null;
   evidence_dimensions?: ResearchEvidenceDimension[];
   evidence_excerpts?: Partial<Record<ResearchEvidenceDimension, string[]>>;
   source_digest?: string;

@@ -35,7 +35,7 @@ def plan(report: dict, *, text_loader=analysis._public_text) -> dict:
         raise ValueError("release requires a bounded inspected sample")
     objects = {}
     for item in report["items"]:
-        if selection.state(item) == "pending":
+        if selection.model_state(item) == "pending":
             raise ValueError("selection is not current")
         text = text_loader(item)  # Official re-fetch, exact full source digest checked.
         selected = item["editorial_selection"]
@@ -46,7 +46,12 @@ def plan(report: dict, *, text_loader=analysis._public_text) -> dict:
         decision = selected["decision"]
         raw = {
             name: decision[name]
-            for name in ("content_kind", "investment_focus", "reason")
+            for name in (
+                "primary_subject",
+                "content_kind",
+                "investment_focus",
+                "reason",
+            )
         }
         raw["transferable_insight"] = (
             {"evidence_ids": [lookup[q] for q in decision["evidence_excerpts"]]}
@@ -61,7 +66,7 @@ def plan(report: dict, *, text_loader=analysis._public_text) -> dict:
         if checked["decision_digest"] != selected["decision_digest"]:
             raise ValueError("selection receipt differs from original evidence")
         objects[PREFIX + f"selections/{selection.cache_key(item)}.json"] = selected
-        if selection.state(item) != "core":
+        if selection.model_state(item) != "core":
             continue  # Never seed an obsolete summary of excluded commentary.
         if (
             item.get("analysis", {}).get("fingerprint") != analysis.cache_key(item)

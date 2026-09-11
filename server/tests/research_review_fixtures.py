@@ -7,6 +7,7 @@ def selection_for(item, text, now, *, kind="research", relevant=True):
     return research_selection.receipt(
         item,
         {
+            "primary_subject": "investment_methodology" if relevant else "other",
             "content_kind": kind,
             "investment_focus": relevant,
             "transferable_insight": {"evidence_ids": [0]} if relevant else None,

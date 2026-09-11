@@ -473,6 +473,7 @@ def enrich(
     review_call=research_review.model_call,
     selection_call=research_selection.model_call,
     max_items: int = 1,
+    selection_only: bool = False,
 ) -> dict:
     if not research_review.enabled():
         return {"enabled": False, "reason": "editorial_release_pending", "completed": 0}
@@ -511,17 +512,25 @@ def enrich(
         if (
             item.get("record_schema_version") != 4
             or item.get("analysis_status") == "not_requested"
+            or item.get("duplicate_of")
         ):
             continue
         # None is used ONLY by the explicit historical review-only qualification;
         # it cannot publish core because projection still requires a selection.
-        selection_state = research_selection.state(item) if selection_call else "core"
+        selection_state_fn = (
+            research_selection.model_state
+            if selection_only
+            else research_selection.state
+        )
+        selection_state = selection_state_fn(item) if selection_call else "core"
         selection_fingerprint = research_selection.cache_key(item)
         selection_path = f"research_analysis/selections/{selection_fingerprint}.json"
         if selection_state == "pending" and storage.exists(selection_path):
             item["editorial_selection"] = storage.read_json(selection_path)
-            selection_state = research_selection.state(item)
+            selection_state = selection_state_fn(item)
             changed = True
+        if selection_only and selection_state != "pending":
+            continue
         if selection_state == "context":
             from module.research_feed import apply_editorial_analysis
 

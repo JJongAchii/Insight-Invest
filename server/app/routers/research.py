@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from datastore import research as research_store
-from module import research_review
+from module import research_curation, research_review
 from module.research_feed import apply_editorial_analysis
 
 router = APIRouter(prefix="/research", tags=["Research"])
@@ -48,7 +48,8 @@ def _matches_query(item: dict, query: str) -> bool:
         item.get("publisher", ""),
         item.get("doi", ""),
         str(item.get("discovered_by", [])),
-        str(item.get("analysis", {})),
+        str(item.get("reading_brief") or {}),
+        str((item.get("analysis") or {}).get("brief", {}).get("title_ko", "")),
         " ".join(str(author) for author in authors if author),
     ]
     searchable = _normalise_search(" ".join(str(value) for value in values))
@@ -74,6 +75,7 @@ def _read_feed() -> dict:
         if item.get("record_schema_version") == 4:
             apply_editorial_analysis(item)
         items.append(item)
+    research_curation.mark_duplicates(items)
     return {**feed, "items": items}
 
 
@@ -147,7 +149,14 @@ def get_research_feed(
         }
         for item in feed["items"]
     ]
-    lane_items = [item for item in all_items if _matches_lane(item, lane)]
+    # The alias stays accessible in saved/read views and by exact entry ID. No
+    # library row is merged, deleted or silently reassigned to the representative.
+    visible_items = [
+        item
+        for item in all_items
+        if not item.get("duplicate_of") or view in {"saved", "read"}
+    ]
+    lane_items = [item for item in visible_items if _matches_lane(item, lane)]
     sources: dict[str, dict] = {}
     for item in lane_items:
         source = sources.setdefault(
@@ -185,11 +194,11 @@ def get_research_feed(
         "saved": sum(item["is_saved"] for item in lane_items),
         "lane": lane,
         "lane_counts": {
-            "core": sum(_item_lane(item) == "core" for item in all_items),
-            "discovery": sum(_item_lane(item) == "discovery" for item in all_items),
-            "updates": sum(_item_lane(item) == "updates" for item in all_items),
-            "context": sum(_item_lane(item) == "context" for item in all_items),
-            "all": len(all_items),
+            "core": sum(_item_lane(item) == "core" for item in visible_items),
+            "discovery": sum(_item_lane(item) == "discovery" for item in visible_items),
+            "updates": sum(_item_lane(item) == "updates" for item in visible_items),
+            "context": sum(_item_lane(item) == "context" for item in visible_items),
+            "all": len(visible_items),
         },
         "view": view,
         "query": query,

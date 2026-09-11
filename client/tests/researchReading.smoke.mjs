@@ -12,13 +12,14 @@ assert.equal(report.production_modified, false);
 report.checked_at ??= report.captured_at;
 const academicProbe = report.status === "probe_completed" && report.llm_calls === 0;
 const originalProbe = report.status === "original_feed_checked" && report.llm_calls === 0 && report.network_calls === 0;
-assert.ok(academicProbe || originalProbe || ["api_contract_qualified", "needs_diagnosis"].includes(report.status));
+const curationProbe = report.status === "curation_projection_checked" && report.llm_calls === 0 && report.network_calls === 0;
+assert.ok(academicProbe || originalProbe || curationProbe || ["api_contract_qualified", "needs_diagnosis"].includes(report.status));
 const originalItems = academicProbe ? report.items.slice(0, 3).map((item) => ({
   ...item, entry_id: item.entry_id_sha256, record_schema_version: item.schema_version,
 })) : report.items;
 assert.ok(originalItems.length >= 1 && originalItems.length <= 3, "Use a bounded actual sample");
-assert.ok(academicProbe || originalProbe || report.review_prompt_version, "Use actual source-review outcomes, never mark drafts reviewed in the fixture");
-const reviewed = (item) => item.analysis_status === "ready" && item.editorial_review_status === "accepted";
+assert.ok(academicProbe || originalProbe || curationProbe || report.review_prompt_version, "Use actual source-review outcomes, never mark drafts reviewed in the fixture");
+const reviewed = (item) => Boolean(item.reading_brief);
 const baseURL = process.env.UI_BASE_URL || "http://127.0.0.1:3118";
 assert.ok(["127.0.0.1", "localhost"].includes(new URL(baseURL).hostname));
 const output = process.env.UI_OUTPUT_DIR || "/tmp/insight-research-reading-review";
@@ -131,14 +132,17 @@ try {
         }
         continue;
       }
-      assert.ok(await card.getByText("원문 대조 완료", { exact: false }).count());
+      assert.ok(await card.getByText(item.reading_brief.status === "partial" ? "일부 검수 보류" : "원문 대조 완료", { exact: false }).count());
       const points = card.locator("dl > div");
-      for (const [index, point] of Object.values(item.analysis.brief).filter((value) => value?.evidence).entries()) {
+      for (const [index, point] of Object.values(item.reading_brief.points).filter((value) => value?.evidence).entries()) {
         const row = points.nth(index);
         await row.locator("summary").click();
         const expected = point.evidence_excerpts || [point.evidence];
         assert.deepEqual(await row.locator("blockquote").allTextContents(), expected);
         if (expected.length > 1) assert.ok(await row.getByText("중간 원문 생략 · 다음 근거").count());
+      }
+      for (const field of Object.keys(item.reading_brief.held_fields)) {
+        assert.equal(await card.getByText(item.analysis.brief[field].text_ko, { exact: true }).count(), 0, "A held claim must not leak into the partial summary");
       }
     }
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
@@ -166,7 +170,8 @@ try {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
     await page.screenshot({ path: `${output}/library-${viewport.width}.png`, fullPage: true });
     checks.push({ width: viewport.width, status: "passed", cards: items.length,
-      accepted: items.filter(reviewed).length, rejected: report.review_rejected });
+      displayed_reading_briefs: items.filter(reviewed).length,
+      partial_reading_briefs: items.filter(item => item.reading_brief?.status === "partial").length });
     console.log(`PASS ${viewport.width}px: actual review outcomes, held originals, lane, search, save, mark-all-read`);
     await context.close();
   }

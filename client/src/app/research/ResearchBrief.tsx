@@ -9,13 +9,12 @@ const POINTS = [
 ] as const;
 
 export function hasReviewedBrief(item: ResearchEntry) {
-  return !!item.analysis && item.analysis_status === "ready"
-    && item.editorial_review_status === "accepted";
+  return !!item.reading_brief;
 }
 
 export default function ResearchBrief({ item }: { item: ResearchEntry }) {
-  const analysis = item.analysis;
-  if (!analysis || !hasReviewedBrief(item)) {
+  const reading = item.reading_brief;
+  if (!reading) {
     const academic = item.quality_profile === "academic-discovery-v1";
     const status = academic
       ? item.original_access_status?.startsWith("verified_") && item.access_status !== "abstract_only"
@@ -28,7 +27,7 @@ export default function ResearchBrief({ item }: { item: ResearchEntry }) {
       : item.analysis_status === "held" ? "요약 확인 필요"
       : item.analysis_status === "not_requested" ? "요약 대상 아님"
       : item.analysis_status === "retry_pending" ? "요약 재시도 대기"
-      : analysis ? "요약 원문 대조 중" : "한국어 요약 준비 중";
+      : item.analysis ? "요약 원문 대조 중" : "한국어 요약 준비 중";
     return (
       <div className="mt-3 space-y-2">
         {item.record_schema_version === 4 && (
@@ -47,19 +46,15 @@ export default function ResearchBrief({ item }: { item: ResearchEntry }) {
   return (
     <div className="mt-4 space-y-3">
       <p className="text-xs text-ink-muted">
-        AI 읽기 요약 · 원문 대조 완료 · 원문 {analysis.analyzed_chars.toLocaleString("ko-KR")}자 분석
+        AI 읽기 요약 · {reading.status === "partial" ? "확인된 항목만 표시 · 일부 검수 보류" : "항목별 원문 대조 완료"} · 원문 {reading.analyzed_chars.toLocaleString("ko-KR")}자 분석
       </p>
       <dl className="space-y-3">
         {POINTS.map(([field, label]) => {
-          const point = analysis.brief[field];
+          const point = reading.points[field];
           if (!point) return null;
-          const pointLabel = field !== "finding" ? label
-            : analysis.brief.content_kind === "research" ? "저자가 보고한 결과"
-            : analysis.brief.content_kind === "market_commentary" ? "저자의 전망·해석"
-            : label;
           return (
             <div key={field} className="grid gap-1 sm:grid-cols-[7.5rem_1fr] sm:gap-3">
-              <dt className="text-xs font-medium leading-6 text-ink-muted">{pointLabel}</dt>
+              <dt className="text-xs font-medium leading-6 text-ink-muted">{label}</dt>
               <dd className="min-w-0 text-sm leading-6 text-ink-secondary">
                 <p>{point.text_ko}</p>
                 <details className="mt-1 text-xs text-ink-muted">
@@ -80,6 +75,12 @@ export default function ResearchBrief({ item }: { item: ResearchEntry }) {
           );
         })}
       </dl>
+      {!!Object.keys(reading.held_fields).length && (
+        <p className="text-xs leading-5 text-ink-muted">
+          보류 항목: {POINTS.filter(([field]) => reading.held_fields[field]).map(([, label]) => label).join(" · ")}. 원문과 의미·조건을 더 확인해야 해 요약에서 제외했습니다.
+        </p>
+      )}
+      {reading.metadata_held && <p className="text-xs leading-5 text-ink-muted">자동 분류는 재확인이 필요합니다. 아래 원문 링크에서 자료 전체를 확인할 수 있습니다.</p>}
       <div className="border-t border-edge pt-3 text-xs leading-5 text-ink-muted">
         <p>AI가 원문 일부와 요약을 대조한 읽기 도움말입니다. 오류가 남을 수 있으며, 독립 재현·성과 검증 결과가 아닙니다.</p>
       </div>
