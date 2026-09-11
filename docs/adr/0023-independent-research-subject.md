@@ -48,3 +48,34 @@ Structured Outputs는 schema 순서대로 키를 내보내지만 내용 오류�
 실제 인수가 통과한 뒤 최신 main을 통합하고 전체 관련 테스트·웹 빌드·배포 스모크와
 사용자 상태 보존을 확인한다. 실패한 선별을 배포하거나 문서별 제목 차단 목록으로
 회귀를 통과시키지 않는다. 수집 소스 확장·전략 구현·백테스트는 이번 범위 밖이다.
+
+## 실제 재검증 — 2026-09-11
+
+동일 v5 구현 `0d47e25`, 최신 main 통합 커밋 `00e7487`에서 다음 고정 표본 6개가
+모두 주제·형식·자동 lane 기대와 일치했다. 동결된 편집 결정은 인수에 사용하지 않았다.
+
+| 원문 | 주제 / 형식 | 자동 lane | Actions run |
+| --- | --- | --- | --- |
+| KCMI 퇴직연금제도 개편 | institutional_policy / research | context | 34570139448 |
+| Robeco AI research workflow | research_operations / practitioner | context | 34570139448 |
+| AQR Academic Alpha | investment_methodology / practitioner | core | 34570139448 |
+| D. E. Shaw Machine Teaching | investment_methodology / practitioner | core | 34570443364 |
+| CFM Hidden Beta in Dip Trade | investment_methodology / research | core | 34570762398 |
+| Robeco Systematic fixed income | investment_methodology / practitioner | core | 34570950713 |
+
+CFM 첫 실행 `34570712687`은 작업자의 잘못된 source ID 입력으로 환경 검사에서
+중단됐다. sources/items/analysis_runs가 모두 비어 있고 모델 호출은 0회다. 등록된
+`cfm-research`로 바로잡아 실행했으며 입력 검사를 완화하지 않았다.
+
+실제 선별 6회, 생성·검수 0회. 토큰 영수증 기준 추가 비용 추정은 $0.021585이며
+시험 원장 예약액은 $0.46797995 → $0.48956495 / $0.50이다. 한도·출력 토큰·모델을
+바꾸거나 실패 예약을 삭제하지 않았다. 이 숫자는 제공자 청구서가 아니다.
+
+최신 main의 전역 시세 표시를 보존한 상태에서 관련 테스트 234개, Ruff, Next production
+build, 실제 출력 1440px/390px 읽기 UI 검사가 통과했다. 현재 운영 스냅샷 654개를
+오프라인 적용하면 core 25개(전체 표시 14, 부분 표시 11)이며 ID·기존 영수증·최초
+노출 시각·알림 출처를 보존한다. 이는 배포 전 투영 결과다.
+
+이 결과로 ADR-0022의 v4 자동분류 실패에 따른 보류를 해제하고 PR #48의 배포 검증으로
+진행한다. 실제 운영 배포·상태 보존 결과는 qws `subject-release-20260911` 증거로
+별도 기록한다. 여섯 표본은 개발 회귀이지 미래 전체 문서의 정확도 보증이 아니다.
