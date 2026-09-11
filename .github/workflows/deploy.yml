@@ -275,11 +275,21 @@ jobs:
           jq -e '.lane == "core" and .total > 0 and .editorial_enabled == true
                and (.items | all(.research_lane == "core"
                                   and .editorial_selection_status == "core"
-                                  and (.notification_eligible | type) == "boolean"))' \
+                                  and (.notification_eligible | type) == "boolean"
+                                  and .duplicate_of == null
+                                  and (.reading_brief == null or (
+                                    .reading_brief.policy_version == "reading-display-v1-field-holds"
+                                    and (.reading_brief.status == "ready" or .reading_brief.status == "partial")
+                                    and (.reading_brief.points.method_data != null or .reading_brief.points.finding != null)
+                                    and (.reading_brief as $brief | $brief.held_fields | keys | all(. as $field | $brief.points[$field] == null))
+                                  ))))' \
             /tmp/research-core.json
           jq '{total, editorial_enabled, lane_counts, items: [.items[] | {
             entry_id, title, source_id, url, analysis_status, editorial_review_status,
-            editorial_selection_status, notification_eligible
+            editorial_selection_status, notification_eligible,
+            reading_status: .reading_brief.status,
+            reading_policy: .reading_brief.policy_version,
+            held_fields: (.reading_brief.held_fields // {} | keys)
           }]}' /tmp/research-core.json >/tmp/research-core-snapshot.json
           curl -sf -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
             -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
