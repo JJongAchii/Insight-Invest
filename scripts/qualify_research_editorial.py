@@ -45,6 +45,7 @@ SAMPLES = (
     "reading-value-v1",
     "reading-value-v2",
     "reading-diversity-v1",
+    "reading-scope-v1",
     "v7-regression",
 )
 V7_PROMPT = "reading-brief-openai-v7-korean-editorial"
@@ -399,6 +400,7 @@ def run(output: Path) -> int:
         for _ in range(4 * len(records)):
             result = research_analysis.enrich(
                 max_items=1,
+                selection_only=sample == "reading-scope-v1",
                 **({"selection_call": None} if sample == "v7-regression" else {}),
                 **(
                     {"text_loader": lambda item: texts[item["entry_id"]]}
@@ -418,7 +420,9 @@ def run(output: Path) -> int:
                 if item.get("analysis_status") != "not_requested"
             ]
             if all(
-                current_review(item) or research_selection.state(item) == "context"
+                research_selection.model_state(item) != "pending"
+                if sample == "reading-scope-v1"
+                else current_review(item) or research_selection.state(item) == "context"
                 for item in requested
             ):
                 break
@@ -447,12 +451,28 @@ def run(output: Path) -> int:
                 "actual": item.get("editorial_selection", {})
                 .get("decision", {})
                 .get("content_kind"),
+                "automatic_lane": research_selection.model_state(item),
             }
             for item in requested
             if item["source_id"] in cases and sample != "v7-regression"
         ]
         # This qualifies transport/structure/binding, not reviewer correctness or alpha.
-        if requested and report["reviewed"] + report["selection_context"] == len(
+        if sample == "reading-scope-v1":
+            report["selection_only"] = True
+            report["editorial_audits_used_for_qualification"] = False
+            report["status"] = (
+                "api_contract_qualified"
+                if requested
+                and all(
+                    research_selection.model_state(item)
+                    == cases[item["source_id"]]["expected_lane"]
+                    and item["editorial_selection"]["decision"]["content_kind"]
+                    in cases[item["source_id"]]["expected_content_kinds"]
+                    for item in requested
+                )
+                else "needs_diagnosis"
+            )
+        elif requested and report["reviewed"] + report["selection_context"] == len(
             requested
         ):
             report["status"] = "api_contract_qualified"

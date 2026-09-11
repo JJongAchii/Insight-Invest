@@ -4,6 +4,65 @@
   "note": "Public metadata and content hashes only. Never replace a changed source with the next latest article. Editorial reading labels are not scientific validity judgments.",
   "items": [
     {
+      "source_id": "kcmi-reports",
+      "title": "초고령사회 다층노후소득을 위한 퇴직연금제도 개편",
+      "url": "https://www.kcmi.re.kr/report/report_view?report_no=2327",
+      "pdf_url": "https://www.kcmi.re.kr/common/downloadw?fgu=002002&fid=29154&fty=004003",
+      "authors": [
+        "남재우"
+      ],
+      "published_at": "2026-09-03T15:00:00+00:00",
+      "source_digest": "06a547e91ba66919a837b396c89834f355040360a74179b66d66cc25d1c6425f",
+      "samples": [
+        "reading-scope-v1"
+      ],
+      "expected_content_kinds": [
+        "other"
+      ],
+      "expected_lane": "context",
+      "reading_check": "General AI research workflow or institutional reform is not quantitative investment methodology."
+    },
+    {
+      "source_id": "robeco-quant-insights",
+      "title": "The agentic research desk",
+      "url": "https://www.robeco.com/en-int/insights/2026/09/the-agentic-research-desk",
+      "pdf_url": "",
+      "authors": [
+        "Mike Chen"
+      ],
+      "published_at": "2026-09-03T00:00:00+00:00",
+      "source_digest": "d73f5cd7c04bf9492d108d28462d95cbce9585790baa02380cace4c2c101b262",
+      "samples": [
+        "reading-scope-v1"
+      ],
+      "expected_content_kinds": [
+        "other"
+      ],
+      "expected_lane": "context",
+      "reading_check": "General AI research workflow or institutional reform is not quantitative investment methodology."
+    },
+    {
+      "source_id": "aqr-research",
+      "title": "Academic Alpha",
+      "url": "https://www.aqr.com/Insights/Research/White-Papers/Academic-Alpha",
+      "pdf_url": "https://www.aqr.com/-/media/AQR/Documents/White-Papers/Academic-Alpha-A-Re-Introduction-to-Style-Premia-Investing.pdf?hash=4459D2FC2A0D470B879C4426DA6D8FD1&sc_lang=en",
+      "authors": [
+        "Thomas Maloney",
+        "Tobias J. Moskowitz"
+      ],
+      "published_at": "2026-08-19T00:00:00+00:00",
+      "source_digest": "e3038ad85e98d5fcaacf2101a3ca37b332977df7ce2cb6322f9f37d0c1577553",
+      "samples": [
+        "reading-scope-v1"
+      ],
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "expected_lane": "core",
+      "reading_check": "Style-premia implementation and mechanisms remain useful despite a regulatory not-research disclaimer."
+    },
+    {
       "samples": ["reading-diversity-v1"],
       "source_id": "deshaw-library",
       "title": "Machine Teaching: What I Learned From My Optimizer",

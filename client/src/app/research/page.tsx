@@ -292,9 +292,10 @@ function ResearchCard({
           </div>
 
           <h2 className="mt-2 text-base font-semibold leading-6 text-ink sm:text-lg">
-            {(hasReviewedBrief(item) && item.analysis?.brief.title_ko) || item.title}
+            {item.reading_brief?.title_ko || item.title}
           </h2>
-          {hasReviewedBrief(item) && item.analysis?.brief.title_ko !== item.title && <p className="mt-1 text-xs leading-5 text-ink-muted" lang="en">{item.title}</p>}
+          {hasReviewedBrief(item) && item.reading_brief?.title_ko !== item.title && <p className="mt-1 text-xs leading-5 text-ink-muted" lang="en">{item.title}</p>}
+          {item.duplicate_of && <p className="mt-1 text-xs leading-5 text-ink-muted">동일 자료의 다른 발행처 · 이 카드의 읽음·보관 기록은 유지됩니다.</p>}
           {authors && <p className="mt-1 text-xs text-ink-muted">{authors}</p>}
           <ResearchBrief item={item} />
 

@@ -189,6 +189,52 @@ def test_search_views_and_entry_deep_link_priority(monkeypatch, tmp_path):
     assert [item["entry_id"] for item in selected["items"]] == [first_id]
 
 
+def test_duplicate_card_keeps_saved_read_history_and_exact_link(monkeypatch, tmp_path):
+    from module import research_curation as curation
+
+    monkeypatch.setenv("APP_DATA", str(tmp_path))
+    audits = curation._audits()
+    alias_id, alias = next(
+        (key, value) for key, value in audits.items() if value.get("duplicate_of")
+    )
+    original_id = alias["duplicate_of"]
+    items = [
+        {
+            **{name: audits[key][name] for name in curation.BINDINGS},
+            "entry_id": key,
+            "source_name": audits[key]["source_id"],
+            "record_schema_version": 4,
+            "editorial_candidate_lane": "core",
+            "notification_candidate": True,
+            "notification_origin": "backfill",
+            "discovered_at": "2026-09-02T00:01:00+00:00",
+        }
+        for key in (original_id, alias_id)
+    ]
+    research_store.save_feed(
+        {
+            "schema_version": 1,
+            "generated_at": "2026-09-02T00:10:00+00:00",
+            "items": items,
+        }
+    )
+    research_store.set_read(alias_id, read=True)
+    research_store.set_saved(alias_id, saved=True)
+    before = {path: path.read_bytes() for path in tmp_path.iterdir() if path.is_file()}
+
+    assert [item["entry_id"] for item in _get(lane="all")["items"]] == [original_id]
+    for view in ("saved", "read"):
+        result = _get(lane="all", view=view)["items"]
+        assert len(result) == 1 and result[0]["entry_id"] == alias_id
+        assert result[0]["duplicate_of"] == original_id
+        assert result[0]["is_saved"] and result[0]["is_read"]
+    linked = _get(entry_id=alias_id)["items"][0]
+    assert linked["is_saved"] and linked["url"] == alias["url"]
+    assert not linked["notification_eligible"]
+    assert not _get(entry_id=original_id)["items"][0]["is_saved"]
+    assert before == {path: path.read_bytes() for path in before}
+
+
 def test_mark_all_read_preserves_saved_state_and_is_idempotent(monkeypatch, tmp_path):
     monkeypatch.setenv("APP_DATA", str(tmp_path))
     first_id = "a" * 64

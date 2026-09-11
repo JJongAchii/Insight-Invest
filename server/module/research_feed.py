@@ -14,7 +14,12 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from datastore import research as research_store
-from module import research_review, research_selection
+from module import (
+    research_curation,
+    research_reading,
+    research_review,
+    research_selection,
+)
 from qdata.radar_notifications import is_incremental
 
 DEFAULT_BUCKET = "insight-invest-datalake"
@@ -170,7 +175,11 @@ def apply_editorial_analysis(item: dict, *, target: dict | None = None) -> None:
         and is_incremental(item)
     )
     if target["notification_eligible"] and not item.get("available_at"):
-        target["available_at"] = item["editorial_selection"]["checked_at"]
+        audit = research_curation.original_audit(item)
+        target["available_at"] = (
+            item.get("editorial_selection", {}).get("checked_at") or audit["checked_at"]
+        )
+    target["reading_brief"] = research_reading.reading_brief({**item, **target})
 
 
 def _topic_concept(term: str) -> str:
@@ -549,6 +558,9 @@ def reconcile(
         key=lambda item: (_timestamp(item), item["entry_id"]),
         reverse=True,
     )
+    before_duplicates = [dict(item) for item in items]
+    research_curation.mark_duplicates(items)
+    migrated = migrated or items != before_duplicates
     changed = bool(
         added or updated or removed or migrated or not current["generated_at"]
     )

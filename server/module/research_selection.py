@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import json
 
-from module import research_review
+from module import research_curation, research_review
 
 MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-selection-v2-evidence-plan"
+PROMPT_VERSION = "reading-selection-v3-investment-substance"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 4096
 SYSTEM = """Select originals for a personal quantitative investment reading feed.
@@ -35,6 +35,19 @@ Institutional reputation, PDF length and paper format are irrelevant to selectio
 
 investment_focus means quantitative investment, empirical asset pricing, signals,
 portfolio/risk construction or market microstructure is the main substance.
+Use a strict subject test, not merely a finance-industry audience test. AI research
+workflow inventories, governance, institutional pension reform, tokenization
+infrastructure, or general sector/business risk frameworks are NOT investment
+methodology just because they mention portfolios, data, risk, or a quant team.
+For these use other and investment_focus=false unless the main body actually
+explains a signal/measurement, portfolio construction rule, empirical pricing
+mechanism, or a concrete trading/implementation effect with transferable reasoning.
+An AI workflow that says 'extract signals and test ideas' without explaining an
+investment signal or measurement is other, even when the workflow is reusable.
+An article describing a factor's construction, risk decomposition, index trading
+effects or a quantitative model's limitation CAN qualify without a backtest.
+Legal disclaimers such as 'not research' or 'not investment advice' do not define
+our editorial content_kind; classify the substance, not its regulatory label.
 For research/practitioner return a transferable_insight with ONE citable passage ID
 (at most 1200 characters total) showing the actual method/mechanism/finding taught.
 If all you can say is 'they use AI', 'they manage risk' or 'they like sector X',
@@ -135,6 +148,17 @@ def cache_key(item: dict) -> str:
 
 
 def state(item: dict) -> str:
+    audit = research_curation.original_audit(item)
+    if audit:
+        # A dated source-only editor decision is separate from an API selection.
+        # This preserves inspected originals during the prompt-version migration;
+        # it never marks an old model result as having run the new prompt.
+        return audit["lane"]
+    return model_state(item)
+
+
+def model_state(item: dict) -> str:
+    """Automatic selector only; qualification must not borrow editorial audits."""
     receipt = item.get("editorial_selection") or {}
     try:
         if (

@@ -123,6 +123,54 @@ def test_selection_never_sees_draft_or_provider_key():
     assert "PRIMARY PURPOSE" in payload["instructions"]
 
 
+def test_selection_only_qualification_ignores_editor_audit_and_never_drafts(
+    source, tmp_path, monkeypatch
+):
+    from module import research_curation
+
+    remove_selection_cache(source, tmp_path)
+    monkeypatch.setattr(
+        research_curation, "original_audit", lambda _: {"lane": "context"}
+    )
+    calls = []
+
+    def choose(text, title, key):
+        calls.append(title)
+        return {
+            "content_kind": "research",
+            "investment_focus": True,
+            "transferable_insight": {"evidence_ids": [0]},
+            "reason": "Synthetic method, not real model acceptance.",
+            "reading_points": {
+                name: {"evidence_ids": [0]} for name in selection.POINT_NAMES
+            },
+        }, {"input_tokens": 100, "output_tokens": 80}
+
+    result = analysis.enrich(
+        now=NOW,
+        text_loader=lambda _: TEXT,
+        selection_call=choose,
+        model_call=forbidden,
+        review_call=forbidden,
+        selection_only=True,
+    )
+    item = research.load_feed()["items"][0]
+    assert calls and result["selected"] == 1
+    assert selection.state(item) == "context"
+    assert selection.model_state(item) == "core"
+    assert (
+        analysis.enrich(
+            now=NOW,
+            selection_only=True,
+            text_loader=forbidden,
+            selection_call=forbidden,
+            model_call=forbidden,
+            review_call=forbidden,
+        )["completed"]
+        == 0
+    )
+
+
 def test_broken_pdf_numbers_are_context_only_not_reconstructed():
     text = "The measured alpha was +1 .76% in the study. Another alpha was 1. 49%. A normal number is 1.76%."
     passages = analysis._source_passages(text)
