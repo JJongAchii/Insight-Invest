@@ -14,6 +14,152 @@
       "published_at": "2026-09-03T15:00:00+00:00",
       "source_digest": "06a547e91ba66919a837b396c89834f355040360a74179b66d66cc25d1c6425f",
       "samples": [
+        "reading-subject-v1"
+      ],
+      "expected_content_kinds": [
+        "research",
+        "practitioner",
+        "other"
+      ],
+      "expected_subjects": [
+        "institutional_policy"
+      ],
+      "expected_lane": "context",
+      "reading_check": "Separate subject from format. Formal policy research and explanatory AI-workflow essays remain context; investment-method research remains core. Source URL/body and expected lane are unchanged from reading-scope-v1."
+    },
+    {
+      "source_id": "robeco-quant-insights",
+      "title": "AI in investment research: from faster summaries to stronger insights",
+      "url": "https://www.robeco.com/en-int/insights/2026/09/the-agentic-research-desk",
+      "pdf_url": "",
+      "authors": [
+        "Mike Chen"
+      ],
+      "published_at": "2026-09-03T00:00:00+00:00",
+      "source_digest": "d73f5cd7c04bf9492d108d28462d95cbce9585790baa02380cace4c2c101b262",
+      "samples": [
+        "reading-subject-v1"
+      ],
+      "expected_content_kinds": [
+        "research",
+        "practitioner",
+        "other"
+      ],
+      "expected_subjects": [
+        "research_operations"
+      ],
+      "expected_lane": "context",
+      "reading_check": "Separate subject from format. Formal policy research and explanatory AI-workflow essays remain context; investment-method research remains core. Source URL/body and expected lane are unchanged from reading-scope-v1."
+    },
+    {
+      "source_id": "aqr-research",
+      "title": "Academic Alpha",
+      "url": "https://www.aqr.com/Insights/Research/White-Papers/Academic-Alpha",
+      "pdf_url": "https://www.aqr.com/-/media/AQR/Documents/White-Papers/Academic-Alpha-A-Re-Introduction-to-Style-Premia-Investing.pdf?hash=4459D2FC2A0D470B879C4426DA6D8FD1&sc_lang=en",
+      "authors": [
+        "Thomas Maloney",
+        "Tobias J. Moskowitz"
+      ],
+      "published_at": "2026-08-19T00:00:00+00:00",
+      "source_digest": "e3038ad85e98d5fcaacf2101a3ca37b332977df7ce2cb6322f9f37d0c1577553",
+      "samples": [
+        "reading-subject-v1"
+      ],
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "expected_subjects": [
+        "investment_methodology",
+        "empirical_market_research"
+      ],
+      "expected_lane": "core",
+      "reading_check": "Separate subject from format. Formal policy research and explanatory AI-workflow essays remain context; investment-method research remains core. Source URL/body and expected lane are unchanged from reading-scope-v1."
+    },
+    {
+      "source_id": "deshaw-library",
+      "title": "Machine Teaching: What I Learned From My Optimizer",
+      "url": "https://www.deshaw.com/library/machine-teaching",
+      "pdf_url": "",
+      "authors": [
+        "The D. E. Shaw Group"
+      ],
+      "published_at": "2023-12-11T00:00:00+00:00",
+      "source_digest": "7e7c14fc4e892dcbcf3dffbd53e0879f11c63d2b422d9ada12092f126ad8eac2",
+      "samples": [
+        "reading-subject-positive-v1"
+      ],
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "expected_subjects": [
+        "investment_methodology",
+        "empirical_market_research"
+      ],
+      "expected_lane": "core",
+      "reading_check": "Investment-method practitioner essay: optimizer sensitivity, uncertainty, sizing and risk. Do not mistake portfolio optimization for software infrastructure or claim independently replicated performance."
+    },
+    {
+      "source_id": "cfm-research",
+      "title": "The Hidden Beta in Dip Trade",
+      "url": "https://www.cfm.com/the-hidden-beta-in-dip-trade",
+      "pdf_url": "",
+      "authors": [
+        "CFM"
+      ],
+      "published_at": "2026-07-15T07:35:01+00:00",
+      "source_digest": "0fc6720c574b3b69976adb44a230e53bc7edaf39796d2db5aa6ea7ea84dcf9e1",
+      "samples": [
+        "reading-subject-positive-v1"
+      ],
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "expected_subjects": [
+        "investment_methodology",
+        "empirical_market_research"
+      ],
+      "expected_lane": "core",
+      "reading_check": "Concrete dip-buying and short-volatility research separating passive beta from timing skill. Costs are explicitly not included, and the two trades and their benchmarks must not be conflated."
+    },
+    {
+      "source_id": "robeco-quant-insights",
+      "title": "Systematic fixed income: bringing diversification benefits to credit portfolios",
+      "url": "https://www.robeco.com/en-int/insights/2026/09/systematic-fixed-income-bringing-diversification-benefits-to-credit-portfolios",
+      "pdf_url": "https://www.robeco.com/files/docm/docu-20260907-systematic-fixed-income-bringing-diversification-benefits-to-credit-portfolios.pdf",
+      "authors": [
+        "Lodewijk van der Linden",
+        "Patrick Houweling"
+      ],
+      "published_at": "2026-09-07T00:00:00+00:00",
+      "source_digest": "e9039fe09f127daeff4978d3cd6d731dd559b94d6a65ee34dbaec57f2474d00d",
+      "samples": [
+        "reading-subject-positive-v1"
+      ],
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "expected_subjects": [
+        "investment_methodology",
+        "empirical_market_research"
+      ],
+      "expected_lane": "core",
+      "reading_check": "Systematic credit factor and portfolio research, not generic AI workflow or issuer preference. Keep genuine investment methods despite practitioner presentation."
+    },
+    {
+      "source_id": "kcmi-reports",
+      "title": "초고령사회 다층노후소득을 위한 퇴직연금제도 개편",
+      "url": "https://www.kcmi.re.kr/report/report_view?report_no=2327",
+      "pdf_url": "https://www.kcmi.re.kr/common/downloadw?fgu=002002&fid=29154&fty=004003",
+      "authors": [
+        "남재우"
+      ],
+      "published_at": "2026-09-03T15:00:00+00:00",
+      "source_digest": "06a547e91ba66919a837b396c89834f355040360a74179b66d66cc25d1c6425f",
+      "samples": [
         "reading-scope-v1"
       ],
       "expected_content_kinds": [

@@ -46,7 +46,12 @@ SAMPLES = (
     "reading-value-v2",
     "reading-diversity-v1",
     "reading-scope-v1",
+    "reading-subject-v1",
+    "reading-subject-positive-v1",
     "v7-regression",
+)
+SELECTION_SAMPLES = frozenset(
+    {"reading-scope-v1", "reading-subject-v1", "reading-subject-positive-v1"}
 )
 V7_PROMPT = "reading-brief-openai-v7-korean-editorial"
 
@@ -79,6 +84,27 @@ def fixed_publication(case: dict, now: datetime) -> tuple[dict, str]:
         raise ValueError("fixed source changed; do not substitute another article")
     record = publication_record(document, source_id=case["source_id"], now=now)
     return record, document["text"][: research_analysis.MAX_INPUT_CHARS]
+
+
+def selection_check(item: dict, case: dict) -> dict:
+    """Check fixed topic/format/lane expectations without borrowing editor overrides."""
+    decision = item.get("editorial_selection", {}).get("decision", {})
+    lane = research_selection.model_state(item)
+    subjects = case.get("expected_subjects", [])
+    return {
+        "source_id": item["source_id"],
+        "expected": case["expected_content_kinds"],
+        "actual": decision.get("content_kind"),
+        "expected_subjects": subjects,
+        "primary_subject": decision.get("primary_subject"),
+        "expected_lane": case.get("expected_lane"),
+        "automatic_lane": lane,
+        "matches": (
+            lane == case.get("expected_lane")
+            and decision.get("content_kind") in case["expected_content_kinds"]
+            and (not subjects or decision.get("primary_subject") in subjects)
+        ),
+    }
 
 
 def preserved_input(record: dict, case: dict) -> dict:
@@ -209,6 +235,7 @@ def run(output: Path) -> int:
         "prompt_version": research_analysis.PROMPT_VERSION,
         "review_model": research_review.MODEL,
         "review_prompt_version": research_review.PROMPT_VERSION,
+        "selection_prompt_version": research_selection.PROMPT_VERSION,
         "dependencies": {
             name: version(name) for name in ("beautifulsoup4", "pypdf", "httpx")
         },
@@ -243,6 +270,8 @@ def run(output: Path) -> int:
                     "source_id",
                     "reading_check",
                     "expected_content_kinds",
+                    "expected_subjects",
+                    "expected_lane",
                     "known_bad_v7_fields",
                 )
                 if name in case
@@ -400,7 +429,7 @@ def run(output: Path) -> int:
         for _ in range(4 * len(records)):
             result = research_analysis.enrich(
                 max_items=1,
-                selection_only=sample == "reading-scope-v1",
+                selection_only=sample in SELECTION_SAMPLES,
                 **({"selection_call": None} if sample == "v7-regression" else {}),
                 **(
                     {"text_loader": lambda item: texts[item["entry_id"]]}
@@ -421,7 +450,7 @@ def run(output: Path) -> int:
             ]
             if all(
                 research_selection.model_state(item) != "pending"
-                if sample == "reading-scope-v1"
+                if sample in SELECTION_SAMPLES
                 else current_review(item) or research_selection.state(item) == "context"
                 for item in requested
             ):
@@ -445,31 +474,19 @@ def run(output: Path) -> int:
             research_selection.state(item) == "context" for item in requested
         )
         report["selection_checks"] = [
-            {
-                "source_id": item["source_id"],
-                "expected": cases[item["source_id"]]["expected_content_kinds"],
-                "actual": item.get("editorial_selection", {})
-                .get("decision", {})
-                .get("content_kind"),
-                "automatic_lane": research_selection.model_state(item),
-            }
+            selection_check(item, cases[item["source_id"]])
             for item in requested
             if item["source_id"] in cases and sample != "v7-regression"
         ]
         # This qualifies transport/structure/binding, not reviewer correctness or alpha.
-        if sample == "reading-scope-v1":
+        if sample in SELECTION_SAMPLES:
             report["selection_only"] = True
             report["editorial_audits_used_for_qualification"] = False
             report["status"] = (
                 "api_contract_qualified"
-                if requested
-                and all(
-                    research_selection.model_state(item)
-                    == cases[item["source_id"]]["expected_lane"]
-                    and item["editorial_selection"]["decision"]["content_kind"]
-                    in cases[item["source_id"]]["expected_content_kinds"]
-                    for item in requested
-                )
+                if len(requested) == maximum
+                and len(report["selection_checks"]) == maximum
+                and all(check["matches"] for check in report["selection_checks"])
                 else "needs_diagnosis"
             )
         elif requested and report["reviewed"] + report["selection_context"] == len(

@@ -39,7 +39,7 @@ on:
       research_sample:
         description: Fixed public-source regression or reading-value sample; no silent replacement
         type: choice
-        options: [latest, reading-value-v1, reading-value-v2, reading-diversity-v1, reading-scope-v1, v7-regression]
+        options: [latest, reading-value-v1, reading-value-v2, reading-diversity-v1, reading-scope-v1, reading-subject-v1, reading-subject-positive-v1, v7-regression]
         default: latest
 
 env:

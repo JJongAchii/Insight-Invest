@@ -178,6 +178,43 @@ def test_preserved_draft_replay_keeps_its_original_parser_identity(monkeypatch):
             qualification.preserved_input({**record, field: value}, case)
 
 
+def test_subject_sample_preserves_failure_source_and_lane_expectation(monkeypatch):
+    previous = qualification.fixed_cases("reading-scope-v1", ["kcmi-reports"])[
+        "kcmi-reports"
+    ]
+    case = qualification.fixed_cases("reading-subject-v1", ["kcmi-reports"])[
+        "kcmi-reports"
+    ]
+    for key in ("url", "source_digest", "title", "expected_lane"):
+        assert case[key] == previous[key]
+    assert case["expected_lane"] == "context"
+    item = {
+        "source_id": "kcmi-reports",
+        "editorial_selection": {
+            "decision": {
+                "primary_subject": "institutional_policy",
+                "content_kind": "research",
+            }
+        },
+    }
+    monkeypatch.setattr(
+        qualification.research_selection, "model_state", lambda _: "context"
+    )
+    check = qualification.selection_check(item, case)
+    assert check[
+        "matches"
+    ]  # Formal research is compatible with a non-investment subject.
+    item["editorial_selection"]["decision"]["primary_subject"] = (
+        "investment_methodology"
+    )
+    assert not qualification.selection_check(item, case)["matches"]
+    item["editorial_selection"]["decision"]["primary_subject"] = "institutional_policy"
+    monkeypatch.setattr(
+        qualification.research_selection, "model_state", lambda _: "core"
+    )
+    assert not qualification.selection_check(item, case)["matches"]
+
+
 def test_fixed_source_drift_stops_before_analysis(monkeypatch):
     from datetime import UTC, datetime
 

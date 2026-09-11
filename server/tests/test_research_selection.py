@@ -51,6 +51,7 @@ def test_source_only_selection_is_first_budgeted_stage(
         )
         assert text == TEXT
         return {
+            "primary_subject": "investment_methodology",
             "content_kind": kind,
             "investment_focus": True,
             "transferable_insight": {"evidence_ids": [0]} if insight else None,
@@ -121,6 +122,10 @@ def test_selection_never_sees_draft_or_provider_key():
     assert payload["store"] is False and "tools" not in payload
     assert payload["text"]["format"]["strict"] is True
     assert "PRIMARY PURPOSE" in payload["instructions"]
+    assert (
+        next(iter(payload["text"]["format"]["schema"]["properties"]))
+        == "primary_subject"
+    )
 
 
 def test_selection_only_qualification_ignores_editor_audit_and_never_drafts(
@@ -137,6 +142,7 @@ def test_selection_only_qualification_ignores_editor_audit_and_never_drafts(
     def choose(text, title, key):
         calls.append(title)
         return {
+            "primary_subject": "investment_methodology",
             "content_kind": "research",
             "investment_focus": True,
             "transferable_insight": {"evidence_ids": [0]},
@@ -169,6 +175,34 @@ def test_selection_only_qualification_ignores_editor_audit_and_never_drafts(
         )["completed"]
         == 0
     )
+
+
+@pytest.mark.parametrize("kind", ["research", "practitioner"])
+@pytest.mark.parametrize("subject", selection.PRIMARY_SUBJECTS)
+def test_topic_cannot_be_overridden_by_research_format_or_financial_focus(
+    source, kind, subject
+):
+    item = deepcopy(source.record)
+    receipt = selection_for(item, TEXT, NOW, kind=kind)
+    receipt["decision"]["primary_subject"] = subject
+    receipt["decision_digest"] = selection.research_review.digest(receipt["decision"])
+    item["editorial_selection"] = receipt
+    expected = "core" if subject in selection.INVESTMENT_SUBJECTS else "context"
+    # Even contradictory investment_focus=true + grounded evidence cannot promote policy.
+    assert selection.model_state(item) == expected
+
+
+@pytest.mark.parametrize("subject", [None, "unknown", ""])
+def test_missing_or_unknown_subject_cannot_reuse_a_selection(source, subject):
+    item = deepcopy(source.record)
+    receipt = selection_for(item, TEXT, NOW)
+    if subject is None:
+        receipt["decision"].pop("primary_subject")
+    else:
+        receipt["decision"]["primary_subject"] = subject
+    receipt["decision_digest"] = selection.research_review.digest(receipt["decision"])
+    item["editorial_selection"] = receipt
+    assert selection.model_state(item) == "pending"
 
 
 def test_broken_pdf_numbers_are_context_only_not_reconstructed():
