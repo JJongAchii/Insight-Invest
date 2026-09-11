@@ -91,7 +91,7 @@ export default function PwaManager() {
         <aside
           role="region"
           aria-label="앱 설치 안내"
-          className="fixed inset-x-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[60] mx-auto max-w-md overflow-hidden rounded-2xl border border-edge-strong bg-overlay/95 p-4 shadow-2xl backdrop-blur-xl md:bottom-6 md:left-auto md:right-6 md:mx-0"
+          className="fixed inset-x-4 bottom-[calc(var(--app-bottom-inset)+1rem)] z-[60] mx-auto max-w-md overflow-hidden rounded-2xl border border-edge-strong bg-overlay/95 p-4 shadow-2xl backdrop-blur-xl md:left-auto md:right-6 md:mx-0"
         >
           <span aria-hidden className="absolute inset-y-0 left-0 w-px bg-gradient-to-b from-primary-400 to-secondary-400" />
           <button
