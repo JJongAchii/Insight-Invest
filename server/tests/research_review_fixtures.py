@@ -7,6 +7,12 @@ def selection_for(item, text, now, *, kind="research", relevant=True):
     return research_selection.receipt(
         item,
         {
+            "main_purpose": {
+                "category": "investment_analysis"
+                if relevant
+                else "adoption_or_outlook",
+                "evidence": {"evidence_ids": [0]},
+            },
             "primary_subject": "investment_methodology" if relevant else "other",
             "content_kind": kind,
             "contribution_type": "investment_mechanism" if relevant else "none",

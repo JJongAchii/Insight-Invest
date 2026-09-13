@@ -112,6 +112,7 @@ def selection_check(item: dict, case: dict) -> dict:
         "primary_subject": decision.get("primary_subject"),
         "expected_contributions": contributions,
         "contribution_type": decision.get("contribution_type"),
+        "main_purpose": decision.get("main_purpose", {}).get("category"),
         "expected_lane": case.get("expected_lane"),
         "automatic_lane": lane,
         "matches": (

@@ -51,6 +51,10 @@ def test_source_only_selection_is_first_budgeted_stage(
         )
         assert text == TEXT
         return {
+            "main_purpose": {
+                "category": "investment_analysis",
+                "evidence": {"evidence_ids": [0]},
+            },
             "primary_subject": "investment_methodology",
             "content_kind": kind,
             "contribution_type": "investment_mechanism",
@@ -124,8 +128,7 @@ def test_selection_never_sees_draft_or_provider_key():
     assert payload["text"]["format"]["strict"] is True
     assert "PRIMARY PURPOSE" in payload["instructions"]
     assert (
-        next(iter(payload["text"]["format"]["schema"]["properties"]))
-        == "primary_subject"
+        next(iter(payload["text"]["format"]["schema"]["properties"])) == "main_purpose"
     )
 
 
@@ -143,6 +146,10 @@ def test_selection_only_qualification_ignores_editor_audit_and_never_drafts(
     def choose(text, title, key):
         calls.append(title)
         return {
+            "main_purpose": {
+                "category": "investment_analysis",
+                "evidence": {"evidence_ids": [0]},
+            },
             "primary_subject": "investment_methodology",
             "content_kind": "research",
             "contribution_type": "rule_or_measurement",
@@ -244,6 +251,39 @@ def test_previous_prompt_receipt_stays_pending_without_editor_override(
             selection, "PROMPT_VERSION", "reading-selection-v5-independent-subject"
         )
         receipt = selection_for(item, TEXT, NOW)
+    item["editorial_selection"] = receipt
+    assert selection.model_state(item) == "pending"
+
+
+@pytest.mark.parametrize("category", selection.PURPOSES)
+def test_main_purpose_gates_incidental_investment_explanation(source, category):
+    item = deepcopy(source.record)
+    receipt = selection_for(item, TEXT, NOW)
+    receipt["decision"]["main_purpose"]["category"] = category
+    receipt["decision_digest"] = selection.research_review.digest(receipt["decision"])
+    item["editorial_selection"] = receipt
+    expected = "core" if category == "investment_analysis" else "context"
+    assert selection.model_state(item) == expected
+
+
+def test_main_purpose_requires_grounded_evidence(source):
+    item = deepcopy(source.record)
+    receipt = selection_for(item, TEXT, NOW)
+    receipt["decision"]["main_purpose"]["evidence_excerpts"] = []
+    receipt["decision_digest"] = selection.research_review.digest(receipt["decision"])
+    item["editorial_selection"] = receipt
+    assert selection.model_state(item) == "context"
+    receipt["decision"].pop("main_purpose")
+    receipt["decision_digest"] = selection.research_review.digest(receipt["decision"])
+    assert selection.model_state(item) == "pending"
+
+
+@pytest.mark.parametrize("purpose", [None, [], "unknown", {"category": "unknown"}])
+def test_malformed_main_purpose_is_pending(source, purpose):
+    item = deepcopy(source.record)
+    receipt = selection_for(item, TEXT, NOW)
+    receipt["decision"]["main_purpose"] = purpose
+    receipt["decision_digest"] = selection.research_review.digest(receipt["decision"])
     item["editorial_selection"] = receipt
     assert selection.model_state(item) == "pending"
 

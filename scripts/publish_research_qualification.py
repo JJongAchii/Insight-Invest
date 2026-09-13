@@ -59,6 +59,15 @@ def plan(report: dict, *, text_loader=analysis._public_text) -> dict:
             if decision["evidence_excerpts"]
             else None
         )
+        purpose = decision["main_purpose"]
+        raw["main_purpose"] = {
+            "category": purpose["category"],
+            "evidence": {
+                "evidence_ids": [lookup[q] for q in purpose["evidence_excerpts"]]
+            }
+            if purpose["evidence_excerpts"]
+            else None,
+        }
         raw["reading_points"] = {
             name: {"evidence_ids": [lookup[q] for q in quotes]} if quotes else None
             for name, quotes in decision["reading_points"].items()
