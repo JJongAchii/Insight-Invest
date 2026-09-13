@@ -1,6 +1,19 @@
 """Synthetic checks for offline state-machine tests, NEVER semantic acceptance."""
 
-from module import research_review, research_selection
+from module import research_boundary, research_review, research_selection
+
+
+def boundary_for(item, text, now, *, verdict="substantive"):
+    return research_boundary.receipt(
+        item,
+        {
+            "verdict": verdict,
+            "evidence_id": None if verdict == "uncertain" else 0,
+            "reason": "Synthetic second reading, not semantic acceptance.",
+        },
+        text,
+        now.isoformat(),
+    )
 
 
 def selection_for(item, text, now, *, kind="research", relevant=True):

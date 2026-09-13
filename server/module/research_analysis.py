@@ -17,7 +17,7 @@ from decimal import Decimal
 import httpx
 
 from datastore import research, storage
-from module import research_review, research_selection
+from module import research_boundary, research_review, research_selection
 
 MODEL = "gpt-5-mini"
 PROMPT_VERSION = "reading-brief-openai-v11-no-ungrounded-note"
@@ -472,8 +472,10 @@ def enrich(
     model_call=_model_call,
     review_call=research_review.model_call,
     selection_call=research_selection.model_call,
+    boundary_call=research_boundary.model_call,
     max_items: int = 1,
     selection_only: bool = False,
+    gate_only: bool = False,
 ) -> dict:
     if not research_review.enabled():
         return {"enabled": False, "reason": "editorial_release_pending", "completed": 0}
@@ -482,7 +484,7 @@ def enrich(
         return {"enabled": False, "reason": "missing_api_key", "completed": 0}
     now = (now or datetime.now(UTC)).astimezone(UTC)
     limit = int(
-        Decimal(os.environ.get("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "1.50"))
+        Decimal(os.environ.get("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "1.40"))
         * 1_000_000_000
     )
     if limit <= 0:
@@ -506,6 +508,7 @@ def enrich(
     feed = research.load_feed()
     preserve_retries(feed["items"])
     completed = failed = attempted = drafted = reviewed = rejected = selected = 0
+    boundary_reviewed = cache_hits = 0
     changed = False
     reason = "settled"
     for item in feed["items"]:
@@ -520,18 +523,46 @@ def enrich(
         selection_state_fn = (
             research_selection.model_state
             if selection_only
+            else research_selection.automatic_state
+            if gate_only
             else research_selection.state
         )
         selection_state = selection_state_fn(item) if selection_call else "core"
         selection_fingerprint = research_selection.cache_key(item)
         selection_path = f"research_analysis/selections/{selection_fingerprint}.json"
-        if selection_state == "pending" and storage.exists(selection_path):
+        if (
+            selection_state == "pending"
+            and research_selection.model_state(item) == "pending"
+            and storage.exists(selection_path)
+        ):
             item["editorial_selection"] = storage.read_json(selection_path)
             selection_state = selection_state_fn(item)
             changed = True
+            cache_hits += 1
+        boundary_fingerprint = research_boundary.cache_key(item)
+        boundary_path = f"research_analysis/boundaries/{boundary_fingerprint}.json"
+        boundary_pending = (
+            not selection_only
+            and selection_state == "pending"
+            and research_selection.needs_boundary(item)
+        )
+        if boundary_pending and storage.exists(boundary_path):
+            item["editorial_boundary"] = storage.read_json(boundary_path)
+            selection_state = selection_state_fn(item)
+            boundary_pending = selection_state == "pending"
+            changed = True
+            cache_hits += 1
+        if selection_call:
+            from module.research_feed import apply_editorial_analysis
+
+            prior_projection = dict(item)
+            apply_editorial_analysis(item)
+            changed = changed or item != prior_projection
         if selection_only and selection_state != "pending":
             continue
-        if selection_state == "context":
+        if selection_state in {"context", "held"} or (
+            gate_only and selection_state == "core"
+        ):
             from module.research_feed import apply_editorial_analysis
 
             apply_editorial_analysis(item)
@@ -539,7 +570,11 @@ def enrich(
         fingerprint = cache_key(item)
         cache_path = f"research_analysis/cache/{fingerprint}.json"
         draft_current = item.get("analysis", {}).get("fingerprint") == fingerprint
-        recovered_draft = not draft_current and storage.exists(cache_path)
+        recovered_draft = (
+            selection_state == "core"
+            and not draft_current
+            and storage.exists(cache_path)
+        )
         if recovered_draft:
             item["analysis"] = storage.read_json(cache_path)
             item["analysis_status"] = "review_pending"
@@ -547,7 +582,9 @@ def enrich(
             changed = True
             completed += 1
         stage = (
-            "select"
+            "boundary"
+            if boundary_pending
+            else "select"
             if selection_state == "pending"
             else "review"
             if draft_current
@@ -555,7 +592,9 @@ def enrich(
         )
         if stage == "select":
             fingerprint, cache_path = selection_fingerprint, selection_path
-        if draft_current and stage != "select":
+        elif stage == "boundary":
+            fingerprint, cache_path = boundary_fingerprint, boundary_path
+        if draft_current and stage not in {"select", "boundary"}:
             fingerprint = research_review.cache_key(item, item["analysis"])
             cache_path = f"research_analysis/reviews/{fingerprint}.json"
             if research_review.state(item) == "pending" and storage.exists(cache_path):
@@ -592,12 +631,18 @@ def enrich(
             text = text_loader(item)[:MAX_INPUT_CHARS]
             if not text.strip():
                 raise ValueError("source text is empty")
-            if stage == "select":
-                payload = research_selection.request_payload(text, item["title"])
+            if stage in {"select", "boundary"}:
+                selector = (
+                    research_selection if stage == "select" else research_boundary
+                )
+                payload = selector.request_payload(text, item["title"])
                 input_rate, output_rate = (
                     INPUT_NANOUSD_PER_TOKEN,
                     OUTPUT_NANOUSD_PER_TOKEN,
                 )
+                if stage == "boundary":
+                    input_rate = research_boundary.INPUT_NANOUSD_PER_TOKEN
+                    output_rate = research_boundary.OUTPUT_NANOUSD_PER_TOKEN
             elif stage == "review":
                 payload = research_review.request_payload(
                     text, item["title"], item["analysis"]["brief"]
@@ -627,6 +672,11 @@ def enrich(
             if stage == "select":
                 decision, usage = selection_call(text, item["title"], api_key)
                 result = research_selection.receipt(
+                    item, decision, text, now.isoformat()
+                )
+            elif stage == "boundary":
+                decision, usage = boundary_call(text, item["title"], api_key)
+                result = research_boundary.receipt(
                     item, decision, text, now.isoformat()
                 )
             elif stage == "review":
@@ -681,6 +731,9 @@ def enrich(
             if stage == "select":
                 item["editorial_selection"] = result
                 selected += 1
+            elif stage == "boundary":
+                item["editorial_boundary"] = result
+                boundary_reviewed += 1
             elif stage == "review":
                 item["analysis"]["review"] = result
                 item["analysis_status"] = (
@@ -747,6 +800,8 @@ def enrich(
         "completed": completed,
         "drafted": drafted,
         "selected": selected,
+        "boundary_reviewed": boundary_reviewed,
+        "cache_hits": cache_hits,
         "reviewed": reviewed,
         "rejected": rejected,
         "failed": failed,

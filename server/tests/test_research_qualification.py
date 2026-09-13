@@ -29,6 +29,49 @@ def test_isolated_environment_contract(configured):
     assert qualification.validate_environment() == (1, ["aqr-research"], "gpt-5-mini")
 
 
+def test_boundary_qualification_preserves_frozen_sources_and_model(
+    configured, monkeypatch
+):
+    sample = "reading-gate-products-v1"
+    assert qualification.fixed_cases(
+        sample, ["aqr-research"]
+    ) == qualification.fixed_cases("reading-products-v1", ["aqr-research"])
+    monkeypatch.setenv("RESEARCH_SAMPLE", sample)
+    assert qualification.validate_environment()[2] == "gpt-5-mini"
+    monkeypatch.setenv("RESEARCH_QUALIFICATION_MODEL", "gpt-5-nano")
+    with pytest.raises(ValueError, match="keeps GPT-5 mini"):
+        qualification.validate_environment()
+
+
+def test_boundary_hold_does_not_relabel_raw_selector_failure(monkeypatch):
+    from research_review_fixtures import boundary_for, selection_for
+    from test_research_analysis import NOW, TEXT
+
+    item = {
+        "source_id": "synthetic",
+        "source_digest": "a" * 64,
+        "title": "Fixture",
+        "analysis_scope": "full_article",
+        "source_chars": 2000,
+    }
+    item["editorial_selection"] = selection_for(item, TEXT, NOW)
+    item["editorial_boundary"] = boundary_for(item, TEXT, NOW, verdict="context")
+    case = {"expected_content_kinds": ["practitioner"], "expected_lane": "context"}
+    check = qualification.gate_check(item, case)
+    assert check["matches"] and check["automatic_lane"] == "held"
+    assert not check["raw_selector_matches"]
+    monkeypatch.setattr(
+        qualification.research_selection.research_curation,
+        "original_audit",
+        lambda _: {"lane": "core"},
+    )
+    assert qualification.gate_check(item, case) == check
+    case["expected_lane"] = "core"
+    assert not qualification.gate_check(item, case)[
+        "matches"
+    ]  # Cannot hold all positives.
+
+
 @pytest.mark.parametrize(
     "name,value",
     [

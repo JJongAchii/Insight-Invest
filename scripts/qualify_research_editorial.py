@@ -23,7 +23,13 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
 
 from datastore import research, storage  # noqa: E402
-from module import research_analysis, research_feed, research_review, research_selection  # noqa: E402
+from module import (
+    research_analysis,
+    research_boundary,
+    research_feed,
+    research_review,
+    research_selection,
+)  # noqa: E402
 from qdata.radar_editorial import (  # noqa: E402
     CHANNELS,
     content_digest,
@@ -40,6 +46,14 @@ ENABLED_SOURCES = tuple(
 # This comparison selector exists only in the isolated manual runner. Production
 # remains on its configured model; no environment-driven fallback is added.
 MODEL_PRICES = {"gpt-5-nano": (50, 400), "gpt-5-mini": (250, 2000)}
+GATE_SAMPLES = {
+    "reading-gate-products-v1": "reading-products-v1",
+    "reading-gate-commercialization-v1": "reading-commercialization-v1",
+    "reading-gate-subject-v1": "reading-subject-v1",
+    "reading-gate-subject-positive-v1": "reading-subject-positive-v1",
+    "reading-gate-boundaries-v1": "reading-contribution-boundaries-v1",
+    "reading-gate-methods-v1": "reading-contribution-methods-v1",
+}
 SAMPLES = (
     "latest",
     "reading-value-v1",
@@ -53,6 +67,7 @@ SAMPLES = (
     "reading-contribution-boundaries-v1",
     "reading-contribution-methods-v1",
     "v7-regression",
+    *GATE_SAMPLES,
 )
 SELECTION_SAMPLES = frozenset(
     {
@@ -71,6 +86,7 @@ V7_PROMPT = "reading-brief-openai-v7-korean-editorial"
 def fixed_cases(sample: str, sources: list[str]) -> dict[str, dict]:
     if sample == "latest":
         return {}
+    sample = GATE_SAMPLES.get(sample, sample)
     path = Path(__file__).with_name("fixtures") / "research-reading-samples.json"
     cases = {
         item["source_id"]: item
@@ -126,6 +142,21 @@ def selection_check(item: dict, case: dict) -> dict:
     }
 
 
+def gate_check(item: dict, case: dict) -> dict:
+    """A hold prevents promotion; it does not fix the raw classifier's mistake."""
+    allowed = ["core"] if case["expected_lane"] == "core" else ["context", "held"]
+    lane = research_selection.automatic_state(item)
+    return {
+        "source_id": item["source_id"],
+        "expected_lanes": allowed,
+        "automatic_lane": lane,
+        "boundary_required": research_selection.needs_boundary(item),
+        "boundary_verdict": research_boundary.state(item),
+        "raw_selector_matches": selection_check(item, case)["matches"],
+        "matches": lane in allowed,
+    }
+
+
 def preserved_input(record: dict, case: dict) -> dict:
     """Replay historical input metadata only after its body/scope is revalidated.
 
@@ -169,6 +200,8 @@ def validate_environment() -> tuple[int, list[str], str]:
     sample = os.environ.get("RESEARCH_SAMPLE", "latest")
     if sample not in SAMPLES or (sample == "v7-regression" and model != "gpt-5-mini"):
         raise ValueError("qualification sample is not approved")
+    if sample in GATE_SAMPLES and model != "gpt-5-mini":
+        raise ValueError("source-only gate qualification keeps GPT-5 mini")
     fixed_cases(sample, sources)  # Fail before any source/provider I/O.
     if model == "gpt-5-mini" and not 1 <= maximum <= min(3, len(sources)):
         raise ValueError("mini comparison allows at most three distinct sources")
@@ -281,6 +314,11 @@ def run(output: Path) -> int:
         if sample == "v7-regression":
             research_analysis.PROMPT_VERSION = V7_PROMPT
         report["sample"] = sample
+        if sample in GATE_SAMPLES:
+            report["boundary_prompt_version"] = research_boundary.PROMPT_VERSION
+            report["gate_policy"] = (
+                "positive=core; negative=context|held; no editorial overrides"
+            )
         report["prompt_version"] = research_analysis.PROMPT_VERSION
         report["sample_expectations"] = [
             {
@@ -449,6 +487,7 @@ def run(output: Path) -> int:
             result = research_analysis.enrich(
                 max_items=1,
                 selection_only=sample in SELECTION_SAMPLES,
+                gate_only=sample in GATE_SAMPLES,
                 **({"selection_call": None} if sample == "v7-regression" else {}),
                 **(
                     {"text_loader": lambda item: texts[item["entry_id"]]}
@@ -460,7 +499,9 @@ def run(output: Path) -> int:
             report["items"] = research.load_feed()["items"]
             save_report()
             print(json.dumps({"stage": "analysis", **result}), flush=True)
-            if result.get("failed") or not result.get("completed"):
+            if result.get("failed") or not (
+                result.get("completed") or result.get("cache_hits")
+            ):
                 break  # Diagnose the first failure before spending on more documents.
             requested = [
                 item
@@ -470,6 +511,8 @@ def run(output: Path) -> int:
             if all(
                 research_selection.model_state(item) != "pending"
                 if sample in SELECTION_SAMPLES
+                else research_selection.automatic_state(item) != "pending"
+                if sample in GATE_SAMPLES
                 else current_review(item) or research_selection.state(item) == "context"
                 for item in requested
             ):
@@ -498,7 +541,19 @@ def run(output: Path) -> int:
             if item["source_id"] in cases and sample != "v7-regression"
         ]
         # This qualifies transport/structure/binding, not reviewer correctness or alpha.
-        if sample in SELECTION_SAMPLES:
+        if sample in GATE_SAMPLES:
+            report["gate_only"] = True
+            report["editorial_audits_used_for_qualification"] = False
+            report["gate_checks"] = [
+                gate_check(item, cases[item["source_id"]]) for item in requested
+            ]
+            report["status"] = (
+                "api_contract_qualified"
+                if len(requested) == maximum
+                and all(check["matches"] for check in report["gate_checks"])
+                else "needs_diagnosis"
+            )
+        elif sample in SELECTION_SAMPLES:
             report["selection_only"] = True
             report["editorial_audits_used_for_qualification"] = False
             report["status"] = (

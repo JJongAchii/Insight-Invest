@@ -11,7 +11,7 @@ from module import (
     research_selection as selection,
 )
 from module.research_review import literal_issues
-from research_review_fixtures import selection_for
+from research_review_fixtures import boundary_for, selection_for
 from test_research_analysis import NOW, TEXT, source as source
 
 
@@ -77,7 +77,9 @@ def test_source_only_selection_is_first_budgeted_stage(
     item = research.load_feed()["items"][0]
     assert result["selected"] == 1 and result["drafted"] == result["reviewed"] == 0
     assert result["reserved_nanousd"] == 185_000
-    assert item["research_lane"] == expected and "analysis" not in item
+    assert selection.model_state(item) == expected
+    assert item["research_lane"] == ("discovery" if expected == "core" else expected)
+    assert "analysis" not in item
     if expected == "context":
         assert (
             analysis.enrich(
@@ -97,6 +99,7 @@ def test_selected_original_survives_summary_off_budget_and_bad_draft(
     research_feed.reconcile(s3=source, now=NOW)
     item = research.load_feed()["items"][0]
     item["editorial_selection"] = selection_for(item, TEXT, NOW)
+    item["editorial_boundary"] = boundary_for(item, TEXT, NOW)
     item["analysis_status"] = "review_rejected"
     monkeypatch.setenv("RADAR_ANALYSIS_ENABLED", "false")
     research_feed.apply_editorial_analysis(item)
@@ -113,6 +116,7 @@ def test_selected_original_survives_summary_off_budget_and_bad_draft(
 def test_selection_is_bound_to_exact_original(source, change):
     item = deepcopy(source.record)
     item["editorial_selection"] = selection_for(item, TEXT, NOW)
+    item["editorial_boundary"] = boundary_for(item, TEXT, NOW)
     assert selection.state(item) == "core"
     if change == "decision":
         item["editorial_selection"]["decision"]["reason"] = "Changed decision"

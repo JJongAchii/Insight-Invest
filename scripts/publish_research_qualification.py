@@ -17,6 +17,7 @@ from botocore.exceptions import ClientError
 from verify_research_review import verify
 from module import (
     research_analysis as analysis,
+    research_boundary as boundary,
     research_review as review,
     research_selection as selection,
 )
@@ -76,7 +77,42 @@ def plan(report: dict, *, text_loader=analysis._public_text) -> dict:
         if checked["decision_digest"] != selected["decision_digest"]:
             raise ValueError("selection receipt differs from original evidence")
         objects[PREFIX + f"selections/{selection.cache_key(item)}.json"] = selected
-        if selection.model_state(item) != "core":
+        if selection.needs_boundary(item):
+            if boundary.state(item) == "pending":
+                raise ValueError("required source-only boundary review is not current")
+            second = item["editorial_boundary"]
+            if second["input_digest"] != review.digest(text):
+                raise ValueError("boundary input changed")
+            value = second["decision"]
+            checked = boundary.receipt(
+                item,
+                {
+                    "verdict": value["verdict"],
+                    "reason": value["reason"],
+                    "evidence_id": lookup[value["evidence_excerpts"][0]]
+                    if value["evidence_excerpts"]
+                    else None,
+                },
+                text,
+                second["checked_at"],
+            )
+            if checked["decision_digest"] != second["decision_digest"]:
+                raise ValueError("boundary receipt differs from original evidence")
+            objects[PREFIX + f"boundaries/{boundary.cache_key(item)}.json"] = second
+        if report.get("gate_only") is True:
+            from qualify_research_editorial import GATE_SAMPLES, fixed_cases, gate_check
+
+            sample = report.get("sample")
+            if sample not in GATE_SAMPLES:
+                raise ValueError("unknown fixed gate qualification")
+            case = fixed_cases(sample, [item["source_id"]])[item["source_id"]]
+            if (
+                item["source_digest"] != case["source_digest"]
+                or not gate_check(item, case)["matches"]
+            ):
+                raise ValueError("gate result differs from frozen expectations")
+            continue  # Seed only both source-reading receipts, not a stale brief.
+        if selection.automatic_state(item) != "core":
             continue  # Never seed an obsolete summary of excluded commentary.
         if (
             item.get("analysis", {}).get("fingerprint") != analysis.cache_key(item)
@@ -97,7 +133,9 @@ def seed(objects: dict, client, *, apply: bool = False) -> list[dict]:
     # Validate the entire plan before the first write, not after partially seeding.
     if not objects or any(
         not re.fullmatch(
-            re.escape(PREFIX) + r"(?:selections|cache|reviews)/[a-f0-9]{64}\.json", key
+            re.escape(PREFIX)
+            + r"(?:selections|boundaries|cache|reviews)/[a-f0-9]{64}\.json",
+            key,
         )
         for key in objects
     ):

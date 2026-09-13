@@ -16,7 +16,7 @@ from module import (
     research_feed,
     research_selection as selection,
 )
-from research_review_fixtures import attach_review, selection_for
+from research_review_fixtures import attach_review, boundary_for, selection_for
 from test_research_analysis import NOW, TEXT, brief, source as source
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
@@ -27,6 +27,7 @@ verifier = importlib.import_module("verify_research_review")
 def report_for(record, *, kind="research"):
     item = {**record, "entry_id": record["entry_id_sha256"], "record_schema_version": 4}
     item["editorial_selection"] = selection_for(item, TEXT, NOW, kind=kind)
+    item["editorial_boundary"] = boundary_for(item, TEXT, NOW)
     item["analysis"] = {
         "fingerprint": analysis.cache_key(item),
         "brief": brief(),
@@ -64,7 +65,7 @@ def test_seeding_is_cache_only_conditional_and_idempotent(source):
     report = report_for(source.record)
     original = deepcopy(report)
     objects = publisher.plan(report, text_loader=lambda _: TEXT)
-    assert len(objects) == 3
+    assert len(objects) == 4
     client = CacheStore()
     assert all(r["state"] == "planned" for r in publisher.seed(objects, client))
     assert client.writes == []
@@ -75,12 +76,12 @@ def test_seeding_is_cache_only_conditional_and_idempotent(source):
         r["state"] == "already_identical"
         for r in publisher.seed(objects, client, apply=True)
     )
-    assert len(client.writes) == 3 and report == original
+    assert len(client.writes) == 4 and report == original
     changed = deepcopy(objects)
     changed[next(iter(changed))]["checked_at"] = "different"
     with pytest.raises(ValueError, match="never overwrite"):
         publisher.seed(changed, client, apply=True)
-    assert len(client.writes) == 3
+    assert len(client.writes) == 4
 
 
 @pytest.mark.parametrize(
@@ -127,7 +128,7 @@ def test_code_only_recheck_keeps_actual_draft_and_model_evidence(source):
         after["review"]["previous_review_fingerprint"]
         == before["review"]["fingerprint"]
     )
-    assert len(publisher.plan(result, text_loader=lambda _: TEXT)) == 3
+    assert len(publisher.plan(result, text_loader=lambda _: TEXT)) == 4
     with pytest.raises(ValueError, match="source input changed"):
         verifier.recheck_code_guards(report, text_loader=lambda _: "Changed source")
 

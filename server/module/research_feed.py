@@ -158,7 +158,9 @@ def apply_editorial_analysis(item: dict, *, target: dict | None = None) -> None:
     candidate = item.get("editorial_candidate_lane", item.get("research_lane"))
     lane = (
         selection
-        if selection != "pending"
+        if selection in {"core", "context"}
+        else "discovery"
+        if selection == "held"
         else ("discovery" if candidate == "core" else candidate)
     )
     target["research_lane"] = lane
@@ -167,6 +169,10 @@ def apply_editorial_analysis(item: dict, *, target: dict | None = None) -> None:
         if selection == "core"
         else "source_selected_context"
         if selection == "context"
+        else "original_selection_disagreement"
+        if selection == "held"
+        else "original_boundary_pending"
+        if research_selection.needs_boundary(item)
         else "original_selection_pending"
     )
     target["notification_eligible"] = bool(
@@ -177,7 +183,13 @@ def apply_editorial_analysis(item: dict, *, target: dict | None = None) -> None:
     if target["notification_eligible"] and not item.get("available_at"):
         audit = research_curation.original_audit(item)
         target["available_at"] = (
-            item.get("editorial_selection", {}).get("checked_at") or audit["checked_at"]
+            (audit or {}).get("checked_at")
+            or (
+                item.get("editorial_boundary", {}).get("checked_at")
+                if research_selection.needs_boundary(item)
+                else None
+            )
+            or item.get("editorial_selection", {}).get("checked_at")
         )
     target["reading_brief"] = research_reading.reading_brief({**item, **target})
 
@@ -535,6 +547,7 @@ def reconcile(
         if prior and prior.get("source_digest") == item.get("source_digest"):
             for field in (
                 "editorial_selection",
+                "editorial_boundary",
                 "analysis",
                 "analysis_status",
                 "analysis_updated_at",

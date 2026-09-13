@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 
-from module import research_curation, research_review
+from module import research_boundary, research_curation, research_review
 
 MODEL = "gpt-5-mini"
 PROMPT_VERSION = "reading-selection-v7-evidence-first-purpose"
@@ -248,7 +248,30 @@ def state(item: dict) -> str:
         # This preserves inspected originals during the prompt-version migration;
         # it never marks an old model result as having run the new prompt.
         return audit["lane"]
-    return model_state(item)
+    return automatic_state(item)
+
+
+def needs_boundary(item: dict) -> bool:
+    """Only clearly empirical research bypasses the extra paid reading."""
+    if model_state(item) != "core":
+        return False
+    value = item["editorial_selection"]["decision"]
+    return not (
+        value["content_kind"] == "research"
+        and value["contribution_type"] == "empirical_finding"
+        and value["primary_subject"] == "empirical_market_research"
+    )
+
+
+def automatic_state(item: dict) -> str:
+    """Keep raw selector failures visible; disagreement holds promotion."""
+    selected = model_state(item)
+    if selected != "core" or not needs_boundary(item):
+        return selected
+    boundary = research_boundary.state(item)
+    if boundary == "pending":
+        return "pending"
+    return "core" if boundary == "substantive" else "held"
 
 
 def model_state(item: dict) -> str:
