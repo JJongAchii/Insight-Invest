@@ -540,6 +540,20 @@ def run(output: Path) -> int:
             for item in requested
             if item["source_id"] in cases and sample != "v7-regression"
         ]
+        if sample in GATE_SAMPLES:
+            # Isolated report/UI uses automatic outcomes too, not migration audits.
+            for item in report["items"]:
+                research_feed.apply_editorial_analysis(item, use_editor_audit=False)
+            report["core"] = sum(
+                item["research_lane"] == "core" for item in report["items"]
+            )
+            report["selection_context"] = sum(
+                item["research_lane"] == "context" for item in report["items"]
+            )
+            report["selection_held"] = sum(
+                item.get("editorial_selection_status") == "held"
+                for item in report["items"]
+            )
         # This qualifies transport/structure/binding, not reviewer correctness or alpha.
         if sample in GATE_SAMPLES:
             report["gate_only"] = True

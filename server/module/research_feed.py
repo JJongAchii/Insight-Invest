@@ -136,7 +136,9 @@ def _publication_fields(payload: dict, *, key: str) -> dict:
     return result
 
 
-def apply_editorial_analysis(item: dict, *, target: dict | None = None) -> None:
+def apply_editorial_analysis(
+    item: dict, *, target: dict | None = None, use_editor_audit: bool = True
+) -> None:
     """An original's reading value is not conditional on a translated brief."""
     target = item if target is None else target
     if item.get("quality_profile") == "academic-discovery-v1":
@@ -150,7 +152,11 @@ def apply_editorial_analysis(item: dict, *, target: dict | None = None) -> None:
             editorial_selection_status="pending",
         )
         return
-    selection = research_selection.state(item)
+    selection = (
+        research_selection.state(item)
+        if use_editor_audit
+        else research_selection.automatic_state(item)
+    )
     target["editorial_selection_status"] = selection
     target["editorial_review_status"] = (
         research_review.state(item) if research_review.enabled() else "pending"
@@ -181,7 +187,7 @@ def apply_editorial_analysis(item: dict, *, target: dict | None = None) -> None:
         and is_incremental(item)
     )
     if target["notification_eligible"] and not item.get("available_at"):
-        audit = research_curation.original_audit(item)
+        audit = research_curation.original_audit(item) if use_editor_audit else None
         target["available_at"] = (
             (audit or {}).get("checked_at")
             or (

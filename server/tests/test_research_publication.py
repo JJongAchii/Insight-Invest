@@ -84,6 +84,39 @@ def test_seeding_is_cache_only_conditional_and_idempotent(source):
     assert len(client.writes) == 4
 
 
+def test_no_seed_before_required_second_reading(source):
+    report = report_for(source.record)
+    report["items"][0].pop("editorial_boundary")
+    with pytest.raises(ValueError, match="boundary review is not current"):
+        publisher.plan(report, text_loader=lambda _: TEXT)
+
+
+def test_gate_seed_keeps_disagreement_and_does_not_include_brief(source, monkeypatch):
+    qualification = importlib.import_module("qualify_research_editorial")
+    report = report_for(source.record)
+    item = report["items"][0]
+    report.update(gate_only=True, sample="reading-gate-products-v1")
+    item["editorial_boundary"] = boundary_for(item, TEXT, NOW, verdict="context")
+    case = {
+        "source_digest": item["source_digest"],
+        "expected_lane": "context",
+        "expected_content_kinds": ["practitioner"],
+    }
+    monkeypatch.setattr(
+        qualification, "fixed_cases", lambda *args: {item["source_id"]: case}
+    )
+    objects = publisher.plan(report, text_loader=lambda _: TEXT)
+    assert len(objects) == 2
+    assert all("/selections/" in key or "/boundaries/" in key for key in objects)
+    assert (
+        selection.model_state(item) == "core"
+        and selection.automatic_state(item) == "held"
+    )
+    case["expected_lane"] = "core"
+    with pytest.raises(ValueError, match="frozen expectations"):
+        publisher.plan(report, text_loader=lambda _: TEXT)
+
+
 @pytest.mark.parametrize(
     "key",
     [

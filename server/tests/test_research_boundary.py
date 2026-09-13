@@ -183,6 +183,8 @@ def test_gate_qualification_cannot_borrow_editor_audit(source, tmp_path, monkeyp
     )
     assert selection.state(item) == "core"
     assert selection.automatic_state(item) == "pending"
+    research_feed.apply_editorial_analysis(item, use_editor_audit=False)
+    assert item["research_lane"] == "discovery" and not item["notification_eligible"]
     monkeypatch.setenv("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0.000001")
     result = analysis.enrich(
         now=NOW, text_loader=lambda _: TEXT, boundary_call=forbidden, gate_only=True
