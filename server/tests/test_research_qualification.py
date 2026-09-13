@@ -233,6 +233,68 @@ def test_fixed_source_drift_stops_before_analysis(monkeypatch):
         qualification.fixed_publication(case, datetime.now(UTC))
 
 
+def test_contribution_samples_are_bounded_and_frozen_before_paid_calls():
+    bundles = {
+        "reading-products-v1": [
+            "robeco-quant-insights",
+            "aqr-research",
+            "cfm-research",
+        ],
+        "reading-commercialization-v1": [
+            "robeco-quant-insights",
+            "deshaw-library",
+            "kcmi-reports",
+        ],
+        "reading-subject-v1": ["robeco-quant-insights", "aqr-research", "kcmi-reports"],
+        "reading-subject-positive-v1": [
+            "robeco-quant-insights",
+            "deshaw-library",
+            "cfm-research",
+        ],
+        "reading-contribution-boundaries-v1": [
+            "aqr-research",
+            "kcmi-capital-market-focus",
+            "syzygy-insights",
+        ],
+        "reading-contribution-methods-v1": ["rafi-publications", "verdad-research"],
+    }
+    cases = {}
+    for sample, sources in bundles.items():
+        assert sample in qualification.SELECTION_SAMPLES
+        fixed = qualification.fixed_cases(sample, sources)
+        assert len(fixed) == len(sources) <= 3
+        for case in fixed.values():
+            previous = cases.setdefault(case["url"], case)
+            assert previous == case
+            assert len(case["source_digest"]) == 64
+    assert len(cases) == 13
+    assert sum(c["expected_lane"] == "core" for c in cases.values()) == 7
+    assert sum(c["expected_lane"] == "context" for c in cases.values()) == 6
+
+
+def test_selection_check_rejects_contribution_mismatch_even_when_lane_matches(
+    monkeypatch,
+):
+    case = qualification.fixed_cases("reading-products-v1", ["robeco-quant-insights"])[
+        "robeco-quant-insights"
+    ]
+    decision = {
+        "primary_subject": "business_or_product",
+        "content_kind": "practitioner",
+        "contribution_type": "none",
+    }
+    item = {
+        "source_id": case["source_id"],
+        "editorial_selection": {"decision": decision},
+    }
+    monkeypatch.setattr(
+        qualification.research_selection, "model_state", lambda _: "context"
+    )
+    assert qualification.selection_check(item, case)["matches"]
+    decision["contribution_type"] = "rule_or_measurement"
+    assert not qualification.selection_check(item, case)["matches"]
+
+
 def test_runner_sets_comparison_prices_and_restores_defaults_without_io(
     configured, monkeypatch, tmp_path
 ):

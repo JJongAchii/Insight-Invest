@@ -49,6 +49,7 @@ def plan(report: dict, *, text_loader=analysis._public_text) -> dict:
             for name in (
                 "primary_subject",
                 "content_kind",
+                "contribution_type",
                 "investment_focus",
                 "reason",
             )

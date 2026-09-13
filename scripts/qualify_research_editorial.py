@@ -48,10 +48,22 @@ SAMPLES = (
     "reading-scope-v1",
     "reading-subject-v1",
     "reading-subject-positive-v1",
+    "reading-products-v1",
+    "reading-commercialization-v1",
+    "reading-contribution-boundaries-v1",
+    "reading-contribution-methods-v1",
     "v7-regression",
 )
 SELECTION_SAMPLES = frozenset(
-    {"reading-scope-v1", "reading-subject-v1", "reading-subject-positive-v1"}
+    {
+        "reading-scope-v1",
+        "reading-subject-v1",
+        "reading-subject-positive-v1",
+        "reading-products-v1",
+        "reading-commercialization-v1",
+        "reading-contribution-boundaries-v1",
+        "reading-contribution-methods-v1",
+    }
 )
 V7_PROMPT = "reading-brief-openai-v7-korean-editorial"
 
@@ -91,18 +103,24 @@ def selection_check(item: dict, case: dict) -> dict:
     decision = item.get("editorial_selection", {}).get("decision", {})
     lane = research_selection.model_state(item)
     subjects = case.get("expected_subjects", [])
+    contributions = case.get("expected_contributions", [])
     return {
         "source_id": item["source_id"],
         "expected": case["expected_content_kinds"],
         "actual": decision.get("content_kind"),
         "expected_subjects": subjects,
         "primary_subject": decision.get("primary_subject"),
+        "expected_contributions": contributions,
+        "contribution_type": decision.get("contribution_type"),
         "expected_lane": case.get("expected_lane"),
         "automatic_lane": lane,
         "matches": (
             lane == case.get("expected_lane")
             and decision.get("content_kind") in case["expected_content_kinds"]
             and (not subjects or decision.get("primary_subject") in subjects)
+            and (
+                not contributions or decision.get("contribution_type") in contributions
+            )
         ),
     }
 

@@ -37,3 +37,28 @@ main에 반영해 운영 함수를 갱신한다. qualification workflow는 운�
 [GPT-5 mini](https://developers.openai.com/api/docs/models/gpt-5-mini).
 
 새 소스 확대·전략 구현·백테스트·모델 교체는 이번 변경에 포함하지 않는다.
+
+## 2026-09-13: v6 구현·고정 회귀 표본
+
+`reading-selection-v6-demonstrated-contribution`은 기존 원문 선별 호출 안에
+`contribution_type`을 추가한다. 구체적인 규칙/측정, 투자 원리, 자료·설계가 있는
+실증 설명 중 하나와 투자 주제·원문 근거가 함께 있어야 자동 core다.
+개념·목표·효용 소개(`overview_or_claim`)와 비투자 주제(`none`)는 context다.
+새 항목 누락·알 수 없는 값·이전 prompt fingerprint는 pending이며 모델의
+모순된 원 응답은 진단을 위해 보존한다. 독립 편집 보정은 그대로 별도 표시한다.
+
+인수 전에 원문 URL/본문 hash/기대 분류를 고정한 13편을 사용한다:
+
+- core 7: AQR Academic Alpha·Warming World, D. E. Shaw Machine Teaching,
+  CFM Hidden Beta, Robeco Systematic Credit, RAFI NLP, Verdad Credit Reflexivity.
+- context 6: Robeco ETF 소개·생물다양성 상품화·AI 연구 업무, KCMI 퇴직연금 개편·
+  토큰증권 인프라, Syzygy SaaS 산업 전망.
+
+자료·신호·측정·원리의 설명을 요구하되 논문 형식·수식·완전한 재현 명세를 요구하지
+않는다. 기후 연구와 AI 신호 연구 양성을 포함하여 주제 자체를 차단하지 않는지도
+확인한다. 기관당 개별 예외를 추가하지 않는다. 기존 고정 표본의 실패 기대값을
+수정하지 않았으며, 6개의 최대 3-source 묶음은 같은 입력의 현재 캐시를 공유한다.
+기존 편집 감사에서 고른 자료이므로 미관측 holdout 정확도라고 주장할 수 없다.
+
+전체 자동 회귀와 계약 테스트가 통과한 뒤에만 v6를 운영 배포한다. 원문 변경,
+예산 부족 또는 의미 분류 실패 시 해당 결과를 기록하고 배포를 보류한다.

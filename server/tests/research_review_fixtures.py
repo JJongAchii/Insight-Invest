@@ -9,6 +9,7 @@ def selection_for(item, text, now, *, kind="research", relevant=True):
         {
             "primary_subject": "investment_methodology" if relevant else "other",
             "content_kind": kind,
+            "contribution_type": "investment_mechanism" if relevant else "none",
             "investment_focus": relevant,
             "transferable_insight": {"evidence_ids": [0]} if relevant else None,
             "reason": "Synthetic original-selection fixture, not a semantic qualification.",

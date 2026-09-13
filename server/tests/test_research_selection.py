@@ -53,6 +53,7 @@ def test_source_only_selection_is_first_budgeted_stage(
         return {
             "primary_subject": "investment_methodology",
             "content_kind": kind,
+            "contribution_type": "investment_mechanism",
             "investment_focus": True,
             "transferable_insight": {"evidence_ids": [0]} if insight else None,
             "reason": "Offline purpose fixture.",
@@ -144,6 +145,7 @@ def test_selection_only_qualification_ignores_editor_audit_and_never_drafts(
         return {
             "primary_subject": "investment_methodology",
             "content_kind": "research",
+            "contribution_type": "rule_or_measurement",
             "investment_focus": True,
             "transferable_insight": {"evidence_ids": [0]},
             "reason": "Synthetic method, not real model acceptance.",
@@ -201,6 +203,47 @@ def test_missing_or_unknown_subject_cannot_reuse_a_selection(source, subject):
     else:
         receipt["decision"]["primary_subject"] = subject
     receipt["decision_digest"] = selection.research_review.digest(receipt["decision"])
+    item["editorial_selection"] = receipt
+    assert selection.model_state(item) == "pending"
+
+
+@pytest.mark.parametrize("contribution", selection.CONTRIBUTION_TYPES)
+def test_contribution_gate_cannot_be_overridden_by_method_topic_or_evidence(
+    source, contribution
+):
+    item = deepcopy(source.record)
+    receipt = selection_for(item, TEXT, NOW)
+    receipt["decision"]["contribution_type"] = contribution
+    receipt["decision_digest"] = selection.research_review.digest(receipt["decision"])
+    item["editorial_selection"] = receipt
+    expected = (
+        "core" if contribution in selection.SUBSTANTIVE_CONTRIBUTIONS else "context"
+    )
+    assert selection.model_state(item) == expected
+
+
+@pytest.mark.parametrize("contribution", [None, "unknown", ""])
+def test_missing_or_unknown_contribution_cannot_reuse_a_selection(source, contribution):
+    item = deepcopy(source.record)
+    receipt = selection_for(item, TEXT, NOW)
+    if contribution is None:
+        receipt["decision"].pop("contribution_type")
+    else:
+        receipt["decision"]["contribution_type"] = contribution
+    receipt["decision_digest"] = selection.research_review.digest(receipt["decision"])
+    item["editorial_selection"] = receipt
+    assert selection.model_state(item) == "pending"
+
+
+def test_previous_prompt_receipt_stays_pending_without_editor_override(
+    source, monkeypatch
+):
+    item = deepcopy(source.record)
+    with monkeypatch.context() as older:
+        older.setattr(
+            selection, "PROMPT_VERSION", "reading-selection-v5-independent-subject"
+        )
+        receipt = selection_for(item, TEXT, NOW)
     item["editorial_selection"] = receipt
     assert selection.model_state(item) == "pending"
 
