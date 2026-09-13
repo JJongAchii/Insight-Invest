@@ -129,9 +129,9 @@ def validate_environment() -> tuple[int, list[str], str]:
     if not research_review.enabled():
         raise ValueError("isolated qualification requires explicit analysis opt-in")
     budget = Decimal(os.environ.get("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0"))
-    if not Decimal("0") < budget <= Decimal("0.50"):
+    if not Decimal("0") < budget <= Decimal("0.60"):
         raise ValueError(
-            "qualification monthly budget must be positive and at most $0.50"
+            "qualification monthly budget must be positive and at most $0.60"
         )
     maximum = int(os.environ.get("RESEARCH_MAX_ITEMS", "1"))
     if not 1 <= maximum <= 30:
