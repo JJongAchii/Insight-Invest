@@ -152,6 +152,12 @@ def gate_check(item: dict, case: dict) -> dict:
         "automatic_lane": lane,
         "boundary_required": research_selection.needs_boundary(item),
         "boundary_verdict": research_boundary.state(item),
+        "boundary_analysis_object": item.get("editorial_boundary", {})
+        .get("decision", {})
+        .get("analysis_object"),
+        "boundary_raw_verdict": item.get("editorial_boundary", {})
+        .get("decision", {})
+        .get("verdict"),
         "raw_selector_matches": selection_check(item, case)["matches"],
         "matches": lane in allowed,
     }

@@ -7,6 +7,10 @@ def boundary_for(item, text, now, *, verdict="substantive"):
     return research_boundary.receipt(
         item,
         {
+            "analysis_object": "unclear"
+            if verdict == "uncertain"
+            else "investment_rule_or_measurement",
+            "object_evidence_id": None if verdict == "uncertain" else 0,
             "verdict": verdict,
             "evidence_id": None if verdict == "uncertain" else 0,
             "reason": "Synthetic second reading, not semantic acceptance.",

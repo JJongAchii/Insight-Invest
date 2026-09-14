@@ -53,6 +53,10 @@ def test_boundary_is_source_only_reserved_and_disagreement_does_not_retry(
             > 185_000
         )
         return {
+            "analysis_object": "unclear"
+            if verdict == "uncertain"
+            else "investment_rule_or_measurement",
+            "object_evidence_id": None if verdict == "uncertain" else 0,
             "verdict": verdict,
             "evidence_id": None if verdict == "uncertain" else 0,
             "reason": "Offline boundary fixture",
@@ -118,7 +122,13 @@ def test_invalid_grounding_fails_closed(source, number):
     with pytest.raises(analysis.AnalysisContractError):
         boundary.receipt(
             source.record,
-            {"verdict": "substantive", "evidence_id": number, "reason": "Fixture"},
+            {
+                "analysis_object": "investment_rule_or_measurement",
+                "object_evidence_id": 0,
+                "verdict": "substantive",
+                "evidence_id": number,
+                "reason": "Fixture",
+            },
             TEXT,
             NOW.isoformat(),
         )
@@ -196,7 +206,13 @@ def test_failed_boundary_keeps_reservation_and_durable_retry(source, tmp_path):
     pending(source, tmp_path)
 
     def invalid(*args):
-        return {"verdict": "substantive", "evidence_id": 99999, "reason": "Invalid"}, {
+        return {
+            "analysis_object": "investment_rule_or_measurement",
+            "object_evidence_id": 0,
+            "verdict": "substantive",
+            "evidence_id": 99999,
+            "reason": "Invalid",
+        }, {
             "input_tokens": 100,
             "output_tokens": 80,
         }
@@ -208,3 +224,68 @@ def test_failed_boundary_keeps_reservation_and_durable_retry(source, tmp_path):
     assert storage.exists(f"research_analysis/retries/{boundary.cache_key(item)}.json")
     assert selection.automatic_state(item) == "pending"
     assert not item["notification_eligible"]
+
+
+@pytest.mark.parametrize("analysis_object", boundary.ANALYSIS_OBJECTS)
+def test_primary_object_cannot_be_overridden_by_substantive_verdict(
+    source, analysis_object
+):
+    research_feed.reconcile(s3=source, now=NOW)
+    item = research.load_feed()["items"][0]
+    item["editorial_selection"] = selection_for(item, TEXT, NOW)
+    item["editorial_boundary"] = boundary.receipt(
+        item,
+        {
+            "analysis_object": analysis_object,
+            "object_evidence_id": None if analysis_object == "unclear" else 0,
+            "verdict": "substantive",
+            "evidence_id": 0,
+            "reason": "Contradictory model fixture",
+        },
+        TEXT,
+        NOW.isoformat(),
+    )
+    expected = "core" if analysis_object in boundary.INVESTMENT_OBJECTS else "held"
+    assert selection.automatic_state(item) == expected
+    assert item["editorial_boundary"]["decision"]["verdict"] == "substantive"
+    research_feed.apply_editorial_analysis(item, use_editor_audit=False)
+    assert item["notification_eligible"] is (expected == "core")
+
+
+@pytest.mark.parametrize("analysis_object", [None, "unknown", ""])
+def test_missing_or_unknown_object_is_pending(source, analysis_object):
+    item = deepcopy(source.record)
+    item["editorial_boundary"] = boundary_for(item, TEXT, NOW)
+    value = item["editorial_boundary"]["decision"]
+    value["analysis_object"] = analysis_object
+    item["editorial_boundary"]["decision_digest"] = research_review.digest(value)
+    assert boundary.state(item) == "pending"
+
+
+@pytest.mark.parametrize("number", [None, True, -1, 99999, "0"])
+def test_object_itself_requires_grounded_passage(source, number):
+    with pytest.raises(
+        analysis.AnalysisContractError, match="analysis-object evidence"
+    ):
+        boundary.receipt(
+            source.record,
+            {
+                "analysis_object": "business_product_or_policy",
+                "object_evidence_id": number,
+                "verdict": "context",
+                "evidence_id": 0,
+                "reason": "Object evidence fixture",
+            },
+            TEXT,
+            NOW.isoformat(),
+        )
+
+
+def test_v1_receipt_is_not_a_current_object_review(source, monkeypatch):
+    item = deepcopy(source.record)
+    with monkeypatch.context() as prior:
+        prior.setattr(boundary, "PROMPT_VERSION", "reading-boundary-v1-source-only")
+        value = boundary_for(item, TEXT, NOW)
+    item["editorial_boundary"] = value
+    assert boundary.state(item) == "pending"
+    assert next(iter(boundary.SCHEMA["properties"])) == "analysis_object"

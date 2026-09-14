@@ -87,6 +87,10 @@ def plan(report: dict, *, text_loader=analysis._public_text) -> dict:
             checked = boundary.receipt(
                 item,
                 {
+                    "analysis_object": value["analysis_object"],
+                    "object_evidence_id": lookup[value["object_evidence_excerpts"][0]]
+                    if value["object_evidence_excerpts"]
+                    else None,
                     "verdict": value["verdict"],
                     "reason": value["reason"],
                     "evidence_id": lookup[value["evidence_excerpts"][0]]
