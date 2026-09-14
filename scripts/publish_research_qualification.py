@@ -61,7 +61,11 @@ def plan(report: dict, *, text_loader=analysis._public_text) -> dict:
             )
         }
         raw["transferable_insight"] = (
-            {"evidence_ids": [lookup[q] for q in decision["evidence_excerpts"]]}
+            {
+                "evidence_ids": analysis._source_span_ids(
+                    text, decision["evidence_excerpts"]
+                )
+            }
             if decision["evidence_excerpts"]
             else None
         )
@@ -69,13 +73,17 @@ def plan(report: dict, *, text_loader=analysis._public_text) -> dict:
         raw["main_purpose"] = {
             "category": purpose["category"],
             "evidence": {
-                "evidence_ids": [lookup[q] for q in purpose["evidence_excerpts"]]
+                "evidence_ids": analysis._source_span_ids(
+                    text, purpose["evidence_excerpts"]
+                )
             }
             if purpose["evidence_excerpts"]
             else None,
         }
         raw["reading_points"] = {
-            name: {"evidence_ids": [lookup[q] for q in quotes]} if quotes else None
+            name: {"evidence_ids": analysis._source_span_ids(text, quotes)}
+            if quotes
+            else None
             for name, quotes in decision["reading_points"].items()
         }
         checked = selection.receipt(item, raw, text, selected["checked_at"])

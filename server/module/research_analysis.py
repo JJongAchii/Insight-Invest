@@ -173,6 +173,25 @@ def _source_passages(text: str) -> list[dict]:
     return passages
 
 
+def _source_span_ids(text: str, quotes: list[str]) -> list[int]:
+    """Resolve an exact contiguous source span, including repeated sentences."""
+    if not isinstance(quotes, list) or any(not isinstance(q, str) for q in quotes):
+        raise AnalysisContractError("invalid source span")
+    if not quotes:
+        return []
+    if (
+        len(quotes) > MAX_EVIDENCE_PASSAGES
+        or sum(map(len, quotes)) > MAX_EVIDENCE_CHARS
+    ):
+        raise AnalysisContractError("source span exceeds evidence limit")
+    passages = _source_passages(text)
+    for start in range(len(passages) - len(quotes) + 1):
+        window = passages[start : start + len(quotes)]
+        if [p["text"] for p in window] == quotes and all(p["citable"] for p in window):
+            return [p["id"] for p in window]
+    raise AnalysisContractError("evidence is not a contiguous bounded source span")
+
+
 def _ground_response(value: dict, text: str) -> dict:
     if not isinstance(value, dict):
         raise AnalysisContractError("analysis JSON must be an object")
@@ -328,11 +347,7 @@ def _request_payload(
         reading_points = {}
         for field in FIELDS:
             excerpts = evidence_plan[field] or []
-            ids = [p["id"] for p in passages if p["citable"] and p["text"] in excerpts]
-            if len(ids) < len(set(excerpts)):
-                raise AnalysisContractError(
-                    "selection evidence changed before generation"
-                )
+            ids = _source_span_ids(text, excerpts)
             reading_points[field] = ids
             if not ids:
                 schema["properties"][field] = {"type": "null"}
