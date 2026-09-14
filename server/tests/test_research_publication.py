@@ -92,6 +92,19 @@ def test_no_seed_before_required_second_reading(source):
         publisher.plan(report, text_loader=lambda _: TEXT)
 
 
+@pytest.mark.parametrize(
+    "diagnostic", [{"diagnostic_only": True}, {"boundary_model": "gpt-5.4-2026-03-05"}]
+)
+def test_model_diagnostics_cannot_be_published_even_if_they_pass(source, diagnostic):
+    report = {**report_for(source.record), **diagnostic}
+
+    def forbidden(*args):
+        pytest.fail("diagnostic publication must stop before source I/O")
+
+    with pytest.raises(ValueError, match="cannot seed production"):
+        publisher.plan(report, text_loader=forbidden)
+
+
 def test_explanation_quotes_are_rechecked_before_cache_publication(source):
     report = report_for(source.record)
     second = report["items"][0]["editorial_boundary"]

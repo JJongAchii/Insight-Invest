@@ -27,6 +27,11 @@ PREFIX = "app/research_analysis/"
 
 
 def plan(report: dict, *, text_loader=analysis._public_text) -> dict:
+    if report.get("diagnostic_only") or report.get("boundary_model") not in {
+        None,
+        boundary.MODEL,
+    }:
+        raise ValueError("diagnostic model comparisons cannot seed production")
     if (
         report.get("production_modified") is not False
         or report.get("status") != "api_contract_qualified"

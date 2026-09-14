@@ -46,6 +46,14 @@ ENABLED_SOURCES = tuple(
 # This comparison selector exists only in the isolated manual runner. Production
 # remains on its configured model; no environment-driven fallback is added.
 MODEL_PRICES = {"gpt-5-nano": (50, 400), "gpt-5-mini": (250, 2000)}
+# Diagnostic only: one fixed model contrast, never a production fallback.
+BOUNDARY_MODEL_PRICES = {
+    "gpt-5-mini": (250, 2000),
+    "gpt-5.4-2026-03-05": (2500, 15000),
+}
+BOUNDARY_COMPARISON_SAMPLES = frozenset(
+    {"reading-gate-products-v1", "reading-gate-boundaries-v1"}
+)
 GATE_SAMPLES = {
     "reading-gate-products-v1": "reading-products-v1",
     "reading-gate-commercialization-v1": "reading-commercialization-v1",
@@ -218,10 +226,48 @@ def validate_environment() -> tuple[int, list[str], str]:
         raise ValueError("qualification sample is not approved")
     if sample in GATE_SAMPLES and model != "gpt-5-mini":
         raise ValueError("source-only gate qualification keeps GPT-5 mini")
+    boundary_model(sample, model)  # Validate the contrast before source/provider I/O.
     fixed_cases(sample, sources)  # Fail before any source/provider I/O.
     if model == "gpt-5-mini" and not 1 <= maximum <= min(3, len(sources)):
         raise ValueError("mini comparison allows at most three distinct sources")
     return maximum, sources, model
+
+
+def boundary_model(sample: str, model: str) -> str:
+    name = os.environ.get("RESEARCH_BOUNDARY_MODEL", "gpt-5-mini")
+    if name not in BOUNDARY_MODEL_PRICES:
+        raise ValueError("boundary comparison model is not approved")
+    if name != "gpt-5-mini" and (
+        model != "gpt-5-mini" or sample not in BOUNDARY_COMPARISON_SAMPLES
+    ):
+        raise ValueError("boundary comparison requires its fixed gate samples")
+    return name
+
+
+def preserved_selections(records: list[dict], texts: dict[str, str]) -> list[dict]:
+    """A model-only contrast must not pay to regenerate its first-stage baseline."""
+    receipts = []
+    for record in records:
+        fingerprint = research_selection.cache_key(record)
+        path = f"research_analysis/selections/{fingerprint}.json"
+        if not storage.exists(path):
+            raise ValueError("boundary comparison requires preserved v7 selections")
+        selected = storage.read_json(path)
+        if research_selection.model_state(
+            {**record, "editorial_selection": selected}
+        ) == "pending" or selected.get("input_digest") != research_review.digest(
+            texts[record["entry_id_sha256"]]
+        ):
+            raise ValueError("boundary comparison selection/input changed")
+        receipts.append(
+            {
+                "entry_id": record["entry_id_sha256"],
+                "fingerprint": fingerprint,
+                "decision_digest": selected["decision_digest"],
+                "input_digest": selected["input_digest"],
+            }
+        )
+    return receipts
 
 
 def select_records(groups: list[list[dict]], maximum: int) -> list[dict]:
@@ -322,10 +368,32 @@ def run(output: Path) -> int:
         research_analysis.OUTPUT_NANOUSD_PER_TOKEN,
     )
     original_prompt = research_analysis.PROMPT_VERSION
+    original_boundary = (
+        research_boundary.MODEL,
+        research_boundary.INPUT_NANOUSD_PER_TOKEN,
+        research_boundary.OUTPUT_NANOUSD_PER_TOKEN,
+    )
     try:
         maximum, sources, model = validate_environment()
         sample = os.environ.get("RESEARCH_SAMPLE", "latest")
         cases = fixed_cases(sample, sources)
+        name = boundary_model(sample, model)
+        (
+            research_boundary.MODEL,
+            research_boundary.INPUT_NANOUSD_PER_TOKEN,
+            research_boundary.OUTPUT_NANOUSD_PER_TOKEN,
+        ) = (name, *BOUNDARY_MODEL_PRICES[name])
+        report["diagnostic_only"] = name != "gpt-5-mini"
+        report["boundary_model"] = name
+        report["boundary_request_config"] = {
+            "system_digest": research_review.digest(research_boundary.SYSTEM),
+            "schema_digest": research_review.digest(research_boundary.SCHEMA),
+            "reasoning_effort": research_boundary.REASONING_EFFORT,
+            "max_output_tokens": research_boundary.MAX_OUTPUT_TOKENS,
+            "max_input_chars": research_analysis.MAX_INPUT_CHARS,
+            "input_nanousd_per_token": BOUNDARY_MODEL_PRICES[name][0],
+            "output_nanousd_per_token": BOUNDARY_MODEL_PRICES[name][1],
+        }
         texts = {}
         if sample == "v7-regression":
             research_analysis.PROMPT_VERSION = V7_PROMPT
@@ -441,6 +509,11 @@ def run(output: Path) -> int:
             for record in records
         ]
         save_report()  # Record the sample before the first paid call.
+        if report["diagnostic_only"]:
+            report["preserved_selection_receipts"] = preserved_selections(
+                records, texts
+            )
+            save_report()
         if sample == "v7-regression":
             report["preserved_input_replay"] = [
                 {
@@ -610,6 +683,11 @@ def run(output: Path) -> int:
             research_analysis.OUTPUT_NANOUSD_PER_TOKEN,
         ) = original_settings
         research_analysis.PROMPT_VERSION = original_prompt
+        (
+            research_boundary.MODEL,
+            research_boundary.INPUT_NANOUSD_PER_TOKEN,
+            research_boundary.OUTPUT_NANOUSD_PER_TOKEN,
+        ) = original_boundary
     print(
         json.dumps(
             {

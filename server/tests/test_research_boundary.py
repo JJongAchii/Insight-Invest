@@ -104,6 +104,55 @@ def test_independent_payload_contains_only_original():
     assert payload["text"]["format"]["strict"] is True
 
 
+def test_diagnostic_model_uses_its_own_reservation_cost_and_cache(
+    source, tmp_path, monkeypatch
+):
+    item = pending(source, tmp_path)
+    original_selection = deepcopy(item["editorial_selection"])
+    mini_fingerprint = boundary.cache_key(item)
+    monkeypatch.setattr(boundary, "MODEL", "gpt-5.4-2026-03-05")
+    monkeypatch.setattr(boundary, "INPUT_NANOUSD_PER_TOKEN", 2500)
+    monkeypatch.setattr(boundary, "OUTPUT_NANOUSD_PER_TOKEN", 15000)
+    reservation = analysis._reserve_payload(
+        boundary.request_payload(TEXT, item["title"]), 2500, 15000
+    )
+
+    def check(text, title, api_key):
+        assert (
+            storage.read_json("research_analysis/budget-2026-09.json")[
+                "reserved_nanousd"
+            ]
+            == reservation
+        )
+        return {
+            "explanation": explanation_value(),
+            "analysis_object": "investment_rule_or_measurement",
+            "object_evidence_id": 0,
+            "verdict": "substantive",
+            "evidence_id": 0,
+            "reason": "Synthetic accounting test, not semantic evidence",
+        }, {"input_tokens": 100, "output_tokens": 80}
+
+    result = analysis.enrich(
+        now=NOW,
+        text_loader=lambda _: TEXT,
+        boundary_call=check,
+        selection_call=forbidden,
+        model_call=forbidden,
+        review_call=forbidden,
+        gate_only=True,
+    )
+    item = research.load_feed()["items"][0]
+    assert result["reserved_nanousd"] == 1_450_000
+    assert item["editorial_selection"] == original_selection
+    second = item["editorial_boundary"]
+    assert second["cost_nanousd"] == 1_450_000
+    assert second["model"] == "gpt-5.4-2026-03-05"
+    assert second["fingerprint"] != mini_fingerprint
+    monkeypatch.setattr(boundary, "MODEL", "gpt-5-mini")
+    assert boundary.state(item) == "pending"  # Cannot reuse as the production model.
+
+
 @pytest.mark.parametrize(
     "field", ["source_digest", "title", "parser_version", "analysis_scope", "decision"]
 )

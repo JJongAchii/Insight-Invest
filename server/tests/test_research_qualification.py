@@ -22,6 +22,7 @@ def configured(monkeypatch):
     monkeypatch.setenv("RESEARCH_MAX_ITEMS", "1")
     monkeypatch.setenv("RESEARCH_SOURCES", "aqr-research")
     monkeypatch.delenv("RESEARCH_QUALIFICATION_MODEL", raising=False)
+    monkeypatch.delenv("RESEARCH_BOUNDARY_MODEL", raising=False)
     monkeypatch.delenv("RESEARCH_SAMPLE", raising=False)
 
 
@@ -72,6 +73,98 @@ def test_boundary_hold_does_not_relabel_raw_selector_failure(monkeypatch):
     ]  # Cannot hold all positives.
 
 
+def test_boundary_model_contrast_is_fixed_and_isolated(configured, monkeypatch):
+    monkeypatch.setenv("RESEARCH_SAMPLE", "reading-gate-products-v1")
+    monkeypatch.setenv("RESEARCH_BOUNDARY_MODEL", "gpt-5.4-2026-03-05")
+    assert qualification.validate_environment() == (1, ["aqr-research"], "gpt-5-mini")
+    assert qualification.BOUNDARY_MODEL_PRICES["gpt-5.4-2026-03-05"] == (2500, 15000)
+    assert qualification.research_boundary.MODEL == "gpt-5-mini"
+    monkeypatch.setenv("RESEARCH_SAMPLE", "latest")
+    with pytest.raises(ValueError, match="fixed gate samples"):
+        qualification.validate_environment()
+    monkeypatch.setenv("RESEARCH_SAMPLE", "reading-gate-extension-v1")
+    with pytest.raises(ValueError, match="fixed gate samples"):
+        qualification.validate_environment()
+    monkeypatch.setenv("RESEARCH_BOUNDARY_MODEL", "gpt-5.4")
+    with pytest.raises(ValueError, match="not approved"):
+        qualification.validate_environment()
+
+
+def test_model_only_contrast_requires_unchanged_first_selection(monkeypatch):
+    from research_review_fixtures import selection_for
+    from test_research_analysis import NOW, TEXT
+
+    record = {
+        "entry_id_sha256": "entry",
+        "title": "Source",
+        "source_digest": "a" * 64,
+        "analysis_scope": "full_article",
+        "source_chars": 2000,
+    }
+    selected = selection_for(record, TEXT, NOW)
+    monkeypatch.setattr(qualification.storage, "exists", lambda _: True)
+    monkeypatch.setattr(qualification.storage, "read_json", lambda _: selected)
+    preserved = qualification.preserved_selections([record], {"entry": TEXT})
+    assert preserved[0]["decision_digest"] == selected["decision_digest"]
+    assert preserved[0]["fingerprint"] == selected["fingerprint"]
+    with pytest.raises(ValueError, match="selection/input changed"):
+        qualification.preserved_selections([record], {"entry": "Other input"})
+    monkeypatch.setattr(qualification.storage, "exists", lambda _: False)
+    with pytest.raises(ValueError, match="preserved v7"):
+        qualification.preserved_selections([record], {"entry": TEXT})
+
+
+def test_diagnostic_restores_model_and_prices_even_when_source_fails(
+    configured, monkeypatch, tmp_path
+):
+    import json
+
+    from test_research_analysis import TEXT
+
+    boundary = qualification.research_boundary
+    original = (
+        boundary.MODEL,
+        boundary.INPUT_NANOUSD_PER_TOKEN,
+        boundary.OUTPUT_NANOUSD_PER_TOKEN,
+    )
+    payload = boundary.request_payload(TEXT, "Source")
+    fingerprint = boundary.cache_key({"title": "Source", "source_digest": "a" * 64})
+    monkeypatch.setenv("RESEARCH_SAMPLE", "reading-gate-products-v1")
+    monkeypatch.setenv("RESEARCH_BOUNDARY_MODEL", "gpt-5.4-2026-03-05")
+    observed = []
+
+    def fail(*args):
+        current = boundary.request_payload(TEXT, "Source")
+        observed.append(current["model"])
+        assert {**current, "model": payload["model"]} == payload
+        assert (
+            boundary.cache_key({"title": "Source", "source_digest": "a" * 64})
+            != fingerprint
+        )
+        assert (
+            boundary.INPUT_NANOUSD_PER_TOKEN,
+            boundary.OUTPUT_NANOUSD_PER_TOKEN,
+        ) == (2500, 15000)
+        assert qualification.research_selection.MODEL == "gpt-5-mini"
+        raise ValueError("source unavailable")
+
+    monkeypatch.setattr(qualification, "fixed_publication", fail)
+    path = tmp_path / "diagnostic.json"
+    assert qualification.run(path) == 1
+    assert observed == ["gpt-5.4-2026-03-05"]
+    report = json.loads(path.read_text())
+    assert report["diagnostic_only"] is True and report["analysis_runs"] == []
+    assert report["boundary_request_config"][
+        "system_digest"
+    ] == qualification.research_review.digest(boundary.SYSTEM)
+    assert (
+        boundary.MODEL,
+        boundary.INPUT_NANOUSD_PER_TOKEN,
+        boundary.OUTPUT_NANOUSD_PER_TOKEN,
+    ) == original
+    assert boundary.request_payload(TEXT, "Source") == payload
+
+
 def test_extension_sample_is_separate_and_does_not_replace_prior_failures():
     cases = qualification.fixed_cases(
         "reading-gate-extension-v1", ["deshaw-library", "robeco-quant-insights"]
@@ -99,6 +192,7 @@ def test_extension_sample_is_separate_and_does_not_replace_prior_failures():
         ("RESEARCH_SOURCES", "man-systematic-insights"),
         ("RESEARCH_SOURCES", "unknown-source"),
         ("RESEARCH_QUALIFICATION_MODEL", "unapproved-model"),
+        ("RESEARCH_BOUNDARY_MODEL", "unapproved-model"),
         ("RESEARCH_SAMPLE", "unapproved-sample"),
     ],
 )
@@ -125,14 +219,22 @@ def test_workflow_is_manual_serialized_non_deploy_and_within_combined_budget():
     run = next(step for step in steps if "Qualify real" in step.get("name", ""))
     assert run["env"]["APP_DATA"] == qualification.QUALIFICATION_ROOT
     assert run["env"]["RADAR_ANALYSIS_ENABLED"] == "true"
+    assert (
+        run["env"]["RESEARCH_BOUNDARY_MODEL"] == "${{ inputs.research_boundary_model }}"
+    )
+    assert all(
+        "RESEARCH_BOUNDARY_MODEL" not in step.get("env", {})
+        for step in workflow["jobs"]["deploy"]["steps"]
+    )
     assert Decimal(run["env"]["RADAR_ANALYSIS_MONTHLY_BUDGET_USD"]) + Decimal(
         "1.00"
     ) == Decimal("2")
     assert "lambda get-function-configuration" in run["run"]
     assert 'test "$LIVE_RESEARCH_BUDGET" = "1.00"' in run["run"]
-    assert 'RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "1.00"' in (
-        ROOT / "infra/template.yaml"
-    ).read_text()
+    assert (
+        'RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "1.00"'
+        in (ROOT / "infra/template.yaml").read_text()
+    )
     assert "inputs.mode != 'research-qualify'" in workflow["jobs"]["deploy"]["if"]
     assert not any(
         "cloudformation" in step.get("run", "")
