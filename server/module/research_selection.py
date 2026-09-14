@@ -7,11 +7,12 @@ The poller shares its existing single-writer cache and budget with this stage.
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 
 from module import research_boundary, research_curation, research_review
 
 MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-selection-v9-context-spans"
+PROMPT_VERSION = "reading-selection-v10-bounded-span-choices"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 4096
 SYSTEM = """Select originals for a personal quantitative investment reading feed.
@@ -148,6 +149,10 @@ limitation = explicit document-specific caveat. Include adjacent sentences neede
 to resolve pronouns, quantities and conditions. If a self-contained explanation
 cannot fit in the bounded span, choose a different span or null.
 For other subjects or market_commentary/other all reading_points must be null.
+Select each evidence as {"span_id":"START:END"}, inclusive. The source passage's
+span_ends lists the allowed END IDs for that START; the response schema permits
+ONLY these prevalidated choices. For one sentence START equals END. Use a short
+span that preserves the explanation; do not invent ranges or count characters.
 Use null for missing evidence. Do not summarize here.
 """
 PRIMARY_SUBJECTS = (
@@ -340,12 +345,57 @@ def model_state(item: dict) -> str:
         return "pending"
 
 
+def _span_choices(passages: list[dict]) -> dict[str, list[int]]:
+    from module.research_analysis import (
+        AnalysisContractError,
+        MAX_EVIDENCE_PASSAGES,
+        MAX_EVIDENCE_CHARS,
+    )
+
+    choices = {}
+    for start in range(len(passages)):
+        size = 0
+        for end in range(start, min(start + MAX_EVIDENCE_PASSAGES, len(passages))):
+            size += len(passages[end]["text"])
+            if not passages[end]["citable"] or size > MAX_EVIDENCE_CHARS:
+                break
+            choices[f"{start}:{end}"] = list(range(start, end + 1))
+    if not choices:
+        raise AnalysisContractError("source lacks bounded sentence evidence")
+    return choices
+
+
 def request_payload(text: str, title: str) -> dict:
-    from module.research_analysis import AnalysisContractError, _source_passages
+    from module.research_analysis import _source_passages
 
     passages = _source_passages(text)
-    if not any(p["citable"] for p in passages):
-        raise AnalysisContractError("source lacks bounded sentence evidence")
+    choices = _span_choices(passages)
+    for passage in passages:
+        passage["span_ends"] = [
+            ids[-1] for ids in choices.values() if ids[0] == passage["id"]
+        ]
+    schema = deepcopy(SCHEMA)
+    span_ref = {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/source_span"}]}
+    schema["properties"]["main_purpose"]["properties"]["evidence"] = span_ref
+    schema["properties"]["transferable_insight"] = span_ref
+    schema["properties"]["reading_points"]["properties"] = {
+        name: span_ref for name in POINT_NAMES
+    }
+    schema["$defs"] = {
+        "source_span": {
+            "type": "object",
+            "properties": {
+                "span_id": {
+                    "type": "string",
+                    # Exact literal alternatives, not arbitrary start/end numbers.
+                    # A pattern avoids dropping source coverage at the enum cap.
+                    "pattern": "^(" + "|".join(choices) + ")$",
+                }
+            },
+            "required": ["span_id"],
+            "additionalProperties": False,
+        }
+    }
     return {
         "model": MODEL,
         "store": False,
@@ -366,16 +416,44 @@ def request_payload(text: str, title: str) -> dict:
                 "type": "json_schema",
                 "name": "research_reading_selection",
                 "strict": True,
-                "schema": SCHEMA,
+                "schema": schema,
             },
         },
     }
 
 
 def model_call(text: str, title: str, api_key: str) -> tuple[dict, dict]:
-    from module.research_analysis import _response_call
+    from module.research_analysis import AnalysisContractError, _response_call
 
-    return _response_call(request_payload(text, title), api_key, timeout=120)
+    value, usage = _response_call(request_payload(text, title), api_key, timeout=120)
+    try:
+        return _resolve_span_choices(value, text), usage
+    except (KeyError, TypeError, ValueError) as exc:
+        raise AnalysisContractError(
+            "invalid provider span choice", usage=usage
+        ) from exc
+
+
+def _resolve_span_choices(value: dict, text: str) -> dict:
+    """Convert strict provider choices to the existing literal-evidence contract."""
+    from module.research_analysis import AnalysisContractError, _source_passages
+
+    choices = _span_choices(_source_passages(text))
+
+    def resolve(point):
+        if point is None:
+            return None
+        if not isinstance(point, dict) or set(point) != {"span_id"}:
+            raise AnalysisContractError("invalid provider evidence object")
+        return {"evidence_ids": choices[point["span_id"]]}
+
+    result = deepcopy(value)
+    result["main_purpose"]["evidence"] = resolve(value["main_purpose"]["evidence"])
+    result["transferable_insight"] = resolve(value["transferable_insight"])
+    result["reading_points"] = {
+        name: resolve(point) for name, point in value["reading_points"].items()
+    }
+    return result
 
 
 def _evidence_span(value: dict | None, passages: list[dict]) -> list[str]:

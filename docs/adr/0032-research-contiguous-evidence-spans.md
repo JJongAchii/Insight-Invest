@@ -52,3 +52,24 @@ qualification monthly caps remain; failed reservations are not reset. Read-only
 qualification does not publish feed cards or replay notifications. Release still
 requires source-semantic inspection, producer/consumer tests, UI/build checks and
 preservation of existing read/saved/seen/delivery state.
+
+## First API call exposed a mechanical contract failure
+
+Run 34906845443 / app 957102b stopped after its first v9 selector call because
+one selected span exceeded 1,200 characters. No v9 selection receipt was accepted;
+the report retained old v8/v6 decisions, explicitly pending under the current
+version. They must NOT be read as new successful or failed semantic outcomes.
+The failed reservation $0.02031075 remains; the ledger is now $0.84331995.
+
+The technical repair v10 precomputes every valid 1–4 sentence span and exposes
+allowed end IDs alongside each original passage. The strict provider schema
+accepts only exact START:END choices through a shared `$defs` string pattern.
+The adapter resolves the choice back into the existing literal passage contract;
+it never clips an oversized proposal. A pattern, rather than a capped enum list,
+preserves full bounded-source coverage for longer originals. The documented
+[Structured Outputs pattern and definition support](https://developers.openai.com/api/docs/guides/structured-outputs)
+was checked before implementation. Code still validates the response itself.
+
+No boundary semantic rule or fixed original expectation changed. First repeat the
+positive trio with v10/v7, then the same 18-original panel. No automatic retry of
+the failed v9 code, reservation refund, model upgrade or production write.

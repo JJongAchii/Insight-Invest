@@ -1,6 +1,7 @@
 """Producer/consumer span contracts; synthetic fixtures are not semantic acceptance."""
 
 import json
+import re
 
 import pytest
 
@@ -84,3 +85,65 @@ def test_source_sentence_version_cannot_be_reused_as_context_span_selection(
         )
         item["editorial_selection"] = selection_for(item, TEXT, NOW)
     assert selection.model_state(item) == "pending"
+
+
+def test_provider_can_only_select_prevalidated_bounded_spans():
+    # Two individually citable sentences must not form an oversized proposal.
+    text = ("A" * 698 + ". ") * 2 + "A short final source explanation."
+    payload = selection.request_payload(text, "Fixture")
+    schema = payload["text"]["format"]["schema"]
+    pattern = schema["$defs"]["source_span"]["properties"]["span_id"]["pattern"]
+    choices = selection._span_choices(analysis._source_passages(text))
+    assert "0:0" in choices and "1:2" in choices and "0:1" not in choices
+    assert not re.fullmatch(pattern, "0:1") and not re.fullmatch(pattern, "0:999")
+    passages = analysis._source_passages(text)
+    for choice in choices:
+        assert re.fullmatch(pattern, choice)
+        start, end = map(int, choice.split(":"))
+        quotes = selection._evidence_span(
+            {"evidence_ids": list(range(start, end + 1))}, passages
+        )
+        assert quotes and sum(map(len, quotes)) <= analysis.MAX_EVIDENCE_CHARS
+    assert json.loads(payload["input"])["source_passages"][0]["span_ends"] == [0]
+    assert schema["properties"]["transferable_insight"]["anyOf"][1] == {
+        "$ref": "#/$defs/source_span"
+    }
+
+
+def test_real_provider_adapter_resolves_spans_before_receipt(source, monkeypatch):
+    value = {
+        "main_purpose": {
+            "category": "investment_analysis",
+            "evidence": {"span_id": "0:1"},
+        },
+        "primary_subject": "investment_methodology",
+        "content_kind": "research",
+        "contribution_type": "rule_or_measurement",
+        "investment_focus": True,
+        "reason": "Synthetic transport fixture, not semantic acceptance.",
+        "transferable_insight": {"span_id": "0:1"},
+        "reading_points": {name: {"span_id": "0:1"} for name in selection.POINT_NAMES},
+    }
+    usage = {"input_tokens": 10, "output_tokens": 10}
+    monkeypatch.setattr(analysis, "_response_call", lambda *a, **k: (value, usage))
+    resolved, measured = selection.model_call(TEXT, "Fixture", "unused")
+    assert measured == usage
+    checked = selection.receipt(source.record, resolved, TEXT, NOW.isoformat())
+    assert len(checked["decision"]["evidence_excerpts"]) == 2
+    # An out-of-contract response is not clipped, repaired or silently accepted.
+    value["transferable_insight"] = {"span_id": "0:999"}
+    with pytest.raises(analysis.AnalysisContractError) as error:
+        selection.model_call(TEXT, "Fixture", "unused")
+    assert error.value.usage == usage
+
+
+def test_many_choices_preserve_complete_source_coverage_without_enum_limit():
+    payload = selection.request_payload(
+        "One sufficiently long source sentence. " * 300, ""
+    )
+    schema = payload["text"]["format"]["schema"]
+    pattern = schema["$defs"]["source_span"]["properties"]["span_id"]["pattern"]
+    assert re.fullmatch(pattern, "0:3")
+    assert re.fullmatch(pattern, "296:299")
+    assert re.fullmatch(pattern, "299:299")
+    assert not re.fullmatch(pattern, "299:300")
