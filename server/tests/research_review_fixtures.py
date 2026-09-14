@@ -3,10 +3,21 @@
 from module import research_boundary, research_review, research_selection
 
 
+def explanation_value():
+    return {
+        name: {
+            "statement": f"Synthetic {name}, not semantic evidence.",
+            "evidence_id": 0,
+        }
+        for name in research_boundary.EXPLANATION_FIELDS
+    }
+
+
 def boundary_for(item, text, now, *, verdict="substantive"):
     return research_boundary.receipt(
         item,
         {
+            "explanation": explanation_value(),
             "analysis_object": "unclear"
             if verdict == "uncertain"
             else "investment_rule_or_measurement",

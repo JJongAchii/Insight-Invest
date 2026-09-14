@@ -14,6 +14,7 @@ from datastore import research, storage
 from module import (
     research_analysis as analysis,
     research_feed,
+    research_review,
     research_selection as selection,
 )
 from research_review_fixtures import attach_review, boundary_for, selection_for
@@ -88,6 +89,17 @@ def test_no_seed_before_required_second_reading(source):
     report = report_for(source.record)
     report["items"][0].pop("editorial_boundary")
     with pytest.raises(ValueError, match="boundary review is not current"):
+        publisher.plan(report, text_loader=lambda _: TEXT)
+
+
+def test_explanation_quotes_are_rechecked_before_cache_publication(source):
+    report = report_for(source.record)
+    second = report["items"][0]["editorial_boundary"]
+    second["decision"]["explanation"]["work"]["evidence_excerpts"] = [
+        "This claimed source passage does not exist."
+    ]
+    second["decision_digest"] = research_review.digest(second["decision"])
+    with pytest.raises(KeyError):
         publisher.plan(report, text_loader=lambda _: TEXT)
 
 

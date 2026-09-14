@@ -72,6 +72,21 @@ def test_boundary_hold_does_not_relabel_raw_selector_failure(monkeypatch):
     ]  # Cannot hold all positives.
 
 
+def test_extension_sample_is_separate_and_does_not_replace_prior_failures():
+    cases = qualification.fixed_cases(
+        "reading-gate-extension-v1", ["deshaw-library", "robeco-quant-insights"]
+    )
+    assert cases["deshaw-library"]["expected_lane"] == "core"
+    assert cases["robeco-quant-insights"]["expected_lane"] == "context"
+    previous = qualification.fixed_cases(
+        "reading-gate-boundaries-v1", ["syzygy-insights"]
+    )
+    assert previous["syzygy-insights"]["expected_lane"] == "context"
+    assert previous["syzygy-insights"]["source_digest"] == (
+        "168762ea8c4d9faf7d19449b2f1df4c145c6d6e0a2f2160f939f75691cedb938"
+    )
+
+
 @pytest.mark.parametrize(
     "name,value",
     [

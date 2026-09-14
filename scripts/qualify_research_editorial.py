@@ -53,6 +53,7 @@ GATE_SAMPLES = {
     "reading-gate-subject-positive-v1": "reading-subject-positive-v1",
     "reading-gate-boundaries-v1": "reading-contribution-boundaries-v1",
     "reading-gate-methods-v1": "reading-contribution-methods-v1",
+    "reading-gate-extension-v1": "reading-contribution-extension-v1",
 }
 SAMPLES = (
     "latest",
@@ -158,6 +159,15 @@ def gate_check(item: dict, case: dict) -> dict:
         "boundary_raw_verdict": item.get("editorial_boundary", {})
         .get("decision", {})
         .get("verdict"),
+        "boundary_explanation_present": {
+            name: bool(
+                item.get("editorial_boundary", {})
+                .get("decision", {})
+                .get("explanation", {})
+                .get(name)
+            )
+            for name in research_boundary.EXPLANATION_FIELDS
+        },
         "raw_selector_matches": selection_check(item, case)["matches"],
         "matches": lane in allowed,
     }

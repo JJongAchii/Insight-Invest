@@ -4,6 +4,36 @@
   "note": "Public metadata and content hashes only. Never replace a changed source with the next latest article. Editorial reading labels are not scientific validity judgments.",
   "items": [
     {
+      "samples": ["reading-contribution-extension-v1"],
+      "frozen_at": "2026-09-14",
+      "source_id": "deshaw-library",
+      "title": "The Concentration Game: Understanding Portfolio Effects of U.S. Equity Market Concentration",
+      "url": "https://www.deshaw.com/library/concentration-game",
+      "pdf_url": "",
+      "authors": ["The D. E. Shaw Group"],
+      "published_at": "2026-02-01T00:00:00+00:00",
+      "source_digest": "80eee269ba5a862295b1b1baaa5f16e90608a3bb8b3ac6cadccde2f8a186b760",
+      "expected_content_kinds": ["research", "practitioner"],
+      "expected_subjects": ["investment_methodology", "empirical_market_research"],
+      "expected_lane": "core",
+      "reading_check": "Extension outside the earlier 13 originals, frozen before any v3 API output. Full cached original read: concentration changes risk contribution, long-only transfer constraints and benchmark-relative breadth; it explains mechanisms and compares market periods. The argument is not just a mega-cap business outlook. Previously included in a human source audit, so not a pristine unseen holdout or independent replication."
+    },
+    {
+      "samples": ["reading-contribution-extension-v1"],
+      "frozen_at": "2026-09-14",
+      "source_id": "robeco-quant-insights",
+      "title": "From AI copilots to operating models in asset management",
+      "url": "https://www.robeco.com/en-int/insights/2026/09/from-copilot-to-operating-model",
+      "pdf_url": "",
+      "authors": ["Mike Chen"],
+      "published_at": "2026-09-10T00:00:00+00:00",
+      "source_digest": "e02dca2abfa0ffd97108a8856ac8d556f003f35d501de8866ad467244cb1ee6a",
+      "expected_content_kinds": ["research", "practitioner", "market_commentary", "other"],
+      "expected_subjects": ["research_operations"],
+      "expected_lane": "context",
+      "reading_check": "Extension outside the earlier 13 originals, frozen before any v3 API output. Full cached original read: describes AI workflow ownership, data/tool permissions, cost visibility, logging, escalation and human review, not an investment signal or portfolio-risk measurement. Useful operating context is preserved. Previously included in a human source audit, so not a pristine unseen holdout."
+    },
+    {
       "samples": ["reading-products-v1"],
       "source_id": "robeco-quant-insights",
       "title": "Active Emerging Markets ETF: Stock selection for core EM exposure",

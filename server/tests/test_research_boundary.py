@@ -13,7 +13,7 @@ from module import (
     research_review,
     research_selection as selection,
 )
-from research_review_fixtures import boundary_for, selection_for
+from research_review_fixtures import boundary_for, explanation_value, selection_for
 from test_research_analysis import NOW, TEXT, source as source
 
 
@@ -53,6 +53,7 @@ def test_boundary_is_source_only_reserved_and_disagreement_does_not_retry(
             > 185_000
         )
         return {
+            "explanation": explanation_value(),
             "analysis_object": "unclear"
             if verdict == "uncertain"
             else "investment_rule_or_measurement",
@@ -123,6 +124,7 @@ def test_invalid_grounding_fails_closed(source, number):
         boundary.receipt(
             source.record,
             {
+                "explanation": explanation_value(),
                 "analysis_object": "investment_rule_or_measurement",
                 "object_evidence_id": 0,
                 "verdict": "substantive",
@@ -207,6 +209,7 @@ def test_failed_boundary_keeps_reservation_and_durable_retry(source, tmp_path):
 
     def invalid(*args):
         return {
+            "explanation": explanation_value(),
             "analysis_object": "investment_rule_or_measurement",
             "object_evidence_id": 0,
             "verdict": "substantive",
@@ -236,6 +239,7 @@ def test_primary_object_cannot_be_overridden_by_substantive_verdict(
     item["editorial_boundary"] = boundary.receipt(
         item,
         {
+            "explanation": explanation_value(),
             "analysis_object": analysis_object,
             "object_evidence_id": None if analysis_object == "unclear" else 0,
             "verdict": "substantive",
@@ -270,6 +274,7 @@ def test_object_itself_requires_grounded_passage(source, number):
         boundary.receipt(
             source.record,
             {
+                "explanation": explanation_value(),
                 "analysis_object": "business_product_or_policy",
                 "object_evidence_id": number,
                 "verdict": "context",
@@ -281,11 +286,69 @@ def test_object_itself_requires_grounded_passage(source, number):
         )
 
 
-def test_v1_receipt_is_not_a_current_object_review(source, monkeypatch):
+@pytest.mark.parametrize(
+    "prior_version",
+    ["reading-boundary-v1-source-only", "reading-boundary-v2-analysis-object"],
+)
+def test_prior_receipt_is_not_an_explanation_review(source, monkeypatch, prior_version):
     item = deepcopy(source.record)
     with monkeypatch.context() as prior:
-        prior.setattr(boundary, "PROMPT_VERSION", "reading-boundary-v1-source-only")
+        prior.setattr(boundary, "PROMPT_VERSION", prior_version)
         value = boundary_for(item, TEXT, NOW)
     item["editorial_boundary"] = value
     assert boundary.state(item) == "pending"
-    assert next(iter(boundary.SCHEMA["properties"])) == "analysis_object"
+    assert next(iter(boundary.SCHEMA["properties"])) == "explanation"
+
+
+@pytest.mark.parametrize("missing", boundary.EXPLANATION_FIELDS)
+def test_confident_label_cannot_fill_missing_explanation(source, missing):
+    item = deepcopy(source.record)
+    item["editorial_selection"] = selection_for(item, TEXT, NOW)
+    item["editorial_boundary"] = boundary_for(item, TEXT, NOW)
+    decision = item["editorial_boundary"]["decision"]
+    decision["explanation"][missing] = None
+    item["editorial_boundary"]["decision_digest"] = research_review.digest(decision)
+    assert boundary.state(item) == "uncertain"
+    assert selection.automatic_state(item) == "held"
+    research_feed.apply_editorial_analysis(item, use_editor_audit=False)
+    assert not item["notification_eligible"]
+    assert decision["verdict"] == "substantive"  # Preserve the contradiction.
+
+
+@pytest.mark.parametrize("card", [None, {}, {"object": None}])
+def test_absent_or_malformed_card_is_not_a_current_review(source, card):
+    item = deepcopy(source.record)
+    item["editorial_boundary"] = boundary_for(item, TEXT, NOW)
+    value = item["editorial_boundary"]["decision"]
+    value["explanation"] = card
+    item["editorial_boundary"]["decision_digest"] = research_review.digest(value)
+    assert boundary.state(item) == "pending"
+
+
+@pytest.mark.parametrize(
+    "point",
+    [
+        {"statement": "Unsupported", "evidence_id": True},
+        {"statement": "Unsupported", "evidence_id": 99999},
+        {"statement": " ", "evidence_id": 0},
+        {"statement": "x" * 401, "evidence_id": 0},
+        {"statement": "Missing grounding"},
+    ],
+)
+def test_each_explanation_point_requires_bounded_source_evidence(source, point):
+    card = explanation_value()
+    card["work"] = point
+    with pytest.raises(analysis.AnalysisContractError, match="explanation evidence"):
+        boundary.receipt(
+            source.record,
+            {
+                "explanation": card,
+                "analysis_object": "investment_rule_or_measurement",
+                "object_evidence_id": 0,
+                "verdict": "substantive",
+                "evidence_id": 0,
+                "reason": "Invalid explanation fixture",
+            },
+            TEXT,
+            NOW.isoformat(),
+        )
