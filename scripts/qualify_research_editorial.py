@@ -164,17 +164,18 @@ def gate_check(item: dict, case: dict) -> dict:
         "boundary_analysis_object": item.get("editorial_boundary", {})
         .get("decision", {})
         .get("analysis_object"),
-        "boundary_raw_verdict": item.get("editorial_boundary", {})
+        "boundary_derived_verdict": item.get("editorial_boundary", {})
         .get("decision", {})
         .get("verdict"),
-        "boundary_explanation_present": {
-            name: bool(
+        "boundary_evidence_roles": {
+            name: (
                 item.get("editorial_boundary", {})
                 .get("decision", {})
-                .get("explanation", {})
+                .get("checks", {})
                 .get(name)
-            )
-            for name in research_boundary.EXPLANATION_FIELDS
+                or {}
+            ).get("role")
+            for name in research_boundary.EVIDENCE_FIELDS
         },
         "raw_selector_matches": selection_check(item, case)["matches"],
         "matches": lane in allowed,

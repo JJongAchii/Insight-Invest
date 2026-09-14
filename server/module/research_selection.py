@@ -252,15 +252,8 @@ def state(item: dict) -> str:
 
 
 def needs_boundary(item: dict) -> bool:
-    """Only clearly empirical research bypasses the extra paid reading."""
-    if model_state(item) != "core":
-        return False
-    value = item["editorial_selection"]["decision"]
-    return not (
-        value["content_kind"] == "research"
-        and value["contribution_type"] == "empirical_finding"
-        and value["primary_subject"] == "empirical_market_research"
-    )
+    """Every proposed core needs evidence review, including empirical labels."""
+    return model_state(item) == "core"
 
 
 def automatic_state(item: dict) -> str:

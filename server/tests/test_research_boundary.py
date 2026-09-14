@@ -1,4 +1,4 @@
-"""Offline routing/state tests; fixed original API receipts qualify semantics."""
+"""Offline contracts only. Actual fixed originals qualify semantic reading value."""
 
 from copy import deepcopy
 from datetime import timedelta
@@ -13,7 +13,7 @@ from module import (
     research_review,
     research_selection as selection,
 )
-from research_review_fixtures import boundary_for, explanation_value, selection_for
+from research_review_fixtures import boundary_for, boundary_value, selection_for
 from test_research_analysis import NOW, TEXT, source as source
 
 
@@ -37,31 +37,29 @@ def pending(source, tmp_path):
 
 @pytest.mark.parametrize(
     "verdict,expected",
-    [("substantive", "core"), ("context", "held"), ("uncertain", "held")],
+    [
+        ("substantive", "core"),
+        ("context", "held"),
+        ("uncertain", "held"),
+    ],
 )
-def test_boundary_is_source_only_reserved_and_disagreement_does_not_retry(
+def test_evidence_review_is_reserved_and_disagreement_does_not_retry(
     source, tmp_path, verdict, expected
 ):
-    pending(source, tmp_path)
+    original = pending(source, tmp_path)
 
-    def check(text, title, api_key):
-        assert text == TEXT
+    def check(text, title, api_key, *, proposed):
+        assert text == TEXT and proposed == boundary.evidence_plan(original)
         assert (
             storage.read_json("research_analysis/budget-2026-09.json")[
                 "reserved_nanousd"
             ]
             > 185_000
         )
-        return {
-            "explanation": explanation_value(),
-            "analysis_object": "unclear"
-            if verdict == "uncertain"
-            else "investment_rule_or_measurement",
-            "object_evidence_id": None if verdict == "uncertain" else 0,
-            "verdict": verdict,
-            "evidence_id": None if verdict == "uncertain" else 0,
-            "reason": "Offline boundary fixture",
-        }, {"input_tokens": 100, "output_tokens": 80}
+        return boundary_value(verdict=verdict), {
+            "input_tokens": 100,
+            "output_tokens": 80,
+        }
 
     result = analysis.enrich(
         now=NOW,
@@ -74,7 +72,8 @@ def test_boundary_is_source_only_reserved_and_disagreement_does_not_retry(
     )
     item = research.load_feed()["items"][0]
     assert result["boundary_reviewed"] == 1 and result["reserved_nanousd"] == 185_000
-    assert selection.model_state(item) == "core"  # Never rewrite the first judgment.
+    assert item["editorial_selection"] == original["editorial_selection"]
+    assert selection.model_state(item) == "core"
     assert selection.automatic_state(item) == expected
     assert item["research_lane"] == ("core" if expected == "core" else "discovery")
     assert item["notification_eligible"] is (expected == "core")
@@ -93,45 +92,45 @@ def test_boundary_is_source_only_reserved_and_disagreement_does_not_retry(
     assert result["completed"] == 0
 
 
-def test_independent_payload_contains_only_original():
-    payload = boundary.request_payload(TEXT, "Original title")
-    assert set(boundary.json.loads(payload["input"])) == {
-        "source_title",
-        "source_passages",
-    }
+def test_payload_contains_literal_proposal_not_first_reader_labels_or_summary(source):
+    plan = boundary.evidence_plan(source.record)
+    payload = boundary.request_payload(TEXT, "Original title", proposed=plan)
+    data = boundary.json.loads(payload["input"])
+    assert set(data) == {"source_title", "source_passages", "proposed_evidence_ids"}
+    for field, ids in data["proposed_evidence_ids"].items():
+        assert [data["source_passages"][i]["text"] for i in ids] == plan[field]
+    assert "verdict" not in boundary.SCHEMA["properties"]
+    assert "explanation" not in boundary.SCHEMA["properties"]
     assert payload["store"] is False and "tools" not in payload
     assert "previous_response_id" not in payload
     assert payload["text"]["format"]["strict"] is True
 
 
-def test_diagnostic_model_uses_its_own_reservation_cost_and_cache(
+def test_diagnostic_model_uses_own_reservation_cost_and_cache(
     source, tmp_path, monkeypatch
 ):
     item = pending(source, tmp_path)
     original_selection = deepcopy(item["editorial_selection"])
-    mini_fingerprint = boundary.cache_key(item)
+    fingerprint = boundary.cache_key(item)
     monkeypatch.setattr(boundary, "MODEL", "gpt-5.4-2026-03-05")
     monkeypatch.setattr(boundary, "INPUT_NANOUSD_PER_TOKEN", 2500)
     monkeypatch.setattr(boundary, "OUTPUT_NANOUSD_PER_TOKEN", 15000)
     reservation = analysis._reserve_payload(
-        boundary.request_payload(TEXT, item["title"]), 2500, 15000
+        boundary.request_payload(
+            TEXT, item["title"], proposed=boundary.evidence_plan(item)
+        ),
+        2500,
+        15000,
     )
 
-    def check(text, title, api_key):
+    def check(text, title, api_key, *, proposed):
         assert (
             storage.read_json("research_analysis/budget-2026-09.json")[
                 "reserved_nanousd"
             ]
             == reservation
         )
-        return {
-            "explanation": explanation_value(),
-            "analysis_object": "investment_rule_or_measurement",
-            "object_evidence_id": 0,
-            "verdict": "substantive",
-            "evidence_id": 0,
-            "reason": "Synthetic accounting test, not semantic evidence",
-        }, {"input_tokens": 100, "output_tokens": 80}
+        return boundary_value(), {"input_tokens": 100, "output_tokens": 80}
 
     result = analysis.enrich(
         now=NOW,
@@ -147,60 +146,59 @@ def test_diagnostic_model_uses_its_own_reservation_cost_and_cache(
     assert item["editorial_selection"] == original_selection
     second = item["editorial_boundary"]
     assert second["cost_nanousd"] == 1_450_000
-    assert second["model"] == "gpt-5.4-2026-03-05"
-    assert second["fingerprint"] != mini_fingerprint
+    assert (
+        second["model"] == "gpt-5.4-2026-03-05" and second["fingerprint"] != fingerprint
+    )
     monkeypatch.setattr(boundary, "MODEL", "gpt-5-mini")
-    assert boundary.state(item) == "pending"  # Cannot reuse as the production model.
+    assert boundary.state(item) == "pending"
 
 
 @pytest.mark.parametrize(
-    "field", ["source_digest", "title", "parser_version", "analysis_scope", "decision"]
+    "field",
+    [
+        "source_digest",
+        "title",
+        "parser_version",
+        "analysis_scope",
+        "decision",
+        "proposal",
+    ],
 )
-def test_receipt_expires_on_changed_source_or_verdict(source, field):
+def test_receipt_expires_on_changed_source_verdict_or_proposal(source, field):
     item = deepcopy(source.record)
     item["editorial_boundary"] = boundary_for(item, TEXT, NOW)
     assert boundary.state(item) == "substantive"
     if field == "decision":
-        item["editorial_boundary"][field]["verdict"] = "context"
+        item["editorial_boundary"]["decision"]["verdict"] = "context"
+    elif field == "proposal":
+        item["editorial_selection"]["decision"]["evidence_excerpts"] = ["Changed"]
     else:
         item[field] = "changed"
     assert boundary.state(item) == "pending"
 
 
 @pytest.mark.parametrize("number", [None, True, -1, 99999, "0"])
-def test_invalid_grounding_fails_closed(source, number):
-    with pytest.raises(analysis.AnalysisContractError):
-        boundary.receipt(
-            source.record,
-            {
-                "explanation": explanation_value(),
-                "analysis_object": "investment_rule_or_measurement",
-                "object_evidence_id": 0,
-                "verdict": "substantive",
-                "evidence_id": number,
-                "reason": "Fixture",
-            },
-            TEXT,
-            NOW.isoformat(),
-        )
+def test_object_requires_bounded_source_evidence(source, number):
+    value = boundary_value()
+    value["object_evidence_id"] = number
+    with pytest.raises(
+        analysis.AnalysisContractError, match="analysis-object evidence"
+    ):
+        boundary.receipt(source.record, value, TEXT, NOW.isoformat())
 
 
-def test_only_clear_empirical_research_skips_boundary(source):
+def test_empirical_label_cannot_bypass_evidence_review(source):
     item = deepcopy(source.record)
-    item["editorial_selection"] = selection_for(item, TEXT, NOW)
-    assert selection.needs_boundary(item)
-    assert selection.automatic_state(item) == "pending"
     value = item["editorial_selection"]["decision"]
     value.update(
+        content_kind="research",
         primary_subject="empirical_market_research",
         contribution_type="empirical_finding",
     )
     item["editorial_selection"]["decision_digest"] = research_review.digest(value)
-    assert not selection.needs_boundary(item)
-    assert selection.automatic_state(item) == "core"
-    value["content_kind"] = "practitioner"
-    item["editorial_selection"]["decision_digest"] = research_review.digest(value)
+    assert selection.model_state(item) == "core"
     assert selection.needs_boundary(item)
+    assert selection.automatic_state(item) == "pending"
 
 
 def test_budget_hold_cannot_promote_or_pay_for_writer(source, tmp_path, monkeypatch):
@@ -218,7 +216,7 @@ def test_budget_hold_cannot_promote_or_pay_for_writer(source, tmp_path, monkeypa
     assert item["relevance_reason"] == "original_boundary_pending"
 
 
-def test_boundary_cache_recovers_with_no_paid_budget_and_survives_reconcile(
+def test_paid_cache_recovers_without_new_budget_and_survives_reconcile(
     source, monkeypatch
 ):
     research_feed.reconcile(s3=source, now=NOW)
@@ -235,7 +233,7 @@ def test_boundary_cache_recovers_with_no_paid_budget_and_survives_reconcile(
     assert after["available_at"] == before["available_at"]
 
 
-def test_gate_qualification_cannot_borrow_editor_audit(source, tmp_path, monkeypatch):
+def test_qualification_cannot_borrow_manual_audit(source, tmp_path, monkeypatch):
     item = pending(source, tmp_path)
     monkeypatch.setattr(
         research_curation,
@@ -253,151 +251,119 @@ def test_gate_qualification_cannot_borrow_editor_audit(source, tmp_path, monkeyp
     assert result["reason"] == "monthly_budget_reached"
 
 
-def test_failed_boundary_keeps_reservation_and_durable_retry(source, tmp_path):
+def test_failed_review_keeps_reservation_and_durable_retry(source, tmp_path):
     pending(source, tmp_path)
 
-    def invalid(*args):
-        return {
-            "explanation": explanation_value(),
-            "analysis_object": "investment_rule_or_measurement",
-            "object_evidence_id": 0,
-            "verdict": "substantive",
-            "evidence_id": 99999,
-            "reason": "Invalid",
-        }, {
-            "input_tokens": 100,
-            "output_tokens": 80,
-        }
+    def invalid(*args, **kwargs):
+        value = boundary_value()
+        value["checks"]["insight"]["role"] = "invented"
+        return value, {"input_tokens": 100, "output_tokens": 80}
 
     result = analysis.enrich(now=NOW, text_loader=lambda _: TEXT, boundary_call=invalid)
     item = research.load_feed()["items"][0]
     assert result["failed"] == 1 and result["reserved_nanousd"] > 185_000
     assert item["analysis_retry"]["stage"] == "boundary"
     assert storage.exists(f"research_analysis/retries/{boundary.cache_key(item)}.json")
-    assert selection.automatic_state(item) == "pending"
-    assert not item["notification_eligible"]
+    assert (
+        selection.automatic_state(item) == "pending"
+        and not item["notification_eligible"]
+    )
 
 
 @pytest.mark.parametrize("analysis_object", boundary.ANALYSIS_OBJECTS)
-def test_primary_object_cannot_be_overridden_by_substantive_verdict(
+def test_business_topic_cannot_be_overridden_by_incidental_method(
     source, analysis_object
 ):
-    research_feed.reconcile(s3=source, now=NOW)
-    item = research.load_feed()["items"][0]
-    item["editorial_selection"] = selection_for(item, TEXT, NOW)
-    item["editorial_boundary"] = boundary.receipt(
-        item,
-        {
-            "explanation": explanation_value(),
-            "analysis_object": analysis_object,
-            "object_evidence_id": None if analysis_object == "unclear" else 0,
-            "verdict": "substantive",
-            "evidence_id": 0,
-            "reason": "Contradictory model fixture",
-        },
-        TEXT,
-        NOW.isoformat(),
+    item = deepcopy(source.record)
+    value = boundary_value()
+    value.update(
+        analysis_object=analysis_object,
+        object_evidence_id=None if analysis_object == "unclear" else 0,
     )
+    item["editorial_boundary"] = boundary.receipt(item, value, TEXT, NOW.isoformat())
     expected = "core" if analysis_object in boundary.INVESTMENT_OBJECTS else "held"
     assert selection.automatic_state(item) == expected
-    assert item["editorial_boundary"]["decision"]["verdict"] == "substantive"
-    research_feed.apply_editorial_analysis(item, use_editor_audit=False)
-    assert item["notification_eligible"] is (expected == "core")
 
 
-@pytest.mark.parametrize("analysis_object", [None, "unknown", ""])
-def test_missing_or_unknown_object_is_pending(source, analysis_object):
+@pytest.mark.parametrize("role", boundary.ROLES)
+def test_code_derives_route_from_roles_not_model_overall_verdict(source, role):
     item = deepcopy(source.record)
-    item["editorial_boundary"] = boundary_for(item, TEXT, NOW)
-    value = item["editorial_boundary"]["decision"]
-    value["analysis_object"] = analysis_object
-    item["editorial_boundary"]["decision_digest"] = research_review.digest(value)
-    assert boundary.state(item) == "pending"
+    value = boundary_value()
+    for check in value["checks"].values():
+        check["role"] = role
+    item["editorial_boundary"] = boundary.receipt(item, value, TEXT, NOW.isoformat())
+    assert selection.automatic_state(item) == (
+        "core" if role in boundary.SUBSTANTIVE_ROLES else "held"
+    )
+    value["verdict"] = "substantive"
+    with pytest.raises(analysis.AnalysisContractError):
+        boundary.receipt(item, value, TEXT, NOW.isoformat())
 
 
-@pytest.mark.parametrize("number", [None, True, -1, 99999, "0"])
-def test_object_itself_requires_grounded_passage(source, number):
-    with pytest.raises(
-        analysis.AnalysisContractError, match="analysis-object evidence"
-    ):
-        boundary.receipt(
-            source.record,
-            {
-                "explanation": explanation_value(),
-                "analysis_object": "business_product_or_policy",
-                "object_evidence_id": number,
-                "verdict": "context",
-                "evidence_id": 0,
-                "reason": "Object evidence fixture",
-            },
-            TEXT,
-            NOW.isoformat(),
-        )
+@pytest.mark.parametrize("role", sorted(boundary.SUBSTANTIVE_ROLES))
+def test_one_specific_insight_is_enough_no_all_criteria_and_gate(source, role):
+    item = deepcopy(source.record)
+    value = boundary_value(verdict="context")
+    value["checks"]["insight"]["role"] = role
+    item["editorial_boundary"] = boundary.receipt(item, value, TEXT, NOW.isoformat())
+    assert selection.automatic_state(item) == "core"
 
 
 @pytest.mark.parametrize(
-    "prior_version",
-    ["reading-boundary-v1-source-only", "reading-boundary-v2-analysis-object"],
+    "version",
+    [
+        "reading-boundary-v1-source-only",
+        "reading-boundary-v2-analysis-object",
+        "reading-boundary-v3-explanation-card",
+    ],
 )
-def test_prior_receipt_is_not_an_explanation_review(source, monkeypatch, prior_version):
+def test_previous_receipts_cannot_borrow_new_policy(source, monkeypatch, version):
     item = deepcopy(source.record)
-    with monkeypatch.context() as prior:
-        prior.setattr(boundary, "PROMPT_VERSION", prior_version)
+    with monkeypatch.context() as old:
+        old.setattr(boundary, "PROMPT_VERSION", version)
         value = boundary_for(item, TEXT, NOW)
     item["editorial_boundary"] = value
     assert boundary.state(item) == "pending"
-    assert next(iter(boundary.SCHEMA["properties"])) == "explanation"
-
-
-@pytest.mark.parametrize("missing", boundary.EXPLANATION_FIELDS)
-def test_confident_label_cannot_fill_missing_explanation(source, missing):
-    item = deepcopy(source.record)
-    item["editorial_selection"] = selection_for(item, TEXT, NOW)
-    item["editorial_boundary"] = boundary_for(item, TEXT, NOW)
-    decision = item["editorial_boundary"]["decision"]
-    decision["explanation"][missing] = None
-    item["editorial_boundary"]["decision_digest"] = research_review.digest(decision)
-    assert boundary.state(item) == "uncertain"
-    assert selection.automatic_state(item) == "held"
-    research_feed.apply_editorial_analysis(item, use_editor_audit=False)
-    assert not item["notification_eligible"]
-    assert decision["verdict"] == "substantive"  # Preserve the contradiction.
-
-
-@pytest.mark.parametrize("card", [None, {}, {"object": None}])
-def test_absent_or_malformed_card_is_not_a_current_review(source, card):
-    item = deepcopy(source.record)
-    item["editorial_boundary"] = boundary_for(item, TEXT, NOW)
-    value = item["editorial_boundary"]["decision"]
-    value["explanation"] = card
-    item["editorial_boundary"]["decision_digest"] = research_review.digest(value)
-    assert boundary.state(item) == "pending"
 
 
 @pytest.mark.parametrize(
-    "point",
+    "proposed",
     [
-        {"statement": "Unsupported", "evidence_id": True},
-        {"statement": "Unsupported", "evidence_id": 99999},
-        {"statement": " ", "evidence_id": 0},
-        {"statement": "x" * 401, "evidence_id": 0},
-        {"statement": "Missing grounding"},
+        {},
+        {"insight": [], "method": []},
+        {"insight": ["invented"], "method": []},
+        {"insight": "not a list", "method": []},
     ],
 )
-def test_each_explanation_point_requires_bounded_source_evidence(source, point):
-    card = explanation_value()
-    card["work"] = point
-    with pytest.raises(analysis.AnalysisContractError, match="explanation evidence"):
-        boundary.receipt(
-            source.record,
-            {
-                "explanation": card,
-                "analysis_object": "investment_rule_or_measurement",
-                "object_evidence_id": 0,
-                "verdict": "substantive",
-                "evidence_id": 0,
-                "reason": "Invalid explanation fixture",
-            },
-            TEXT,
-            NOW.isoformat(),
-        )
+def test_invalid_proposal_stops_before_provider(proposed):
+    with pytest.raises(analysis.AnalysisContractError):
+        boundary.request_payload(TEXT, "Original", proposed=proposed)
+
+
+def test_missing_check_or_altered_attached_evidence_is_pending(source):
+    item = deepcopy(source.record)
+    for change in ("missing", "quote"):
+        item["editorial_boundary"] = boundary_for(item, TEXT, NOW)
+        decision = item["editorial_boundary"]["decision"]
+        if change == "missing":
+            decision["checks"]["insight"] = None
+        else:
+            decision["checks"]["insight"]["evidence_excerpts"] = [
+                "Another real sentence cannot repair this quote"
+            ]
+        item["editorial_boundary"]["decision_digest"] = research_review.digest(decision)
+        assert boundary.state(item) == "pending"
+
+
+def test_absent_method_must_be_null_and_does_not_block_specific_insight(source):
+    item = deepcopy(source.record)
+    item["editorial_selection"]["decision"]["reading_points"]["method_data"] = None
+    item["editorial_selection"]["decision_digest"] = research_review.digest(
+        item["editorial_selection"]["decision"]
+    )
+    value = boundary_value()
+    with pytest.raises(analysis.AnalysisContractError, match="absent evidence"):
+        boundary.receipt(item, value, TEXT, NOW.isoformat())
+    value["checks"]["method"] = None
+    item["editorial_boundary"] = boundary.receipt(item, value, TEXT, NOW.isoformat())
+    assert selection.automatic_state(item) == "core"

@@ -127,14 +127,18 @@ def test_diagnostic_restores_model_and_prices_even_when_source_fails(
         boundary.INPUT_NANOUSD_PER_TOKEN,
         boundary.OUTPUT_NANOUSD_PER_TOKEN,
     )
-    payload = boundary.request_payload(TEXT, "Source")
+    proposed = {
+        "insight": [qualification.research_analysis._source_passages(TEXT)[0]["text"]],
+        "method": [],
+    }
+    payload = boundary.request_payload(TEXT, "Source", proposed=proposed)
     fingerprint = boundary.cache_key({"title": "Source", "source_digest": "a" * 64})
     monkeypatch.setenv("RESEARCH_SAMPLE", "reading-gate-products-v1")
     monkeypatch.setenv("RESEARCH_BOUNDARY_MODEL", "gpt-5.4-2026-03-05")
     observed = []
 
     def fail(*args):
-        current = boundary.request_payload(TEXT, "Source")
+        current = boundary.request_payload(TEXT, "Source", proposed=proposed)
         observed.append(current["model"])
         assert {**current, "model": payload["model"]} == payload
         assert (
@@ -162,7 +166,7 @@ def test_diagnostic_restores_model_and_prices_even_when_source_fails(
         boundary.INPUT_NANOUSD_PER_TOKEN,
         boundary.OUTPUT_NANOUSD_PER_TOKEN,
     ) == original
-    assert boundary.request_payload(TEXT, "Source") == payload
+    assert boundary.request_payload(TEXT, "Source", proposed=proposed) == payload
 
 
 def test_extension_sample_is_separate_and_does_not_replace_prior_failures():

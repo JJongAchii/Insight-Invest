@@ -635,7 +635,12 @@ def enrich(
                 selector = (
                     research_selection if stage == "select" else research_boundary
                 )
-                payload = selector.request_payload(text, item["title"])
+                proposed = research_boundary.evidence_plan(item)
+                payload = selector.request_payload(
+                    text,
+                    item["title"],
+                    **({"proposed": proposed} if stage == "boundary" else {}),
+                )
                 input_rate, output_rate = (
                     INPUT_NANOUSD_PER_TOKEN,
                     OUTPUT_NANOUSD_PER_TOKEN,
@@ -675,7 +680,9 @@ def enrich(
                     item, decision, text, now.isoformat()
                 )
             elif stage == "boundary":
-                decision, usage = boundary_call(text, item["title"], api_key)
+                decision, usage = boundary_call(
+                    text, item["title"], api_key, proposed=proposed
+                )
                 result = research_boundary.receipt(
                     item, decision, text, now.isoformat()
                 )

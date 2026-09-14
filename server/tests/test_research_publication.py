@@ -105,14 +105,14 @@ def test_model_diagnostics_cannot_be_published_even_if_they_pass(source, diagnos
         publisher.plan(report, text_loader=forbidden)
 
 
-def test_explanation_quotes_are_rechecked_before_cache_publication(source):
+def test_proposed_quotes_are_rechecked_before_cache_publication(source):
     report = report_for(source.record)
     second = report["items"][0]["editorial_boundary"]
-    second["decision"]["explanation"]["work"]["evidence_excerpts"] = [
+    second["decision"]["checks"]["method"]["evidence_excerpts"] = [
         "This claimed source passage does not exist."
     ]
     second["decision_digest"] = research_review.digest(second["decision"])
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError, match="boundary review is not current"):
         publisher.plan(report, text_loader=lambda _: TEXT)
 
 

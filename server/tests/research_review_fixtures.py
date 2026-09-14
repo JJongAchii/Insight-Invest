@@ -3,29 +3,36 @@
 from module import research_boundary, research_review, research_selection
 
 
-def explanation_value():
+def boundary_value(*, verdict="substantive"):
     return {
-        name: {
-            "statement": f"Synthetic {name}, not semantic evidence.",
-            "evidence_id": 0,
-        }
-        for name in research_boundary.EXPLANATION_FIELDS
+        "checks": {
+            name: {
+                "source_meaning": "Synthetic check, not semantic evidence.",
+                "disclosed_or_missing": "Synthetic disclosure check.",
+                "role": {
+                    "substantive": "operational_detail",
+                    "context": "objective_or_profile",
+                    "uncertain": "unclear",
+                }[verdict],
+            }
+            for name in research_boundary.EVIDENCE_FIELDS
+        },
+        "analysis_object": "investment_rule_or_measurement",
+        "object_evidence_id": 0,
     }
 
 
 def boundary_for(item, text, now, *, verdict="substantive"):
+    if "editorial_selection" not in item:
+        item["editorial_selection"] = selection_for(item, text, now)
+    value = boundary_value(verdict=verdict)
+    plan = research_boundary.evidence_plan(item)
+    for name in value["checks"]:
+        if not plan[name]:
+            value["checks"][name] = None
     return research_boundary.receipt(
         item,
-        {
-            "explanation": explanation_value(),
-            "analysis_object": "unclear"
-            if verdict == "uncertain"
-            else "investment_rule_or_measurement",
-            "object_evidence_id": None if verdict == "uncertain" else 0,
-            "verdict": verdict,
-            "evidence_id": None if verdict == "uncertain" else 0,
-            "reason": "Synthetic second reading, not semantic acceptance.",
-        },
+        value,
         text,
         now.isoformat(),
     )
