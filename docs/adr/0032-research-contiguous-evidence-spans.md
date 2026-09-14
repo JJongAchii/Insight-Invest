@@ -73,3 +73,31 @@ was checked before implementation. Code still validates the response itself.
 No boundary semantic rule or fixed original expectation changed. First repeat the
 positive trio with v10/v7, then the same 18-original panel. No automatic retry of
 the failed v9 code, reservation refund, model upgrade or production write.
+
+## Actual v10 positive trio and downstream handoff
+
+Run 34909761737 / app f104e03 completed all six calls. All three originals are
+core. D.E.Shaw now transmits the correlated-index example's initial allocation,
+changed volatility estimate and resulting allocation together. Robeco's accepted
+insight is the spread-versus-issuer-risk/rating/maturity comparison, not its ranking
+engine. The latter was explicitly objective_or_profile. CFM transmits the
+regression and residual explanation. These are source-reading decisions, not
+validation of the authors' performance claims. Cost $0.02896950; ledger
+$0.87228945. Remaining fixed negative/positive cases are still required.
+
+Inspection also showed a producer/consumer defect: the selected insight admitted
+the original, but the writer's separate why_read could omit it entirely; its
+method_data could still contain the rejected ranking-engine blurb. The writer
+now uses the boundary-accepted insight (or accepted method when that is the only
+contribution) for why_read, and suppresses a method proposal whose evidence role
+was rejected. Question/finding/limitation retain literal source selection and
+the existing per-field factual review. Original selector/checker receipts are not
+edited. Cache identity follows the actual effective reading plan, so only changed
+inputs invalidate drafts. This does not change the v10/v7 document gate or its
+frozen labels and adds no model calls/stages.
+
+An offline duplicated-sentence test also reproduced a cache publication defect:
+the publisher selected a same-text citation outside the checker's visible span.
+It now reconstructs the object citation only from the actually visible proposal
+IDs. The regression initially failed and passes with that repair; publication
+still re-fetches exact source content and never overwrites existing cache objects.

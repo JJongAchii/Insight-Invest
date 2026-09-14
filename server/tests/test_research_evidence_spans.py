@@ -2,6 +2,7 @@
 
 import json
 import re
+from copy import deepcopy
 
 import pytest
 
@@ -147,3 +148,57 @@ def test_many_choices_preserve_complete_source_coverage_without_enum_limit():
     assert re.fullmatch(pattern, "296:299")
     assert re.fullmatch(pattern, "299:299")
     assert not re.fullmatch(pattern, "299:300")
+
+
+def test_publication_reconstructs_object_citation_from_visible_duplicate(source):
+    from test_research_publication import publisher, report_for
+    from module.research_review import digest
+
+    text = (
+        "Repeated investment statement. First separate explanation. "
+        "Repeated investment statement. Second contextual explanation."
+    )
+    passages = analysis._source_passages(text)
+    report = report_for(source.record)
+    item = report["items"][0]
+    selected = item["editorial_selection"]
+    decision = selected["decision"]
+    decision["evidence_excerpts"] = [p["text"] for p in passages[2:4]]
+    decision["main_purpose"]["evidence_excerpts"] = [passages[3]["text"]]
+    decision["reading_points"] = {
+        name: decision["evidence_excerpts"] for name in selection.POINT_NAMES
+    }
+    selected["input_digest"] = digest(text)
+    selected["decision_digest"] = digest(decision)
+    value = boundary_value()
+    value["object_evidence_id"] = 2
+    item["editorial_boundary"] = boundary.receipt(item, value, text, NOW.isoformat())
+    report.update(gate_only=True, sample="reading-gate-subject-positive-v1")
+    with pytest.raises(ValueError, match="frozen expectations"):
+        publisher.plan(report, text_loader=lambda _: text)
+
+
+def test_brief_uses_accepted_insight_and_not_rejected_method(source):
+    from module.research_review import digest
+
+    item = dict(source.record)
+    item["editorial_selection"] = selection_for(item, TEXT, NOW)
+    decision = item["editorial_selection"]["decision"]
+    passages = analysis._source_passages(TEXT)
+    # The old plan would lose the admitted contribution in a different why-read.
+    decision["reading_points"]["why_read"] = [passages[1]["text"]]
+    item["editorial_selection"]["decision_digest"] = digest(decision)
+    original = deepcopy(item["editorial_selection"])
+    previous_key = analysis.cache_key(item)
+    value = boundary_value()
+    value["checks"]["method"]["role"] = "objective_or_profile"
+    item["editorial_boundary"] = boundary.receipt(item, value, TEXT, NOW.isoformat())
+    plan = analysis.reading_evidence_plan(item)
+    assert plan["method_data"] is None
+    assert plan["why_read"] == decision["evidence_excerpts"]
+    assert analysis.cache_key(item) != previous_key
+    assert item["editorial_selection"] == original
+    request = analysis._request_payload(TEXT, "Fixture", evidence_plan=plan)
+    assert request["text"]["format"]["schema"]["properties"]["method_data"] == {
+        "type": "null"
+    }

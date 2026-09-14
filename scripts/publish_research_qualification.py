@@ -48,7 +48,6 @@ def plan(report: dict, *, text_loader=analysis._public_text) -> dict:
         if selected["input_digest"] != review.digest(text):
             raise ValueError("selection input changed")
         passages = analysis._source_passages(text)
-        lookup = {p["text"]: p["id"] for p in reversed(passages)}
         decision = selected["decision"]
         raw = {
             name: decision[name]
@@ -97,6 +96,15 @@ def plan(report: dict, *, text_loader=analysis._public_text) -> dict:
             if second["input_digest"] != review.digest(text):
                 raise ValueError("boundary input changed")
             value = second["decision"]
+            visible = {
+                number
+                for quotes in boundary.evidence_plan(item).values()
+                for number in analysis._source_span_ids(text, quotes)
+            }
+            # Repeated text elsewhere in the original is not a visible citation.
+            lookup = {
+                p["text"]: p["id"] for p in reversed(passages) if p["id"] in visible
+            }
             checked = boundary.receipt(
                 item,
                 {

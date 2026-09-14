@@ -291,6 +291,31 @@ def validate_brief(value: dict, text: str) -> dict:
     return value
 
 
+def reading_evidence_plan(item: dict) -> dict | None:
+    """Carry the admitted contribution into the brief, not a rejected method blurb."""
+    points = (
+        item.get("editorial_selection", {}).get("decision", {}).get("reading_points")
+    )
+    if points is None:
+        return None
+    result = dict(points)
+    if research_boundary.state(item) != "substantive":
+        return result  # Historical direct-reading path; no fabricated approval.
+    checks = item["editorial_boundary"]["decision"]["checks"]
+
+    def accepted(name):
+        check = checks[name]
+        return (
+            check["evidence_excerpts"]
+            if check and check["role"] in research_boundary.SUBSTANTIVE_ROLES
+            else None
+        )
+
+    result["method_data"] = accepted("method")
+    result["why_read"] = accepted("insight") or accepted("method")
+    return result
+
+
 def cache_key(item: dict) -> str:
     identity = [
         item["source_digest"],
@@ -304,11 +329,7 @@ def cache_key(item: dict) -> str:
         MAX_OUTPUT_TOKENS,
     ]
     if item.get("editorial_selection"):
-        identity.append(
-            research_review.digest(
-                item["editorial_selection"]["decision"].get("reading_points")
-            )
-        )
+        identity.append(research_review.digest(reading_evidence_plan(item)))
     return hashlib.sha256(json.dumps(identity, ensure_ascii=False).encode()).hexdigest()
 
 
@@ -670,11 +691,7 @@ def enrich(
                 input_rate = research_review.INPUT_NANOUSD_PER_TOKEN
                 output_rate = research_review.OUTPUT_NANOUSD_PER_TOKEN
             else:
-                evidence_plan = (
-                    item.get("editorial_selection", {})
-                    .get("decision", {})
-                    .get("reading_points")
-                )
+                evidence_plan = reading_evidence_plan(item)
                 payload = _request_payload(
                     text, item["title"], evidence_plan=evidence_plan
                 )
