@@ -96,9 +96,18 @@ def test_payload_contains_literal_proposal_not_first_reader_labels_or_summary(so
     plan = boundary.evidence_plan(source.record)
     payload = boundary.request_payload(TEXT, "Original title", proposed=plan)
     data = boundary.json.loads(payload["input"])
-    assert set(data) == {"source_title", "source_passages", "proposed_evidence_ids"}
+    assert set(data) == {
+        "source_passages",
+        "proposed_evidence_ids",
+        "purpose_evidence_ids",
+    }
+    passages = {p["id"]: p["text"] for p in data["source_passages"]}
     for field, ids in data["proposed_evidence_ids"].items():
-        assert [data["source_passages"][i]["text"] for i in ids] == plan[field]
+        assert [passages[i] for i in ids] == plan[field]
+    assert set(passages) == set(data["purpose_evidence_ids"]).union(
+        *data["proposed_evidence_ids"].values()
+    )
+    assert len(data["source_passages"]) < len(analysis._source_passages(TEXT))
     assert "verdict" not in boundary.SCHEMA["properties"]
     assert "explanation" not in boundary.SCHEMA["properties"]
     assert payload["store"] is False and "tools" not in payload
@@ -315,6 +324,7 @@ def test_one_specific_insight_is_enough_no_all_criteria_and_gate(source, role):
         "reading-boundary-v1-source-only",
         "reading-boundary-v2-analysis-object",
         "reading-boundary-v3-explanation-card",
+        "reading-boundary-v4-evidence-roles",
     ],
 )
 def test_previous_receipts_cannot_borrow_new_policy(source, monkeypatch, version):
@@ -367,3 +377,24 @@ def test_absent_method_must_be_null_and_does_not_block_specific_insight(source):
     value["checks"]["method"] = None
     item["editorial_boundary"] = boundary.receipt(item, value, TEXT, NOW.isoformat())
     assert selection.automatic_state(item) == "core"
+
+
+def test_cannot_cite_a_valid_but_unseen_body_passage(source):
+    value = boundary_value()
+    value["object_evidence_id"] = 1
+    assert analysis._source_passages(TEXT)[1]["citable"]
+    with pytest.raises(
+        analysis.AnalysisContractError, match="analysis-object evidence"
+    ):
+        boundary.receipt(source.record, value, TEXT, NOW.isoformat())
+
+
+def test_receipt_records_actual_read_scope_not_whole_source_length(source):
+    receipt = boundary_for(source.record, TEXT, NOW)
+    assert receipt["source_input_chars"] == len(TEXT)
+    assert receipt["analyzed_chars"] == len(analysis._source_passages(TEXT)[0]["text"])
+    assert receipt["scope"] == "isolated_proposed_source_passages"
+    payload = boundary.request_payload(
+        TEXT, source.record["title"], proposed=boundary.evidence_plan(source.record)
+    )
+    assert receipt["request_input_digest"] == research_review.digest(payload["input"])

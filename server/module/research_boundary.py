@@ -11,7 +11,7 @@ import json
 from module import research_review
 
 MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-boundary-v4-evidence-roles"
+PROMPT_VERSION = "reading-boundary-v5-isolated-evidence"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 4096
 INPUT_NANOUSD_PER_TOKEN = 250
@@ -24,6 +24,7 @@ ANALYSIS_OBJECTS = (
 )
 INVESTMENT_OBJECTS = frozenset(ANALYSIS_OBJECTS[:2])
 EVIDENCE_FIELDS = ("insight", "method")
+PROPOSAL_FIELDS = (*EVIDENCE_FIELDS, "purpose")
 ROLES = (
     "operational_detail",
     "analytical_comparison",
@@ -43,8 +44,11 @@ For EACH proposed passage describe precisely what its words disclose and what
 they leave unspecified, then assign its evidence ROLE. Null is required when no
 passage is proposed. Use ONLY that field's proposed passages for its role; do not
 repair weak evidence with another sentence, the title, prior knowledge, or a
-plausible method you imagine the author uses. Full source is supplied for context,
-contradictions and the central topic, NOT to fill gaps in a proposed passage.
+plausible method you imagine the author uses. You receive ONLY proposed passages,
+plus one purpose passage for topic context. The original's title, publisher,
+other body passages and the first reader's generated labels are not available.
+The purpose passage cannot fill gaps in the proposed method or insight.
+Keep each explanation to one complete sentence; no lists of every missing detail.
 These are alternative kinds of reading value, not cumulative requirements:
 
 operational_detail: discloses an actual analytic step connecting a specified
@@ -52,6 +56,11 @@ input to a signal, estimator, exposure, or portfolio decision. Examples include
 subtracting market returns before computing momentum; dividing an exposure by a
 stated denominator; comparing spread after controlling for issuer risk.
 Naming inputs or saying they are jointly considered is NOT an operation.
+The input must be a specified measurement, observed variable or stated scenario,
+not merely a universe/entity or an undefined attractiveness/quality/alpha score.
+'Ranks securities by attractiveness' is circular: the ranking key is undisclosed.
+It is objective_or_profile, not operational_detail, despite containing an action
+verb and an output. Likewise 'a model generates forecasts' does not teach its method.
 No complete trading system, formula, numerical threshold or backtest is required.
 
 analytical_comparison: discloses a specific investment measurement/test contrast
@@ -90,18 +99,21 @@ Contrast examples (illustrative, NOT rules keyed to a publisher or topic):
 - 'Equal-dollar sleeves with different volatilities are not equal-risk sleeves'
   = explained_mechanism: identifies the specific measurement mismatch.
 - 'We optimize quality and risk together' = objective_or_profile.
+- 'A ranking engine orders bonds by attractiveness' = objective_or_profile.
+- 'We compare a bond spread with issuer risk, maturity and rating' = operational_detail.
 - 'We remove the market component from each stock return before ranking stocks'
   = operational_detail, even without coefficients or a performance table.
 - 'The industry faces pricing pressure from new entrants' = business explanation,
   even if the author discusses investment opportunities or valuation multiples.
 
-Separately identify the original's CENTRAL analysis_object from the full supplied
-body and choose a citable object_evidence_id. investment_rule_or_measurement =
+Separately identify analysis_object from the supplied purpose and contribution
+passages and choose a VISIBLE object_evidence_id. investment_rule_or_measurement =
 investment signal/estimator/portfolio/risk construction or measurement pitfalls;
 market_pricing_or_risk = asset return/risk patterns, liquidity/pricing mechanics
 or investment comparisons; business_product_or_policy = product introduction,
 company/industry outlook, adoption, policy, organizing research; unclear = null ID.
-Do not let one incidental investment sentence override the body's main work.
+Do not override a business/policy purpose with an incidental investment sentence.
+If these passages cannot establish the object, use unclear; do not infer the body.
 Commercial context does not disqualify a real investment explanation. Publisher
 prestige, academic format, equations and backtests are not admission requirements.
 
@@ -150,6 +162,7 @@ def evidence_plan(item: dict) -> dict:
     return {
         "insight": selected.get("evidence_excerpts", []),
         "method": (selected.get("reading_points") or {}).get("method_data") or [],
+        "purpose": (selected.get("main_purpose") or {}).get("evidence_excerpts") or [],
     }
 
 
@@ -232,7 +245,7 @@ def state(item: dict) -> str:
 def _proposed_ids(text: str, proposed: dict) -> dict:
     from module.research_analysis import AnalysisContractError, _source_passages
 
-    if not isinstance(proposed, dict) or set(proposed) != set(EVIDENCE_FIELDS):
+    if not isinstance(proposed, dict) or set(proposed) != set(PROPOSAL_FIELDS):
         raise AnalysisContractError("missing proposed contribution evidence")
     lookup = {
         p["text"]: p["id"] for p in reversed(_source_passages(text)) if p["citable"]
@@ -248,7 +261,7 @@ def _proposed_ids(text: str, proposed: dict) -> dict:
                 "proposed evidence is not a bounded source passage"
             )
         result[name] = [lookup[q] for q in quotes]
-    if not any(result.values()):
+    if not any(result[name] for name in EVIDENCE_FIELDS):
         raise AnalysisContractError("missing proposed contribution evidence")
     return result
 
@@ -256,6 +269,8 @@ def _proposed_ids(text: str, proposed: dict) -> dict:
 def request_payload(text: str, title: str, *, proposed: dict) -> dict:
     from module.research_analysis import _source_passages
 
+    ids = _proposed_ids(text, proposed)
+    visible = {number for numbers in ids.values() for number in numbers}
     return {
         "model": MODEL,
         "store": False,
@@ -264,9 +279,11 @@ def request_payload(text: str, title: str, *, proposed: dict) -> dict:
         "instructions": SYSTEM,
         "input": json.dumps(
             {
-                "source_title": title,
-                "source_passages": _source_passages(text),
-                "proposed_evidence_ids": _proposed_ids(text, proposed),
+                "source_passages": [
+                    p for p in _source_passages(text) if p["id"] in visible
+                ],
+                "proposed_evidence_ids": {name: ids[name] for name in EVIDENCE_FIELDS},
+                "purpose_evidence_ids": ids["purpose"],
             },
             ensure_ascii=False,
         ),
@@ -298,7 +315,8 @@ def receipt(item: dict, value: dict, text: str, now: str) -> dict:
     if not isinstance(value, dict) or set(value) != set(SCHEMA["required"]):
         raise AnalysisContractError("invalid evidence-role decision")
     plan = evidence_plan(item)
-    _proposed_ids(text, plan)
+    proposed_ids = _proposed_ids(text, plan)
+    visible = {number for numbers in proposed_ids.values() for number in numbers}
     if not isinstance(value["checks"], dict) or set(value["checks"]) != set(
         EVIDENCE_FIELDS
     ):
@@ -318,11 +336,7 @@ def receipt(item: dict, value: dict, text: str, now: str) -> dict:
     valid = (
         number is None
         if value["analysis_object"] == "unclear"
-        else (
-            type(number) is int
-            and 0 <= number < len(passages)
-            and passages[number]["citable"]
-        )
+        else (type(number) is int and number in visible and passages[number]["citable"])
     )
     if not valid:
         raise AnalysisContractError("invalid analysis-object evidence")
@@ -338,10 +352,14 @@ def receipt(item: dict, value: dict, text: str, now: str) -> dict:
         "fingerprint": cache_key(item),
         "source_digest": item["source_digest"],
         "input_digest": research_review.digest(text),
-        "analyzed_chars": len(text),
+        "source_input_chars": len(text),
+        "analyzed_chars": sum(len(p["text"]) for p in passages if p["id"] in visible),
+        "request_input_digest": research_review.digest(
+            request_payload(text, item["title"], proposed=plan)["input"]
+        ),
         "model": MODEL,
         "prompt_version": PROMPT_VERSION,
-        "scope": "proposed_source_evidence_review",
+        "scope": "isolated_proposed_source_passages",
         "checked_at": now,
         "decision": decision,
         "decision_digest": research_review.digest(decision),

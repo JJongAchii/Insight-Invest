@@ -130,6 +130,7 @@ def test_diagnostic_restores_model_and_prices_even_when_source_fails(
     proposed = {
         "insight": [qualification.research_analysis._source_passages(TEXT)[0]["text"]],
         "method": [],
+        "purpose": [],
     }
     payload = boundary.request_payload(TEXT, "Source", proposed=proposed)
     fingerprint = boundary.cache_key({"title": "Source", "source_digest": "a" * 64})
