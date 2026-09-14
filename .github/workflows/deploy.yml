@@ -86,7 +86,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           APP_DATA: s3://insight-invest-datalake/research-radar/qualification/openai
           RADAR_ANALYSIS_ENABLED: "true"
-          RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "0.60"
+          RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "1.00"
           RESEARCH_MAX_ITEMS: ${{ inputs.research_max_items }}
           RESEARCH_SOURCES: ${{ inputs.research_sources }}
           RESEARCH_QUALIFICATION_MODEL: ${{ inputs.research_model }}
@@ -96,7 +96,7 @@ jobs:
           LIVE_RESEARCH_BUDGET=$(aws lambda get-function-configuration \
             --function-name insight-invest-research-poller \
             --query 'Environment.Variables.RADAR_ANALYSIS_MONTHLY_BUDGET_USD' --output text)
-          test "$LIVE_RESEARCH_BUDGET" = "1.40"
+          test "$LIVE_RESEARCH_BUDGET" = "1.00"
           python scripts/qualify_research_editorial.py --output qualification-report.json
       - uses: actions/upload-artifact@v4
         if: always()

@@ -18,7 +18,7 @@ def configured(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "offline-test-key")
     monkeypatch.setenv("APP_DATA", qualification.QUALIFICATION_ROOT)
     monkeypatch.setenv("RADAR_ANALYSIS_ENABLED", "true")
-    monkeypatch.setenv("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0.60")
+    monkeypatch.setenv("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "1.00")
     monkeypatch.setenv("RESEARCH_MAX_ITEMS", "1")
     monkeypatch.setenv("RESEARCH_SOURCES", "aqr-research")
     monkeypatch.delenv("RESEARCH_QUALIFICATION_MODEL", raising=False)
@@ -93,7 +93,7 @@ def test_extension_sample_is_separate_and_does_not_replace_prior_failures():
         ("OPENAI_API_KEY", ""),
         ("APP_DATA", "s3://insight-invest-datalake/app"),
         ("RADAR_ANALYSIS_ENABLED", "false"),
-        ("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0.600001"),
+        ("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "1.000001"),
         ("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0"),
         ("RESEARCH_MAX_ITEMS", "31"),
         ("RESEARCH_SOURCES", "man-systematic-insights"),
@@ -126,10 +126,13 @@ def test_workflow_is_manual_serialized_non_deploy_and_within_combined_budget():
     assert run["env"]["APP_DATA"] == qualification.QUALIFICATION_ROOT
     assert run["env"]["RADAR_ANALYSIS_ENABLED"] == "true"
     assert Decimal(run["env"]["RADAR_ANALYSIS_MONTHLY_BUDGET_USD"]) + Decimal(
-        "1.40"
+        "1.00"
     ) == Decimal("2")
     assert "lambda get-function-configuration" in run["run"]
-    assert 'test "$LIVE_RESEARCH_BUDGET" = "1.40"' in run["run"]
+    assert 'test "$LIVE_RESEARCH_BUDGET" = "1.00"' in run["run"]
+    assert 'RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "1.00"' in (
+        ROOT / "infra/template.yaml"
+    ).read_text()
     assert "inputs.mode != 'research-qualify'" in workflow["jobs"]["deploy"]["if"]
     assert not any(
         "cloudformation" in step.get("run", "")
