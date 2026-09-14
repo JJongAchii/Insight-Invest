@@ -325,6 +325,7 @@ def test_one_specific_insight_is_enough_no_all_criteria_and_gate(source, role):
         "reading-boundary-v2-analysis-object",
         "reading-boundary-v3-explanation-card",
         "reading-boundary-v4-evidence-roles",
+        "reading-boundary-v5-isolated-evidence",
     ],
 )
 def test_previous_receipts_cannot_borrow_new_policy(source, monkeypatch, version):

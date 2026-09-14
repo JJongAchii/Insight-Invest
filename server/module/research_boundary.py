@@ -11,7 +11,7 @@ import json
 from module import research_review
 
 MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-boundary-v5-isolated-evidence"
+PROMPT_VERSION = "reading-boundary-v6-proposal-scope"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 4096
 INPUT_NANOUSD_PER_TOKEN = 250
@@ -58,6 +58,9 @@ stated denominator; comparing spread after controlling for issuer risk.
 Naming inputs or saying they are jointly considered is NOT an operation.
 The input must be a specified measurement, observed variable or stated scenario,
 not merely a universe/entity or an undefined attractiveness/quality/alpha score.
+An identified sensitivity-analysis procedure linking perturbed model inputs to
+portfolio sizes qualifies without specifying the exact variables or perturbation
+magnitudes. This is a disclosed analytic operation, not an undefined ranking key.
 'Ranks securities by attractiveness' is circular: the ranking key is undisclosed.
 It is objective_or_profile, not operational_detail, despite containing an action
 verb and an output. Likewise 'a model generates forecasts' does not teach its method.
@@ -106,14 +109,20 @@ Contrast examples (illustrative, NOT rules keyed to a publisher or topic):
 - 'The industry faces pricing pressure from new entrants' = business explanation,
   even if the author discusses investment opportunities or valuation multiples.
 
-Separately identify analysis_object from the supplied purpose and contribution
-passages and choose a VISIBLE object_evidence_id. investment_rule_or_measurement =
+Identify analysis_object as the object ACTUALLY analyzed by the proposed insight
+or method, not the article's overall genre/purpose, which you have not read. The
+first reader checks the full body separately. Choose a VISIBLE object_evidence_id.
+investment_rule_or_measurement =
 investment signal/estimator/portfolio/risk construction or measurement pitfalls;
 market_pricing_or_risk = asset return/risk patterns, liquidity/pricing mechanics
 or investment comparisons; business_product_or_policy = product introduction,
 company/industry outlook, adoption, policy, organizing research; unclear = null ID.
-Do not override a business/policy purpose with an incidental investment sentence.
-If these passages cannot establish the object, use unclear; do not infer the body.
+An optimizer sensitivity exercise concerning portfolio position sizes is an
+investment object, even when described as teaching managers. Research workflow
+means managing documents, authorship, productivity or tools, not how model inputs
+affect portfolio decisions. An industry competition/revenue mechanism remains a
+business object. If the proposed analysis object is unestablished, use unclear.
+Do not claim to have independently determined the whole original's main purpose.
 Commercial context does not disqualify a real investment explanation. Publisher
 prestige, academic format, equations and backtests are not admission requirements.
 

@@ -11,7 +11,7 @@ import json
 from module import research_boundary, research_curation, research_review
 
 MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-selection-v7-evidence-first-purpose"
+PROMPT_VERSION = "reading-selection-v8-disclosed-evidence"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 4096
 SYSTEM = """Select originals for a personal quantitative investment reading feed.
@@ -114,11 +114,29 @@ not a recommendation score. Do not infer a hidden proprietary method.
 For investment-focused research/practitioner return a transferable_insight with
 ONE citable passage ID (at most 1200 characters) demonstrating that contribution,
 not merely stating that a method exists, has benefits or seeks certain outcomes.
+Select the strongest self-contained EXPLANATION in the body, not the paragraph
+that sounds most like a quantitative process description. A ranking engine that
+orders securities by undefined 'attractiveness' does not disclose an analytic
+step: the ranking key is missing. A model turning data into scores/predictions is
+also only a component description unless the measured inputs or transformation
+are explained. Look for the actual comparison, measurement pitfall, worked example
+or sensitivity exercise elsewhere in the article. For example, a discussion of
+why a spread needs to be compared with issuer risk is stronger evidence than a
+description of a bond-ranking engine. None of this requires a formula or backtest.
+The next reader sees ONLY your selected passages, not the surrounding article,
+publisher or your labels. Select a passage whose literal words establish the
+contribution without importing facts from other parts of the document. A sentence
+about 'this change' producing an allocation is insufficient if it omits what input
+changed. Prefer a complete qualitative principle or an identified input/output
+relationship to a numerical example whose conditions are in another sentence.
+If no such passage exists, do not manufacture substance from a process name.
 Also choose reading_points: ONE self-contained
 citable passage per question, method_data, finding, why_read, limitation (or null).
 These passages will be the ONLY input to the Korean writer. Prefer an explanatory
 method/mechanism over an isolated numerical result requiring absent context.
-question = problem addressed; method_data = concrete method/data/framework;
+question = problem addressed;
+method_data = the disclosed analytic step/comparison or an explained measurement
+pitfall, NOT an engine name, undefined ranking criterion or list of design choices;
 finding = author conclusion; why_read = specific transferable insight;
 limitation = explicit document-specific caveat. If a sentence cannot stand alone
 without additional assumptions or another sentence, choose another passage or null.

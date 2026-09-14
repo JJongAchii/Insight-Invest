@@ -74,6 +74,11 @@ def test_boundary_hold_does_not_relabel_raw_selector_failure(monkeypatch):
 
 
 def test_boundary_model_contrast_is_fixed_and_isolated(configured, monkeypatch):
+    monkeypatch.setattr(
+        qualification.research_selection,
+        "PROMPT_VERSION",
+        "reading-selection-v7-evidence-first-purpose",
+    )
     monkeypatch.setenv("RESEARCH_SAMPLE", "reading-gate-products-v1")
     monkeypatch.setenv("RESEARCH_BOUNDARY_MODEL", "gpt-5.4-2026-03-05")
     assert qualification.validate_environment() == (1, ["aqr-research"], "gpt-5-mini")
@@ -118,6 +123,12 @@ def test_diagnostic_restores_model_and_prices_even_when_source_fails(
     configured, monkeypatch, tmp_path
 ):
     import json
+
+    monkeypatch.setattr(
+        qualification.research_selection,
+        "PROMPT_VERSION",
+        "reading-selection-v7-evidence-first-purpose",
+    )
 
     from test_research_analysis import TEXT
 

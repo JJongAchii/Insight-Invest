@@ -62,6 +62,7 @@ GATE_SAMPLES = {
     "reading-gate-boundaries-v1": "reading-contribution-boundaries-v1",
     "reading-gate-methods-v1": "reading-contribution-methods-v1",
     "reading-gate-extension-v1": "reading-contribution-extension-v1",
+    "reading-gate-generalization-v1": "reading-evidence-generalization-v1",
 }
 SAMPLES = (
     "latest",
@@ -239,7 +240,10 @@ def boundary_model(sample: str, model: str) -> str:
     if name not in BOUNDARY_MODEL_PRICES:
         raise ValueError("boundary comparison model is not approved")
     if name != "gpt-5-mini" and (
-        model != "gpt-5-mini" or sample not in BOUNDARY_COMPARISON_SAMPLES
+        model != "gpt-5-mini"
+        or sample not in BOUNDARY_COMPARISON_SAMPLES
+        or research_selection.PROMPT_VERSION
+        != "reading-selection-v7-evidence-first-purpose"
     ):
         raise ValueError("boundary comparison requires its fixed gate samples")
     return name

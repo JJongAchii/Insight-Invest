@@ -47,3 +47,32 @@ premise before release. No article is deleted because a proposal is insufficient
 
 Remaining qualification cap before this contrast: $0.20943280 of the existing $1,
 aggregate monthly production+qualification still $2. No reset or automatic increase.
+
+## Actual v5 contrast and next fixed configuration
+
+Run 34842941394, app 875c14d: 3 boundary calls, zero selector/writer/reviewer calls.
+The unchanged generic Robeco ranking passage is now correctly objective_or_profile
+and held. CFM remains core. D.E.Shaw is incorrectly held: a purpose paragraph about
+learning from optimizers was treated as business/workflow after the body was removed.
+Thus quote isolation fixed one failure but the narrowed reviewer was still tasked
+with a full-document judgment it no longer had evidence to make. This is not a pass.
+Cost $0.011825; qualification ledger now $0.80239220; remaining $0.19760780.
+
+Selector v8 now selects a self-contained disclosed relationship (not an engine name
+or a numerical effect with an absent antecedent). Boundary v6 judges the object of
+the PROPOSED analysis only; the full-body topic gate stays with the first reader.
+Portfolio-input sensitivity is an investment method, not research-desk workflow.
+The reduced checker cannot claim to have independently read the whole article.
+
+Freeze the same 15-original panel plus three new-to-panel originals before v8/v6
+calls: CFM Too Diversified to Win (core), Verdad Distribution of Global Value (core),
+KCMI fractional-share policy note (context). Bodies were read and hashes/date/author
+metadata frozen in the fixture. These were previously broad human-audited/production
+sources, not a pristine holdout. Expected distinct totals: 10 core / 8 non-core.
+Do not change or substitute sources/expectations after outcomes. First rerun the
+positive trio to inspect whether Robeco's real disclosed credit comparison is now
+chosen and D.E.Shaw retained; then finish the same-version panel and new trio.
+At most 36 new calls, no writer/reviewer/5.4 calls and the same $1 qualification cap.
+Earlier model-only diagnostics are disallowed with the new selector rather than
+silently redefining their fixed v7 contrast. Release still requires valid premises,
+not merely 18 matching labels. Reading/notification state remains untouched.
