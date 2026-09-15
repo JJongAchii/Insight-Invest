@@ -202,3 +202,49 @@ def test_brief_uses_accepted_insight_and_not_rejected_method(source):
     assert request["text"]["format"]["schema"]["properties"]["method_data"] == {
         "type": "null"
     }
+
+
+def test_live_writer_recovers_reviewed_plan_even_for_manually_curated_core(
+    source, monkeypatch
+):
+    from datastore import research, storage
+    from module import research_curation, research_feed
+    from test_research_analysis import wire_brief
+
+    record = source.record
+    record["editorial_selection"] = selection_for(record, TEXT, NOW)
+    value = boundary_value()
+    value["checks"]["method"]["role"] = "objective_or_profile"
+    second = boundary.receipt(record, value, TEXT, NOW.isoformat())
+    storage.write_json(second, f"research_analysis/boundaries/{second['fingerprint']}.json")
+    monkeypatch.setattr(
+        research_curation, "original_audit",
+        lambda _: {"lane": "core", "checked_at": NOW.isoformat()},
+    )
+    research_feed.reconcile(s3=source, now=NOW)
+    before = research.load_feed()["items"][0]
+    assert selection.state(before) == "core"
+    assert not before.get("editorial_selection")
+    observed = []
+
+    def provider(request, _key):
+        payload = json.loads(request["input"])
+        observed.append(payload)
+        assert payload["reading_points"] is not None
+        assert payload["reading_points"]["method_data"] == []
+        assert request["text"]["format"]["schema"]["properties"]["method_data"] == {
+            "type": "null"
+        }
+        result = wire_brief()
+        result["method_data"] = None
+        result["finding"] = {"text_ko": "원문의 연구 질문이다.", "evidence_ids": [0]}
+        return result, {"input_tokens": 100, "output_tokens": 80}
+
+    monkeypatch.setattr(analysis, "_response_call", provider)
+    result = analysis.enrich(now=NOW, text_loader=lambda _: TEXT)
+    assert result["drafted"] == 1 and len(observed) == 1
+    assert result["cache_hits"] == 2
+    item = research.load_feed()["items"][0]
+    assert selection.automatic_state(item) == "core"
+    assert item["analysis"]["brief"]["method_data"] is None
+    assert item["analysis"]["fingerprint"] == analysis.cache_key(item)

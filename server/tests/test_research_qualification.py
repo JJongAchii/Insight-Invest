@@ -196,6 +196,19 @@ def test_extension_sample_is_separate_and_does_not_replace_prior_failures():
     )
 
 
+def test_full_brief_requires_automatic_gate_not_only_completed_translation(monkeypatch):
+    monkeypatch.setattr(qualification, "current_review", lambda _: True)
+    monkeypatch.setattr(qualification.research_selection, "state", lambda _: "core")
+    monkeypatch.setattr(
+        qualification.research_selection, "automatic_state", lambda _: "pending"
+    )
+    assert not qualification.current_automatic_review({})
+    monkeypatch.setattr(
+        qualification.research_selection, "automatic_state", lambda _: "core"
+    )
+    assert qualification.current_automatic_review({})
+
+
 @pytest.mark.parametrize(
     "name,value",
     [

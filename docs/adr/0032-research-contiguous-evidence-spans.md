@@ -115,3 +115,20 @@ D.E.Shaw's example must preserve its conditions rather than become general tradi
 advice. Missing/held fields may remain visibly partial, but unsupported text must
 not be displayed or silently marked accepted. This validates a reading product,
 not the underlying authors' investment claims.
+# 2026-09-15: live writer bypass discovered by full-brief qualification
+
+Run 34914982594 completed three drafts/reviews but is **not** accepted as end-to-end
+evidence-plan qualification. All three records matched historical source-bound
+manual reading-list audits. `enrich` treated that display permission as an automatic
+gate, did not recover current selection/boundary caches, and generated unrestricted
+summaries. Robeco's rejected generic ranking-engine description consequently
+reappeared. The $0.03501925 actual usage remains charged; reports/caches are retained,
+not seeded to production or rewritten as passes.
+
+New paid drafting now always uses `automatic_state`; a manual audit still preserves
+the original's independent reading-list display but cannot authorize skipping current
+source receipts. A production-path regression intercepts the actual writer request,
+verifies both receipts are recovered, and asserts rejected `method_data` is forced
+to null. Full-brief qualification also requires current automatic gate receipts and
+a matching current draft/review, not merely any completed translation. No model,
+prompt, source-panel expectation, budget, or past qualification receipt is changed.

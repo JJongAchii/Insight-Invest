@@ -556,12 +556,12 @@ def enrich(
             continue
         # None is used ONLY by the explicit historical review-only qualification;
         # it cannot publish core because projection still requires a selection.
+        # A manual reading-list audit preserves display, not permission to bypass
+        # the current source/evidence gate when generating a new paid summary.
         selection_state_fn = (
             research_selection.model_state
             if selection_only
             else research_selection.automatic_state
-            if gate_only
-            else research_selection.state
         )
         selection_state = selection_state_fn(item) if selection_call else "core"
         selection_fingerprint = research_selection.cache_key(item)

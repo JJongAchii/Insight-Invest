@@ -315,6 +315,10 @@ def current_review(item: dict) -> bool:
     ).get("fingerprint") == research_analysis.cache_key(item)
 
 
+def current_automatic_review(item: dict) -> bool:
+    return research_selection.automatic_state(item) == "core" and current_review(item)
+
+
 class RecordSnapshot:
     """Feed the real producer records through the real consumer projection."""
 
@@ -609,6 +613,8 @@ def run(output: Path) -> int:
                 if sample in SELECTION_SAMPLES
                 else research_selection.automatic_state(item) != "pending"
                 if sample in GATE_SAMPLES
+                else current_automatic_review(item)
+                if sample in BRIEF_SAMPLES
                 else current_review(item) or research_selection.state(item) == "context"
                 for item in requested
             ):
@@ -636,7 +642,7 @@ def run(output: Path) -> int:
             for item in requested
             if item["source_id"] in cases and sample != "v7-regression"
         ]
-        if sample in GATE_SAMPLES:
+        if sample in GATE_SAMPLES or sample in BRIEF_SAMPLES:
             # Isolated report/UI uses automatic outcomes too, not migration audits.
             for item in report["items"]:
                 research_feed.apply_editorial_analysis(item, use_editor_audit=False)
@@ -671,6 +677,18 @@ def run(output: Path) -> int:
                 if len(requested) == maximum
                 and len(report["selection_checks"]) == maximum
                 and all(check["matches"] for check in report["selection_checks"])
+                else "needs_diagnosis"
+            )
+        elif sample in BRIEF_SAMPLES:
+            report["editorial_audits_used_for_qualification"] = False
+            report["gate_checks"] = [
+                gate_check(item, cases[item["source_id"]]) for item in requested
+            ]
+            report["status"] = (
+                "api_contract_qualified"
+                if len(requested) == maximum
+                and all(check["matches"] for check in report["gate_checks"])
+                and all(current_automatic_review(item) for item in requested)
                 else "needs_diagnosis"
             )
         elif requested and report["reviewed"] + report["selection_context"] == len(
