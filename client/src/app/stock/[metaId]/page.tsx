@@ -46,7 +46,7 @@ const PERIOD_OPTIONS: { value: Period; label: string; days: number; months: numb
 const FLOW_OPTIONS: { id: FlowMode; label: string }[] = [
   { id: "frgn", label: "외국인" },
   { id: "inst", label: "기관" },
-  { id: "both", label: "Both" },
+  { id: "both", label: "함께" },
 ];
 
 /** Fractional return (0.12) → "+12.0%". */
@@ -108,7 +108,12 @@ const StockDetailPage = () => {
   const isKr = meta?.iso_code === "KR";
   const isEtf = (meta?.security_type ?? "").toLowerCase() === "etf";
 
-  const { data: flowsData } = useFetchInsightFlowsTickerQuery(
+  const {
+    currentData: flowsData,
+    isFetching: flowsLoading,
+    error: flowsError,
+    refetch: refetchFlows,
+  } = useFetchInsightFlowsTickerQuery(
     { ticker: meta?.ticker ?? "", months: periodOption.months },
     { skip: !isKr || !meta?.ticker }
   );
@@ -350,6 +355,9 @@ const StockDetailPage = () => {
               <StockPriceFlowsChart
                 prices={priceData.prices}
                 flows={flowsData?.rows ?? null}
+                flowLoading={flowsLoading}
+                flowError={!!flowsError}
+                onRetryFlows={refetchFlows}
                 showFrgn={showFrgn}
                 showInst={showInst}
                 isKr={isKr}

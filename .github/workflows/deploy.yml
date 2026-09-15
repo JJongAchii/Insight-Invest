@@ -177,6 +177,21 @@ jobs:
           URL=$(aws cloudformation describe-stacks --stack-name insight-invest-api \
             --query 'Stacks[0].Outputs[?OutputKey==`FunctionUrl`].OutputValue' --output text)
           curl -sf "$URL/health" | grep healthy
+          curl -sf --max-time 110 \
+            -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
+            -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
+            "$URL/actions?horizon_days=90" >/tmp/action-results.json
+          jq -e '.items | all(has("result_summary"))' /tmp/action-results.json
+          jq '[.items[] | select(.source == "fred" and .result_summary != null)
+            | {title, scheduled_for, result_summary}]' \
+            /tmp/action-results.json >/tmp/action-results-snapshot.json
+          jq -e 'length > 0 and all(
+            (.result_summary.metrics | length > 0)
+            and (.result_summary.metrics | all(
+              (.actual == null or (.actual | type) == "number")
+              and .estimate == null and .comparison == "previous"
+              and (.status != "released" or .actual != null))))' \
+            /tmp/action-results-snapshot.json
           curl -sf -H "X-API-Key: ${{ secrets.API_TOKEN }}" \
             -H "X-Site-Access: ${{ secrets.SITE_ACCESS_CODE }}" \
             "$URL/meta" >/dev/null
@@ -320,6 +335,13 @@ jobs:
                and .paths["/research/status"].get
                and .paths["/research/seen"].put
                and (.paths["/intraday/market"].get.parameters | any(.name == "sector"))'
+
+      - name: Record deployed action result summaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: action-results-snapshot
+          path: /tmp/action-results-snapshot.json
+          if-no-files-found: error
 
       - name: Record research release and historical-alert safety
         uses: actions/upload-artifact@v4

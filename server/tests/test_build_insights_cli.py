@@ -260,7 +260,8 @@ def test_earnings_hub_adds_sec_result_signal_without_filling_actuals(monkeypatch
     assert coverage["fetch"]["sec_results"]["events_enriched"] == 1
 
 
-def test_action_center_projects_tracked_rows_from_ready_earnings_hub(monkeypatch, tmp_path):
+@pytest.mark.parametrize("future_actual", [None, 2.2])
+def test_action_center_projects_tracked_rows_from_ready_earnings_hub(monkeypatch, tmp_path, future_actual):
     today = pd.Timestamp.now(tz="Asia/Seoul").date()
     release = (today + timedelta(days=20)).isoformat()
     monkeypatch.setenv("APP_DATA", str(tmp_path))
@@ -281,6 +282,7 @@ def test_action_center_projects_tracked_rows_from_ready_earnings_hub(monkeypatch
             "release_timing": "amc",
             "lifecycle": "scheduled",
             "eps_estimate": 2.1,
+            "eps_actual": future_actual,
             "revenue_estimate": 100_000_000_000,
             "stock_link": "/stock/1",
             "available_at": f"{today.isoformat()}T10:00:00+09:00",
@@ -311,3 +313,38 @@ def test_action_center_projects_tracked_rows_from_ready_earnings_hub(monkeypatch
     assert result.events["event_status"].tolist() == ["projected"]
     assert result.events["severity"].tolist() == ["high"]
     assert "Revenue estimate $100.00B" in result.events.iloc[0]["detail"]
+    summary = json.loads(result.events.iloc[0]["result_summary"])
+    assert summary["metrics"][0]["estimate"] == 2.1
+    assert summary["metrics"][0]["actual"] is None
+    assert "EPS actual" not in result.events.iloc[0]["detail"]
+    assert summary["metrics"][1]["estimate"] == 100_000_000_000
+    assert summary["status"] == "scheduled"
+
+
+def test_macro_results_keep_recent_release_dates_in_the_existing_action_window(
+    monkeypatch, tmp_path
+):
+    today = pd.Timestamp.now(tz="Asia/Seoul").date()
+    monkeypatch.setenv("APP_DATA", str(tmp_path))
+    monkeypatch.setattr(bi, "_tracked_assets", lambda: pd.DataFrame(columns=["iso_code"]))
+    monkeypatch.setattr(bi.qdata_settings, "lake_root", lambda: tmp_path)
+    monkeypatch.setattr(bi.qdata_settings, "fred_api_key", lambda: "test-key")
+    called = []
+
+    def fred(key, start, end, available_at):
+        assert start == today - timedelta(days=7)
+        assert end == today + timedelta(days=180)
+        return bi.external_events.ProviderResult(bi.external_events.empty_events(), "test")
+
+    def enrich(events, key, available_at):
+        called.append(key)
+        return events
+
+    empty = lambda *args: bi.external_events.ProviderResult(
+        bi.external_events.empty_events(), "test"
+    )
+    monkeypatch.setattr(bi.external_events, "fetch_fred_events", fred)
+    monkeypatch.setattr(bi.macro_event_results, "enrich_fred_results", enrich)
+    monkeypatch.setattr(bi.external_events, "fetch_fomc_events", empty)
+    bi.build_external_events()
+    assert called == ["test-key"]
