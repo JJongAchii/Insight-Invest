@@ -1438,14 +1438,14 @@ export interface InsightFlowsMarketResponse {
 
 export interface InsightTickerFlowRow {
   date: string;
-  frgn_net: number;
-  inst_net: number;
-  indiv_net: number;
+  frgn_net: number | null;
+  inst_net: number | null;
+  indiv_net: number | null;
 }
 
 export interface InsightFlowsTickerResponse {
   ticker: string;
-  as_of: string;
+  as_of: string | null;
   rows: InsightTickerFlowRow[];
 }
 
