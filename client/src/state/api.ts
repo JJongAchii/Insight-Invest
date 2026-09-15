@@ -601,6 +601,31 @@ export interface AttentionResponse {
 export type ActionState = "new" | "read" | "snoozed" | "dismissed";
 export type ActionKind = "attention" | "alert" | "review" | "rebalance" | "data" | "system" | "event";
 
+export interface ActionResultMetric {
+  label: string;
+  unit: string;
+  actual: number | null;
+  estimate: number | null;
+  previous: number | null;
+  actual_period: string | null;
+  previous_period: string | null;
+  frequency: "monthly" | "quarterly" | "fiscal";
+  comparison: "previous" | "estimate";
+  difference: number | null;
+  difference_unit: string;
+  source_url: string;
+  status: "released" | "scheduled" | "pending" | "unavailable";
+  note: string | null;
+}
+
+export interface ActionResultSummary {
+  status: "released" | "partial" | "scheduled" | "pending" | "unavailable";
+  source: string;
+  available_at: string;
+  note: string;
+  metrics: ActionResultMetric[];
+}
+
 export interface ActionItem {
   event_id: string;
   kind: ActionKind;
@@ -615,6 +640,7 @@ export interface ActionItem {
   market: string | null;
   scope: "market" | "portfolio" | "watchlist" | null;
   event_status: "confirmed" | "projected" | "observed" | null;
+  result_summary?: ActionResultSummary | null;
   occurred_at: string | null;
   available_at: string;
   data_as_of: string | null;

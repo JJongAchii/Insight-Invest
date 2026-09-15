@@ -25,9 +25,10 @@ import {
   useUpdateActionStateMutation,
 } from "@/state/api";
 import NotificationSettings from "./NotificationSettings";
+import ActionResults from "./ActionResults";
 
 type Tab = "inbox" | "calendar" | "alerts";
-type Filter = "all" | "high" | "portfolio" | "research" | "events";
+type Filter = "all" | "results" | "high" | "portfolio" | "research" | "events";
 
 const SEVERITY_STYLE: Record<AttentionSeverity, string> = {
   high: "bg-losses",
@@ -59,7 +60,7 @@ const SOURCE_STATUS = {
 } as const;
 
 const TABS: Tab[] = ["inbox", "calendar", "alerts"];
-const FILTERS: Filter[] = ["all", "high", "portfolio", "research", "events"];
+const FILTERS: Filter[] = ["all", "results", "high", "portfolio", "research", "events"];
 
 const replaceViewInUrl = (tab: Tab, filter: Filter) => {
   const url = new URL(window.location.href);
@@ -101,7 +102,7 @@ function ActionCard({ item }: { item: ActionItem }) {
             <span className="badge-neutral">{item.category}</span>
             {item.market && <span className="badge-neutral">{item.market}</span>}
             {item.event_status && (
-              <span className="badge-neutral capitalize">{item.event_status}</span>
+              <span className="badge-neutral">{{ confirmed: "일정 확정", projected: "예정 일정", observed: "발표·공시 확인" }[item.event_status]}</span>
             )}
             {(item.ticker || item.name) && <span>{item.ticker ?? item.name}</span>}
             {item.scheduled_for && <span>{dateLabel(item.scheduled_for)}</span>}
@@ -112,13 +113,17 @@ function ActionCard({ item }: { item: ActionItem }) {
           </div>
           <h2 className="mt-2 text-[15px] font-semibold leading-6 text-ink sm:text-base">{item.title}</h2>
           <p className="mt-1 text-sm leading-6 text-ink-secondary">{item.detail}</p>
+          {item.result_summary ? <ActionResults summary={item.result_summary} /> :
+            item.kind === "event" && ["macro", "earnings"].includes(item.category) && <p className="mt-3 text-xs leading-5 text-ink-muted">
+              {item.source === "federal_reserve" ? "정책 결정 내용은 상세 보기의 공식 성명에서 확인할 수 있습니다." : "표시할 발표 수치가 없습니다. 상세 보기에서 원문을 확인할 수 있습니다."}
+            </p>}
           <div className="mt-4 flex flex-wrap items-center gap-2">
             {externalLink ? (
               <a
                 href={item.link}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="btn-primary inline-flex items-center gap-1.5"
+                className="btn-secondary inline-flex items-center gap-1.5"
                 onClick={() => updateState({ event_id: item.event_id, state: "read" })}
               >
                 상세 보기 <ChevronRight size={15} aria-hidden />
@@ -126,7 +131,7 @@ function ActionCard({ item }: { item: ActionItem }) {
             ) : (
               <Link
                 href={item.link}
-                className="btn-primary inline-flex items-center gap-1.5"
+                className="btn-secondary inline-flex items-center gap-1.5"
                 onClick={() => updateState({ event_id: item.event_id, state: "read" })}
               >
                 상세 보기 <ChevronRight size={15} aria-hidden />
@@ -162,7 +167,12 @@ function ActionCard({ item }: { item: ActionItem }) {
 
 export default function ActionCenterPage() {
   // 분기 실적은 약 90일 간격이라 60일 창에서는 정상 수집된 다음 일정도 숨을 수 있다.
-  const { data, isLoading, error, refetch } = useFetchActionsQuery({ horizonDays: 90 });
+  const { data, isLoading, error, refetch } = useFetchActionsQuery({ horizonDays: 90 }, {
+    pollingInterval: 120_000,
+    skipPollingIfUnfocused: true,
+    refetchOnFocus: true,
+    refetchOnReconnect: true,
+  });
   const [tab, setTab] = useState<Tab>("inbox");
   const [filter, setFilter] = useState<Filter>("all");
 
@@ -183,6 +193,7 @@ export default function ActionCenterPage() {
 
   const items = useMemo(() => {
     const source = tab === "calendar" ? data?.calendar ?? [] : data?.items ?? [];
+    if (filter === "results") return source.filter((item) => item.result_summary?.metrics.some((metric) => metric.actual != null));
     if (filter === "high") return source.filter((item) => item.severity === "high");
     if (filter === "portfolio") return source.filter((item) => item.scope === "portfolio" || ["holding", "strategy"].includes(item.category));
     if (filter === "research") return source.filter((item) => ["watchlist", "journal", "signal"].includes(item.category));
@@ -218,7 +229,7 @@ export default function ActionCenterPage() {
         description="시장 변화와 내 투자 판단에서 지금 확인할 항목을 중요도와 시점 순으로 정리합니다."
         meta={
           <>
-            <span>90일 검토 창</span>
+            <span>{filter === "results" ? "최근 7일 발표 결과" : "최근 7일 · 향후 90일"}</span>
             <span>·</span>
             <span>{data?.data_as_of ? `시장 기준 ${data.data_as_of}` : "시장 기준 확인 중"}</span>
           </>
@@ -325,6 +336,7 @@ export default function ActionCenterPage() {
           <div className="scrollbar-hidden flex items-center gap-2 overflow-x-auto" aria-label="검토 항목 필터">
             {([
               ["all", "전체"],
+              ["results", "발표 결과"],
               ["high", "높은 우선순위"],
               ["portfolio", "포트폴리오"],
               ["research", "리서치"],
@@ -344,7 +356,9 @@ export default function ActionCenterPage() {
 
           {items.length === 0 ? (
             <div className="card">
-              <EmptyState icon={<CheckCircle2 size={28} />} title="지금 확인할 항목이 없습니다" hint="새로운 변화나 예정된 검토가 생기면 이곳에 표시됩니다." />
+              <EmptyState icon={<CheckCircle2 size={28} />}
+                title={filter === "results" ? "확인된 발표 결과가 없습니다" : "지금 확인할 항목이 없습니다"}
+                hint={filter === "results" ? "최근 7일 중 발표 수치가 확인된 항목을 모아 표시합니다." : "새로운 변화나 예정된 검토가 생기면 이곳에 표시됩니다."} />
             </div>
           ) : tab === "calendar" ? (
             <div className="space-y-6">

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import html
 import io
+import json
+import math
 import re
 import zipfile
 from dataclasses import dataclass
@@ -36,6 +38,7 @@ EVENT_COLUMNS = [
     "scheduled_for",
     "source",
     "event_status",
+    "result_summary",
 ]
 
 
@@ -119,15 +122,16 @@ def _request_json(
     try:
         response = client.get(url, params=params)
     except httpx.HTTPError as exc:
-        raise ProviderUnavailable(f"요청 실패: {type(exc).__name__}") from exc
+        raise ProviderUnavailable(f"요청 실패: {type(exc).__name__}") from None
     if response.status_code in {401, 403} and auth_name:
         raise ConfigurationRequired(f"{auth_name} API 키를 확인하세요")
     if response.status_code in {401, 402, 403} and entitlement_name:
         raise EntitlementRequired(f"{entitlement_name} 구독 권한이 필요합니다")
     try:
         response.raise_for_status()
-    except httpx.HTTPStatusError as exc:
-        raise ProviderUnavailable(f"HTTP {response.status_code}") from exc
+    except httpx.HTTPStatusError:
+        # Provider URLs contain API credentials; do not retain their exception chain.
+        raise ProviderUnavailable(f"HTTP {response.status_code}") from None
     try:
         return response.json()
     except ValueError as exc:
@@ -374,6 +378,15 @@ def fetch_massive_earnings(
                 "scheduled_for": scheduled,
                 "source": "massive_earnings",
                 "event_status": status,
+                "result_summary": earnings_result_summary(
+                    {
+                        "release_date": scheduled,
+                        "available_at": available_at,
+                        "period": period,
+                        "eps_estimate": estimate,
+                    },
+                    source="Benzinga · Massive",
+                ),
             }
         )
     events = _frame(rows).drop_duplicates("event_key")
@@ -403,6 +416,72 @@ def _money(value) -> str | None:
     if absolute >= 1_000_000:
         return f"${number / 1_000_000:.1f}M"
     return f"${number:,.0f}"
+
+
+def earnings_result_summary(item: dict, *, source: str = "Finnhub") -> str:
+    """Display the existing provider/Hub values, including its EPS comparison hold."""
+
+    def finite(value):
+        number = _number(value)
+        return number if number is not None and math.isfinite(number) else None
+
+    scheduled = str(item.get("release_date", ""))[:10]
+    available_at = str(item.get("available_at", ""))
+    today = pd.Timestamp(available_at).tz_convert("America/New_York").date().isoformat()
+    future = scheduled > today
+    metrics = []
+    for key, label, unit in [("eps", "주당순이익 (EPS)", "USD/주"), ("revenue", "매출", "USD")]:
+        actual = None if future else finite(item.get(f"{key}_actual"))
+        estimate = finite(item.get(f"{key}_estimate"))
+        official_eps = key == "eps" and item.get("eps_actual_source") == "sec"
+        official_url = item.get("official_actual_url")
+        difference = None
+        if actual is not None and estimate not in {None, 0} and not official_eps:
+            difference = (actual - estimate) / abs(estimate) * 100
+        metrics.append(
+            {
+                "label": label,
+                "unit": unit,
+                "actual": actual,
+                "estimate": estimate,
+                "previous": None,
+                "actual_period": item.get("period"),
+                "previous_period": None,
+                "frequency": "fiscal",
+                "comparison": "estimate",
+                "difference": difference,
+                "difference_unit": "%",
+                "source_url": official_url if official_eps and isinstance(official_url, str) else "",
+                "status": "released"
+                if actual is not None
+                else "scheduled"
+                if future
+                else "pending",
+                "note": "공식 EPS · 회계 기준이 달라 예상 대비 비교 보류" if official_eps else None,
+            }
+        )
+    status = (
+        "released"
+        if all(m["actual"] is not None for m in metrics)
+        else (
+            "partial"
+            if any(m["actual"] is not None for m in metrics)
+            else "scheduled"
+            if future
+            else "pending"
+        )
+    )
+    return json.dumps(
+        {
+            "status": status,
+            "source": source,
+            "available_at": available_at,
+            "note": "제공된 컨센서스와 발표 수치입니다. 미제공·비교 불가 항목은 비워 둡니다.",
+            "metrics": metrics,
+        },
+        ensure_ascii=False,
+        allow_nan=False,
+    )
 
 
 def fetch_finnhub_earnings(
@@ -542,6 +621,17 @@ def fetch_finnhub_earnings(
                 "scheduled_for": scheduled,
                 "source": "finnhub_earnings",
                 "event_status": status,
+                "result_summary": earnings_result_summary(
+                    {
+                        "release_date": scheduled,
+                        "available_at": available_at,
+                        "period": period,
+                        "eps_actual": eps_actual,
+                        "eps_estimate": eps_estimate,
+                        "revenue_actual": revenue_actual,
+                        "revenue_estimate": revenue_estimate,
+                    }
+                ),
             }
         )
     events = _frame(rows).drop_duplicates("event_key")

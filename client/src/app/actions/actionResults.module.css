@@ -1,0 +1,32 @@
+.summary {
+  margin-top: 16px;
+  border-block: 1px solid var(--border);
+}
+.heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.heading span:last-child { color: var(--text-muted); }
+.metric { padding: 12px 0; border-top: 1px solid var(--border); }
+.name { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; }
+.name strong { font-size: 12px; font-weight: 600; }
+.name span { color: var(--text-muted); font-size: 10px; }
+.values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 10px; gap: 12px; }
+.values > div { min-width: 0; }
+.values dt { color: var(--text-muted); font-size: 10px; }
+.values dd { margin-top: 4px; font-family: var(--font-data); font-variant-numeric: tabular-nums; font-size: 13px; overflow-wrap: anywhere; }
+.values small { display: block; margin-top: 3px; color: var(--text-muted); font-size: 10px; }
+.actual { border-left: 2px solid var(--secondary); padding-left: 10px; }
+.actual dd { font-size: 16px; font-weight: 600; color: var(--text-primary); }
+.values .missing { font-family: inherit; font-size: 11px; font-weight: 400; color: var(--text-muted); }
+.footnote { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px 16px; padding: 10px 0; border-top: 1px solid var(--border); }
+.footnote, .note { color: var(--text-muted); font-size: 10px; line-height: 1.7; }
+.note { margin-top: 8px; }
+@media (min-width: 640px) {
+  .values { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .earnings { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
