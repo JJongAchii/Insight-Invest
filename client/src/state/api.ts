@@ -735,7 +735,7 @@ export interface ResearchEntry {
   date_precision?: "day" | "month";
   analysis_status?: string;
   editorial_review_status?: "pending" | "accepted" | "rejected";
-  editorial_selection_status?: "pending" | "core" | "context";
+  editorial_selection_status?: "pending" | "core" | "context" | "held";
   analysis?: ResearchAnalysis;
   duplicate_of?: string;
   reading_brief?: {

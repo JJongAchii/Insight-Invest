@@ -14,9 +14,10 @@ from datastore import research, storage
 from module import (
     research_analysis as analysis,
     research_feed,
+    research_review,
     research_selection as selection,
 )
-from research_review_fixtures import attach_review, selection_for
+from research_review_fixtures import attach_review, boundary_for, selection_for
 from test_research_analysis import NOW, TEXT, brief, source as source
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
@@ -27,6 +28,7 @@ verifier = importlib.import_module("verify_research_review")
 def report_for(record, *, kind="research"):
     item = {**record, "entry_id": record["entry_id_sha256"], "record_schema_version": 4}
     item["editorial_selection"] = selection_for(item, TEXT, NOW, kind=kind)
+    item["editorial_boundary"] = boundary_for(item, TEXT, NOW)
     item["analysis"] = {
         "fingerprint": analysis.cache_key(item),
         "brief": brief(),
@@ -64,7 +66,7 @@ def test_seeding_is_cache_only_conditional_and_idempotent(source):
     report = report_for(source.record)
     original = deepcopy(report)
     objects = publisher.plan(report, text_loader=lambda _: TEXT)
-    assert len(objects) == 3
+    assert len(objects) == 4
     client = CacheStore()
     assert all(r["state"] == "planned" for r in publisher.seed(objects, client))
     assert client.writes == []
@@ -75,12 +77,69 @@ def test_seeding_is_cache_only_conditional_and_idempotent(source):
         r["state"] == "already_identical"
         for r in publisher.seed(objects, client, apply=True)
     )
-    assert len(client.writes) == 3 and report == original
+    assert len(client.writes) == 4 and report == original
     changed = deepcopy(objects)
     changed[next(iter(changed))]["checked_at"] = "different"
     with pytest.raises(ValueError, match="never overwrite"):
         publisher.seed(changed, client, apply=True)
-    assert len(client.writes) == 3
+    assert len(client.writes) == 4
+
+
+def test_no_seed_before_required_second_reading(source):
+    report = report_for(source.record)
+    report["items"][0].pop("editorial_boundary")
+    with pytest.raises(ValueError, match="boundary review is not current"):
+        publisher.plan(report, text_loader=lambda _: TEXT)
+
+
+@pytest.mark.parametrize(
+    "diagnostic", [{"diagnostic_only": True}, {"boundary_model": "gpt-5.4-2026-03-05"}]
+)
+def test_model_diagnostics_cannot_be_published_even_if_they_pass(source, diagnostic):
+    report = {**report_for(source.record), **diagnostic}
+
+    def forbidden(*args):
+        pytest.fail("diagnostic publication must stop before source I/O")
+
+    with pytest.raises(ValueError, match="cannot seed production"):
+        publisher.plan(report, text_loader=forbidden)
+
+
+def test_proposed_quotes_are_rechecked_before_cache_publication(source):
+    report = report_for(source.record)
+    second = report["items"][0]["editorial_boundary"]
+    second["decision"]["checks"]["method"]["evidence_excerpts"] = [
+        "This claimed source passage does not exist."
+    ]
+    second["decision_digest"] = research_review.digest(second["decision"])
+    with pytest.raises(ValueError, match="boundary review is not current"):
+        publisher.plan(report, text_loader=lambda _: TEXT)
+
+
+def test_gate_seed_keeps_disagreement_and_does_not_include_brief(source, monkeypatch):
+    qualification = importlib.import_module("qualify_research_editorial")
+    report = report_for(source.record)
+    item = report["items"][0]
+    report.update(gate_only=True, sample="reading-gate-products-v1")
+    item["editorial_boundary"] = boundary_for(item, TEXT, NOW, verdict="context")
+    case = {
+        "source_digest": item["source_digest"],
+        "expected_lane": "context",
+        "expected_content_kinds": ["practitioner"],
+    }
+    monkeypatch.setattr(
+        qualification, "fixed_cases", lambda *args: {item["source_id"]: case}
+    )
+    objects = publisher.plan(report, text_loader=lambda _: TEXT)
+    assert len(objects) == 2
+    assert all("/selections/" in key or "/boundaries/" in key for key in objects)
+    assert (
+        selection.model_state(item) == "core"
+        and selection.automatic_state(item) == "held"
+    )
+    case["expected_lane"] = "core"
+    with pytest.raises(ValueError, match="frozen expectations"):
+        publisher.plan(report, text_loader=lambda _: TEXT)
 
 
 @pytest.mark.parametrize(
@@ -127,7 +186,7 @@ def test_code_only_recheck_keeps_actual_draft_and_model_evidence(source):
         after["review"]["previous_review_fingerprint"]
         == before["review"]["fingerprint"]
     )
-    assert len(publisher.plan(result, text_loader=lambda _: TEXT)) == 3
+    assert len(publisher.plan(result, text_loader=lambda _: TEXT)) == 4
     with pytest.raises(ValueError, match="source input changed"):
         verifier.recheck_code_guards(report, text_loader=lambda _: "Changed source")
 

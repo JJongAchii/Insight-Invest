@@ -11,7 +11,7 @@ from module import (
     research_selection as selection,
 )
 from module.research_review import literal_issues
-from research_review_fixtures import selection_for
+from research_review_fixtures import boundary_for, selection_for
 from test_research_analysis import NOW, TEXT, source as source
 
 
@@ -51,8 +51,13 @@ def test_source_only_selection_is_first_budgeted_stage(
         )
         assert text == TEXT
         return {
+            "main_purpose": {
+                "category": "investment_analysis",
+                "evidence": {"evidence_ids": [0]},
+            },
             "primary_subject": "investment_methodology",
             "content_kind": kind,
+            "contribution_type": "investment_mechanism",
             "investment_focus": True,
             "transferable_insight": {"evidence_ids": [0]} if insight else None,
             "reason": "Offline purpose fixture.",
@@ -72,7 +77,9 @@ def test_source_only_selection_is_first_budgeted_stage(
     item = research.load_feed()["items"][0]
     assert result["selected"] == 1 and result["drafted"] == result["reviewed"] == 0
     assert result["reserved_nanousd"] == 185_000
-    assert item["research_lane"] == expected and "analysis" not in item
+    assert selection.model_state(item) == expected
+    assert item["research_lane"] == ("discovery" if expected == "core" else expected)
+    assert "analysis" not in item
     if expected == "context":
         assert (
             analysis.enrich(
@@ -92,6 +99,7 @@ def test_selected_original_survives_summary_off_budget_and_bad_draft(
     research_feed.reconcile(s3=source, now=NOW)
     item = research.load_feed()["items"][0]
     item["editorial_selection"] = selection_for(item, TEXT, NOW)
+    item["editorial_boundary"] = boundary_for(item, TEXT, NOW)
     item["analysis_status"] = "review_rejected"
     monkeypatch.setenv("RADAR_ANALYSIS_ENABLED", "false")
     research_feed.apply_editorial_analysis(item)
@@ -108,6 +116,7 @@ def test_selected_original_survives_summary_off_budget_and_bad_draft(
 def test_selection_is_bound_to_exact_original(source, change):
     item = deepcopy(source.record)
     item["editorial_selection"] = selection_for(item, TEXT, NOW)
+    item["editorial_boundary"] = boundary_for(item, TEXT, NOW)
     assert selection.state(item) == "core"
     if change == "decision":
         item["editorial_selection"]["decision"]["reason"] = "Changed decision"
@@ -123,8 +132,7 @@ def test_selection_never_sees_draft_or_provider_key():
     assert payload["text"]["format"]["strict"] is True
     assert "PRIMARY PURPOSE" in payload["instructions"]
     assert (
-        next(iter(payload["text"]["format"]["schema"]["properties"]))
-        == "primary_subject"
+        next(iter(payload["text"]["format"]["schema"]["properties"])) == "main_purpose"
     )
 
 
@@ -142,8 +150,13 @@ def test_selection_only_qualification_ignores_editor_audit_and_never_drafts(
     def choose(text, title, key):
         calls.append(title)
         return {
+            "main_purpose": {
+                "category": "investment_analysis",
+                "evidence": {"evidence_ids": [0]},
+            },
             "primary_subject": "investment_methodology",
             "content_kind": "research",
+            "contribution_type": "rule_or_measurement",
             "investment_focus": True,
             "transferable_insight": {"evidence_ids": [0]},
             "reason": "Synthetic method, not real model acceptance.",
@@ -200,6 +213,80 @@ def test_missing_or_unknown_subject_cannot_reuse_a_selection(source, subject):
         receipt["decision"].pop("primary_subject")
     else:
         receipt["decision"]["primary_subject"] = subject
+    receipt["decision_digest"] = selection.research_review.digest(receipt["decision"])
+    item["editorial_selection"] = receipt
+    assert selection.model_state(item) == "pending"
+
+
+@pytest.mark.parametrize("contribution", selection.CONTRIBUTION_TYPES)
+def test_contribution_gate_cannot_be_overridden_by_method_topic_or_evidence(
+    source, contribution
+):
+    item = deepcopy(source.record)
+    receipt = selection_for(item, TEXT, NOW)
+    receipt["decision"]["contribution_type"] = contribution
+    receipt["decision_digest"] = selection.research_review.digest(receipt["decision"])
+    item["editorial_selection"] = receipt
+    expected = (
+        "core" if contribution in selection.SUBSTANTIVE_CONTRIBUTIONS else "context"
+    )
+    assert selection.model_state(item) == expected
+
+
+@pytest.mark.parametrize("contribution", [None, "unknown", ""])
+def test_missing_or_unknown_contribution_cannot_reuse_a_selection(source, contribution):
+    item = deepcopy(source.record)
+    receipt = selection_for(item, TEXT, NOW)
+    if contribution is None:
+        receipt["decision"].pop("contribution_type")
+    else:
+        receipt["decision"]["contribution_type"] = contribution
+    receipt["decision_digest"] = selection.research_review.digest(receipt["decision"])
+    item["editorial_selection"] = receipt
+    assert selection.model_state(item) == "pending"
+
+
+def test_previous_prompt_receipt_stays_pending_without_editor_override(
+    source, monkeypatch
+):
+    item = deepcopy(source.record)
+    with monkeypatch.context() as older:
+        older.setattr(
+            selection, "PROMPT_VERSION", "reading-selection-v5-independent-subject"
+        )
+        receipt = selection_for(item, TEXT, NOW)
+    item["editorial_selection"] = receipt
+    assert selection.model_state(item) == "pending"
+
+
+@pytest.mark.parametrize("category", selection.PURPOSES)
+def test_main_purpose_gates_incidental_investment_explanation(source, category):
+    item = deepcopy(source.record)
+    receipt = selection_for(item, TEXT, NOW)
+    receipt["decision"]["main_purpose"]["category"] = category
+    receipt["decision_digest"] = selection.research_review.digest(receipt["decision"])
+    item["editorial_selection"] = receipt
+    expected = "core" if category == "investment_analysis" else "context"
+    assert selection.model_state(item) == expected
+
+
+def test_main_purpose_requires_grounded_evidence(source):
+    item = deepcopy(source.record)
+    receipt = selection_for(item, TEXT, NOW)
+    receipt["decision"]["main_purpose"]["evidence_excerpts"] = []
+    receipt["decision_digest"] = selection.research_review.digest(receipt["decision"])
+    item["editorial_selection"] = receipt
+    assert selection.model_state(item) == "context"
+    receipt["decision"].pop("main_purpose")
+    receipt["decision_digest"] = selection.research_review.digest(receipt["decision"])
+    assert selection.model_state(item) == "pending"
+
+
+@pytest.mark.parametrize("purpose", [None, [], "unknown", {"category": "unknown"}])
+def test_malformed_main_purpose_is_pending(source, purpose):
+    item = deepcopy(source.record)
+    receipt = selection_for(item, TEXT, NOW)
+    receipt["decision"]["main_purpose"] = purpose
     receipt["decision_digest"] = selection.research_review.digest(receipt["decision"])
     item["editorial_selection"] = receipt
     assert selection.model_state(item) == "pending"

@@ -12,7 +12,12 @@ from datastore import research, storage
 from module import research_analysis as analysis, research_feed, research_selection
 from qdata.radar_editorial import publication_record
 from qdata.radar_notifications import origin
-from research_review_fixtures import attach_review, checks_for, selection_for
+from research_review_fixtures import (
+    attach_review,
+    boundary_for,
+    checks_for,
+    selection_for,
+)
 
 NOW = datetime(2026, 9, 7, 12, tzinfo=UTC)
 TEXT = (
@@ -98,6 +103,10 @@ def source(monkeypatch, tmp_path):
         selection_for(record, TEXT, NOW),
         f"research_analysis/selections/{research_selection.cache_key(record)}.json",
     )
+    boundary = boundary_for(record, TEXT, NOW)
+    storage.write_json(
+        boundary, f"research_analysis/boundaries/{boundary['fingerprint']}.json"
+    )
     return Records(record)
 
 
@@ -106,6 +115,7 @@ def apply_test_brief(*, now=NOW, relevant=True):
     feed = research.load_feed()
     for item in feed["items"]:
         item["editorial_selection"] = selection_for(item, TEXT, now, relevant=relevant)
+        item["editorial_boundary"] = boundary_for(item, TEXT, now)
         item["analysis"] = {
             "model": "offline-test-fixture",
             "analyzed_at": now.isoformat(),
@@ -333,7 +343,9 @@ def test_monthly_cap_stops_before_network(source, monkeypatch):
         now=NOW, text_loader=lambda _item: TEXT, model_call=forbidden
     )
     assert result["reason"] == "monthly_budget_reached"
-    assert not research.load_feed()["items"][0]["notification_eligible"]
+    # Already-paid selection AND boundary remain usable; no summary was purchased.
+    assert research.load_feed()["items"][0]["notification_eligible"]
+    assert "analysis" not in research.load_feed()["items"][0]
 
 
 def test_missing_openai_key_leaves_original_readable(source, monkeypatch):
@@ -514,7 +526,7 @@ def test_research_deployment_uses_separate_openai_key_not_news_key():
     assert "ANTHROPIC_API_KEY" not in poller
     assert "AnthropicApiKey" not in poller
     assert "OPENAI_API_KEY: !Ref OpenAIApiKey" in poller
-    assert 'RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "1.40"' in poller
+    assert 'RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "0.90"' in poller
 
 
 def test_contract_failure_records_only_a_safe_diagnosis(source):
@@ -708,6 +720,9 @@ def test_document_kind_controls_core_without_deleting_or_rewriting_library(
     if kind is not None:
         feed["items"][0]["editorial_selection"] = selection_for(
             feed["items"][0], TEXT, NOW, kind=kind
+        )
+        feed["items"][0]["editorial_boundary"] = boundary_for(
+            feed["items"][0], TEXT, NOW
         )
         attach_review(feed["items"][0], TEXT, NOW)
     research_feed.apply_editorial_analysis(feed["items"][0])

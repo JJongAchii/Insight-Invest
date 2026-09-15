@@ -23,7 +23,13 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
 
 from datastore import research, storage  # noqa: E402
-from module import research_analysis, research_feed, research_review, research_selection  # noqa: E402
+from module import (
+    research_analysis,
+    research_boundary,
+    research_feed,
+    research_review,
+    research_selection,
+)  # noqa: E402
 from qdata.radar_editorial import (  # noqa: E402
     CHANNELS,
     content_digest,
@@ -40,6 +46,25 @@ ENABLED_SOURCES = tuple(
 # This comparison selector exists only in the isolated manual runner. Production
 # remains on its configured model; no environment-driven fallback is added.
 MODEL_PRICES = {"gpt-5-nano": (50, 400), "gpt-5-mini": (250, 2000)}
+# Diagnostic only: one fixed model contrast, never a production fallback.
+BOUNDARY_MODEL_PRICES = {
+    "gpt-5-mini": (250, 2000),
+    "gpt-5.4-2026-03-05": (2500, 15000),
+}
+BOUNDARY_COMPARISON_SAMPLES = frozenset(
+    {"reading-gate-products-v1", "reading-gate-boundaries-v1"}
+)
+GATE_SAMPLES = {
+    "reading-gate-products-v1": "reading-products-v1",
+    "reading-gate-commercialization-v1": "reading-commercialization-v1",
+    "reading-gate-subject-v1": "reading-subject-v1",
+    "reading-gate-subject-positive-v1": "reading-subject-positive-v1",
+    "reading-gate-boundaries-v1": "reading-contribution-boundaries-v1",
+    "reading-gate-methods-v1": "reading-contribution-methods-v1",
+    "reading-gate-extension-v1": "reading-contribution-extension-v1",
+    "reading-gate-generalization-v1": "reading-evidence-generalization-v1",
+}
+BRIEF_SAMPLES = {"reading-brief-evidence-v1": "reading-subject-positive-v1"}
 SAMPLES = (
     "latest",
     "reading-value-v1",
@@ -48,10 +73,24 @@ SAMPLES = (
     "reading-scope-v1",
     "reading-subject-v1",
     "reading-subject-positive-v1",
+    "reading-products-v1",
+    "reading-commercialization-v1",
+    "reading-contribution-boundaries-v1",
+    "reading-contribution-methods-v1",
     "v7-regression",
+    *GATE_SAMPLES,
+    *BRIEF_SAMPLES,
 )
 SELECTION_SAMPLES = frozenset(
-    {"reading-scope-v1", "reading-subject-v1", "reading-subject-positive-v1"}
+    {
+        "reading-scope-v1",
+        "reading-subject-v1",
+        "reading-subject-positive-v1",
+        "reading-products-v1",
+        "reading-commercialization-v1",
+        "reading-contribution-boundaries-v1",
+        "reading-contribution-methods-v1",
+    }
 )
 V7_PROMPT = "reading-brief-openai-v7-korean-editorial"
 
@@ -59,6 +98,7 @@ V7_PROMPT = "reading-brief-openai-v7-korean-editorial"
 def fixed_cases(sample: str, sources: list[str]) -> dict[str, dict]:
     if sample == "latest":
         return {}
+    sample = {**GATE_SAMPLES, **BRIEF_SAMPLES}.get(sample, sample)
     path = Path(__file__).with_name("fixtures") / "research-reading-samples.json"
     cases = {
         item["source_id"]: item
@@ -91,19 +131,57 @@ def selection_check(item: dict, case: dict) -> dict:
     decision = item.get("editorial_selection", {}).get("decision", {})
     lane = research_selection.model_state(item)
     subjects = case.get("expected_subjects", [])
+    contributions = case.get("expected_contributions", [])
     return {
         "source_id": item["source_id"],
         "expected": case["expected_content_kinds"],
         "actual": decision.get("content_kind"),
         "expected_subjects": subjects,
         "primary_subject": decision.get("primary_subject"),
+        "expected_contributions": contributions,
+        "contribution_type": decision.get("contribution_type"),
+        "main_purpose": decision.get("main_purpose", {}).get("category"),
         "expected_lane": case.get("expected_lane"),
         "automatic_lane": lane,
         "matches": (
             lane == case.get("expected_lane")
             and decision.get("content_kind") in case["expected_content_kinds"]
             and (not subjects or decision.get("primary_subject") in subjects)
+            and (
+                not contributions or decision.get("contribution_type") in contributions
+            )
         ),
+    }
+
+
+def gate_check(item: dict, case: dict) -> dict:
+    """A hold prevents promotion; it does not fix the raw classifier's mistake."""
+    allowed = ["core"] if case["expected_lane"] == "core" else ["context", "held"]
+    lane = research_selection.automatic_state(item)
+    return {
+        "source_id": item["source_id"],
+        "expected_lanes": allowed,
+        "automatic_lane": lane,
+        "boundary_required": research_selection.needs_boundary(item),
+        "boundary_verdict": research_boundary.state(item),
+        "boundary_analysis_object": item.get("editorial_boundary", {})
+        .get("decision", {})
+        .get("analysis_object"),
+        "boundary_derived_verdict": item.get("editorial_boundary", {})
+        .get("decision", {})
+        .get("verdict"),
+        "boundary_evidence_roles": {
+            name: (
+                item.get("editorial_boundary", {})
+                .get("decision", {})
+                .get("checks", {})
+                .get(name)
+                or {}
+            ).get("role")
+            for name in research_boundary.EVIDENCE_FIELDS
+        },
+        "raw_selector_matches": selection_check(item, case)["matches"],
+        "matches": lane in allowed,
     }
 
 
@@ -129,9 +207,9 @@ def validate_environment() -> tuple[int, list[str], str]:
     if not research_review.enabled():
         raise ValueError("isolated qualification requires explicit analysis opt-in")
     budget = Decimal(os.environ.get("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0"))
-    if not Decimal("0") < budget <= Decimal("0.60"):
+    if not Decimal("0") < budget <= Decimal("1.10"):
         raise ValueError(
-            "qualification monthly budget must be positive and at most $0.60"
+            "qualification monthly budget must be positive and at most $1.10"
         )
     maximum = int(os.environ.get("RESEARCH_MAX_ITEMS", "1"))
     if not 1 <= maximum <= 30:
@@ -150,10 +228,53 @@ def validate_environment() -> tuple[int, list[str], str]:
     sample = os.environ.get("RESEARCH_SAMPLE", "latest")
     if sample not in SAMPLES or (sample == "v7-regression" and model != "gpt-5-mini"):
         raise ValueError("qualification sample is not approved")
+    if sample in {*GATE_SAMPLES, *BRIEF_SAMPLES} and model != "gpt-5-mini":
+        raise ValueError("source-only gate qualification keeps GPT-5 mini")
+    boundary_model(sample, model)  # Validate the contrast before source/provider I/O.
     fixed_cases(sample, sources)  # Fail before any source/provider I/O.
     if model == "gpt-5-mini" and not 1 <= maximum <= min(3, len(sources)):
         raise ValueError("mini comparison allows at most three distinct sources")
     return maximum, sources, model
+
+
+def boundary_model(sample: str, model: str) -> str:
+    name = os.environ.get("RESEARCH_BOUNDARY_MODEL", "gpt-5-mini")
+    if name not in BOUNDARY_MODEL_PRICES:
+        raise ValueError("boundary comparison model is not approved")
+    if name != "gpt-5-mini" and (
+        model != "gpt-5-mini"
+        or sample not in BOUNDARY_COMPARISON_SAMPLES
+        or research_selection.PROMPT_VERSION
+        != "reading-selection-v7-evidence-first-purpose"
+    ):
+        raise ValueError("boundary comparison requires its fixed gate samples")
+    return name
+
+
+def preserved_selections(records: list[dict], texts: dict[str, str]) -> list[dict]:
+    """A model-only contrast must not pay to regenerate its first-stage baseline."""
+    receipts = []
+    for record in records:
+        fingerprint = research_selection.cache_key(record)
+        path = f"research_analysis/selections/{fingerprint}.json"
+        if not storage.exists(path):
+            raise ValueError("boundary comparison requires preserved v7 selections")
+        selected = storage.read_json(path)
+        if research_selection.model_state(
+            {**record, "editorial_selection": selected}
+        ) == "pending" or selected.get("input_digest") != research_review.digest(
+            texts[record["entry_id_sha256"]]
+        ):
+            raise ValueError("boundary comparison selection/input changed")
+        receipts.append(
+            {
+                "entry_id": record["entry_id_sha256"],
+                "fingerprint": fingerprint,
+                "decision_digest": selected["decision_digest"],
+                "input_digest": selected["input_digest"],
+            }
+        )
+    return receipts
 
 
 def select_records(groups: list[list[dict]], maximum: int) -> list[dict]:
@@ -192,6 +313,10 @@ def current_review(item: dict) -> bool:
     return research_review.state(item) in {"accepted", "rejected"} and item.get(
         "analysis", {}
     ).get("fingerprint") == research_analysis.cache_key(item)
+
+
+def current_automatic_review(item: dict) -> bool:
+    return research_selection.automatic_state(item) == "core" and current_review(item)
 
 
 class RecordSnapshot:
@@ -254,14 +379,41 @@ def run(output: Path) -> int:
         research_analysis.OUTPUT_NANOUSD_PER_TOKEN,
     )
     original_prompt = research_analysis.PROMPT_VERSION
+    original_boundary = (
+        research_boundary.MODEL,
+        research_boundary.INPUT_NANOUSD_PER_TOKEN,
+        research_boundary.OUTPUT_NANOUSD_PER_TOKEN,
+    )
     try:
         maximum, sources, model = validate_environment()
         sample = os.environ.get("RESEARCH_SAMPLE", "latest")
         cases = fixed_cases(sample, sources)
+        name = boundary_model(sample, model)
+        (
+            research_boundary.MODEL,
+            research_boundary.INPUT_NANOUSD_PER_TOKEN,
+            research_boundary.OUTPUT_NANOUSD_PER_TOKEN,
+        ) = (name, *BOUNDARY_MODEL_PRICES[name])
+        report["diagnostic_only"] = name != "gpt-5-mini"
+        report["boundary_model"] = name
+        report["boundary_request_config"] = {
+            "system_digest": research_review.digest(research_boundary.SYSTEM),
+            "schema_digest": research_review.digest(research_boundary.SCHEMA),
+            "reasoning_effort": research_boundary.REASONING_EFFORT,
+            "max_output_tokens": research_boundary.MAX_OUTPUT_TOKENS,
+            "max_input_chars": research_analysis.MAX_INPUT_CHARS,
+            "input_nanousd_per_token": BOUNDARY_MODEL_PRICES[name][0],
+            "output_nanousd_per_token": BOUNDARY_MODEL_PRICES[name][1],
+        }
         texts = {}
         if sample == "v7-regression":
             research_analysis.PROMPT_VERSION = V7_PROMPT
         report["sample"] = sample
+        if sample in GATE_SAMPLES:
+            report["boundary_prompt_version"] = research_boundary.PROMPT_VERSION
+            report["gate_policy"] = (
+                "positive=core; negative=context|held; no editorial overrides"
+            )
         report["prompt_version"] = research_analysis.PROMPT_VERSION
         report["sample_expectations"] = [
             {
@@ -368,6 +520,11 @@ def run(output: Path) -> int:
             for record in records
         ]
         save_report()  # Record the sample before the first paid call.
+        if report["diagnostic_only"]:
+            report["preserved_selection_receipts"] = preserved_selections(
+                records, texts
+            )
+            save_report()
         if sample == "v7-regression":
             report["preserved_input_replay"] = [
                 {
@@ -430,6 +587,7 @@ def run(output: Path) -> int:
             result = research_analysis.enrich(
                 max_items=1,
                 selection_only=sample in SELECTION_SAMPLES,
+                gate_only=sample in GATE_SAMPLES,
                 **({"selection_call": None} if sample == "v7-regression" else {}),
                 **(
                     {"text_loader": lambda item: texts[item["entry_id"]]}
@@ -441,7 +599,9 @@ def run(output: Path) -> int:
             report["items"] = research.load_feed()["items"]
             save_report()
             print(json.dumps({"stage": "analysis", **result}), flush=True)
-            if result.get("failed") or not result.get("completed"):
+            if result.get("failed") or not (
+                result.get("completed") or result.get("cache_hits")
+            ):
                 break  # Diagnose the first failure before spending on more documents.
             requested = [
                 item
@@ -451,6 +611,10 @@ def run(output: Path) -> int:
             if all(
                 research_selection.model_state(item) != "pending"
                 if sample in SELECTION_SAMPLES
+                else research_selection.automatic_state(item) != "pending"
+                if sample in GATE_SAMPLES
+                else current_automatic_review(item)
+                if sample in BRIEF_SAMPLES
                 else current_review(item) or research_selection.state(item) == "context"
                 for item in requested
             ):
@@ -478,8 +642,34 @@ def run(output: Path) -> int:
             for item in requested
             if item["source_id"] in cases and sample != "v7-regression"
         ]
+        if sample in GATE_SAMPLES or sample in BRIEF_SAMPLES:
+            # Isolated report/UI uses automatic outcomes too, not migration audits.
+            for item in report["items"]:
+                research_feed.apply_editorial_analysis(item, use_editor_audit=False)
+            report["core"] = sum(
+                item["research_lane"] == "core" for item in report["items"]
+            )
+            report["selection_context"] = sum(
+                item["research_lane"] == "context" for item in report["items"]
+            )
+            report["selection_held"] = sum(
+                item.get("editorial_selection_status") == "held"
+                for item in report["items"]
+            )
         # This qualifies transport/structure/binding, not reviewer correctness or alpha.
-        if sample in SELECTION_SAMPLES:
+        if sample in GATE_SAMPLES:
+            report["gate_only"] = True
+            report["editorial_audits_used_for_qualification"] = False
+            report["gate_checks"] = [
+                gate_check(item, cases[item["source_id"]]) for item in requested
+            ]
+            report["status"] = (
+                "api_contract_qualified"
+                if len(requested) == maximum
+                and all(check["matches"] for check in report["gate_checks"])
+                else "needs_diagnosis"
+            )
+        elif sample in SELECTION_SAMPLES:
             report["selection_only"] = True
             report["editorial_audits_used_for_qualification"] = False
             report["status"] = (
@@ -487,6 +677,18 @@ def run(output: Path) -> int:
                 if len(requested) == maximum
                 and len(report["selection_checks"]) == maximum
                 and all(check["matches"] for check in report["selection_checks"])
+                else "needs_diagnosis"
+            )
+        elif sample in BRIEF_SAMPLES:
+            report["editorial_audits_used_for_qualification"] = False
+            report["gate_checks"] = [
+                gate_check(item, cases[item["source_id"]]) for item in requested
+            ]
+            report["status"] = (
+                "api_contract_qualified"
+                if len(requested) == maximum
+                and all(check["matches"] for check in report["gate_checks"])
+                and all(current_automatic_review(item) for item in requested)
                 else "needs_diagnosis"
             )
         elif requested and report["reviewed"] + report["selection_context"] == len(
@@ -506,6 +708,11 @@ def run(output: Path) -> int:
             research_analysis.OUTPUT_NANOUSD_PER_TOKEN,
         ) = original_settings
         research_analysis.PROMPT_VERSION = original_prompt
+        (
+            research_boundary.MODEL,
+            research_boundary.INPUT_NANOUSD_PER_TOKEN,
+            research_boundary.OUTPUT_NANOUSD_PER_TOKEN,
+        ) = original_boundary
     print(
         json.dumps(
             {

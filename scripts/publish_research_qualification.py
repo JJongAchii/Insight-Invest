@@ -17,6 +17,7 @@ from botocore.exceptions import ClientError
 from verify_research_review import verify
 from module import (
     research_analysis as analysis,
+    research_boundary as boundary,
     research_review as review,
     research_selection as selection,
 )
@@ -26,6 +27,11 @@ PREFIX = "app/research_analysis/"
 
 
 def plan(report: dict, *, text_loader=analysis._public_text) -> dict:
+    if report.get("diagnostic_only") or report.get("boundary_model") not in {
+        None,
+        boundary.MODEL,
+    }:
+        raise ValueError("diagnostic model comparisons cannot seed production")
     if (
         report.get("production_modified") is not False
         or report.get("status") != "api_contract_qualified"
@@ -42,31 +48,104 @@ def plan(report: dict, *, text_loader=analysis._public_text) -> dict:
         if selected["input_digest"] != review.digest(text):
             raise ValueError("selection input changed")
         passages = analysis._source_passages(text)
-        lookup = {p["text"]: p["id"] for p in reversed(passages)}
         decision = selected["decision"]
         raw = {
             name: decision[name]
             for name in (
                 "primary_subject",
                 "content_kind",
+                "contribution_type",
                 "investment_focus",
                 "reason",
             )
         }
         raw["transferable_insight"] = (
-            {"evidence_ids": [lookup[q] for q in decision["evidence_excerpts"]]}
+            {
+                "evidence_ids": analysis._source_span_ids(
+                    text, decision["evidence_excerpts"]
+                )
+            }
             if decision["evidence_excerpts"]
             else None
         )
+        purpose = decision["main_purpose"]
+        raw["main_purpose"] = {
+            "category": purpose["category"],
+            "evidence": {
+                "evidence_ids": analysis._source_span_ids(
+                    text, purpose["evidence_excerpts"]
+                )
+            }
+            if purpose["evidence_excerpts"]
+            else None,
+        }
         raw["reading_points"] = {
-            name: {"evidence_ids": [lookup[q] for q in quotes]} if quotes else None
+            name: {"evidence_ids": analysis._source_span_ids(text, quotes)}
+            if quotes
+            else None
             for name, quotes in decision["reading_points"].items()
         }
         checked = selection.receipt(item, raw, text, selected["checked_at"])
         if checked["decision_digest"] != selected["decision_digest"]:
             raise ValueError("selection receipt differs from original evidence")
         objects[PREFIX + f"selections/{selection.cache_key(item)}.json"] = selected
-        if selection.model_state(item) != "core":
+        if selection.needs_boundary(item):
+            if boundary.state(item) == "pending":
+                raise ValueError("required source-only boundary review is not current")
+            second = item["editorial_boundary"]
+            if second["input_digest"] != review.digest(text):
+                raise ValueError("boundary input changed")
+            value = second["decision"]
+            visible = {
+                number
+                for quotes in boundary.evidence_plan(item).values()
+                for number in analysis._source_span_ids(text, quotes)
+            }
+            # Repeated text elsewhere in the original is not a visible citation.
+            lookup = {
+                p["text"]: p["id"] for p in reversed(passages) if p["id"] in visible
+            }
+            checked = boundary.receipt(
+                item,
+                {
+                    "checks": {
+                        name: {
+                            key: point[key]
+                            for key in (
+                                "source_meaning",
+                                "disclosed_or_missing",
+                                "role",
+                            )
+                        }
+                        if point is not None
+                        else None
+                        for name, point in value["checks"].items()
+                    },
+                    "analysis_object": value["analysis_object"],
+                    "object_evidence_id": lookup[value["object_evidence_excerpts"][0]]
+                    if value["object_evidence_excerpts"]
+                    else None,
+                },
+                text,
+                second["checked_at"],
+            )
+            if checked["decision_digest"] != second["decision_digest"]:
+                raise ValueError("boundary receipt differs from original evidence")
+            objects[PREFIX + f"boundaries/{boundary.cache_key(item)}.json"] = second
+        if report.get("gate_only") is True:
+            from qualify_research_editorial import GATE_SAMPLES, fixed_cases, gate_check
+
+            sample = report.get("sample")
+            if sample not in GATE_SAMPLES:
+                raise ValueError("unknown fixed gate qualification")
+            case = fixed_cases(sample, [item["source_id"]])[item["source_id"]]
+            if (
+                item["source_digest"] != case["source_digest"]
+                or not gate_check(item, case)["matches"]
+            ):
+                raise ValueError("gate result differs from frozen expectations")
+            continue  # Seed only both source-reading receipts, not a stale brief.
+        if selection.automatic_state(item) != "core":
             continue  # Never seed an obsolete summary of excluded commentary.
         if (
             item.get("analysis", {}).get("fingerprint") != analysis.cache_key(item)
@@ -87,7 +166,9 @@ def seed(objects: dict, client, *, apply: bool = False) -> list[dict]:
     # Validate the entire plan before the first write, not after partially seeding.
     if not objects or any(
         not re.fullmatch(
-            re.escape(PREFIX) + r"(?:selections|cache|reviews)/[a-f0-9]{64}\.json", key
+            re.escape(PREFIX)
+            + r"(?:selections|boundaries|cache|reviews)/[a-f0-9]{64}\.json",
+            key,
         )
         for key in objects
     ):

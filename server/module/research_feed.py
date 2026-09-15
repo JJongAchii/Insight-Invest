@@ -136,7 +136,9 @@ def _publication_fields(payload: dict, *, key: str) -> dict:
     return result
 
 
-def apply_editorial_analysis(item: dict, *, target: dict | None = None) -> None:
+def apply_editorial_analysis(
+    item: dict, *, target: dict | None = None, use_editor_audit: bool = True
+) -> None:
     """An original's reading value is not conditional on a translated brief."""
     target = item if target is None else target
     if item.get("quality_profile") == "academic-discovery-v1":
@@ -150,7 +152,11 @@ def apply_editorial_analysis(item: dict, *, target: dict | None = None) -> None:
             editorial_selection_status="pending",
         )
         return
-    selection = research_selection.state(item)
+    selection = (
+        research_selection.state(item)
+        if use_editor_audit
+        else research_selection.automatic_state(item)
+    )
     target["editorial_selection_status"] = selection
     target["editorial_review_status"] = (
         research_review.state(item) if research_review.enabled() else "pending"
@@ -158,7 +164,9 @@ def apply_editorial_analysis(item: dict, *, target: dict | None = None) -> None:
     candidate = item.get("editorial_candidate_lane", item.get("research_lane"))
     lane = (
         selection
-        if selection != "pending"
+        if selection in {"core", "context"}
+        else "discovery"
+        if selection == "held"
         else ("discovery" if candidate == "core" else candidate)
     )
     target["research_lane"] = lane
@@ -167,6 +175,10 @@ def apply_editorial_analysis(item: dict, *, target: dict | None = None) -> None:
         if selection == "core"
         else "source_selected_context"
         if selection == "context"
+        else "original_selection_disagreement"
+        if selection == "held"
+        else "original_boundary_pending"
+        if research_selection.needs_boundary(item)
         else "original_selection_pending"
     )
     target["notification_eligible"] = bool(
@@ -175,9 +187,15 @@ def apply_editorial_analysis(item: dict, *, target: dict | None = None) -> None:
         and is_incremental(item)
     )
     if target["notification_eligible"] and not item.get("available_at"):
-        audit = research_curation.original_audit(item)
+        audit = research_curation.original_audit(item) if use_editor_audit else None
         target["available_at"] = (
-            item.get("editorial_selection", {}).get("checked_at") or audit["checked_at"]
+            (audit or {}).get("checked_at")
+            or (
+                item.get("editorial_boundary", {}).get("checked_at")
+                if research_selection.needs_boundary(item)
+                else None
+            )
+            or item.get("editorial_selection", {}).get("checked_at")
         )
     target["reading_brief"] = research_reading.reading_brief({**item, **target})
 
@@ -535,6 +553,7 @@ def reconcile(
         if prior and prior.get("source_digest") == item.get("source_digest"):
             for field in (
                 "editorial_selection",
+                "editorial_boundary",
                 "analysis",
                 "analysis_status",
                 "analysis_updated_at",

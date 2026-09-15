@@ -113,6 +113,8 @@ try {
         assert.ok(await card.getByText(item.title, { exact: true }).count());
         const label = academicProbe ? item.original_access_status?.startsWith("verified_") && item.access_status !== "abstract_only" ? "공개 원문 확인" : "초록 확인"
           : item.editorial_selection_status === "context" ? "한국어 요약 대상에서 제외"
+          : item.editorial_selection_status === "held" ? "핵심연구 승격 보류"
+          : item.relevance_reason === "original_boundary_pending" ? "2차 원문 검수 대기"
           : item.analysis_status === "not_requested" ? "요약 대상 아님"
           : item.editorial_review_status === "rejected" ? "요약 검수 보류"
           : item.analysis_status === "retry_pending" ? "요약 재시도 대기"
@@ -154,7 +156,7 @@ try {
       }
     }
     await page.getByRole("button", { name: /^전체 기록/ }).click();
-    const selected = items.find(reviewed) || items[0];
+    const selected = items.find(item => item.editorial_selection_status === "held") || items.find(reviewed) || items[0];
     const card = page.locator(`#research-${selected.entry_id}`);
     await card.waitFor();
     await card.getByRole("button", { name: "보관", exact: true }).click();

@@ -4,6 +4,186 @@
   "note": "Public metadata and content hashes only. Never replace a changed source with the next latest article. Editorial reading labels are not scientific validity judgments.",
   "items": [
     {
+      "samples": ["reading-evidence-generalization-v1"],
+      "frozen_at": "2026-09-14",
+      "source_id": "cfm-research",
+      "title": "Too Diversified to Win",
+      "url": "https://www.cfm.com/too-diversified-to-win",
+      "pdf_url": "",
+      "authors": ["CFM"],
+      "published_at": "2026-06-22T10:49:17+00:00",
+      "source_digest": "c19ca549bf6c32dcadc54aa33aa7303578e15cca7f57a92534b1401c98c228a2",
+      "expected_content_kinds": ["research", "practitioner"],
+      "expected_subjects": ["empirical_market_research", "investment_methodology"],
+      "expected_lane": "core",
+      "reading_check": "New to the 15-original API panel, frozen before v8/v6 calls. Full cached official body read: compares effective concentration of actual fund holdings with cap-weighted versions of the same stocks and explains benchmark-relative underweights when large stocks outperform. Previously human-audited and v5-selected in production; not a pristine unseen holdout."
+    },
+    {
+      "samples": ["reading-evidence-generalization-v1"],
+      "frozen_at": "2026-09-14",
+      "source_id": "verdad-research",
+      "title": "Distribution of Global Value",
+      "url": "https://verdadcap.com/archive/distribution-of-global-value",
+      "pdf_url": "",
+      "authors": ["Brian Chingono"],
+      "published_at": "2026-03-23T19:52:00+00:00",
+      "source_digest": "0d0a08f56e8789652ce713681ce6626e0eff20e161b65a0203fe94c61613a75d",
+      "expected_content_kinds": ["research", "practitioner"],
+      "expected_subjects": ["investment_methodology", "empirical_market_research"],
+      "expected_lane": "core",
+      "reading_check": "New to the 15-original API panel; full official body read before v8/v6 calls. A short practitioner note with explicit P/B, P/E and capitalization filters, regional counts/revenue and aggregate market-cap/revenue comparison. Keep this concrete screening/measurement note despite current allocation commentary. Not a backtest. Prior broad human audit/v5 production selection is disclosed."
+    },
+    {
+      "samples": ["reading-evidence-generalization-v1"],
+      "frozen_at": "2026-09-14",
+      "source_id": "kcmi-capital-market-focus",
+      "title": "소수단위 거래의 현황 및 향후 과제 | 자본시장포커스 | 발간물 | 자본시장연구원",
+      "url": "https://www.kcmi.re.kr/publications/pub_detail_view?cno=6837&syear=2026&zcd=002001016&zno=1934",
+      "pdf_url": "https://www.kcmi.re.kr/common/downloadw?fgu=002001&fid=29157&fty=004003",
+      "authors": ["최지운"],
+      "published_at": "2026-09-07T00:00:00+00:00",
+      "source_digest": "d150f7a78f34478150d313bf7deb8802e935184e6326f2c1943f4321fcd38689",
+      "expected_content_kinds": ["research", "practitioner", "market_commentary", "other"],
+      "expected_subjects": ["institutional_policy"],
+      "expected_lane": "context",
+      "reading_check": "New to the fixed API panel; full cached PDF read before v8/v6 calls. Institutional structure of fractional-share trading, adoption, investor rights and reform proposals; not an investment decision/measurement rule. Useful policy context remains accessible. This is a reading classification, not verification of cited laws. Previously broad human-audited, not an unseen holdout."
+    },
+    {
+      "samples": ["reading-contribution-extension-v1"],
+      "frozen_at": "2026-09-14",
+      "source_id": "deshaw-library",
+      "title": "The Concentration Game: Understanding Portfolio Effects of U.S. Equity Market Concentration",
+      "url": "https://www.deshaw.com/library/concentration-game",
+      "pdf_url": "",
+      "authors": ["The D. E. Shaw Group"],
+      "published_at": "2026-02-01T00:00:00+00:00",
+      "source_digest": "80eee269ba5a862295b1b1baaa5f16e90608a3bb8b3ac6cadccde2f8a186b760",
+      "expected_content_kinds": ["research", "practitioner"],
+      "expected_subjects": ["investment_methodology", "empirical_market_research"],
+      "expected_lane": "core",
+      "reading_check": "Extension outside the earlier 13 originals, frozen before any v3 API output. Full cached original read: concentration changes risk contribution, long-only transfer constraints and benchmark-relative breadth; it explains mechanisms and compares market periods. The argument is not just a mega-cap business outlook. Previously included in a human source audit, so not a pristine unseen holdout or independent replication."
+    },
+    {
+      "samples": ["reading-contribution-extension-v1"],
+      "frozen_at": "2026-09-14",
+      "source_id": "robeco-quant-insights",
+      "title": "From AI copilots to operating models in asset management",
+      "url": "https://www.robeco.com/en-int/insights/2026/09/from-copilot-to-operating-model",
+      "pdf_url": "",
+      "authors": ["Mike Chen"],
+      "published_at": "2026-09-10T00:00:00+00:00",
+      "source_digest": "e02dca2abfa0ffd97108a8856ac8d556f003f35d501de8866ad467244cb1ee6a",
+      "expected_content_kinds": ["research", "practitioner", "market_commentary", "other"],
+      "expected_subjects": ["research_operations"],
+      "expected_lane": "context",
+      "reading_check": "Extension outside the earlier 13 originals, frozen before any v3 API output. Full cached original read: describes AI workflow ownership, data/tool permissions, cost visibility, logging, escalation and human review, not an investment signal or portfolio-risk measurement. Useful operating context is preserved. Previously included in a human source audit, so not a pristine unseen holdout."
+    },
+    {
+      "samples": ["reading-products-v1"],
+      "source_id": "robeco-quant-insights",
+      "title": "Active Emerging Markets ETF: Stock selection for core EM exposure",
+      "url": "https://www.robeco.com/en-int/insights/2026/09/active-emerging-markets-etf-stock-selection-for-core-em-exposure",
+      "pdf_url": "",
+      "authors": ["Nick King", "Jan Sytze Mosselaar"],
+      "published_at": "2026-09-11T00:00:00+00:00",
+      "source_digest": "9a4647426c6556c65a0bdda67efad724f5e138092e31b8cb8f1ec7f64037698d",
+      "expected_content_kinds": ["research", "practitioner", "market_commentary", "other"],
+      "expected_subjects": ["business_or_product"],
+      "expected_contributions": ["overview_or_claim", "none"],
+      "expected_lane": "context",
+      "reading_check": "Known v5 false positive: product benefits, target IR, broad objectives and small active bets do not explain a signal or test. Manual editor context must not count as automatic success. Frozen before v6 API calls on 2026-09-13."
+    },
+    {
+      "samples": ["reading-commercialization-v1"],
+      "source_id": "robeco-quant-insights",
+      "title": "SI Debate: How to go from biodiversity science to financial products?",
+      "url": "https://www.robeco.com/en-int/insights/2026/09/si-debate-how-to-go-from-biodiversity-science-to-financial-products",
+      "pdf_url": "",
+      "authors": ["Rachel Whittaker, CFA", "Michal Kulak"],
+      "published_at": "2026-09-10T00:00:00+00:00",
+      "source_digest": "e1208c7830b6516171c167fce3cd440ea75980e78fff995658a850c5312dac39",
+      "expected_content_kinds": ["research", "practitioner", "market_commentary", "other"],
+      "expected_subjects": ["business_or_product", "institutional_policy"],
+      "expected_contributions": ["overview_or_claim", "none"],
+      "expected_lane": "context",
+      "reading_check": "Known v5 false positive: commercialization, local-versus-standardized biodiversity metrics, blended-finance incentives and a conference. A named Traffic Light is not a specified investment method. Frozen before v6 API calls on 2026-09-13."
+    },
+    {
+      "samples": ["reading-contribution-boundaries-v1"],
+      "source_id": "aqr-research",
+      "title": "Investing in a Warming World",
+      "url": "https://www.aqr.com/Insights/Research/White-Papers/Investing-in-a-Warming-World",
+      "pdf_url": "https://www.aqr.com/-/media/AQR/Documents/White-Papers/Investing-in-a-Warming-World-How-Market-Driven-Valuation-Effects-Can-Impact-Portfolio-Decarbonization.pdf?hash=BA80DCF11FE32D528AAFE7DEE7A34DFC&sc_lang=en",
+      "authors": ["Steffen Bixby"],
+      "published_at": "2026-09-01T00:00:00+00:00",
+      "source_digest": "cb21a2134a2e7490f2abeaa9fafec84f68bfe8e0dcac4f6929e46830df3f4931",
+      "expected_content_kinds": ["research", "practitioner"],
+      "expected_subjects": ["investment_methodology", "empirical_market_research"],
+      "expected_contributions": ["rule_or_measurement", "investment_mechanism", "empirical_finding"],
+      "expected_lane": "core",
+      "reading_check": "Positive climate boundary: separates valuation-driven carbon-metric changes from real emissions and explains portfolio measurement. No blanket ESG exclusion. Prior editor-audited original, not an unseen holdout; frozen before v6 calls."
+    },
+    {
+      "samples": ["reading-contribution-boundaries-v1"],
+      "source_id": "kcmi-capital-market-focus",
+      "title": "주요국 토큰증권 인프라 구축 동향과 국내 시사점: 기존 예탁결제체계와 DLT 원장의 단계적 결합을 중심으로 | 자본시장포커스 | 발간물 | 자본시장연구원",
+      "url": "https://www.kcmi.re.kr/publications/pub_detail_view?cno=6836&syear=2026&zcd=002001016&zno=1934",
+      "pdf_url": "https://www.kcmi.re.kr/common/downloadw?fgu=002001&fid=29156&fty=004003",
+      "authors": ["한아름"],
+      "published_at": "2026-09-07T00:00:00+00:00",
+      "source_digest": "d39741d5a70a5c3f51d0f0a7509602585629e782120347e917f2cb9c27e65b45",
+      "expected_content_kinds": ["research", "practitioner", "other"],
+      "expected_subjects": ["institutional_policy"],
+      "expected_contributions": ["overview_or_claim", "none"],
+      "expected_lane": "context",
+      "reading_check": "Detailed settlement/institutional infrastructure is not an investment method. Prior editor-audited original, not an unseen holdout; frozen before v6 calls."
+    },
+    {
+      "samples": ["reading-contribution-boundaries-v1"],
+      "source_id": "syzygy-insights",
+      "title": "The Impact of AI on SaaS: A Risk Framework for Investors",
+      "url": "https://www.syzygyassetmanagement.com/insights/publications/articles/1113-cio-insights-the-impact-of-ai-on-saas-s-risk-framework-for-investors",
+      "pdf_url": "https://media.syzygyassetmanagement.com/1113_cio_insights_the_impact_of_ai_on_saas_s_risk_framework_for_investors_6db19dcdcb.pdf",
+      "authors": ["Jim Masturzo, CFA"],
+      "published_at": "2026-04-14T21:45:00+00:00",
+      "source_digest": "168762ea8c4d9faf7d19449b2f1df4c145c6d6e0a2f2160f939f75691cedb938",
+      "expected_content_kinds": ["research", "practitioner", "market_commentary", "other"],
+      "expected_subjects": ["business_or_product", "market_outlook"],
+      "expected_contributions": ["overview_or_claim", "none"],
+      "expected_lane": "context",
+      "reading_check": "An industry risk outlook can be serious and useful context without providing quant investment methodology. Prior editor-audited original, not an unseen holdout; frozen before v6 calls."
+    },
+    {
+      "samples": ["reading-contribution-methods-v1"],
+      "source_id": "verdad-research",
+      "title": "The Reflexivity of Credit Markets",
+      "url": "https://verdadcap.com/archive/the-reflexivity-of-credit-markets",
+      "pdf_url": "",
+      "authors": ["Sam Hanson", "Greg Obenshain", "and Daniel Rasmussen"],
+      "published_at": "2026-04-20T20:02:00+00:00",
+      "source_digest": "83384e87ab537036e56890bad83db9819a0557b906224123eb2dc7eef2923d58",
+      "expected_content_kinds": ["research", "practitioner"],
+      "expected_subjects": ["investment_methodology", "empirical_market_research"],
+      "expected_contributions": ["rule_or_measurement", "investment_mechanism", "empirical_finding"],
+      "expected_lane": "core",
+      "reading_check": "Credit-refinancing feedback mechanism and ratings-implied default-risk decomposition remain readable research despite references to current markets. Prior editor-audited original, not an unseen holdout; frozen before v6 calls."
+    },
+    {
+      "samples": ["reading-contribution-methods-v1"],
+      "source_id": "rafi-publications",
+      "title": "Reading Between the Lines: NLP for Long-Horizon Factor Investing (Part 1 of 2) | RAFI Indices",
+      "url": "https://www.rafi.com/research/publications/articles/1117-nlp-for-long-horizon-factor-investing",
+      "pdf_url": "https://awesome-light-4e4ac6b0e4.media.strapiapp.com/1117_nlp_for_long_horizon_factor_investing_d39e26f476.pdf",
+      "authors": ["Que Nguyen", "Joseph Shim, CFA"],
+      "published_at": "2026-06-02T15:15:00+00:00",
+      "source_digest": "a7f289afc320a783f3912677fc53e4c6ca92bb2ac822dbfbff317a092b323de2",
+      "expected_content_kinds": ["research", "practitioner"],
+      "expected_subjects": ["investment_methodology", "empirical_market_research"],
+      "expected_contributions": ["rule_or_measurement", "investment_mechanism", "empirical_finding"],
+      "expected_lane": "core",
+      "reading_check": "NLP on SEC filings explicitly defines Jaccard similarity, ranking and portfolio comparisons. It is not generic AI workflow. This is a reading label, not replicated performance. Prior editor-audited original; frozen before v6 calls."
+    },
+    {
       "source_id": "kcmi-reports",
       "title": "초고령사회 다층노후소득을 위한 퇴직연금제도 개편",
       "url": "https://www.kcmi.re.kr/report/report_view?report_no=2327",
@@ -14,7 +194,7 @@
       "published_at": "2026-09-03T15:00:00+00:00",
       "source_digest": "06a547e91ba66919a837b396c89834f355040360a74179b66d66cc25d1c6425f",
       "samples": [
-        "reading-subject-v1"
+        "reading-subject-v1", "reading-commercialization-v1"
       ],
       "expected_content_kinds": [
         "research",
@@ -63,7 +243,7 @@
       "published_at": "2026-08-19T00:00:00+00:00",
       "source_digest": "e3038ad85e98d5fcaacf2101a3ca37b332977df7ce2cb6322f9f37d0c1577553",
       "samples": [
-        "reading-subject-v1"
+        "reading-subject-v1", "reading-products-v1"
       ],
       "expected_content_kinds": [
         "research",
@@ -87,7 +267,7 @@
       "published_at": "2023-12-11T00:00:00+00:00",
       "source_digest": "7e7c14fc4e892dcbcf3dffbd53e0879f11c63d2b422d9ada12092f126ad8eac2",
       "samples": [
-        "reading-subject-positive-v1"
+        "reading-subject-positive-v1", "reading-commercialization-v1"
       ],
       "expected_content_kinds": [
         "research",
@@ -111,7 +291,7 @@
       "published_at": "2026-07-15T07:35:01+00:00",
       "source_digest": "0fc6720c574b3b69976adb44a230e53bc7edaf39796d2db5aa6ea7ea84dcf9e1",
       "samples": [
-        "reading-subject-positive-v1"
+        "reading-subject-positive-v1", "reading-products-v1"
       ],
       "expected_content_kinds": [
         "research",
