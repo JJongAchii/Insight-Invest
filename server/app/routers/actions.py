@@ -19,7 +19,7 @@ from datastore import holdings as holdings_store
 from datastore import journal as journal_store
 from datastore import watchlist as watchlist_store
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from . import attention, overview
 from . import watchlist as watchlist_api
@@ -33,6 +33,43 @@ SEVERITY_RANK = {"high": 0, "medium": 1, "low": 2}
 class ActionStateRequest(BaseModel):
     state: Literal["new", "read", "snoozed", "dismissed"]
     snoozed_until: datetime | None = None
+
+
+class ResultMetric(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+    label: str
+    unit: str
+    actual: float | None = None
+    estimate: float | None = None
+    previous: float | None = None
+    actual_period: str | None = None
+    previous_period: str | None = None
+    frequency: Literal["monthly", "quarterly", "fiscal"] = "monthly"
+    comparison: Literal["previous", "estimate"]
+    difference: float | None = None
+    difference_unit: str
+    source_url: str = ""
+    status: Literal["released", "scheduled", "pending", "unavailable"]
+    note: str | None = None
+
+
+class ResultSummary(BaseModel):
+    status: Literal["released", "partial", "scheduled", "pending", "unavailable"]
+    source: str
+    available_at: datetime
+    note: str
+    metrics: list[ResultMetric]
+
+
+def _result_summary(row) -> dict | None:
+    value = getattr(row, "result_summary", None)
+    if not isinstance(value, str):
+        return None
+    try:
+        return ResultSummary.model_validate_json(value).model_dump(mode="json")
+    except ValidationError:
+        logger.warning("External event result summary is invalid; preserving event without metrics")
+        return None
 
 
 def _iso(value) -> str | None:
@@ -78,6 +115,7 @@ def _event(
     scope: str | None = None,
     event_status: str | None = None,
     actions: list[str] | None = None,
+    result_summary: dict | None = None,
 ) -> dict:
     return {
         "event_id": _event_id(source, key, occurred_at),
@@ -98,6 +136,7 @@ def _event(
         "data_as_of": data_as_of,
         "scheduled_for": scheduled_for,
         "source": source,
+        "result_summary": result_summary,
         "actions": actions or ["open", "journal", "snooze", "dismiss"],
     }
 
@@ -450,6 +489,7 @@ def _external_event_events(now: datetime, horizon_days: int) -> list[dict]:
                 market=_optional_text(row, "market"),
                 scope=_optional_text(row, "scope"),
                 event_status=_optional_text(row, "event_status"),
+                result_summary=_result_summary(row),
             )
         )
     return out

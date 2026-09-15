@@ -66,7 +66,14 @@ from datastore import (  # noqa: E402
     storage,
     watchlist,
 )
-from module import asset_master, earnings, external_events, regime, spotlight  # noqa: E402
+from module import (  # noqa: E402
+    asset_master,
+    earnings,
+    external_events,
+    macro_event_results,
+    regime,
+    spotlight,
+)
 from module.backtest import Backtest  # noqa: E402
 from module.util import backtest_result  # noqa: E402
 from qdata import api as qdata_api  # noqa: E402
@@ -1889,6 +1896,18 @@ def _earnings_hub_action_events(
     selected = hub[hub["meta_id"].isin(tracked_ids)].copy()
     dates = pd.to_datetime(selected["release_date"], errors="coerce").dt.date
     selected = selected[dates.between(start, end, inclusive="both")]
+    # Keep Action Center's official fallback/basis identical to Earnings Hub.
+    from app.routers.earnings import _resolve_actuals
+
+    selected = _resolve_actuals(selected)
+    known_on = (
+        pd.to_datetime(selected["available_at"], utc=True).dt.tz_convert("America/New_York").dt.date
+    )
+    future = pd.to_datetime(selected["release_date"]).dt.date > known_on
+    selected.loc[
+        future, ["eps_actual", "eps_surprise_pct", "revenue_actual", "revenue_surprise_pct"]
+    ] = None
+    selected.loc[future, "lifecycle"] = "scheduled"
     rows = []
     upcoming = reported = 0
     timing_labels = {
@@ -1951,6 +1970,14 @@ def _earnings_hub_action_events(
                 "scheduled_for": row.release_date,
                 "source": "finnhub_earnings",
                 "event_status": "observed" if is_reported else "projected",
+                "result_summary": external_events.earnings_result_summary(
+                    {**row._asdict(), "period": period},
+                    source=(
+                        "Finnhub · SEC"
+                        if row.actual_reconciliation_status == "official_only"
+                        else "Finnhub"
+                    ),
+                ),
             }
         )
     events = pd.DataFrame(rows).reindex(columns=external_events.EVENT_COLUMNS)
@@ -1982,9 +2009,12 @@ def build_external_events() -> pd.DataFrame:
     qdata_settings.lake_root()
 
     def fred():
-        return external_events.fetch_fred_events(
-            qdata_settings.fred_api_key(), today, macro_end, available_at
+        key = qdata_settings.fred_api_key()
+        result = external_events.fetch_fred_events(
+            key, today - timedelta(days=7), macro_end, available_at
         )
+        result.events = macro_event_results.enrich_fred_results(result.events, key, available_at)
+        return result
 
     def fomc():
         return external_events.fetch_fomc_events(today, macro_end, available_at)
