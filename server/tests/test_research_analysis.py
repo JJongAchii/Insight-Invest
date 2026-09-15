@@ -80,6 +80,8 @@ def source(monkeypatch, tmp_path):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key-never-used-over-network")
     monkeypatch.setenv("RADAR_ANALYSIS_ENABLED", "true")
     monkeypatch.setenv("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "2")
+    monkeypatch.delenv("RADAR_ANALYSIS_BUDGET_OVERRIDE_MONTH", raising=False)
+    monkeypatch.delenv("RADAR_ANALYSIS_BUDGET_OVERRIDE_USD", raising=False)
     record = publication_record(
         {
             "title": "Factor portfolio research",
@@ -346,6 +348,114 @@ def test_monthly_cap_stops_before_network(source, monkeypatch):
     # Already-paid selection AND boundary remain usable; no summary was purchased.
     assert research.load_feed()["items"][0]["notification_eligible"]
     assert "analysis" not in research.load_feed()["items"][0]
+
+
+@pytest.mark.parametrize(
+    "timestamp,expected",
+    [
+        ("2026-08-31T14:59:59+00:00", 900_000_000),
+        ("2026-08-31T15:00:00+00:00", 1_000_000_000),
+        ("2026-09-15T12:00:00+09:00", 1_000_000_000),
+        ("2026-09-30T14:59:59+00:00", 1_000_000_000),
+        ("2026-09-30T15:00:00+00:00", 900_000_000),
+        ("2026-10-01T00:00:00+00:00", 900_000_000),
+        ("2027-09-15T12:00:00+09:00", 900_000_000),
+    ],
+)
+def test_dated_budget_expires_at_october_kst_midnight(monkeypatch, timestamp, expected):
+    monkeypatch.setenv("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0.90")
+    monkeypatch.setenv("RADAR_ANALYSIS_BUDGET_OVERRIDE_MONTH", "2026-09")
+    monkeypatch.setenv("RADAR_ANALYSIS_BUDGET_OVERRIDE_USD", "1.00")
+    assert analysis.budget_limit_nanousd(datetime.fromisoformat(timestamp)) == expected
+    monkeypatch.setenv("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0")
+    assert analysis.budget_limit_nanousd(datetime.fromisoformat(timestamp)) == 0
+
+
+@pytest.mark.parametrize(
+    "month,amount",
+    [
+        ("", "1.00"),
+        ("2026-09", ""),
+        ("2026-9", "1.00"),
+        ("2026-13", "1.00"),
+        ("0000-09", "1.00"),
+        ("2026-09", "NaN"),
+        ("2026-09", "Infinity"),
+        ("2026-09", "-1"),
+        ("2026-09", "0"),
+        ("2026-09", "oops"),
+    ],
+)
+def test_invalid_budget_override_stops_before_storage(
+    source, monkeypatch, month, amount
+):
+    monkeypatch.setenv("RADAR_ANALYSIS_BUDGET_OVERRIDE_MONTH", month)
+    monkeypatch.setenv("RADAR_ANALYSIS_BUDGET_OVERRIDE_USD", amount)
+    monkeypatch.setattr(
+        storage, "exists", lambda _: pytest.fail("budget must fail first")
+    )
+    with pytest.raises(ValueError):
+        analysis.enrich(now=NOW)
+
+
+def test_override_preserves_spending_and_expiry_does_not_reset_utc_ledger(
+    source, monkeypatch
+):
+    research_feed.reconcile(s3=source, now=NOW)
+    monkeypatch.setenv("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0.90")
+    monkeypatch.setenv("RADAR_ANALYSIS_BUDGET_OVERRIDE_MONTH", "2026-09")
+    monkeypatch.setenv("RADAR_ANALYSIS_BUDGET_OVERRIDE_USD", "1.00")
+    path = "research_analysis/budget-2026-09.json"
+    prior = {"reserved_nanousd": 950_000_000, "prior_failures": "retained"}
+    storage.write_json(prior, path)
+    result = analysis.enrich(
+        now=NOW,
+        text_loader=lambda _: TEXT,
+        model_call=lambda *_: (brief(), {"input_tokens": 100, "output_tokens": 80}),
+    )
+    assert result["drafted"] == 1 and result["limit_nanousd"] == 1_000_000_000
+    assert result["reserved_nanousd"] == prior["reserved_nanousd"] + 185_000
+    before_expiry = storage.read_json(path)
+    assert before_expiry["prior_failures"] == "retained"
+    expired = analysis.enrich(
+        now=datetime.fromisoformat("2026-10-01T00:00:00+09:00"),
+        text_loader=lambda _: TEXT,
+        review_call=lambda *_: pytest.fail("expired override must not buy review"),
+    )
+    assert expired["reason"] == "monthly_budget_reached"
+    assert expired["limit_nanousd"] == 900_000_000
+    assert storage.read_json(path) == before_expiry
+    assert not storage.exists("research_analysis/budget-2026-10.json")
+
+
+def test_budget_expiry_during_source_load_stops_next_paid_request(source, monkeypatch):
+    class Clock(datetime):
+        current = datetime.fromisoformat("2026-09-30T23:59:59+09:00")
+
+        @classmethod
+        def now(cls, tz):
+            return cls.current.astimezone(tz)
+
+    research_feed.reconcile(s3=source, now=NOW)
+    monkeypatch.setattr(analysis, "datetime", Clock)
+    monkeypatch.setenv("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0.90")
+    monkeypatch.setenv("RADAR_ANALYSIS_BUDGET_OVERRIDE_MONTH", "2026-09")
+    monkeypatch.setenv("RADAR_ANALYSIS_BUDGET_OVERRIDE_USD", "1.00")
+    path = "research_analysis/budget-2026-09.json"
+    prior = {"reserved_nanousd": 950_000_000}
+    storage.write_json(prior, path)
+
+    def load(_item):
+        Clock.current += timedelta(seconds=1)
+        return TEXT
+
+    result = analysis.enrich(
+        text_loader=load,
+        model_call=lambda *_: pytest.fail("override expired while loading source"),
+    )
+    assert result["reason"] == "monthly_budget_reached"
+    assert result["limit_nanousd"] == 900_000_000
+    assert storage.read_json(path) == prior
 
 
 def test_missing_openai_key_leaves_original_readable(source, monkeypatch):

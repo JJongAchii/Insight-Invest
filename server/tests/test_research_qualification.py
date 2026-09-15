@@ -1,6 +1,7 @@
 """Qualification must not deploy, access live user state, or reset its budget."""
 
 import importlib.util
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,8 @@ def configured(monkeypatch):
     monkeypatch.setenv("APP_DATA", qualification.QUALIFICATION_ROOT)
     monkeypatch.setenv("RADAR_ANALYSIS_ENABLED", "true")
     monkeypatch.setenv("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "1.00")
+    monkeypatch.delenv("RADAR_ANALYSIS_BUDGET_OVERRIDE_MONTH", raising=False)
+    monkeypatch.delenv("RADAR_ANALYSIS_BUDGET_OVERRIDE_USD", raising=False)
     monkeypatch.setenv("RESEARCH_MAX_ITEMS", "1")
     monkeypatch.setenv("RESEARCH_SOURCES", "aqr-research")
     monkeypatch.delenv("RESEARCH_QUALIFICATION_MODEL", raising=False)
@@ -217,6 +220,8 @@ def test_full_brief_requires_automatic_gate_not_only_completed_translation(monke
         ("RADAR_ANALYSIS_ENABLED", "false"),
         ("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "1.100001"),
         ("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0"),
+        ("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "NaN"),
+        ("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "Infinity"),
         ("RESEARCH_MAX_ITEMS", "31"),
         ("RESEARCH_SOURCES", "man-systematic-insights"),
         ("RESEARCH_SOURCES", "unknown-source"),
@@ -260,6 +265,9 @@ def test_workflow_is_manual_serialized_non_deploy_and_within_combined_budget():
     ) == Decimal("2")
     assert "lambda get-function-configuration" in run["run"]
     assert 'test "$LIVE_RESEARCH_BUDGET" = "0.90"' in run["run"]
+    assert run["env"]["RADAR_ANALYSIS_BUDGET_OVERRIDE_MONTH"] == "2026-09"
+    assert Decimal(run["env"]["RADAR_ANALYSIS_BUDGET_OVERRIDE_USD"]) + Decimal("1") == 5
+    assert '.month == "2026-09" and .usd == "1.00"' in run["run"]
     assert (
         'RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "0.90"'
         in (ROOT / "infra/template.yaml").read_text()
@@ -270,6 +278,37 @@ def test_workflow_is_manual_serialized_non_deploy_and_within_combined_budget():
         or "lambda invoke" in step.get("run", "")
         for step in steps
     )
+
+
+@pytest.mark.parametrize("month,amount", [("2026-10", "4"), ("2026-09", "4.000001")])
+def test_unapproved_qualification_overrides_fail(
+    configured, monkeypatch, month, amount
+):
+    monkeypatch.setenv("RADAR_ANALYSIS_BUDGET_OVERRIDE_MONTH", month)
+    monkeypatch.setenv("RADAR_ANALYSIS_BUDGET_OVERRIDE_USD", amount)
+    with pytest.raises(ValueError, match="approved only"):
+        qualification.validate_environment()
+
+
+@pytest.mark.parametrize(
+    "timestamp,expected",
+    [
+        ("2026-09-30T23:59:59+09:00", 4_000_000_000),
+        ("2026-10-01T00:00:00+09:00", 1_100_000_000),
+    ],
+)
+def test_qualification_uses_dated_cap_without_increasing_base(
+    configured, monkeypatch, timestamp, expected
+):
+    monkeypatch.setenv("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "1.10")
+    monkeypatch.setenv("RADAR_ANALYSIS_BUDGET_OVERRIDE_MONTH", "2026-09")
+    monkeypatch.setenv("RADAR_ANALYSIS_BUDGET_OVERRIDE_USD", "4.00")
+    now = datetime.fromisoformat(timestamp)
+    assert qualification.validate_environment(now=now)[2] == "gpt-5-mini"
+    assert qualification.research_analysis.budget_limit_nanousd(now) == expected
+    monkeypatch.setenv("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "4")
+    with pytest.raises(ValueError, match="at most"):
+        qualification.validate_environment(now=now)
 
 
 def test_mini_comparison_is_bounded_and_uses_correct_rates(configured, monkeypatch):

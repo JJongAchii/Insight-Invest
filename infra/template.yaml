@@ -467,6 +467,8 @@ Resources:
           OPENAI_API_KEY: !Ref OpenAIApiKey
           RADAR_ANALYSIS_ENABLED: !Ref ResearchAnalysisEnabled
           RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "0.90"
+          RADAR_ANALYSIS_BUDGET_OVERRIDE_MONTH: "2026-09"
+          RADAR_ANALYSIS_BUDGET_OVERRIDE_USD: "1.00"
           WEB_PUSH_PUBLIC_KEY: !Ref WebPushPublicKey
           WEB_PUSH_PRIVATE_KEY: !Ref WebPushPrivateKey
           WEB_PUSH_SUBJECT: !Ref WebPushSubject

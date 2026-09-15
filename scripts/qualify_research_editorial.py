@@ -199,18 +199,25 @@ def preserved_input(record: dict, case: dict) -> dict:
     return {**record, "parser_version": case["baseline_parser_version"]}
 
 
-def validate_environment() -> tuple[int, list[str], str]:
+def validate_environment(*, now: datetime | None = None) -> tuple[int, list[str], str]:
     if not os.environ.get("OPENAI_API_KEY", "").strip():
         raise ValueError("OPENAI_API_KEY is not configured")
     if storage.app_data_root() != QUALIFICATION_ROOT:
         raise ValueError("qualification requires its isolated APP_DATA prefix")
     if not research_review.enabled():
         raise ValueError("isolated qualification requires explicit analysis opt-in")
+    research_analysis.budget_limit_nanousd(now or datetime.now(UTC))
     budget = Decimal(os.environ.get("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0"))
     if not Decimal("0") < budget <= Decimal("1.10"):
         raise ValueError(
             "qualification monthly budget must be positive and at most $1.10"
         )
+    month = os.environ.get("RADAR_ANALYSIS_BUDGET_OVERRIDE_MONTH", "").strip()
+    if month and (
+        month != "2026-09"
+        or Decimal(os.environ["RADAR_ANALYSIS_BUDGET_OVERRIDE_USD"]) > Decimal("4")
+    ):
+        raise ValueError("qualification override is approved only for 2026-09 up to $4")
     maximum = int(os.environ.get("RESEARCH_MAX_ITEMS", "1"))
     if not 1 <= maximum <= 30:
         raise ValueError("qualification requires 1 to 30 items")
@@ -385,7 +392,7 @@ def run(output: Path) -> int:
         research_boundary.OUTPUT_NANOUSD_PER_TOKEN,
     )
     try:
-        maximum, sources, model = validate_environment()
+        maximum, sources, model = validate_environment(now=now)
         sample = os.environ.get("RESEARCH_SAMPLE", "latest")
         cases = fixed_cases(sample, sources)
         name = boundary_model(sample, model)
@@ -441,9 +448,15 @@ def run(output: Path) -> int:
             "output": MODEL_PRICES[model][1],
         }
         report["max_items"] = maximum
-        report["monthly_qualification_limit_usd"] = os.environ[
+        report["monthly_qualification_base_usd"] = os.environ[
             "RADAR_ANALYSIS_MONTHLY_BUDGET_USD"
         ]
+        report["monthly_qualification_limit_usd"] = str(
+            Decimal(research_analysis.budget_limit_nanousd(now)) / 1_000_000_000
+        )
+        report["budget_override_month_kst"] = os.environ.get(
+            "RADAR_ANALYSIS_BUDGET_OVERRIDE_MONTH", ""
+        )
         report["review_pricing_nanousd_per_token"] = {
             "input": research_review.INPUT_NANOUSD_PER_TOKEN,
             "output": research_review.OUTPUT_NANOUSD_PER_TOKEN,
