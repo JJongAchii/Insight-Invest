@@ -92,6 +92,8 @@ jobs:
           APP_DATA: s3://insight-invest-datalake/research-radar/qualification/openai
           RADAR_ANALYSIS_ENABLED: "true"
           RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "1.10"
+          RADAR_ANALYSIS_BUDGET_OVERRIDE_MONTH: "2026-09"
+          RADAR_ANALYSIS_BUDGET_OVERRIDE_USD: "4.00"
           RESEARCH_MAX_ITEMS: ${{ inputs.research_max_items }}
           RESEARCH_SOURCES: ${{ inputs.research_sources }}
           RESEARCH_QUALIFICATION_MODEL: ${{ inputs.research_model }}
@@ -103,6 +105,10 @@ jobs:
             --function-name insight-invest-research-poller \
             --query 'Environment.Variables.RADAR_ANALYSIS_MONTHLY_BUDGET_USD' --output text)
           test "$LIVE_RESEARCH_BUDGET" = "0.90"
+          LIVE_RESEARCH_OVERRIDE=$(aws lambda get-function-configuration \
+            --function-name insight-invest-research-poller \
+            --query '{month:Environment.Variables.RADAR_ANALYSIS_BUDGET_OVERRIDE_MONTH,usd:Environment.Variables.RADAR_ANALYSIS_BUDGET_OVERRIDE_USD}' --output json)
+          jq -e '.month == "2026-09" and .usd == "1.00"' <<< "$LIVE_RESEARCH_OVERRIDE"
           python scripts/qualify_research_editorial.py --output qualification-report.json
       - uses: actions/upload-artifact@v4
         if: always()

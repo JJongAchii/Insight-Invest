@@ -11,8 +11,8 @@ import hashlib
 import json
 import os
 import re
-from datetime import UTC, datetime, timedelta
-from decimal import Decimal
+from datetime import UTC, datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 
 import httpx
 
@@ -501,6 +501,30 @@ def preserve_retries(items: list[dict]) -> None:
                 storage.write_json(retry, path)
 
 
+def budget_limit_nanousd(now: datetime) -> int:
+    """Select a dated KST exception without resetting the UTC cost ledger."""
+    try:
+        base = Decimal(os.environ.get("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0.90"))
+        if not base.is_finite():
+            raise ValueError("monthly budget must be finite")
+        if base <= 0:
+            return 0  # An exception cannot override the existing budget kill switch.
+        month = os.environ.get("RADAR_ANALYSIS_BUDGET_OVERRIDE_MONTH", "").strip()
+        amount = os.environ.get("RADAR_ANALYSIS_BUDGET_OVERRIDE_USD", "").strip()
+        if month or amount:
+            if not re.fullmatch(r"\d{4}-\d{2}", month):
+                raise ValueError("budget override requires a YYYY-MM month")
+            datetime.strptime(month, "%Y-%m")  # Reject invalid calendar months.
+            override = Decimal(amount)
+            if not override.is_finite() or override <= 0:
+                raise ValueError("budget override must be finite and positive")
+            if now.astimezone(timezone(timedelta(hours=9))).strftime("%Y-%m") == month:
+                base = override
+        return int(base * 1_000_000_000)
+    except InvalidOperation as exc:
+        raise ValueError("budget amounts must be decimal USD") from exc
+
+
 def enrich(
     *,
     now: datetime | None = None,
@@ -518,11 +542,9 @@ def enrich(
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
     if not api_key:
         return {"enabled": False, "reason": "missing_api_key", "completed": 0}
+    fixed_now = now is not None
     now = (now or datetime.now(UTC)).astimezone(UTC)
-    limit = int(
-        Decimal(os.environ.get("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0.90"))
-        * 1_000_000_000
-    )
+    limit = budget_limit_nanousd(now)
     if limit <= 0:
         return {"enabled": False, "reason": "budget_disabled", "completed": 0}
     budget_path = f"research_analysis/budget-{now:%Y-%m}.json"
@@ -700,6 +722,9 @@ def enrich(
                     OUTPUT_NANOUSD_PER_TOKEN,
                 )
             reservation = _reserve_payload(payload, input_rate, output_rate)
+            if not fixed_now:
+                # Source loading or a previous stage may have crossed KST midnight.
+                limit = min(limit, budget_limit_nanousd(datetime.now(UTC)))
             if budget["reserved_nanousd"] + reservation > limit:
                 reason = "monthly_budget_reached"
                 continue  # A paid-work hold must not hide verified cached originals.
