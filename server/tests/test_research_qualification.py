@@ -133,7 +133,10 @@ def test_legacy_library_id_maps_only_to_the_same_canonical_original():
     for key in ("entry_id", "producer_entry_id", "consumer_document_identity", "url"):
         with pytest.raises(ValueError, match="identity mapping"):
             qualification.batch_entry_key(
-                {**case, key: case["url"] + "-different" if key == "url" else "different"}
+                {
+                    **case,
+                    key: case["url"] + "-different" if key == "url" else "different",
+                }
             )
 
 
@@ -153,6 +156,18 @@ def test_editorial_cache_does_not_depend_on_preserved_library_alias():
     alias = {**item, "entry_id": "c" * 64}
     for stage in (research_selection, research_boundary, research_analysis):
         assert stage.cache_key(item) == stage.cache_key(alias)
+
+
+def test_incremental_core_is_preserved_as_a_separate_negative_reading_case():
+    cases = qualification.fixed_cases("reading-quality-20260915-f", ["kcmi-reports"])
+    assert len(cases) == 1
+    case = next(iter(cases.values()))
+    assert case["expected_lane"] == "context"
+    assert case["expected_content_kinds"] == ["research"]
+    assert (
+        case["entry_id"]
+        == "f9014e439ba0044e0677d1a4e7c56b55b8f5cfbca8f693427c8b88b46248b742"
+    )
 
 
 def test_batch_completion_cannot_borrow_manual_core_or_skip_review(monkeypatch):

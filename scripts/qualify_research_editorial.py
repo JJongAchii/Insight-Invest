@@ -73,7 +73,7 @@ GATE_SAMPLES = {
     "reading-gate-generalization-v1": "reading-evidence-generalization-v1",
 }
 BRIEF_SAMPLES = {"reading-brief-evidence-v1": "reading-subject-positive-v1"}
-BATCH_SAMPLES = frozenset(f"reading-quality-20260915-{part}" for part in "abcde")
+BATCH_SAMPLES = frozenset(f"reading-quality-20260915-{part}" for part in "abcdef")
 SAMPLES = (
     "latest",
     "reading-value-v1",
@@ -128,11 +128,10 @@ def fixed_cases(sample: str, sources: list[str]) -> dict[str, dict]:
     if sample == "latest":
         return {}
     if sample in BATCH_SAMPLES:
-        filename = (
-            "research-reading-holdout-20260915.json"
-            if sample == "reading-quality-20260915-e"
-            else "research-quality-20260915.json"
-        )
+        filename = {
+            "reading-quality-20260915-e": "research-reading-holdout-20260915.json",
+            "reading-quality-20260915-f": "research-reading-incremental-20260915.json",
+        }.get(sample, "research-quality-20260915.json")
         path = Path(__file__).with_name("fixtures") / filename
         cases = {
             batch_entry_key(item): item

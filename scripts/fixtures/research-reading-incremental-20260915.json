@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-09-15T07:35:42.950188+00:00",
+  "purpose": "One additional production core after the initial 27-case freeze. Read available parsed PDF excerpt in full before qualification. Preserve this later source instead of claiming the earlier core snapshot is still complete. Not used to revise selection or boundary prompts.",
+  "items": [
+    {
+      "entry_id": "f9014e439ba0044e0677d1a4e7c56b55b8f5cfbca8f693427c8b88b46248b742",
+      "source_id": "kcmi-reports",
+      "title": "무형자산의 부상과 생산요소의 배분 효율성 | 최신보고서 | 보고서 | 자본시장연구원",
+      "url": "https://www.kcmi.re.kr/report/report_view?report_no=2319",
+      "source_digest": "316aba992749ad0070a979192a04db0871c42d9f5c5de0a75afa80dfa9d0fd7a",
+      "published_at": "2026-08-25T15:00:00+00:00",
+      "authors": ["정희철"],
+      "analysis_scope": "pdf_excerpt",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-f",
+      "expected_lane": "context",
+      "expected_content_kinds": ["research"],
+      "reading_check": "Substantive economic research, but its object is production-factor allocation and aggregate productivity/policy, not asset-return, portfolio-risk or investment-rule analysis. Preserve it as economic background, not as low-quality or unreadable material. Do not confuse capital used by firms with portfolio capital allocation."
+    }
+  ]
+}
