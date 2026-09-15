@@ -4,7 +4,7 @@ const POINTS = [
   ["question", "다루는 질문"],
   ["method_data", "방법·데이터"],
   ["finding", "저자의 설명·주장"],
-  ["why_read", "읽어볼 이유"],
+  ["why_read", "핵심 내용"],
   ["limitation", "원문이 밝힌 한계"],
 ] as const;
 

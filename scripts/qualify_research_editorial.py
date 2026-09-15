@@ -46,10 +46,12 @@ ENABLED_SOURCES = tuple(
 # This comparison selector exists only in the isolated manual runner. Production
 # remains on its configured model; no environment-driven fallback is added.
 READING_CONTRAST_MODEL = "gpt-5.4-mini-2026-03-17"
+READING_QUALITY_MODEL = "gpt-5.4-2026-03-05"
 MODEL_PRICES = {
     "gpt-5-nano": (50, 400),
     "gpt-5-mini": (250, 2000),
     READING_CONTRAST_MODEL: (750, 4500),
+    READING_QUALITY_MODEL: (2500, 15000),
 }
 # Diagnostic only: one fixed model contrast, never a production fallback.
 BOUNDARY_MODEL_PRICES = {
@@ -262,12 +264,16 @@ def validate_environment(*, now: datetime | None = None) -> tuple[int, list[str]
     if sample not in SAMPLES or (sample == "v7-regression" and model != "gpt-5-mini"):
         raise ValueError("qualification sample is not approved")
     reading_contrast = model == READING_CONTRAST_MODEL
+    reading_quality = model == READING_QUALITY_MODEL
+    if reading_quality and sample not in {*BATCH_SAMPLES, "latest"}:
+        raise ValueError("reading quality model requires a bounded reading batch")
     if reading_contrast and sample != "reading-quality-20260915-a":
         raise ValueError("reading model contrast requires its frozen seven originals")
     if (
         sample in {*GATE_SAMPLES, *BRIEF_SAMPLES, *BATCH_SAMPLES}
         and model != "gpt-5-mini"
         and not reading_contrast
+        and not reading_quality
     ):
         raise ValueError("source-only gate qualification keeps GPT-5 mini")
     boundary_model(sample, model)  # Validate the contrast before source/provider I/O.
@@ -275,7 +281,9 @@ def validate_environment(*, now: datetime | None = None) -> tuple[int, list[str]
     if sample in BATCH_SAMPLES:
         if maximum != len(cases) or maximum > 12:
             raise ValueError("frozen reading batch requires its exact bounded size")
-    elif model == "gpt-5-mini" and not 1 <= maximum <= min(3, len(sources)):
+    elif model in {"gpt-5-mini", READING_QUALITY_MODEL} and not 1 <= maximum <= min(
+        3, len(sources)
+    ):
         raise ValueError("mini comparison allows at most three distinct sources")
     return maximum, sources, model
 
@@ -404,6 +412,11 @@ def run(output: Path) -> int:
         "review_model": research_review.MODEL,
         "review_prompt_version": research_review.PROMPT_VERSION,
         "selection_prompt_version": research_selection.PROMPT_VERSION,
+        "selection_model": research_selection.MODEL,
+        "selection_pricing_nanousd_per_token": {
+            "input": research_selection.INPUT_NANOUSD_PER_TOKEN,
+            "output": research_selection.OUTPUT_NANOUSD_PER_TOKEN,
+        },
         "dependencies": {
             name: version(name) for name in ("beautifulsoup4", "pypdf", "httpx")
         },

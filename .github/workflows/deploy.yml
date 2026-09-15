@@ -4,7 +4,7 @@
 #   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY  — ECR push + CFN deploy 권한
 #   GH_PAT                                     — quant-data(private) 읽기용 PAT
 #   API_TOKEN                                  — X-API-Key 앱 토큰
-#   OPENAI_API_KEY                             — Research GPT-5 mini 요약·원문 검수
+#   OPENAI_API_KEY                             — Research OpenAI 요약·원문 검수
 #   WEB_PUSH_PUBLIC_KEY / WEB_PUSH_PRIVATE_KEY  — VAPID 키 (없으면 Push 비활성)
 
 name: deploy-api
@@ -32,10 +32,10 @@ on:
         type: string
         default: "aqr-research"
       research_model:
-        description: Isolated writer model; 5.4 mini contrasts writer/reviewer on frozen batch A only
+        description: Pinned reading model; 5.4 mini is a diagnostic writer/reviewer contrast only
         type: choice
-        options: [gpt-5-nano, gpt-5-mini, gpt-5.4-mini-2026-03-17]
-        default: gpt-5-mini
+        options: [gpt-5-nano, gpt-5-mini, gpt-5.4-mini-2026-03-17, gpt-5.4-2026-03-05]
+        default: gpt-5.4-2026-03-05
       research_boundary_model:
         description: Diagnostic boundary contrast only; production is unchanged
         type: choice

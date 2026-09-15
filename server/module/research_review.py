@@ -11,14 +11,14 @@ import json
 import os
 import re
 
-MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-review-openai-v9-reading-value"
+MODEL = "gpt-5.4-2026-03-05"
+PROMPT_VERSION = "reading-review-openai-v10-single-note-fidelity"
 CODE_GUARD_VERSION = "point-qualifiers-v1"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 8192
 REQUEST_TIMEOUT_SECONDS = 120
-INPUT_NANOUSD_PER_TOKEN = 250
-OUTPUT_NANOUSD_PER_TOKEN = 2000
+INPUT_NANOUSD_PER_TOKEN = 2500
+OUTPUT_NANOUSD_PER_TOKEN = 15000
 POINTS = ("question", "method_data", "finding", "why_read", "limitation")
 FIELDS = (
     "title_ko",
@@ -73,6 +73,17 @@ For each check give a concise Korean reason (empty for not_applicable) and 0–4
 citable source passage IDs. supported non-null fields require at least one source
 passage. An unsupported/unclear field can use no IDs if the problem is missing
 evidence. IDs explain the check; they do NOT replace the draft's attached quotes.
+The current brief intentionally contains ONE central explanation in why_read.
+All other points may be null. That is complete for this format, not a missing
+paper summary. A faithful title focusing on that explanation is supported even
+when the original also covers other topics. Do not require literal translation
+of the original title or complete coverage of the entire document.
+Check causal roles and size contrasts explicitly: an investor's confidence can
+change the interpretation of an optimizer's output without causing its numerical
+variation. 'Large allocation differences barely change utility' is not 'small
+allocation changes barely change utility'. Reject added prescriptions in a note
+that is supposed to explain the original. Do not import a caveat about a different
+portfolio or test to qualify the central claim.
 Do not return an overall verdict: the application rejects if ANY field is
 unsupported or unclear. Being conservative is appropriate when a numerical claim,
 financial concept or attribution cannot be supported by the displayed evidence."""

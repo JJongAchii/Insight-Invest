@@ -1,4 +1,4 @@
-"""Bounded GPT-5 mini Korean reading briefs for public research documents.
+"""Bounded, source-grounded Korean reading briefs for public research documents.
 
 ResearchPoller is the single writer. Cost is reserved before every request, canonical
 records and user library state are never rewritten, and failures leave the item
@@ -19,14 +19,14 @@ import httpx
 from datastore import research, storage
 from module import research_boundary, research_review, research_selection
 
-MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-brief-openai-v12-readable-investment-note"
+MODEL = "gpt-5.4-2026-03-05"
+PROMPT_VERSION = "reading-brief-openai-v13-single-reading-note"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 8192  # Visible output AND reasoning; real PDFs exceeded 4096.
 MAX_INPUT_CHARS = 24000
 MAX_ATTEMPTS = 3
-INPUT_NANOUSD_PER_TOKEN = 250
-OUTPUT_NANOUSD_PER_TOKEN = 2000
+INPUT_NANOUSD_PER_TOKEN = 2500
+OUTPUT_NANOUSD_PER_TOKEN = 15000
 MAX_EVIDENCE_CHARS = 1200
 MAX_EVIDENCE_PASSAGES = 4
 CONTENT_KINDS = ("research", "practitioner", "market_commentary", "other")
@@ -80,6 +80,16 @@ not a generic legal disclaimer. Unsupported or uninformative fields are null.
 An informative why_read can stand alone; never fill finding with a slogan just to
 populate a template. Do not use '교훈:' or '핵심 질문은' as repetitive boilerplate.
 title_ko conveys the actual subject in natural Korean, not a literal idiom translation.
+For the current selected-evidence path, write ONLY why_read: a compact explanation
+of the source's central idea in 2–3 natural Korean sentences, usually 120–260
+characters. The other four points are null by schema. Explain the actual mechanism
+or comparison, not advice about what the reader should do. Do not add '따져봐야 한다',
+'확인해야 한다' or an inferred investment recommendation. Keep the source's actor,
+direction, size contrast and qualifications. For example, 'large allocation changes
+have little effect on utility' must not become 'small changes have little effect'.
+Explain foreign concepts in plain Korean; do not leave passive portfolio or moderate
+dips untranslated. The note's title can focus on this selected idea within the
+original; it need not cover every other section of a longer article.
 reviewer_note is always the empty string. No unquoted synthesis or further-reading
 claims: the interface supplies a fixed scope/validation disclaimer instead.
 
@@ -331,9 +341,12 @@ def reading_evidence_plan(item: dict) -> dict | None:
             else None
         )
 
-    result["method_data"] = accepted("method")
-    result["why_read"] = accepted("insight") or accepted("method")
-    return result
+    return {
+        name: (accepted("insight") or accepted("method"))
+        if name == "why_read"
+        else None
+        for name in FIELDS
+    }
 
 
 def cache_key(item: dict) -> str:
@@ -719,13 +732,8 @@ def enrich(
                     item["title"],
                     **({"proposed": proposed} if stage == "boundary" else {}),
                 )
-                input_rate, output_rate = (
-                    INPUT_NANOUSD_PER_TOKEN,
-                    OUTPUT_NANOUSD_PER_TOKEN,
-                )
-                if stage == "boundary":
-                    input_rate = research_boundary.INPUT_NANOUSD_PER_TOKEN
-                    output_rate = research_boundary.OUTPUT_NANOUSD_PER_TOKEN
+                input_rate = selector.INPUT_NANOUSD_PER_TOKEN
+                output_rate = selector.OUTPUT_NANOUSD_PER_TOKEN
             elif stage == "review":
                 payload = research_review.request_payload(
                     text, item["title"], item["analysis"]["brief"]

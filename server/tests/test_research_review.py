@@ -65,7 +65,7 @@ def test_review_request_is_separate_bounded_untrusted_and_structured(monkeypatch
     monkeypatch.setattr(analysis.httpx, "post", post)
     checks, usage = review.model_call(TEXT, "Original", brief(), "offline-key")
     assert usage == USAGE and set(checks) == set(review.FIELDS)
-    assert captured["model"] == "gpt-5-mini" and captured["store"] is False
+    assert captured["model"] == "gpt-5.4-2026-03-05" and captured["store"] is False
     assert captured["instructions"] != analysis.SYSTEM
     assert (
         "UNTRUSTED" in captured["instructions"]
@@ -215,7 +215,7 @@ def test_new_budget_preserves_old_reservations_and_resumes_cached_draft(
         review_call=reserved_call,
     )
     assert (
-        result["reserved_nanousd"] == 82_225_450
+        result["reserved_nanousd"] == 83_490_450
         and result["limit_nanousd"] == 500_000_000
     )
     item = research.load_feed()["items"][0]

@@ -268,7 +268,9 @@ def test_backfill_and_topic_mismatch_never_notify(
     assert not item["notification_eligible"]
 
 
-def test_model_request_uses_gpt5_mini_strict_schema_without_storage(monkeypatch):
+def test_model_request_uses_pinned_reading_model_strict_schema_without_storage(
+    monkeypatch,
+):
     captured = {}
 
     class Response:
@@ -300,7 +302,7 @@ def test_model_request_uses_gpt5_mini_strict_schema_without_storage(monkeypatch)
         "input_tokens": 100,
         "output_tokens": 80,
     }
-    assert payload["model"] == "gpt-5-mini" and payload["store"] is False
+    assert payload["model"] == "gpt-5.4-2026-03-05" and payload["store"] is False
     assert payload["text"]["format"]["type"] == "json_schema"
     assert payload["text"]["format"]["strict"] is True
     assert payload["max_output_tokens"] == analysis.MAX_OUTPUT_TOKENS
@@ -324,7 +326,7 @@ def test_budget_is_reserved_before_call_and_cache_avoids_second_call(source):
 
     result = analysis.enrich(now=NOW, text_loader=lambda _item: TEXT, model_call=model)
     assert result["completed"] == 1
-    assert result["reserved_nanousd"] == 185_000
+    assert result["reserved_nanousd"] == 1_450_000
     assert research.load_feed()["items"][0]["research_lane"] == "core"
     reviewed = analysis.enrich(
         now=NOW,
@@ -334,7 +336,7 @@ def test_budget_is_reserved_before_call_and_cache_avoids_second_call(source):
             {"input_tokens": 100, "output_tokens": 80},
         ),
     )
-    assert reviewed["reviewed"] == 1 and reviewed["reserved_nanousd"] == 370_000
+    assert reviewed["reviewed"] == 1 and reviewed["reserved_nanousd"] == 2_900_000
     assert research.load_feed()["items"][0]["research_lane"] == "core"
     assert (
         analysis.enrich(now=NOW, text_loader=lambda _item: TEXT, model_call=model)[
@@ -416,8 +418,10 @@ def test_override_preserves_spending_and_expiry_does_not_reset_utc_ledger(
     monkeypatch.setenv("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0.90")
     monkeypatch.setenv("RADAR_ANALYSIS_BUDGET_OVERRIDE_MONTH", "2026-09")
     monkeypatch.setenv("RADAR_ANALYSIS_BUDGET_OVERRIDE_USD", "1.00")
+    # Isolate expiry mechanics from the larger model's maximum-output reserve.
+    monkeypatch.setattr(analysis, "MAX_OUTPUT_TOKENS", 2048)
     path = "research_analysis/budget-2026-09.json"
-    prior = {"reserved_nanousd": 950_000_000, "prior_failures": "retained"}
+    prior = {"reserved_nanousd": 910_000_000, "prior_failures": "retained"}
     storage.write_json(prior, path)
     result = analysis.enrich(
         now=NOW,
@@ -425,7 +429,7 @@ def test_override_preserves_spending_and_expiry_does_not_reset_utc_ledger(
         model_call=lambda *_: (brief(), {"input_tokens": 100, "output_tokens": 80}),
     )
     assert result["drafted"] == 1 and result["limit_nanousd"] == 1_000_000_000
-    assert result["reserved_nanousd"] == prior["reserved_nanousd"] + 185_000
+    assert result["reserved_nanousd"] == prior["reserved_nanousd"] + 1_450_000
     before_expiry = storage.read_json(path)
     assert before_expiry["prior_failures"] == "retained"
     expired = analysis.enrich(
@@ -545,7 +549,7 @@ def test_failed_requests_keep_reservation_and_stop_after_three_attempts(source):
     assert result["reserved_nanousd"] == 3 * analysis._request_reservation(
         TEXT,
         item["title"],
-        evidence_plan=item["editorial_selection"]["decision"]["reading_points"],
+        evidence_plan=analysis.reading_evidence_plan(item),
     )
 
 
@@ -594,16 +598,14 @@ def test_persisted_cache_recovers_projection_without_another_request(source):
 def test_source_input_is_bounded_before_reserving_and_sending(source):
     research_feed.reconcile(s3=source, now=NOW)
     long_text = TEXT * 100
+    observed = {}
 
     def model(text, title, _key):
-        assert text == long_text[: analysis.MAX_INPUT_CHARS]
-        assert storage.read_json("research_analysis/budget-2026-09.json")[
-            "reserved_nanousd"
-        ] == analysis._request_reservation(
-            text,
-            title,
-            evidence_plan=selection_for(source.record, TEXT, NOW)["decision"][
-                "reading_points"
+        observed.update(
+            text=text,
+            title=title,
+            reserved=storage.read_json("research_analysis/budget-2026-09.json")[
+                "reserved_nanousd"
             ],
         )
         return brief(), {"input_tokens": 100, "output_tokens": 80}
@@ -613,6 +615,13 @@ def test_source_input_is_bounded_before_reserving_and_sending(source):
             "completed"
         ]
         == 1
+    )
+    assert observed["text"] == long_text[: analysis.MAX_INPUT_CHARS]
+    # enrich first restores the admitted evidence in memory, then persists it.
+    assert observed["reserved"] == analysis._request_reservation(
+        observed["text"],
+        observed["title"],
+        evidence_plan=analysis.reading_evidence_plan(research.load_feed()["items"][0]),
     )
 
 

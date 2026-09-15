@@ -38,9 +38,12 @@ def remove_selection_cache(source, tmp_path):
     ],
 )
 def test_source_only_selection_is_first_budgeted_stage(
-    source, tmp_path, kind, insight, expected
+    source, tmp_path, monkeypatch, kind, insight, expected
 ):
     remove_selection_cache(source, tmp_path)
+    # A cheaper writer diagnostic must not undercharge the separate selector.
+    monkeypatch.setattr(analysis, "INPUT_NANOUSD_PER_TOKEN", 50)
+    monkeypatch.setattr(analysis, "OUTPUT_NANOUSD_PER_TOKEN", 400)
 
     def choose(text, title, key):
         assert (
@@ -76,7 +79,7 @@ def test_source_only_selection_is_first_budgeted_stage(
     )
     item = research.load_feed()["items"][0]
     assert result["selected"] == 1 and result["drafted"] == result["reviewed"] == 0
-    assert result["reserved_nanousd"] == 185_000
+    assert result["reserved_nanousd"] == 1_450_000
     assert selection.model_state(item) == expected
     assert item["research_lane"] == ("discovery" if expected == "core" else expected)
     assert "analysis" not in item
@@ -339,6 +342,16 @@ def test_writer_sees_only_preselected_field_evidence():
     assert payload["text"]["format"]["schema"]["properties"]["method_data"]["anyOf"][1][
         "properties"
     ]["evidence_ids"]["items"]["enum"] == [0]
+
+
+def test_selection_schema_does_not_fill_unrelated_paper_template_fields():
+    payload = selection.request_payload(TEXT, "Original")
+    fields = payload["text"]["format"]["schema"]["properties"]["reading_points"][
+        "properties"
+    ]
+    for name in ("question", "finding", "limitation"):
+        assert fields[name] == {"type": "null"}
+    assert fields["why_read"]["anyOf"][1] == {"$ref": "#/$defs/source_span"}
 
 
 def test_generation_cannot_add_an_unquoted_editorial_note():

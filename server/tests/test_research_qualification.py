@@ -24,13 +24,26 @@ def configured(monkeypatch):
     monkeypatch.delenv("RADAR_ANALYSIS_BUDGET_OVERRIDE_USD", raising=False)
     monkeypatch.setenv("RESEARCH_MAX_ITEMS", "1")
     monkeypatch.setenv("RESEARCH_SOURCES", "aqr-research")
-    monkeypatch.delenv("RESEARCH_QUALIFICATION_MODEL", raising=False)
+    monkeypatch.setenv("RESEARCH_QUALIFICATION_MODEL", "gpt-5-mini")
     monkeypatch.delenv("RESEARCH_BOUNDARY_MODEL", raising=False)
     monkeypatch.delenv("RESEARCH_SAMPLE", raising=False)
 
 
 def test_isolated_environment_contract(configured):
     assert qualification.validate_environment() == (1, ["aqr-research"], "gpt-5-mini")
+
+
+def test_reading_quality_candidate_is_pinned_and_bounded(configured, monkeypatch):
+    monkeypatch.delenv("RESEARCH_QUALIFICATION_MODEL")
+    model = qualification.READING_QUALITY_MODEL
+    assert qualification.validate_environment() == (1, ["aqr-research"], model)
+    assert qualification.MODEL_PRICES[model] == (2500, 15000)
+    assert qualification.research_selection.MODEL == model
+    assert qualification.research_selection.INPUT_NANOUSD_PER_TOKEN == 2500
+    assert qualification.research_boundary.MODEL == "gpt-5-mini"
+    monkeypatch.setenv("RESEARCH_MAX_ITEMS", "4")
+    with pytest.raises(ValueError, match="three distinct sources"):
+        qualification.validate_environment()
 
 
 def test_frozen_batch_preserves_multiple_originals_from_one_source(
@@ -66,8 +79,8 @@ def test_frozen_batch_preserves_multiple_originals_from_one_source(
         750,
         4500,
     )
-    assert qualification.research_analysis.MODEL == "gpt-5-mini"
-    assert qualification.research_review.MODEL == "gpt-5-mini"
+    assert qualification.research_analysis.MODEL == qualification.READING_QUALITY_MODEL
+    assert qualification.research_review.MODEL == qualification.READING_QUALITY_MODEL
     for key, case in cases.items():
         assert (
             qualification.case_for(
@@ -383,7 +396,7 @@ def test_mini_comparison_is_bounded_and_uses_correct_rates(configured, monkeypat
     monkeypatch.setenv("RESEARCH_MAX_ITEMS", "3")
     assert qualification.validate_environment()[2] == "gpt-5-mini"
     assert qualification.MODEL_PRICES["gpt-5-mini"] == (250, 2000)
-    assert qualification.research_analysis.MODEL == "gpt-5-mini"
+    assert qualification.research_analysis.MODEL == qualification.READING_QUALITY_MODEL
     monkeypatch.setenv("RESEARCH_MAX_ITEMS", "4")
     with pytest.raises(ValueError, match="three distinct sources"):
         qualification.validate_environment()
@@ -465,6 +478,7 @@ def test_preserved_draft_replay_keeps_its_original_parser_identity(monkeypatch):
     monkeypatch.setattr(
         qualification.research_analysis, "PROMPT_VERSION", qualification.V7_PROMPT
     )
+    monkeypatch.setattr(qualification.research_analysis, "MODEL", "gpt-5-mini")
     assert (
         qualification.research_analysis.cache_key(replay)
         == case["baseline_fingerprint"]

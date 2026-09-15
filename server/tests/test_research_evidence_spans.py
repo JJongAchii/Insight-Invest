@@ -195,7 +195,7 @@ def test_brief_uses_accepted_insight_and_not_rejected_method(source):
     value["checks"]["method"]["role"] = "objective_or_profile"
     item["editorial_boundary"] = boundary.receipt(item, value, TEXT, NOW.isoformat())
     plan = analysis.reading_evidence_plan(item)
-    assert plan["method_data"] is None
+    assert all(plan[name] is None for name in analysis.FIELDS if name != "why_read")
     assert plan["why_read"] == decision["evidence_excerpts"]
     assert analysis.cache_key(item) != previous_key
     assert item["editorial_selection"] == original
@@ -203,6 +203,11 @@ def test_brief_uses_accepted_insight_and_not_rejected_method(source):
     assert request["text"]["format"]["schema"]["properties"]["method_data"] == {
         "type": "null"
     }
+    for name in analysis.FIELDS:
+        if name != "why_read":
+            assert request["text"]["format"]["schema"]["properties"][name] == {
+                "type": "null"
+            }
 
 
 def test_live_writer_recovers_reviewed_plan_even_for_manually_curated_core(

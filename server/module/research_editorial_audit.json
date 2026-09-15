@@ -3,6 +3,36 @@
   "scope": "editorial_reading_only_not_strategy_validation",
   "editor": "codex_original_audit",
   "items": {
+    "2443b6d4689607d35e9cd61abf8449c39a85782bb95c70c96cac2257a26dcfd2": {
+      "entry_id": "2443b6d4689607d35e9cd61abf8449c39a85782bb95c70c96cac2257a26dcfd2",
+      "source_id": "robeco-quant-insights",
+      "source_digest": "5218c28323c8978868b85965fc29e882ce385b3e8042539567efa601797f01ed",
+      "title": "Circular Economy: an all-weather strategy for every market cycle",
+      "url": "https://www.robeco.com/en-int/insights/2026/09/circular-economy-an-all-weather-strategy-for-every-market-cycle",
+      "pdf_url": "",
+      "parser_version": "editorial-v3-pdf-layout",
+      "analysis_scope": "full_article",
+      "lane": "context",
+      "reason": "운용 중인 테마 상품의 AI/비AI 배치와 우량기업 선호 속성·장점이 중심이다. 수치가 있는 프로필과 설명된 투자 분석을 구분한다.",
+      "checked_at": "2026-09-15T06:10:00+00:00",
+      "audit_basis": "official_full_article_digest_verified_20260915_main_editor_source_review",
+      "field_holds": {}
+    },
+    "4078a19020314fa8ecf7605eae2c745d182e7b08be0c153f242a98e3095bf603": {
+      "entry_id": "4078a19020314fa8ecf7605eae2c745d182e7b08be0c153f242a98e3095bf603",
+      "source_id": "robeco-quant-insights",
+      "source_digest": "510f89bc1ffacd56c4ec7980f2e80b02ef2513cbf17b20ea6b00e057474e2944",
+      "title": "Credit income amid interest rate uncertainty",
+      "url": "https://www.robeco.com/en-int/insights/2026/09/credit-income-amid-interest-rate-uncertainty",
+      "pdf_url": "",
+      "parser_version": "editorial-v3-pdf-layout",
+      "analysis_scope": "full_article",
+      "lane": "context",
+      "reason": "현재 신용시장 전망과 펀드의 기간·베타·선호 섹터 소개다. 현재 배분 수치는 재사용 가능한 분석이나 투자 규칙의 설명이 아니다.",
+      "checked_at": "2026-09-15T06:10:00+00:00",
+      "audit_basis": "official_full_article_digest_verified_20260915_main_editor_source_review",
+      "field_holds": {}
+    },
     "4a2f1514e7a59cedd5002866e299eb974a359760ee1ebbf3185e389fa0326026": {
       "entry_id": "4a2f1514e7a59cedd5002866e299eb974a359760ee1ebbf3185e389fa0326026",
       "source_id": "robeco-quant-insights",
@@ -258,10 +288,10 @@
       "parser_version": "editorial-v3-pdf-layout",
       "analysis_scope": "full_article",
       "draft_digest": "10620279c5ebe7c85297d716e6936616b85292b3cfb587a7093a70229a27d50a",
-      "lane": "core",
-      "reason": "홍보성 문맥도 있지만 직교 통계 모드에 대한 위험배분과 신호군 분산 원리를 실제로 설명한다.",
-      "checked_at": "2026-09-11T04:48:31+00:00",
-      "audit_basis": "official_source_and_attached_claim_comparison",
+      "lane": "context",
+      "reason": "원문 전체를 재검토한 결과, 기관의 도입 이유·회사 역량·방법명 소개가 중심이다. 직교 모드의 추출이나 배분 관계를 실제로 설명하지 않아 이전 core 판단을 정정한다.",
+      "checked_at": "2026-09-15T06:10:00+00:00",
+      "audit_basis": "official_full_article_digest_verified_20260915_main_editor_source_review; supersedes_20260911_core",
       "field_holds": {
         "why_read": "'이들 모드'가 무엇인지 요약과 첨부 인용만으로 설명되지 않는다."
       }
