@@ -3,8 +3,8 @@
 from module import research_boundary, research_review, research_selection
 
 
-def boundary_value(*, verdict="substantive"):
-    return {
+def boundary_value(*, verdict="substantive", include_method=False):
+    value = {
         "checks": {
             name: {
                 "source_meaning": "Synthetic check, not semantic evidence.",
@@ -20,12 +20,15 @@ def boundary_value(*, verdict="substantive"):
         "analysis_object": "investment_rule_or_measurement",
         "object_evidence_id": 0,
     }
+    if not include_method:
+        value["checks"]["method"] = None
+    return value
 
 
 def boundary_for(item, text, now, *, verdict="substantive"):
     if "editorial_selection" not in item:
         item["editorial_selection"] = selection_for(item, text, now)
-    value = boundary_value(verdict=verdict)
+    value = boundary_value(verdict=verdict, include_method=True)
     plan = research_boundary.evidence_plan(item)
     for name in value["checks"]:
         if not plan[name]:

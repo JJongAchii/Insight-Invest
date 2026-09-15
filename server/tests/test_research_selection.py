@@ -269,8 +269,36 @@ def test_main_purpose_gates_incidental_investment_explanation(source, category):
     receipt["decision"]["main_purpose"]["category"] = category
     receipt["decision_digest"] = selection.research_review.digest(receipt["decision"])
     item["editorial_selection"] = receipt
-    expected = "core" if category == "investment_analysis" else "context"
+    expected = (
+        "core"
+        if category in {"investment_analysis", "mixed_investment_analysis"}
+        else "context"
+    )
     assert selection.model_state(item) == expected
+
+
+@pytest.mark.parametrize("subject", selection.PRIMARY_SUBJECTS)
+@pytest.mark.parametrize("substantive", [True, False])
+def test_mixed_article_requires_actual_investment_section(source, subject, substantive):
+    item = deepcopy(source.record)
+    receipt = selection_for(item, TEXT, NOW)
+    decision = receipt["decision"]
+    decision["main_purpose"]["category"] = "mixed_investment_analysis"
+    decision["primary_subject"] = subject
+    decision["contribution_type"] = (
+        "investment_mechanism" if substantive else "overview_or_claim"
+    )
+    receipt["decision_digest"] = selection.research_review.digest(decision)
+    item["editorial_selection"] = receipt
+    admissible = substantive and subject in {
+        *selection.INVESTMENT_SUBJECTS,
+        "business_or_product",
+    }
+    assert selection.model_state(item) == ("core" if admissible else "context")
+    if admissible:
+        # A mixed label never bypasses the isolated source-evidence check.
+        item.pop("editorial_boundary", None)
+        assert selection.automatic_state(item) == "pending"
 
 
 def test_main_purpose_requires_grounded_evidence(source):

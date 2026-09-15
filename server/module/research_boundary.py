@@ -11,7 +11,7 @@ import json
 from module import research_review
 
 MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-boundary-v8-profile-consistency"
+PROMPT_VERSION = "reading-boundary-v9-unique-evidence"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 4096
 INPUT_NANOUSD_PER_TOKEN = 250
@@ -181,9 +181,15 @@ SCHEMA = {
 
 def evidence_plan(item: dict) -> dict:
     selected = item.get("editorial_selection", {}).get("decision", {})
+    insight = selected.get("evidence_excerpts", [])
+    method = (selected.get("reading_points") or {}).get("method_data") or []
+    # Check literal evidence once. Duplicating it under two field names creates
+    # contradictory judgments, not an independent test or extra reading value.
+    if method == insight:
+        method = []
     return {
-        "insight": selected.get("evidence_excerpts", []),
-        "method": (selected.get("reading_points") or {}).get("method_data") or [],
+        "insight": insight,
+        "method": method,
         "purpose": (selected.get("main_purpose") or {}).get("evidence_excerpts") or [],
     }
 

@@ -299,7 +299,8 @@ def test_code_derives_route_from_roles_not_model_overall_verdict(source, role):
     item = deepcopy(source.record)
     value = boundary_value()
     for check in value["checks"].values():
-        check["role"] = role
+        if check:
+            check["role"] = role
     item["editorial_boundary"] = boundary.receipt(item, value, TEXT, NOW.isoformat())
     assert selection.automatic_state(item) == (
         "core" if role in boundary.SUBSTANTIVE_ROLES else "held"
@@ -317,7 +318,7 @@ def test_one_specific_insight_is_enough_no_all_criteria_and_gate(source, role):
         analysis._source_passages(TEXT)[1]["text"]
     ]
     item["editorial_selection"]["decision_digest"] = research_review.digest(decision)
-    value = boundary_value(verdict="context")
+    value = boundary_value(verdict="context", include_method=True)
     value["checks"]["insight"]["role"] = role
     item["editorial_boundary"] = boundary.receipt(item, value, TEXT, NOW.isoformat())
     assert selection.automatic_state(item) == "core"
@@ -326,15 +327,29 @@ def test_one_specific_insight_is_enough_no_all_criteria_and_gate(source, role):
 @pytest.mark.parametrize("positive", ["insight", "method"])
 def test_same_literal_span_cannot_be_both_substantive_and_profile(source, positive):
     item = deepcopy(source.record)
-    assert (
-        boundary.evidence_plan(item)["insight"]
-        == boundary.evidence_plan(item)["method"]
-    )
-    value = boundary_value(verdict="context")
+    plan = boundary.evidence_plan(item)
+    assert plan["insight"] and not plan["method"]
+    # Retain the defensive guard for an explicit contradictory legacy proposal.
+    plan["method"] = plan["insight"]
+    value = boundary_value(verdict="context", include_method=True)
     value["checks"][positive]["role"] = "operational_detail"
+    for name, check in value["checks"].items():
+        check["evidence_excerpts"] = plan[name]
+    assert boundary._verdict(value, plan) == "uncertain"
+
+
+def test_duplicate_insight_method_is_reviewed_once_without_manufactured_check(source):
+    item = deepcopy(source.record)
+    plan = boundary.evidence_plan(item)
+    assert plan["insight"] and plan["method"] == []
+    payload = boundary.request_payload(TEXT, item["title"], proposed=plan)
+    assert (
+        boundary.json.loads(payload["input"])["proposed_evidence_ids"]["method"] == []
+    )
+    value = boundary_value()
     item["editorial_boundary"] = boundary.receipt(item, value, TEXT, NOW.isoformat())
-    assert boundary.state(item) == "uncertain"
-    assert selection.automatic_state(item) == "held"
+    assert item["editorial_boundary"]["decision"]["checks"]["method"] is None
+    assert selection.automatic_state(item) == "core"
 
 
 @pytest.mark.parametrize(
@@ -391,7 +406,7 @@ def test_absent_method_must_be_null_and_does_not_block_specific_insight(source):
     item["editorial_selection"]["decision_digest"] = research_review.digest(
         item["editorial_selection"]["decision"]
     )
-    value = boundary_value()
+    value = boundary_value(include_method=True)
     with pytest.raises(analysis.AnalysisContractError, match="absent evidence"):
         boundary.receipt(item, value, TEXT, NOW.isoformat())
     value["checks"]["method"] = None

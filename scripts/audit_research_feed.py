@@ -20,9 +20,19 @@ from qdata.radar_editorial import CHANNELS, content_digest, parse_publication  #
 from qdata.radar_public import _fetch_bytes  # noqa: E402
 
 
-def run(feed_path: Path, output: Path) -> dict:
+def run(feed_path: Path, output: Path, entry_ids: list[str] | None = None) -> dict:
     feed = json.loads(feed_path.read_text())
-    selected = [item for item in feed["items"] if item["research_lane"] == "core"]
+    selected = [
+        item
+        for item in feed["items"]
+        if (
+            item["entry_id"] in entry_ids
+            if entry_ids
+            else item["research_lane"] == "core"
+        )
+    ]
+    if entry_ids and {item["entry_id"] for item in selected} != set(entry_ids):
+        raise ValueError("requested original missing from frozen feed")
     output.mkdir(parents=True, exist_ok=True)
 
     def collect(item):
@@ -89,7 +99,9 @@ def run(feed_path: Path, output: Path) -> dict:
     report = {
         "checked_at": datetime.now(UTC).isoformat(),
         "feed_generated_at": feed.get("generated_at"),
-        "core_count": len(selected),
+        "selection": "explicit_entries" if entry_ids else "current_core",
+        "selected_count": len(selected),
+        "core_count": sum(item["research_lane"] == "core" for item in selected),
         "llm_calls": 0,
         "production_writes": 0,
         "semantic_acceptance": "pending_editorial_reading",
@@ -105,6 +117,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--feed", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--entry-id",
+        action="append",
+        help="Exact frozen-feed ID; repeat for additional originals",
+    )
     args = parser.parse_args()
-    report = run(args.feed, args.output)
+    report = run(args.feed, args.output, args.entry_id)
     print(json.dumps({key: value for key, value in report.items() if key != "items"}))

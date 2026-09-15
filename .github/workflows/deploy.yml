@@ -44,7 +44,7 @@ on:
       research_sample:
         description: Fixed public-source regression or reading-value sample; no silent replacement
         type: choice
-        options: [latest, reading-value-v1, reading-value-v2, reading-diversity-v1, reading-scope-v1, reading-subject-v1, reading-subject-positive-v1, reading-products-v1, reading-commercialization-v1, reading-contribution-boundaries-v1, reading-contribution-methods-v1, v7-regression, reading-gate-products-v1, reading-gate-commercialization-v1, reading-gate-subject-v1, reading-gate-subject-positive-v1, reading-gate-boundaries-v1, reading-gate-methods-v1, reading-gate-extension-v1, reading-gate-generalization-v1, reading-brief-evidence-v1, reading-quality-20260915-a, reading-quality-20260915-b, reading-quality-20260915-c, reading-quality-20260915-d]
+        options: [latest, reading-value-v1, reading-value-v2, reading-diversity-v1, reading-scope-v1, reading-subject-v1, reading-subject-positive-v1, reading-products-v1, reading-commercialization-v1, reading-contribution-boundaries-v1, reading-contribution-methods-v1, v7-regression, reading-gate-products-v1, reading-gate-commercialization-v1, reading-gate-subject-v1, reading-gate-subject-positive-v1, reading-gate-boundaries-v1, reading-gate-methods-v1, reading-gate-extension-v1, reading-gate-generalization-v1, reading-brief-evidence-v1, reading-quality-20260915-a, reading-quality-20260915-b, reading-quality-20260915-c, reading-quality-20260915-d, reading-quality-20260915-e]
         default: latest
 
 env:

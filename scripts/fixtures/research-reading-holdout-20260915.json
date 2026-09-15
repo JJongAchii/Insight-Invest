@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-09-15T06:18:39.955586+00:00",
+  "purpose": "Three existing-feed originals outside this repair's 27 development cases, first read after prompt commit 20f4823. Subsequent prompt repairs are based on A failures, not these cases. Not a claim of a pristine holdout across all earlier project work. Expectations frozen before new paid calls; no expectation changes to match model outputs.",
+  "items": [
+    {
+      "entry_id": "cccf6ecb7e4a919345e3d95b4051e86accf7fdb9297141ba741bf7d0d6244a3f",
+      "source_id": "cfm-research",
+      "title": "Seven Degrees of Market Structure",
+      "url": "https://www.cfm.com/seven-degrees-of-market-structure",
+      "source_digest": "403792f1d93c10c92cd9724f1e203c641d7453b623e0db53102f9d7ebdafcb74",
+      "published_at": "2026-06-24T11:14:14+00:00",
+      "authors": ["CFM"],
+      "analysis_scope": "full_article",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-e",
+      "expected_lane": "core",
+      "expected_content_kinds": ["research", "practitioner"],
+      "reading_check": "Explain a specified market-flow/risk mechanism, not the firm's data scale or product benefits. The 0DTE hedging explanation is conditional on dealers being net short gamma; do not make all option flows amplify moves."
+    },
+    {
+      "entry_id": "4f8a633bf1dc3ed4faeb14c31100d5d3993b50350a99cfb75ce3a78c31bed2ab",
+      "source_id": "robeco-quant-insights",
+      "title": "The central bank divergence: inflation vs. growth",
+      "url": "https://www.robeco.com/en-int/insights/2026/09/the-central-bank-divergence-inflation-vs-growth",
+      "source_digest": "dc32630e05623ec87d9e81e627206c474fdf97f902e10f17029b006fe3051716",
+      "published_at": "2026-09-09T00:00:00+00:00",
+      "authors": ["Colin Graham"],
+      "analysis_scope": "full_article",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-e",
+      "expected_lane": "context",
+      "expected_content_kinds": ["market_commentary", "other"],
+      "reading_check": "Current regional rate-policy outlook. Neutral-rate discussion does not disclose an estimator or a tested investment comparison. Do not infer a model from a chart or turn outlook into validated research."
+    },
+    {
+      "entry_id": "5c3b8ef8d50160f7d952bc901823e6535fe7689b6c87e6db118872dad7fc0722",
+      "source_id": "verdad-research",
+      "title": "Echoes of Junk Bonds Past",
+      "url": "https://verdadcap.com/archive/echoes-of-junk-bonds-past",
+      "source_digest": "fa88d6e80ee1192bb6449099f0b3ecd545e9be4f0d14927b67f295a11bc59110",
+      "published_at": "2026-04-06T19:58:00+00:00",
+      "authors": ["Greg Obenshain"],
+      "analysis_scope": "full_article",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-e",
+      "expected_lane": "core",
+      "expected_content_kinds": ["research", "practitioner"],
+      "reading_check": "The flow-refinancing-default feedback or rating/leverage/loss comparison is a reading contribution. Historical base rates and author's stress scenarios are not measured future private-credit losses; avoid incomplete numerical examples."
+    }
+  ]
+}

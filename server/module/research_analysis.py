@@ -20,7 +20,7 @@ from datastore import research, storage
 from module import research_boundary, research_review, research_selection
 
 MODEL = "gpt-5.4-2026-03-05"
-PROMPT_VERSION = "reading-brief-openai-v13-single-reading-note"
+PROMPT_VERSION = "reading-brief-openai-v14-scoped-reading-note"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 8192  # Visible output AND reasoning; real PDFs exceeded 4096.
 MAX_INPUT_CHARS = 24000
@@ -56,6 +56,11 @@ once when genuinely helpful. passive portfolio = 패시브 포트폴리오;
 buying the dip = 하락 시 매수; peak position size = 최대 보유 규모;
 shorter-horizon trade = 보유 기간이 짧은 거래. Do not translate income as 소득
 in a bond strategy; describe 이자수익 when the source specifically means carry.
+For lifetime trade risk/return, say 보유 기간 전체의 위험/수익, not 생애 or 수명.
+Replace unexplained example labels (such as Forecast F/S) with their supported
+meaning, such as the shorter/longer holding-period trade. If the passage describes
+a hypothetical example, establish that scope in the FIRST sentence; do not state
+its conditional relationship as a universal rule and add '예시' only at the end.
 Avoid financial jargon not explained in the quoted source. Omit a whole numerical
 example if its name/conditions cannot be stated clearly; retain a supported
 qualitative explanation instead. Do not write unsupported connective reasoning.

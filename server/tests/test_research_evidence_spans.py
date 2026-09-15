@@ -34,7 +34,8 @@ def test_contiguous_span_survives_selection_reviewer_writer_and_cache_seed(sourc
     payload = boundary.request_payload(
         TEXT, "Not sent", proposed=boundary.evidence_plan(item)
     )
-    assert json.loads(payload["input"])["proposed_evidence_ids"]["method"] == [0, 1]
+    proposed_ids = json.loads(payload["input"])["proposed_evidence_ids"]
+    assert proposed_ids["insight"] == [0, 1] and proposed_ids["method"] == []
     draft = analysis._request_payload(
         TEXT, "Source", evidence_plan=selected["decision"]["reading_points"]
     )
@@ -191,7 +192,7 @@ def test_brief_uses_accepted_insight_and_not_rejected_method(source):
     item["editorial_selection"]["decision_digest"] = digest(decision)
     original = deepcopy(item["editorial_selection"])
     previous_key = analysis.cache_key(item)
-    value = boundary_value()
+    value = boundary_value(include_method=True)
     value["checks"]["method"]["role"] = "objective_or_profile"
     item["editorial_boundary"] = boundary.receipt(item, value, TEXT, NOW.isoformat())
     plan = analysis.reading_evidence_plan(item)
@@ -230,7 +231,7 @@ def test_live_writer_recovers_reviewed_plan_even_for_manually_curated_core(
         record["editorial_selection"],
         f"research_analysis/selections/{selection.cache_key(record)}.json",
     )
-    value = boundary_value()
+    value = boundary_value(include_method=True)
     value["checks"]["method"]["role"] = "objective_or_profile"
     second = boundary.receipt(record, value, TEXT, NOW.isoformat())
     storage.write_json(
