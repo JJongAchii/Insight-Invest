@@ -101,3 +101,17 @@ the publisher selected a same-text citation outside the checker's visible span.
 It now reconstructs the object citation only from the actually visible proposal
 IDs. The regression initially failed and passes with that repair; publication
 still re-fetches exact source content and never overwrites existing cache objects.
+
+## Frozen full-brief check
+
+`reading-brief-evidence-v1` uses the SAME three frozen positive originals as
+`reading-subject-positive-v1`, but executes the full production reading path,
+not the historical selection-only sample. Preserve existing v10/v7 receipts and
+generate/review only the changed reading plans. GPT-5 mini only, same limits.
+Inspect actual Korean output before publication: why_read must convey the admitted
+contribution and be source-supported; Robeco's rejected method blurb must be null;
+CFM's unnamed numeric metric must not become an invented percentage/Sharpe; and
+D.E.Shaw's example must preserve its conditions rather than become general trading
+advice. Missing/held fields may remain visibly partial, but unsupported text must
+not be displayed or silently marked accepted. This validates a reading product,
+not the underlying authors' investment claims.

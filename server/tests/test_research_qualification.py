@@ -474,6 +474,21 @@ def test_selection_check_rejects_contribution_mismatch_even_when_lane_matches(
     assert not qualification.selection_check(item, case)["matches"]
 
 
+def test_full_brief_uses_the_same_frozen_positive_sources(configured, monkeypatch):
+    sample = "reading-brief-evidence-v1"
+    sources = ["deshaw-library", "cfm-research", "robeco-quant-insights"]
+    assert qualification.fixed_cases(sample, sources) == qualification.fixed_cases(
+        "reading-subject-positive-v1", sources
+    )
+    assert sample not in qualification.GATE_SAMPLES
+    assert sample not in qualification.SELECTION_SAMPLES
+    monkeypatch.setenv("RESEARCH_SAMPLE", sample)
+    monkeypatch.setenv("RESEARCH_SOURCES", ",".join(sources))
+    monkeypatch.setenv("RESEARCH_MAX_ITEMS", "3")
+    monkeypatch.setenv("RESEARCH_QUALIFICATION_MODEL", "gpt-5-mini")
+    assert qualification.validate_environment() == (3, sources, "gpt-5-mini")
+
+
 def test_runner_sets_comparison_prices_and_restores_defaults_without_io(
     configured, monkeypatch, tmp_path
 ):

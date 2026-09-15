@@ -64,6 +64,7 @@ GATE_SAMPLES = {
     "reading-gate-extension-v1": "reading-contribution-extension-v1",
     "reading-gate-generalization-v1": "reading-evidence-generalization-v1",
 }
+BRIEF_SAMPLES = {"reading-brief-evidence-v1": "reading-subject-positive-v1"}
 SAMPLES = (
     "latest",
     "reading-value-v1",
@@ -78,6 +79,7 @@ SAMPLES = (
     "reading-contribution-methods-v1",
     "v7-regression",
     *GATE_SAMPLES,
+    *BRIEF_SAMPLES,
 )
 SELECTION_SAMPLES = frozenset(
     {
@@ -96,7 +98,7 @@ V7_PROMPT = "reading-brief-openai-v7-korean-editorial"
 def fixed_cases(sample: str, sources: list[str]) -> dict[str, dict]:
     if sample == "latest":
         return {}
-    sample = GATE_SAMPLES.get(sample, sample)
+    sample = {**GATE_SAMPLES, **BRIEF_SAMPLES}.get(sample, sample)
     path = Path(__file__).with_name("fixtures") / "research-reading-samples.json"
     cases = {
         item["source_id"]: item
@@ -226,7 +228,7 @@ def validate_environment() -> tuple[int, list[str], str]:
     sample = os.environ.get("RESEARCH_SAMPLE", "latest")
     if sample not in SAMPLES or (sample == "v7-regression" and model != "gpt-5-mini"):
         raise ValueError("qualification sample is not approved")
-    if sample in GATE_SAMPLES and model != "gpt-5-mini":
+    if sample in {*GATE_SAMPLES, *BRIEF_SAMPLES} and model != "gpt-5-mini":
         raise ValueError("source-only gate qualification keeps GPT-5 mini")
     boundary_model(sample, model)  # Validate the contrast before source/provider I/O.
     fixed_cases(sample, sources)  # Fail before any source/provider I/O.
