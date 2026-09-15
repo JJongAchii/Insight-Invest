@@ -20,8 +20,11 @@ import { formatChartDate, formatDate } from "@/lib/market";
 
 interface StockPriceFlowsChartProps {
   prices: PricePoint[];
-  /** KR daily investor flows; null/empty hides the bar layer (US stocks). */
+  /** KR daily investor flows, in KRW. Missing observations stay null. */
   flows: InsightTickerFlowRow[] | null;
+  flowLoading?: boolean;
+  flowError?: boolean;
+  onRetryFlows?: () => void;
   showFrgn: boolean;
   showInst: boolean;
   isKr: boolean;
@@ -45,8 +48,11 @@ const tooltipContentStyle: React.CSSProperties = {
 
 const fmtEokTooltip = (eok: number): string => {
   const sign = eok > 0 ? "+" : "";
-  return `${sign}${Math.round(eok).toLocaleString()}억`;
+  return `${sign}${eok.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}억`;
 };
+
+const toEok = (value: number | null | undefined): number | null =>
+  value == null || !Number.isFinite(value) ? null : value / 1e8;
 
 /**
  * Stock detail centerpiece: adjusted close as a line (left axis) with daily
@@ -56,28 +62,37 @@ const fmtEokTooltip = (eok: number): string => {
 const StockPriceFlowsChart: React.FC<StockPriceFlowsChartProps> = ({
   prices,
   flows,
+  flowLoading = false,
+  flowError = false,
+  onRetryFlows,
   showFrgn,
   showInst,
   isKr,
   height = 360,
 }) => {
-  const hasFlows = isKr && !!flows && flows.length > 0;
-  const frgnVisible = hasFlows && showFrgn;
-  const instVisible = hasFlows && showInst;
-
   const data = useMemo<ChartPoint[]>(() => {
     const flowByDate = new Map<string, InsightTickerFlowRow>();
-    for (const row of flows ?? []) flowByDate.set(row.date, row);
+    // Price dates can include T00:00:00; flows use YYYY-MM-DD. These are
+    // exchange trading dates, so match their date text without timezone shifts.
+    for (const row of flows ?? []) flowByDate.set(row.date.slice(0, 10), row);
     return prices.map((p) => {
-      const flow = flowByDate.get(p.trade_date);
+      const date = p.trade_date.slice(0, 10);
+      const flow = flowByDate.get(date);
       return {
-        date: p.trade_date,
+        date,
         price: p.value ?? p.adj_close,
-        frgn: flow ? flow.frgn_net / 1e8 : null,
-        inst: flow ? flow.inst_net / 1e8 : null,
+        frgn: toEok(flow?.frgn_net),
+        inst: toEok(flow?.inst_net),
       };
     });
   }, [prices, flows]);
+
+  const frgnVisible = isKr && showFrgn && data.some((row) => row.frgn != null);
+  const instVisible = isKr && showInst && data.some((row) => row.inst != null);
+  const observed = data.filter((row) =>
+    (frgnVisible && row.frgn != null) || (instVisible && row.inst != null)
+  );
+  const latest = observed.at(-1);
 
   const priceFormatter = (value: number): string =>
     isKr
@@ -104,6 +119,30 @@ const StockPriceFlowsChart: React.FC<StockPriceFlowsChartProps> = ({
   };
 
   return (
+    <div className="min-w-0 space-y-3">
+      {isKr && <section aria-label="투자자 수급 정보" aria-live="polite" className="space-y-2 text-xs">
+        {flowError ? (
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-edge bg-raised px-3 py-2">
+            <span className="text-warning">수급 데이터를 불러오지 못했습니다.</span>
+            <button type="button" className="btn-secondary" onClick={onRetryFlows}>수급 다시 시도</button>
+          </div>
+        ) : flowLoading && !flows ? (
+          <p className="text-ink-muted">수급 데이터를 불러오는 중…</p>
+        ) : !latest ? (
+          <p className="text-ink-muted">선택 기간에 제공되는 {showFrgn && showInst ? "외국인·기관" : showFrgn ? "외국인" : "기관"} 수급 데이터가 없습니다.</p>
+        ) : null}
+        {latest && <>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-ink-secondary">
+            <span>최근 수급 · {formatDate(latest.date)}</span>
+            {showFrgn && <span>외국인 <strong className="num text-ink">{latest.frgn == null ? "미제공" : fmtEokTooltip(latest.frgn)}</strong></span>}
+            {showInst && <span>기관 <strong className="num text-ink">{latest.inst == null ? "미제공" : fmtEokTooltip(latest.inst)}</strong></span>}
+          </div>
+          <p className="text-ink-muted">
+            선: 가격 · 막대: 일별 순매수(억원) · 양수는 순매수, 음수는 순매도
+          </p>
+          <p className="text-ink-muted">수급 표시 구간 {formatDate(observed[0].date)} ~ {formatDate(latest.date)} · 결측일은 비워 둡니다.</p>
+        </>}
+      </section>}
     <ResponsiveContainer width="100%" height={height}>
       <ComposedChart data={data} margin={{ top: 8, right: 0, bottom: 0, left: 0 }}>
         <CartesianGrid stroke="var(--grid-line)" vertical={false} />
@@ -194,6 +233,7 @@ const StockPriceFlowsChart: React.FC<StockPriceFlowsChartProps> = ({
         />
       </ComposedChart>
     </ResponsiveContainer>
+    </div>
   );
 };
 
