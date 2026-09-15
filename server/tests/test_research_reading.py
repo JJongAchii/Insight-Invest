@@ -65,10 +65,21 @@ def test_changed_source_cannot_borrow_partial_review(item, field):
     assert reading.reading_brief(item) is None
 
 
-def test_no_summary_without_supported_method_or_finding(item):
+def test_no_summary_without_supported_reading_content(item):
     item["analysis"]["review"]["checks"]["method_data"]["status"] = "unclear"
+    item["analysis"]["review"]["checks"]["why_read"]["status"] = "unclear"
     seal(item)
     assert reading.reading_brief(item) is None
+
+
+def test_one_reviewed_insight_does_not_require_filler_method_or_finding(item):
+    item["analysis"]["brief"]["method_data"] = None
+    attach_review(item, TEXT, NOW)
+    shown = reading.reading_brief(item)
+    assert shown["points"]["why_read"]
+    assert shown["points"]["method_data"] is None
+    assert shown["points"]["finding"] is None
+    assert shown["status"] == "ready"
 
 
 def test_source_audit_hold_is_bound_to_exact_draft(item, monkeypatch):
@@ -150,7 +161,7 @@ def test_numeric_scope_hold_preserves_other_points_and_original_model_verdict(it
     before = deepcopy(item)
     assert review.state(item) == "accepted"
     shown = reading.reading_brief(item)
-    assert shown["policy_version"] == "reading-display-v2-numeric-scope"
+    assert shown["policy_version"] == "reading-display-v3-standalone-insight"
     assert shown["status"] == "partial" and shown["points"]["why_read"] is None
     assert shown["points"]["method_data"] == before["analysis"]["brief"]["method_data"]
     assert item == before and review.state(item) == "accepted"

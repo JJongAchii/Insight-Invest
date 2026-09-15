@@ -12,7 +12,7 @@ import os
 import re
 
 MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-review-openai-v8-qualifier-guard"
+PROMPT_VERSION = "reading-review-openai-v9-reading-value"
 CODE_GUARD_VERSION = "point-qualifiers-v1"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 8192
@@ -51,7 +51,8 @@ denominators, attribution, and expectations versus measured/independently verifi
 results. Do not combine properties of different metrics or broaden a conditional
 finding into a general result. A related financial concept is not a translation.
 Use normal Korean financial meaning, retaining English when needed. Judge material
-meaning errors, not a stylistic preference. A source/author-name error is factual.
+meaning errors and whether the Korean explanation is independently understandable,
+not a preference between two equally clear styles. A source/author-name error is factual.
 
 For title_ko, content_kind and relevance/substance flags use the whole bounded
 source. research develops/examines an investment method/mechanism/empirical finding;
@@ -61,7 +62,7 @@ other covers promotion, general opinion, introductions and infrastructure. LLM u
 or publisher prestige is NOT enough to make a market outlook quantitative research.
 quant_relevant concerns quantitative investment ideas, signals, portfolio/risk,
 microstructure or empirical asset pricing. substantive requires concrete grounded
-method or finding, but not academic-paper formality.
+method, finding or a concrete transferable insight, but not academic-paper formality.
 
 reviewer_note is an AI further-reading checkpoint, not a source quotation. Accept a
 cautious question/checkpoint grounded in the brief; reject newly asserted facts,
@@ -87,8 +88,12 @@ SYSTEM += """
 point_evidence_ids는 각 항목에 이미 붙은 인용의 허용 ID 목록이다. supported로 판단할 때
 그 항목의 허용 ID만 사용한다. 다른 곳에서 더 적절한 근거를 찾았다는 이유로 합격시키지 않는다.
 reviewer_note의 사실·연도·고유명사도 별도로 점검하며, 요약 근거에 없는 새 사실을 추가한
-메모는 unsupported이다. 문체 취향과 의미 오류는 구분하고, null이나 간결한 요약 자체는
-결함으로 보지 않는다."""
+메모는 unsupported이다. null이나 간결한 요약 자체는 결함으로 보지 않는다.
+독자가 무엇을 비교했고 왜 그런 결과가 되는지 이해할 수 없는 번역투는 unclear다.
+'더 많이 원해진다', '수동 드리프트'처럼 주체·의미가 불분명한 표현을 통과시키지 않는다.
+finding이 유연성·효율성·가치창출 같은 일반적인 상품 장점만 반복하면 읽을 내용으로는
+불충분하므로 unclear다. why_read는 구체적 분석 관점 자체를 설명해야 하며 찬사나
+광고 문구를 반복하면 안 된다. generic legal disclaimer는 연구 한계가 아니다."""
 
 SYSTEM += """
 

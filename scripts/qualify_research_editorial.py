@@ -65,6 +65,7 @@ GATE_SAMPLES = {
     "reading-gate-generalization-v1": "reading-evidence-generalization-v1",
 }
 BRIEF_SAMPLES = {"reading-brief-evidence-v1": "reading-subject-positive-v1"}
+BATCH_SAMPLES = frozenset(f"reading-quality-20260915-{part}" for part in "abcd")
 SAMPLES = (
     "latest",
     "reading-value-v1",
@@ -80,6 +81,7 @@ SAMPLES = (
     "v7-regression",
     *GATE_SAMPLES,
     *BRIEF_SAMPLES,
+    *BATCH_SAMPLES,
 )
 SELECTION_SAMPLES = frozenset(
     {
@@ -98,6 +100,16 @@ V7_PROMPT = "reading-brief-openai-v7-korean-editorial"
 def fixed_cases(sample: str, sources: list[str]) -> dict[str, dict]:
     if sample == "latest":
         return {}
+    if sample in BATCH_SAMPLES:
+        path = Path(__file__).with_name("fixtures") / "research-quality-20260915.json"
+        cases = {
+            item["entry_id"]: item
+            for item in json.loads(path.read_text())["items"]
+            if item["sample"] == sample
+        }
+        if not cases or {case["source_id"] for case in cases.values()} != set(sources):
+            raise ValueError("frozen reading batch requires its exact sources")
+        return cases
     sample = {**GATE_SAMPLES, **BRIEF_SAMPLES}.get(sample, sample)
     path = Path(__file__).with_name("fixtures") / "research-reading-samples.json"
     cases = {
@@ -108,6 +120,15 @@ def fixed_cases(sample: str, sources: list[str]) -> dict[str, dict]:
     if set(cases) != set(sources):
         raise ValueError("fixed sample does not cover all requested sources")
     return cases
+
+
+def case_for(item: dict, cases: dict[str, dict]) -> dict:
+    return cases.get(item.get("entry_id"), cases.get(item["source_id"], {}))
+
+
+def completed_batch_item(item: dict) -> bool:
+    lane = research_selection.automatic_state(item)
+    return lane in {"context", "held"} or (lane == "core" and current_review(item))
 
 
 def fixed_publication(case: dict, now: datetime) -> tuple[dict, str]:
@@ -235,11 +256,17 @@ def validate_environment(*, now: datetime | None = None) -> tuple[int, list[str]
     sample = os.environ.get("RESEARCH_SAMPLE", "latest")
     if sample not in SAMPLES or (sample == "v7-regression" and model != "gpt-5-mini"):
         raise ValueError("qualification sample is not approved")
-    if sample in {*GATE_SAMPLES, *BRIEF_SAMPLES} and model != "gpt-5-mini":
+    if (
+        sample in {*GATE_SAMPLES, *BRIEF_SAMPLES, *BATCH_SAMPLES}
+        and model != "gpt-5-mini"
+    ):
         raise ValueError("source-only gate qualification keeps GPT-5 mini")
     boundary_model(sample, model)  # Validate the contrast before source/provider I/O.
-    fixed_cases(sample, sources)  # Fail before any source/provider I/O.
-    if model == "gpt-5-mini" and not 1 <= maximum <= min(3, len(sources)):
+    cases = fixed_cases(sample, sources)  # Fail before any source/provider I/O.
+    if sample in BATCH_SAMPLES:
+        if maximum != len(cases) or maximum > 12:
+            raise ValueError("frozen reading batch requires its exact bounded size")
+    elif model == "gpt-5-mini" and not 1 <= maximum <= min(3, len(sources)):
         raise ValueError("mini comparison allows at most three distinct sources")
     return maximum, sources, model
 
@@ -462,10 +489,13 @@ def run(output: Path) -> int:
             "output": research_review.OUTPUT_NANOUSD_PER_TOKEN,
         }
 
-        def collect(name):
+        def collect(key):
+            name = cases[key]["source_id"] if cases else key
             try:
                 if cases:
-                    record, text = fixed_publication(cases[name], now)
+                    record, text = fixed_publication(cases[key], now)
+                    if sample in BATCH_SAMPLES and record["entry_id_sha256"] != key:
+                        raise ValueError("frozen reading entry identity changed")
                     texts[record["entry_id_sha256"]] = text
                     return {
                         "source_id": name,
@@ -488,7 +518,7 @@ def run(output: Path) -> int:
 
         groups = []
         with ThreadPoolExecutor(max_workers=4) as pool:
-            for health, records in pool.map(collect, sources):
+            for health, records in pool.map(collect, list(cases) if cases else sources):
                 report["sources"].append(health)
                 if model == "gpt-5-mini":
                     report.setdefault("prefilter_skipped", []).extend(
@@ -517,7 +547,13 @@ def run(output: Path) -> int:
         records = select_records(groups, maximum)
         if not records:
             raise ValueError("no readable qualification publications")
-        if model == "gpt-5-mini" and len({r["source_id"] for r in records}) != maximum:
+        if sample in BATCH_SAMPLES and len(records) != maximum:
+            raise ValueError("frozen reading batch is incomplete; no paid calls")
+        if (
+            model == "gpt-5-mini"
+            and sample not in BATCH_SAMPLES
+            and len({r["source_id"] for r in records}) != maximum
+        ):
             raise ValueError("mini comparison requires one readable item per source")
         report["selected_entries"] = [
             {
@@ -622,7 +658,9 @@ def run(output: Path) -> int:
                 if item.get("analysis_status") != "not_requested"
             ]
             if all(
-                research_selection.model_state(item) != "pending"
+                completed_batch_item(item)
+                if sample in BATCH_SAMPLES
+                else research_selection.model_state(item) != "pending"
                 if sample in SELECTION_SAMPLES
                 else research_selection.automatic_state(item) != "pending"
                 if sample in GATE_SAMPLES
@@ -651,11 +689,11 @@ def run(output: Path) -> int:
             research_selection.state(item) == "context" for item in requested
         )
         report["selection_checks"] = [
-            selection_check(item, cases[item["source_id"]])
+            selection_check(item, case_for(item, cases))
             for item in requested
-            if item["source_id"] in cases and sample != "v7-regression"
+            if case_for(item, cases) and sample != "v7-regression"
         ]
-        if sample in GATE_SAMPLES or sample in BRIEF_SAMPLES:
+        if sample in GATE_SAMPLES or sample in BRIEF_SAMPLES or sample in BATCH_SAMPLES:
             # Isolated report/UI uses automatic outcomes too, not migration audits.
             for item in report["items"]:
                 research_feed.apply_editorial_analysis(item, use_editor_audit=False)
@@ -670,7 +708,23 @@ def run(output: Path) -> int:
                 for item in report["items"]
             )
         # This qualifies transport/structure/binding, not reviewer correctness or alpha.
-        if sample in GATE_SAMPLES:
+        if sample in BATCH_SAMPLES:
+            report["editorial_audits_used_for_qualification"] = False
+            report["gate_checks"] = [
+                {
+                    "entry_id": item["entry_id"],
+                    **gate_check(item, case_for(item, cases)),
+                }
+                for item in requested
+            ]
+            report["status"] = (
+                "api_contract_qualified"
+                if len(requested) == maximum
+                and all(check["matches"] for check in report["gate_checks"])
+                and all(completed_batch_item(item) for item in requested)
+                else "needs_diagnosis"
+            )
+        elif sample in GATE_SAMPLES:
             report["gate_only"] = True
             report["editorial_audits_used_for_qualification"] = False
             report["gate_checks"] = [

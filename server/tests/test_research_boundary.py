@@ -312,10 +312,29 @@ def test_code_derives_route_from_roles_not_model_overall_verdict(source, role):
 @pytest.mark.parametrize("role", sorted(boundary.SUBSTANTIVE_ROLES))
 def test_one_specific_insight_is_enough_no_all_criteria_and_gate(source, role):
     item = deepcopy(source.record)
+    decision = item["editorial_selection"]["decision"]
+    decision["reading_points"]["method_data"] = [
+        analysis._source_passages(TEXT)[1]["text"]
+    ]
+    item["editorial_selection"]["decision_digest"] = research_review.digest(decision)
     value = boundary_value(verdict="context")
     value["checks"]["insight"]["role"] = role
     item["editorial_boundary"] = boundary.receipt(item, value, TEXT, NOW.isoformat())
     assert selection.automatic_state(item) == "core"
+
+
+@pytest.mark.parametrize("positive", ["insight", "method"])
+def test_same_literal_span_cannot_be_both_substantive_and_profile(source, positive):
+    item = deepcopy(source.record)
+    assert (
+        boundary.evidence_plan(item)["insight"]
+        == boundary.evidence_plan(item)["method"]
+    )
+    value = boundary_value(verdict="context")
+    value["checks"][positive]["role"] = "operational_detail"
+    item["editorial_boundary"] = boundary.receipt(item, value, TEXT, NOW.isoformat())
+    assert boundary.state(item) == "uncertain"
+    assert selection.automatic_state(item) == "held"
 
 
 @pytest.mark.parametrize(

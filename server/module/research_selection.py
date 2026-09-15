@@ -12,7 +12,7 @@ from copy import deepcopy
 from module import research_boundary, research_curation, research_review
 
 MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-selection-v10-bounded-span-choices"
+PROMPT_VERSION = "reading-selection-v11-teaching-not-positioning"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 4096
 SYSTEM = """Select originals for a personal quantitative investment reading feed.
@@ -26,7 +26,8 @@ Return category:
 - investment_analysis: the main question is HOW an investment rule/estimator is
   defined, WHY a pricing/risk relationship occurs, or WHAT a comparison/test finds.
 - adoption_or_outlook: the main question concerns adoption, commercial viability,
-  institutional reform, business/sector outlook, or organizing research work.
+  institutional reform, business/sector outlook, organizing research work, or
+  describing a manager's current portfolio, positioning and product advantages.
 - unclear: no passage establishes the main purpose; use null evidence.
 Answer this before the detailed labels. A discussion of obstacles to scaling a
 financial product remains adoption_or_outlook even when it mentions measurement
@@ -137,6 +138,15 @@ sentence just because the useful explanation requires two or three sentences.
 For example, the naive spread screen and its issuer-risk-aware alternative together
 explain a measurement pitfall. Select BOTH, not the nearby ranking-engine description.
 If no such span exists, do not manufacture substance from a process name.
+Apply the teaching test: after removing the manager/product's name and current
+holdings, can a reader explain a specific calculation, comparison or causal
+relationship from the remaining passage? A list of desired company attributes
+(quality, cash generation, strong balance sheets), a portfolio's duration target,
+current beta, a barbell positioning description, or a manager saying it cut
+overvalued stocks is a PROFILE, not a disclosed method. Concrete portfolio numbers
+do not turn a current positioning report into research. Conversely a worked
+sensitivity example, a risk decomposition or a comparison of two measurement
+methods qualifies even inside a manager's article. No backtest is required.
 Also choose reading_points: one contiguous, self-contained span of 1–4 citable
 passage IDs, at most 1200 characters per point (or null).
 These passages will be the ONLY input to the Korean writer. Prefer an explanatory
@@ -148,6 +158,11 @@ finding = author conclusion; why_read = specific transferable insight;
 limitation = explicit document-specific caveat. Include adjacent sentences needed
 to resolve pronouns, quantities and conditions. If a self-contained explanation
 cannot fit in the bounded span, choose a different span or null.
+Choose a coherent reading note about the CENTRAL investment explanation, not five
+unrelated excerpts. The finding must explain what the comparison/mechanism shows;
+claims that an approach is flexible, resilient, disciplined or adds value are not
+findings. Leave them null. A generic legal disclaimer is not a research limitation.
+Do not invent a research question from a slogan or a statement of product benefits.
 For other subjects or market_commentary/other all reading_points must be null.
 Select each evidence as {"span_id":"START:END"}, inclusive. The source passage's
 span_ends lists the allowed END IDs for that START; the response schema permits

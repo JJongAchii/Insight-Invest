@@ -20,7 +20,7 @@ from datastore import research, storage
 from module import research_boundary, research_review, research_selection
 
 MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-brief-openai-v11-no-ungrounded-note"
+PROMPT_VERSION = "reading-brief-openai-v12-readable-investment-note"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 8192  # Visible output AND reasoning; real PDFs exceeded 4096.
 MAX_INPUT_CHARS = 24000
@@ -46,9 +46,19 @@ narrow the claim or return null. Non-citable fragments are context, not evidence
 Do not combine properties of different metrics or claim that author findings are
 independently reproduced. Distinguish reported findings from proposed benefits.
 
-Write clear Korean for a financially literate reader, not word-by-word translation.
-Prefer a simple accurate sentence to a dense list. Keep uncertain technical terms
-in the original English instead of inventing Korean financial terminology.
+Write an investment reading note in natural Korean, not a translated abstract.
+Each point is one or two short sentences explaining one concrete idea. Prefer
+80–180 Korean characters when sufficient; the 360-character limit is not a target.
+State the actor, operation and consequence clearly. Never use awkward passive
+phrases such as '더 많이 원해진다' or literal abstractions such as '수동 드리프트'.
+Explain in Korean what the reader should understand, with original English only
+once when genuinely helpful. passive portfolio = 패시브 포트폴리오;
+buying the dip = 하락 시 매수; peak position size = 최대 보유 규모;
+shorter-horizon trade = 보유 기간이 짧은 거래. Do not translate income as 소득
+in a bond strategy; describe 이자수익 when the source specifically means carry.
+Avoid financial jargon not explained in the quoted source. Omit a whole numerical
+example if its name/conditions cannot be stated clearly; retain a supported
+qualitative explanation instead. Do not write unsupported connective reasoning.
 Use 금융배출량 for financed emissions; 매출 for revenue; 채권 for fixed income;
 기후를 고려하는 투자자 for climate-aware investor; 분산 효과 for diversification.
 active carbon exposure = 벤치마크 대비 탄소 노출 (not 활성 탄소 노출).
@@ -57,10 +67,18 @@ and attribution. Prefer qualitative findings; quote a number only when its exact
 digits, metric, period and conditions are supported by that point's selected evidence.
 Do not reconstruct broken PDF numbers, read chart values from prose, or convert units.
 
-Fields: question = author's question (can be null for an essay/interview);
-method_data = concrete approach/data/framework; finding = ONE specific author claim;
-why_read = the concrete insight the reader can learn (not praise or profit promise);
-limitation = a document-specific caveat explicitly stated, otherwise null.
+Fields: question = actual analytical question, not a product claim turned into a
+question; method_data = how the disclosed analysis works, not a method's name;
+finding = ONE informative conclusion of that analysis, not generic claimed
+advantages such as flexibility, resilience, efficiency or value creation;
+why_read = explain the concrete investment lesson itself, not '도움이 된다',
+'살펴볼 수 있다', or a promise that a strategy works. Do not summarize every
+sentence in a selected span: explain its one strongest supported idea and omit
+unrelated promotional claims. Avoid repeating the same lesson in every field.
+limitation = a relevant assumption/data limitation stated in the selected evidence,
+not a generic legal disclaimer. Unsupported or uninformative fields are null.
+An informative why_read can stand alone; never fill finding with a slogan just to
+populate a template. Do not use '교훈:' or '핵심 질문은' as repetitive boilerplate.
 title_ko conveys the actual subject in natural Korean, not a literal idiom translation.
 reviewer_note is always the empty string. No unquoted synthesis or further-reading
 claims: the interface supplies a fixed scope/validation disclaimer instead.
@@ -70,7 +88,7 @@ practitioner teaches a reusable investment process; market_commentary is princip
 current outlook/sector preference/positioning; other is news, promotion or software.
 Mentioning AI, portfolio risk or financial ratios alone is not quant research.
 quant_relevant concerns quantitative investment/asset pricing/portfolio methodology.
-substantive requires at least a source-grounded method_data or finding.
+substantive requires a source-grounded method_data, finding or concrete why_read.
 No trading advice, evidence scores or claims of scientific validation.
 """
 
@@ -286,8 +304,10 @@ def validate_brief(value: dict, text: str) -> dict:
             raise AnalysisContractError(
                 f"excerpt display differs from source excerpts: {name}"
             )
-    if value["substantive"] and not (value["method_data"] or value["finding"]):
-        raise AnalysisContractError("substantive brief lacks grounded method/finding")
+    if value["substantive"] and not (
+        value["method_data"] or value["finding"] or value["why_read"]
+    ):
+        raise AnalysisContractError("substantive brief lacks grounded reading content")
     return value
 
 

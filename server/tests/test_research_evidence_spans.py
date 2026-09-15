@@ -187,6 +187,7 @@ def test_brief_uses_accepted_insight_and_not_rejected_method(source):
     passages = analysis._source_passages(TEXT)
     # The old plan would lose the admitted contribution in a different why-read.
     decision["reading_points"]["why_read"] = [passages[1]["text"]]
+    decision["reading_points"]["method_data"] = [passages[1]["text"]]
     item["editorial_selection"]["decision_digest"] = digest(decision)
     original = deepcopy(item["editorial_selection"])
     previous_key = analysis.cache_key(item)
@@ -213,12 +214,26 @@ def test_live_writer_recovers_reviewed_plan_even_for_manually_curated_core(
 
     record = source.record
     record["editorial_selection"] = selection_for(record, TEXT, NOW)
+    decision = record["editorial_selection"]["decision"]
+    decision["reading_points"]["method_data"] = [
+        analysis._source_passages(TEXT)[1]["text"]
+    ]
+    record["editorial_selection"]["decision_digest"] = analysis.research_review.digest(
+        decision
+    )
+    storage.write_json(
+        record["editorial_selection"],
+        f"research_analysis/selections/{selection.cache_key(record)}.json",
+    )
     value = boundary_value()
     value["checks"]["method"]["role"] = "objective_or_profile"
     second = boundary.receipt(record, value, TEXT, NOW.isoformat())
-    storage.write_json(second, f"research_analysis/boundaries/{second['fingerprint']}.json")
+    storage.write_json(
+        second, f"research_analysis/boundaries/{second['fingerprint']}.json"
+    )
     monkeypatch.setattr(
-        research_curation, "original_audit",
+        research_curation,
+        "original_audit",
         lambda _: {"lane": "core", "checked_at": NOW.isoformat()},
     )
     research_feed.reconcile(s3=source, now=NOW)

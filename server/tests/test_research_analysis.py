@@ -74,6 +74,17 @@ def wire_brief():
     return result
 
 
+def test_standalone_grounded_insight_does_not_require_a_filler_finding():
+    value = brief()
+    value["method_data"] = None
+    assert analysis.validate_brief(value, TEXT)["why_read"]
+    value["why_read"] = None
+    with pytest.raises(
+        analysis.AnalysisContractError, match="grounded reading content"
+    ):
+        analysis.validate_brief(value, TEXT)
+
+
 @pytest.fixture
 def source(monkeypatch, tmp_path):
     monkeypatch.setenv("APP_DATA", str(tmp_path))
@@ -668,8 +679,9 @@ def test_practitioner_article_needs_substance_not_a_formal_research_question():
     value["question"] = None
     assert analysis.validate_brief(value, TEXT)["substantive"]
     value["method_data"] = None
+    value["why_read"] = None
     with pytest.raises(
-        analysis.AnalysisContractError, match="lacks grounded method/finding"
+        analysis.AnalysisContractError, match="lacks grounded reading content"
     ):
         analysis.validate_brief(value, TEXT)
 

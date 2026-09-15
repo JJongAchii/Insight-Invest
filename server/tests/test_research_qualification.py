@@ -33,6 +33,56 @@ def test_isolated_environment_contract(configured):
     assert qualification.validate_environment() == (1, ["aqr-research"], "gpt-5-mini")
 
 
+def test_frozen_batch_preserves_multiple_originals_from_one_source(
+    configured, monkeypatch
+):
+    sources = [
+        "robeco-quant-insights",
+        "cfm-research",
+        "deshaw-library",
+        "aqr-research",
+    ]
+    sample = "reading-quality-20260915-a"
+    cases = qualification.fixed_cases(sample, sources)
+    assert len(cases) == 7
+    assert (
+        sum(case["source_id"] == "robeco-quant-insights" for case in cases.values())
+        == 3
+    )
+    assert sum(case["expected_lane"] == "context" for case in cases.values()) == 2
+    monkeypatch.setenv("RESEARCH_SAMPLE", sample)
+    monkeypatch.setenv("RESEARCH_SOURCES", ",".join(sources))
+    monkeypatch.setenv("RESEARCH_MAX_ITEMS", "7")
+    assert qualification.validate_environment() == (7, sources, "gpt-5-mini")
+    for key, case in cases.items():
+        assert (
+            qualification.case_for(
+                {"entry_id": key, "source_id": case["source_id"]}, cases
+            )
+            == case
+        )
+    monkeypatch.setenv("RESEARCH_MAX_ITEMS", "6")
+    with pytest.raises(ValueError, match="exact bounded size"):
+        qualification.validate_environment()
+    with pytest.raises(ValueError, match="exact sources"):
+        qualification.fixed_cases(sample, sources[:-1])
+
+
+def test_batch_completion_cannot_borrow_manual_core_or_skip_review(monkeypatch):
+    for lane, reviewed, expected in [
+        ("pending", True, False),
+        ("core", False, False),
+        ("core", True, True),
+        ("held", False, True),
+        ("context", False, True),
+    ]:
+        monkeypatch.setattr(
+            qualification.research_selection, "automatic_state", lambda _: lane
+        )
+        monkeypatch.setattr(qualification, "current_review", lambda _: reviewed)
+        assert qualification.completed_batch_item({"research_lane": "core"}) is expected
+
+
 def test_boundary_qualification_preserves_frozen_sources_and_model(
     configured, monkeypatch
 ):

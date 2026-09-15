@@ -11,7 +11,7 @@ import json
 from module import research_review
 
 MODEL = "gpt-5-mini"
-PROMPT_VERSION = "reading-boundary-v7-context-spans"
+PROMPT_VERSION = "reading-boundary-v8-profile-consistency"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 4096
 INPUT_NANOUSD_PER_TOKEN = 250
@@ -65,6 +65,12 @@ magnitudes. This is a disclosed analytic operation, not an undefined ranking key
 It is objective_or_profile, not operational_detail, despite containing an action
 verb and an output. Likewise 'a model generates forecasts' does not teach its method.
 No complete trading system, formula, numerical threshold or backtest is required.
+Distinguish the operation from its current RESULT: a duration range, today's beta,
+portfolio holdings or desired stock attributes are objectives/profiles, even when
+quantified. They do not explain how evidence changes a decision. Reducing stocks
+called 'overvalued' does not disclose how value was assessed. A three-lens framework
+listing customer value, healthy fundamentals and risk management names criteria,
+not an analytic relationship. Do not upgrade it because the list is detailed.
 
 analytical_comparison: discloses a specific investment measurement/test contrast
 with identifiable compared objects AND a named measured outcome or qualitative
@@ -131,6 +137,11 @@ prestige, academic format, equations and backtests are not admission requirement
 Return checks, analysis_object and object_evidence_id. Do NOT return an overall
 verdict, recommendation, explanation card, rewritten evidence or financial score.
 This checks reading evidence, not whether the author's investment claims are true.
+The same literal span cannot be substantive in the insight check but merely an
+objective/profile in the method check. Resolve that contradiction by what the
+span actually explains, not by the field name. A substantive role must be supported
+by the analytic link described in source_meaning; missing coefficient details are
+fine, but an absent operation/causal link/comparison is not.
 """
 CHECK_SCHEMA = {
     "anyOf": [
@@ -227,6 +238,12 @@ def _verdict(decision: dict, plan: dict) -> str:
         return "context"
     if obj == "unclear":
         return "uncertain"
+    insight, method = (checks[name] for name in EVIDENCE_FIELDS)
+    if insight and method and plan["insight"] == plan["method"]:
+        if (insight["role"] in SUBSTANTIVE_ROLES) != (
+            method["role"] in SUBSTANTIVE_ROLES
+        ):
+            return "uncertain"  # Identical evidence cannot pass and fail by label.
     roles = {check["role"] for check in checks.values() if check}
     if roles & SUBSTANTIVE_ROLES:
         return "substantive"

@@ -10,7 +10,7 @@ import re
 
 from module import research_curation, research_review
 
-POLICY_VERSION = "reading-display-v2-numeric-scope"
+POLICY_VERSION = "reading-display-v3-standalone-insight"
 
 
 def numeric_scope_issues(claim: str, evidence: str) -> list[str]:
@@ -150,7 +150,7 @@ def reading_brief(item: dict) -> dict | None:
         else:
             points[name] = point
     # A title or an isolated caveat is not a useful reading summary.
-    if not (points["method_data"] or points["finding"]):
+    if not (points["method_data"] or points["finding"] or points["why_read"]):
         return None
     title_check = checks["title_ko"]
     title = (

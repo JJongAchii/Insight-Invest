@@ -1,0 +1,560 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-09-15T05:12:04.027038+00:00",
+  "purpose": "Development regression: entire frozen production core, not an untouched holdout. Expectations precede new paid calls; core means useful original, not independent replication.",
+  "items": [
+    {
+      "entry_id": "2443b6d4689607d35e9cd61abf8449c39a85782bb95c70c96cac2257a26dcfd2",
+      "source_id": "robeco-quant-insights",
+      "title": "Circular Economy: an all-weather strategy for every market cycle",
+      "url": "https://www.robeco.com/en-int/insights/2026/09/circular-economy-an-all-weather-strategy-for-every-market-cycle",
+      "source_digest": "5218c28323c8978868b85965fc29e882ce385b3e8042539567efa601797f01ed",
+      "published_at": "2026-09-15T00:00:00+00:00",
+      "authors": [
+        "Natalie Falkman"
+      ],
+      "analysis_scope": "full_article",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-a",
+      "expected_lane": "context",
+      "expected_content_kinds": [
+        "market_commentary",
+        "other"
+      ],
+      "reading_check": "Current portfolio/product positioning does not disclose an investment rule, analytical comparison or causal explanation."
+    },
+    {
+      "entry_id": "4078a19020314fa8ecf7605eae2c745d182e7b08be0c153f242a98e3095bf603",
+      "source_id": "robeco-quant-insights",
+      "title": "Credit income amid interest rate uncertainty",
+      "url": "https://www.robeco.com/en-int/insights/2026/09/credit-income-amid-interest-rate-uncertainty",
+      "source_digest": "510f89bc1ffacd56c4ec7980f2e80b02ef2513cbf17b20ea6b00e057474e2944",
+      "published_at": "2026-09-14T00:00:00+00:00",
+      "authors": [
+        "Erik Keller"
+      ],
+      "analysis_scope": "full_article",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-a",
+      "expected_lane": "context",
+      "expected_content_kinds": [
+        "market_commentary",
+        "other"
+      ],
+      "reading_check": "Current portfolio/product positioning does not disclose an investment rule, analytical comparison or causal explanation."
+    },
+    {
+      "entry_id": "f4a68789f3309762eb0d4980935c5f1d69df83261e9499702cd954a380a32736",
+      "source_id": "cfm-research",
+      "title": "CFM Talks To: Xavier Gabaix",
+      "url": "https://www.cfm.com/cfm-talks-to-xavier-gabaix",
+      "source_digest": "432a6305caf798379af90b328d379ad4ea06162adfea3fca8b01b63aace8313b",
+      "published_at": "2026-09-09T13:08:44+00:00",
+      "authors": [
+        "CFM"
+      ],
+      "analysis_scope": "full_article",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-a",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "f7aa0071268e357c57d62fffea0f6894f9c08c6584e75d4a68615ace621444b4",
+      "source_id": "deshaw-library",
+      "title": "Machine Teaching: What I Learned From My Optimizer",
+      "url": "https://www.deshaw.com/library/machine-teaching",
+      "source_digest": "7e7c14fc4e892dcbcf3dffbd53e0879f11c63d2b422d9ada12092f126ad8eac2",
+      "published_at": "2023-12-11T00:00:00+00:00",
+      "authors": [
+        "The D. E. Shaw Group"
+      ],
+      "analysis_scope": "full_article",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-a",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "f6aef948d69d685569c3ec24127ba7af936adf3a4c27cd19934ee9d0e48512e0",
+      "source_id": "deshaw-library",
+      "title": "The Concentration Game: Understanding Portfolio Effects of U.S. Equity Market Concentration",
+      "url": "https://www.deshaw.com/library/concentration-game",
+      "source_digest": "80eee269ba5a862295b1b1baaa5f16e90608a3bb8b3ac6cadccde2f8a186b760",
+      "published_at": "2026-02-01T00:00:00+00:00",
+      "authors": [
+        "The D. E. Shaw Group"
+      ],
+      "analysis_scope": "full_article",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-c",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "f64cbba3319dca5dccbf947cc91e793fca934265c47b8bdaf36310116600afcc",
+      "source_id": "kcmi-capital-market-focus",
+      "title": "미 국채 장기금리 상승의 구조적 배경과 시사점 | 자본시장포커스 | 발간물 | 자본시장연구원",
+      "url": "https://www.kcmi.re.kr/publications/pub_detail_view?cno=6838&syear=2026&zcd=002001016&zno=1934",
+      "source_digest": "7f2b2644c772649f24dc9a917477aaff2c982e03b4facdd7bc0e609acf0c4ae8",
+      "published_at": "2026-09-07T00:00:00+00:00",
+      "authors": [
+        "강현주"
+      ],
+      "analysis_scope": "full_pdf",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-b",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "f0156347f593f8f7b2a004970e0e8172217423f7381015db776d0b3a124ecf46",
+      "source_id": "syzygy-insights",
+      "title": "Guided by Fundamentals: Navigating Emerging Markets with Value",
+      "url": "https://www.syzygyassetmanagement.com/insights/publications/articles/1116-guided-by-fundamentals-navigating-emerging-markets-with-value",
+      "source_digest": "19b546ac39fa2460cacca2bfb5d0412195eaa4215be1122ad1e00d584aaef3de",
+      "published_at": "2026-05-28T12:30:00+00:00",
+      "authors": [
+        "Que Nguyen",
+        "Mario Albuquerque, CFA"
+      ],
+      "analysis_scope": "full_pdf",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-d",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "cc5675c11e810c5e3188e2be72d0a770d13f735171fe6bbbec9d6bca205582c1",
+      "source_id": "rafi-publications",
+      "title": "Reading Between the Lines: NLP for Long-Horizon Factor Investing (Part 1 of 2) | RAFI Indices",
+      "url": "https://www.rafi.com/research/publications/articles/1117-nlp-for-long-horizon-factor-investing",
+      "source_digest": "a7f289afc320a783f3912677fc53e4c6ca92bb2ac822dbfbff317a092b323de2",
+      "published_at": "2026-06-02T15:15:00+00:00",
+      "authors": [
+        "Que Nguyen",
+        "Joseph Shim, CFA"
+      ],
+      "analysis_scope": "pdf_excerpt",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-d",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "abd06c086fcd6c1e19d8d88dd17097d1f6c83675331dc9b3d890ef58f558ee6e",
+      "source_id": "aqr-research",
+      "title": "Academic Alpha",
+      "url": "https://www.aqr.com/Insights/Research/White-Papers/Academic-Alpha",
+      "source_digest": "e3038ad85e98d5fcaacf2101a3ca37b332977df7ce2cb6322f9f37d0c1577553",
+      "published_at": "2026-08-19T00:00:00+00:00",
+      "authors": [
+        "Thomas Maloney",
+        "Tobias J. Moskowitz"
+      ],
+      "analysis_scope": "full_pdf",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-b",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "a9dbfa743a0c5b13e78cc8b15c24ee08a6f606a5e3c74fd5bf27b334673e85cf",
+      "source_id": "deshaw-library",
+      "title": "Imbalance Sheet: Supply, Demand, and S&P 500® Financing",
+      "url": "https://www.deshaw.com/library/imbalance-sheet",
+      "source_digest": "c080b4843e3aff8b025bc84fe8bf30685058287cfd348c8db0c67cc9eb09331a",
+      "published_at": "2025-01-23T00:00:00+00:00",
+      "authors": [
+        "The D. E. Shaw Group"
+      ],
+      "analysis_scope": "full_article",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-c",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "a464ca5dd72316629440c37835e8fbb89ff0d86f37bdb6fbb2af92275b9683bf",
+      "source_id": "cfm-research",
+      "title": "Long Time Gone: What Happened to Active Equity Returns?",
+      "url": "https://www.cfm.com/long-time-gone-what-happened-to-active-equity-returns",
+      "source_digest": "0d449db06bb53f2725e50034b88a26291883fbf20583956c2f6c68f73a2285e9",
+      "published_at": "2026-05-21T08:23:33+00:00",
+      "authors": [
+        "CFM"
+      ],
+      "analysis_scope": "full_article",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-b",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "981346324aff2e9867469f7d6c586a92090dbe3f2beb3351aecdf86778795966",
+      "source_id": "rafi-publications",
+      "title": "Outgrowing Glamour: A Fundamental Approach to Growth Investing | RAFI Indices",
+      "url": "https://www.rafi.com/research/publications/articles/1114-outgrowing-glamour-a-fundamental-approach-to-growth-investing",
+      "source_digest": "0b5ba268cf3b3cfe344153237fa5424ecde86f7676095748980296548fe5cbca",
+      "published_at": "2026-04-29T21:00:00+00:00",
+      "authors": [
+        "Que Nguyen",
+        "Ari Polychronopoulos, CFA",
+        "Omid Shakernia, PhD"
+      ],
+      "analysis_scope": "pdf_excerpt",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-d",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "937631bb74b183f9ad523e7e8bcae3bc0d57ee8d0bb51b646fbab07db6671aa3",
+      "source_id": "aqr-research",
+      "title": "Investing in a Warming World",
+      "url": "https://www.aqr.com/Insights/Research/White-Papers/Investing-in-a-Warming-World",
+      "source_digest": "cb21a2134a2e7490f2abeaa9fafec84f68bfe8e0dcac4f6929e46830df3f4931",
+      "published_at": "2026-09-01T00:00:00+00:00",
+      "authors": [
+        "Steffen Bixby"
+      ],
+      "analysis_scope": "full_pdf",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-a",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "92b94abae60c49dee6d9b6a163605ce033e5228b207b11131ed8bc7dad468802",
+      "source_id": "cfm-research",
+      "title": "Why Systematic Global Macro Is Having a Moment",
+      "url": "https://www.cfm.com/why-systematic-global-macro-is-having-a-moment",
+      "source_digest": "a571f569447d7844065c81c53eb016d6a4efebc164843aca218f32fca3584c01",
+      "published_at": "2026-06-15T10:11:04+00:00",
+      "authors": [
+        "CFM"
+      ],
+      "analysis_scope": "full_article",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-c",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "8d973493fd9c37f4cd4a716cf0af46dba6f824bf83859b04cf0a2f80fa136434",
+      "source_id": "rafi-publications",
+      "title": "Flip-Flops: When Index Membership Doesn’t Last (CFA Institute Research Foundation Series) | RAFI Indices",
+      "url": "https://www.rafi.com/research/publications/articles/1121-flip-flops-when-index-membership-doesn't-last",
+      "source_digest": "4fbacc663759c213024b2270ecef8eb42854d9f2148a1366754473299f7bd7ee",
+      "published_at": "2026-07-14T08:45:00+00:00",
+      "authors": [
+        "Rob Arnott",
+        "Lillian Wu"
+      ],
+      "analysis_scope": "pdf_excerpt",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-c",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "85104d6d59edc3ebb7460c8a97ebe40981185a5deecd24ec65a5fc0ce5a56fe7",
+      "source_id": "cfm-research",
+      "title": "Too Diversified to Win",
+      "url": "https://www.cfm.com/too-diversified-to-win",
+      "source_digest": "c19ca549bf6c32dcadc54aa33aa7303578e15cca7f57a92534b1401c98c228a2",
+      "published_at": "2026-06-22T10:49:17+00:00",
+      "authors": [
+        "CFM"
+      ],
+      "analysis_scope": "full_article",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-c",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "7caa59dda81d163da6439d13a2df245e25368f6468aeafa782245d541e069b27",
+      "source_id": "deshaw-library",
+      "title": "Tunnel Vision: 2024 Inflation and Growth Forecasts in Historical Perspective",
+      "url": "https://www.deshaw.com/library/tunnel-vision",
+      "source_digest": "f2d74fa4a3ea5240113ed133727eb0531883d6061f4275a6a9099c88be88fb68",
+      "published_at": "2024-03-26T00:00:00+00:00",
+      "authors": [
+        "The D. E. Shaw Group"
+      ],
+      "analysis_scope": "full_article",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-c",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "6044acfcefa8abc180ca8efce14616166ebffa3b22734e83e35942ab50fb3844",
+      "source_id": "rafi-publications",
+      "title": "Membership Has Its Privileges: Who Pays the Premium? (CFA Institute Research Foundation Series) | RAFI Indices",
+      "url": "https://www.rafi.com/research/publications/articles/1120-membership-has-its-privileges-who-pays-the-premium",
+      "source_digest": "7e8e2ecb0a3b937d9a505a9b6cd0dbf1df2142974321ad4fc9269696741ccd5f",
+      "published_at": "2026-07-08T09:15:00+00:00",
+      "authors": [
+        "Rob Arnott",
+        "Lillian Wu"
+      ],
+      "analysis_scope": "pdf_excerpt",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-d",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "5d3f6d9ebef15cb026bac178a8daa3710e92708e31fda18dfa47e6e978bdfa32",
+      "source_id": "robeco-quant-insights",
+      "title": "Systematic fixed income: bringing diversification benefits to credit portfolios",
+      "url": "https://www.robeco.com/en-int/insights/2026/09/systematic-fixed-income-bringing-diversification-benefits-to-credit-portfolios",
+      "source_digest": "e9039fe09f127daeff4978d3cd6d731dd559b94d6a65ee34dbaec57f2474d00d",
+      "published_at": "2026-09-07T00:00:00+00:00",
+      "authors": [
+        "Lodewijk van der Linden",
+        "Patrick Houweling"
+      ],
+      "analysis_scope": "full_article",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-a",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "56fadd1e556d20f13d6a356b425db08b0505992a2763f2a9781946d227a13d02",
+      "source_id": "kcmi-reports",
+      "title": "주식시장 변동성 상승의 배경 검토",
+      "url": "https://www.kcmi.re.kr/report/report_view?report_no=2315",
+      "source_digest": "94f5279cb0efa41a81588a9296b112f3edc0e8d3ffb33eda1cf0a9bae391230f",
+      "published_at": "2026-07-26T15:00:00+00:00",
+      "authors": [
+        "김준석",
+        "장근혁"
+      ],
+      "analysis_scope": "full_pdf",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-b",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "548902e6845ac11156434bafe52d34a5aa8cd319705f37e6da45e801b82405d6",
+      "source_id": "rafi-publications",
+      "title": "Growth Without Price Distortion | RAFI Indices",
+      "url": "https://www.rafi.com/research/publications/articles/1118-growth-without-price-distortion",
+      "source_digest": "6ff3cbe79b7db119f55866d3bb333c06e113255a4b330dc9bfc5457b038b9bd2",
+      "published_at": "2026-06-09T12:30:00+00:00",
+      "authors": [
+        "Que Nguyen",
+        "Li Liang"
+      ],
+      "analysis_scope": "pdf_excerpt",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-d",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "45c0dba2999772f5c25b3f9666d10268b1a21762170d61f659eff18ab28d4c7b",
+      "source_id": "deshaw-library",
+      "title": "Worth Its Weight? Assessing Gold’s Portfolio Utility",
+      "url": "https://www.deshaw.com/library/worth-its-weight",
+      "source_digest": "c33e82c93291da2d9d758f1e1a492654c821b140b29adf6bcd00fdb5084557c8",
+      "published_at": "2025-08-27T00:00:00+00:00",
+      "authors": [
+        "The D. E. Shaw Group"
+      ],
+      "analysis_scope": "full_article",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-c",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "35a3979c9cb3a3345fdcdcebfc3c9b54b3f3778b869ee1596601da61359dac82",
+      "source_id": "rafi-publications",
+      "title": "The Future of Indexing: Passive Investing Isn’t Passive (CFA Institute Research Foundation Series) | RAFI Indices",
+      "url": "https://www.rafi.com/research/publications/articles/1119-the-future-of-indexing-passive-isnt-passive",
+      "source_digest": "a06934edd86121165bb75b976f57561deebcbec26166b4a32699f73383de5470",
+      "published_at": "2026-06-23T12:30:00+00:00",
+      "authors": [
+        "Rob Arnott",
+        "Lillian Wu"
+      ],
+      "analysis_scope": "pdf_excerpt",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-d",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "0d79c8e16c4c3d389d6d7d39a37d4825f3e6bd01075d129f7c6e5de5e1a872f7",
+      "source_id": "cfm-research",
+      "title": "The Hidden Beta in Dip Trade",
+      "url": "https://www.cfm.com/the-hidden-beta-in-dip-trade",
+      "source_digest": "0fc6720c574b3b69976adb44a230e53bc7edaf39796d2db5aa6ea7ea84dcf9e1",
+      "published_at": "2026-07-15T07:35:01+00:00",
+      "authors": [
+        "CFM"
+      ],
+      "analysis_scope": "full_article",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-a",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "daccf5b63bb5dddb3f55457c9a58430443842f7e005bf7f8338687ba3600f743",
+      "source_id": "verdad-research",
+      "title": "Hope Springs Eternal",
+      "url": "https://verdadcap.com/archive/hope-springs-eternal",
+      "source_digest": "d688d3f13be2c6150f276bcd81a8b10038c185152968402bc230e73c9983806e",
+      "published_at": "2026-03-16T19:50:00+00:00",
+      "authors": [
+        "Brian Chingono"
+      ],
+      "analysis_scope": "full_article",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-b",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "c4faaf734951879c030e976acfe0041c1af15f6f58a3cf732e125086b6708242",
+      "source_id": "verdad-research",
+      "title": "The Reflexivity of Credit Markets",
+      "url": "https://verdadcap.com/archive/the-reflexivity-of-credit-markets",
+      "source_digest": "83384e87ab537036e56890bad83db9819a0557b906224123eb2dc7eef2923d58",
+      "published_at": "2026-04-20T20:02:00+00:00",
+      "authors": [
+        "Sam Hanson",
+        "Greg Obenshain",
+        "and Daniel Rasmussen"
+      ],
+      "analysis_scope": "full_article",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-b",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    },
+    {
+      "entry_id": "1872fc42bfe3eafce10e3f0641eb233784d16ee88332346ea3252179cb03e177",
+      "source_id": "verdad-research",
+      "title": "Distribution of Global Value",
+      "url": "https://verdadcap.com/archive/distribution-of-global-value",
+      "source_digest": "0d0a08f56e8789652ce713681ce6626e0eff20e161b65a0203fe94c61613a75d",
+      "published_at": "2026-03-23T19:52:00+00:00",
+      "authors": [
+        "Brian Chingono"
+      ],
+      "analysis_scope": "full_article",
+      "parser_version": "editorial-v3-pdf-layout",
+      "sample": "reading-quality-20260915-b",
+      "expected_lane": "core",
+      "expected_content_kinds": [
+        "research",
+        "practitioner"
+      ],
+      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+    }
+  ]
+}
