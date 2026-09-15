@@ -10,7 +10,54 @@ import re
 
 from module import research_curation, research_review
 
-POLICY_VERSION = "reading-display-v1-field-holds"
+POLICY_VERSION = "reading-display-v2-numeric-scope"
+
+
+def numeric_scope_issues(claim: str, evidence: str) -> list[str]:
+    """Hold ambiguous decimals, not infer their metric from other document text.
+
+    This is deliberately a presentation hold, not a semantic acceptance rule or
+    a repair of the immutable draft/model verdict. Qualitative points are unaffected.
+    """
+    decimals = set(re.findall(r"(?<![\d.])\d+\.\d+(?!\d)", claim))
+    if not decimals:
+        return []
+    issues = []
+    metrics = (
+        r"샤프|sharpe",
+        r"상관|correlation",
+        r"베타|beta",
+        r"알파|alpha",
+        r"변동성|volatility",
+        r"수익률|returns?",
+        r"정보비율|information ratio",
+        r"표준편차|standard deviation",
+        r"p[- ]?value|p값",
+        r"t[- ]?stat|t통계",
+    )
+    named = any(
+        re.search(name, claim, re.I) and re.search(name, evidence, re.I)
+        for name in metrics
+    )
+    units = (
+        r"\s*(?:%|bp\b|bps\b|배|x\b|times\b|년|개월|일|years?\b|months?\b|days?\b|σ)"
+    )
+    for number in decimals:
+        explicit_unit = all(
+            re.search(re.escape(number) + units, text, re.I)
+            for text in (claim, evidence)
+        )
+        if not named and not explicit_unit:
+            issues.append("unnamed_numeric_metric")
+            break
+    if re.search(
+        r"\b(?:example|hypothetical|in this case)\b", evidence, re.I
+    ) and not re.search(
+        r"예시|예제|가상|이 사례|해당 사례|이 경우|이 조건|위 조건|주어진 (?:조건|가정)",
+        claim,
+    ):
+        issues.append("numeric_example_scope_missing")
+    return issues
 
 
 def display_issues(claim: str, evidence: str) -> list[str]:
@@ -37,6 +84,7 @@ def display_issues(claim: str, evidence: str) -> list[str]:
     if re.search(r"\bfirst[- ]order\b", evidence, re.I):
         checked = re.sub(r"(?<!\d)1차", "일차", checked)
     issues = research_review.literal_issues(checked, evidence)
+    issues.extend(numeric_scope_issues(claim, evidence))
     if re.search(r"기후를?\s*고려|기후\s*투자자", claim) and not re.search(
         r"climate|carbon|기후|탄소", evidence, re.I
     ):

@@ -108,6 +108,54 @@ def test_guard_unit_correspondences_do_not_allow_unrelated_numbers(
     assert (not reading.display_issues(claim, evidence)) is clean
 
 
+@pytest.mark.parametrize(
+    "claim,evidence,issue",
+    [
+        (
+            "중간급 딥은 0.38로 감소한다.",
+            "Moderate dips shrink to 0.38.",
+            "unnamed_numeric_metric",
+        ),
+        ("샤프비율은 0.38이다.", "The value is 0.38.", "unnamed_numeric_metric"),
+        ("상관계수는 0.95이다.", "The correlation is 0.95.", None),
+        ("샤프비율은 0.38이다.", "The Sharpe ratio is 0.38.", None),
+        ("비용은 1.5%다.", "Costs are 1.5%.", None),
+        ("기간은 1.5년이다.", "The horizon is 1.5 years.", None),
+        ("p값은 0.05이다.", "The p-value is 0.05.", None),
+        (
+            "실무에서는 3.2배 차이가 난다.",
+            "Simplified example: in this case, 3.2x larger.",
+            "numeric_example_scope_missing",
+        ),
+        (
+            "이 예시에서는 3.2배다.",
+            "Simplified example: in this case, 3.2x larger.",
+            None,
+        ),
+        ("포지션이 더 커진다.", "In this example, 3.2x larger.", None),
+    ],
+)
+def test_numeric_scope_holds_are_generic_and_preserve_typed_comparisons(
+    claim, evidence, issue
+):
+    assert reading.numeric_scope_issues(claim, evidence) == ([issue] if issue else [])
+
+
+def test_numeric_scope_hold_preserves_other_points_and_original_model_verdict(item):
+    item["analysis"]["brief"]["why_read"] = {
+        "text_ko": "중간급 딥은 0.38로 감소한다.",
+        "evidence": "Moderate dips shrink to 0.38.",
+    }
+    seal(item)
+    before = deepcopy(item)
+    assert review.state(item) == "accepted"
+    shown = reading.reading_brief(item)
+    assert shown["policy_version"] == "reading-display-v2-numeric-scope"
+    assert shown["status"] == "partial" and shown["points"]["why_read"] is None
+    assert shown["points"]["method_data"] == before["analysis"]["brief"]["method_data"]
+    assert item == before and review.state(item) == "accepted"
+
+
 def test_frozen_audit_changes_do_not_apply_to_similar_or_changed_original():
     entry_id, audit = next(iter(curation._audits().items()))
     item = {"entry_id": entry_id, **{name: audit[name] for name in curation.BINDINGS}}

@@ -289,7 +289,7 @@ jobs:
                                   and (.notification_eligible | type) == "boolean"
                                   and .duplicate_of == null
                                   and (.reading_brief == null or (
-                                    .reading_brief.policy_version == "reading-display-v1-field-holds"
+                                    .reading_brief.policy_version == "reading-display-v2-numeric-scope"
                                     and (.reading_brief.status == "ready" or .reading_brief.status == "partial")
                                     and (.reading_brief.points.method_data != null or .reading_brief.points.finding != null)
                                     and (.reading_brief as $brief | $brief.held_fields | keys | all(. as $field | $brief.points[$field] == null))
