@@ -202,7 +202,7 @@ def test_extension_sample_is_separate_and_does_not_replace_prior_failures():
         ("OPENAI_API_KEY", ""),
         ("APP_DATA", "s3://insight-invest-datalake/app"),
         ("RADAR_ANALYSIS_ENABLED", "false"),
-        ("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "1.000001"),
+        ("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "1.100001"),
         ("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0"),
         ("RESEARCH_MAX_ITEMS", "31"),
         ("RESEARCH_SOURCES", "man-systematic-insights"),
@@ -243,12 +243,12 @@ def test_workflow_is_manual_serialized_non_deploy_and_within_combined_budget():
         for step in workflow["jobs"]["deploy"]["steps"]
     )
     assert Decimal(run["env"]["RADAR_ANALYSIS_MONTHLY_BUDGET_USD"]) + Decimal(
-        "1.00"
+        "0.90"
     ) == Decimal("2")
     assert "lambda get-function-configuration" in run["run"]
-    assert 'test "$LIVE_RESEARCH_BUDGET" = "1.00"' in run["run"]
+    assert 'test "$LIVE_RESEARCH_BUDGET" = "0.90"' in run["run"]
     assert (
-        'RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "1.00"'
+        'RADAR_ANALYSIS_MONTHLY_BUDGET_USD: "0.90"'
         in (ROOT / "infra/template.yaml").read_text()
     )
     assert "inputs.mode != 'research-qualify'" in workflow["jobs"]["deploy"]["if"]

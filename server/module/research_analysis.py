@@ -520,7 +520,7 @@ def enrich(
         return {"enabled": False, "reason": "missing_api_key", "completed": 0}
     now = (now or datetime.now(UTC)).astimezone(UTC)
     limit = int(
-        Decimal(os.environ.get("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "1.00"))
+        Decimal(os.environ.get("RADAR_ANALYSIS_MONTHLY_BUDGET_USD", "0.90"))
         * 1_000_000_000
     )
     if limit <= 0:
