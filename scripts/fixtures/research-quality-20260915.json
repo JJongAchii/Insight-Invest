@@ -281,12 +281,13 @@
       "analysis_scope": "full_article",
       "parser_version": "editorial-v3-pdf-layout",
       "sample": "reading-quality-20260915-c",
-      "expected_lane": "core",
+      "expected_lane": "context",
       "expected_content_kinds": [
-        "research",
-        "practitioner"
+        "practitioner",
+        "market_commentary",
+        "other"
       ],
-      "reading_check": "Previously source-audited original must remain available; require a concrete, faithful and readable investment explanation, not generic benefits."
+      "reading_check": "Full-text re-audit before this document's new API run: manager introduction, adoption benefits and named processes; orthogonal modes are mentioned without a disclosed analytic/weighting relationship. Prior manual core is corrected, not borrowed as a gold label."
     },
     {
       "entry_id": "8d973493fd9c37f4cd4a716cf0af46dba6f824bf83859b04cf0a2f80fa136434",

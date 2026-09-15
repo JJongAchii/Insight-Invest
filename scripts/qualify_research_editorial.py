@@ -45,7 +45,12 @@ ENABLED_SOURCES = tuple(
 )
 # This comparison selector exists only in the isolated manual runner. Production
 # remains on its configured model; no environment-driven fallback is added.
-MODEL_PRICES = {"gpt-5-nano": (50, 400), "gpt-5-mini": (250, 2000)}
+READING_CONTRAST_MODEL = "gpt-5.4-mini-2026-03-17"
+MODEL_PRICES = {
+    "gpt-5-nano": (50, 400),
+    "gpt-5-mini": (250, 2000),
+    READING_CONTRAST_MODEL: (750, 4500),
+}
 # Diagnostic only: one fixed model contrast, never a production fallback.
 BOUNDARY_MODEL_PRICES = {
     "gpt-5-mini": (250, 2000),
@@ -256,9 +261,13 @@ def validate_environment(*, now: datetime | None = None) -> tuple[int, list[str]
     sample = os.environ.get("RESEARCH_SAMPLE", "latest")
     if sample not in SAMPLES or (sample == "v7-regression" and model != "gpt-5-mini"):
         raise ValueError("qualification sample is not approved")
+    reading_contrast = model == READING_CONTRAST_MODEL
+    if reading_contrast and sample != "reading-quality-20260915-a":
+        raise ValueError("reading model contrast requires its frozen seven originals")
     if (
         sample in {*GATE_SAMPLES, *BRIEF_SAMPLES, *BATCH_SAMPLES}
         and model != "gpt-5-mini"
+        and not reading_contrast
     ):
         raise ValueError("source-only gate qualification keeps GPT-5 mini")
     boundary_model(sample, model)  # Validate the contrast before source/provider I/O.
@@ -418,6 +427,11 @@ def run(output: Path) -> int:
         research_boundary.INPUT_NANOUSD_PER_TOKEN,
         research_boundary.OUTPUT_NANOUSD_PER_TOKEN,
     )
+    original_review = (
+        research_review.MODEL,
+        research_review.INPUT_NANOUSD_PER_TOKEN,
+        research_review.OUTPUT_NANOUSD_PER_TOKEN,
+    )
     try:
         maximum, sources, model = validate_environment(now=now)
         sample = os.environ.get("RESEARCH_SAMPLE", "latest")
@@ -428,7 +442,19 @@ def run(output: Path) -> int:
             research_boundary.INPUT_NANOUSD_PER_TOKEN,
             research_boundary.OUTPUT_NANOUSD_PER_TOKEN,
         ) = (name, *BOUNDARY_MODEL_PRICES[name])
-        report["diagnostic_only"] = name != "gpt-5-mini"
+        report["diagnostic_only"] = (
+            name != "gpt-5-mini" or model == READING_CONTRAST_MODEL
+        )
+        if model == READING_CONTRAST_MODEL:
+            (
+                research_review.MODEL,
+                research_review.INPUT_NANOUSD_PER_TOKEN,
+                research_review.OUTPUT_NANOUSD_PER_TOKEN,
+            ) = (model, *MODEL_PRICES[model])
+            report["review_model"] = model
+            report["contrast_scope"] = (
+                "writer_and_reviewer_only; identical prompts and preserved source selection"
+            )
         report["boundary_model"] = name
         report["boundary_request_config"] = {
             "system_digest": research_review.digest(research_boundary.SYSTEM),
@@ -780,6 +806,11 @@ def run(output: Path) -> int:
             research_boundary.INPUT_NANOUSD_PER_TOKEN,
             research_boundary.OUTPUT_NANOUSD_PER_TOKEN,
         ) = original_boundary
+        (
+            research_review.MODEL,
+            research_review.INPUT_NANOUSD_PER_TOKEN,
+            research_review.OUTPUT_NANOUSD_PER_TOKEN,
+        ) = original_review
     print(
         json.dumps(
             {

@@ -32,9 +32,9 @@ on:
         type: string
         default: "aqr-research"
       research_model:
-        description: Isolated qualification model only; mini is limited to 3 distinct sources
+        description: Isolated writer model; 5.4 mini contrasts writer/reviewer on frozen batch A only
         type: choice
-        options: [gpt-5-nano, gpt-5-mini]
+        options: [gpt-5-nano, gpt-5-mini, gpt-5.4-mini-2026-03-17]
         default: gpt-5-mini
       research_boundary_model:
         description: Diagnostic boundary contrast only; production is unchanged

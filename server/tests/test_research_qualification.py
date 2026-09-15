@@ -54,6 +54,20 @@ def test_frozen_batch_preserves_multiple_originals_from_one_source(
     monkeypatch.setenv("RESEARCH_SOURCES", ",".join(sources))
     monkeypatch.setenv("RESEARCH_MAX_ITEMS", "7")
     assert qualification.validate_environment() == (7, sources, "gpt-5-mini")
+    monkeypatch.setenv(
+        "RESEARCH_QUALIFICATION_MODEL", qualification.READING_CONTRAST_MODEL
+    )
+    assert qualification.validate_environment() == (
+        7,
+        sources,
+        qualification.READING_CONTRAST_MODEL,
+    )
+    assert qualification.MODEL_PRICES[qualification.READING_CONTRAST_MODEL] == (
+        750,
+        4500,
+    )
+    assert qualification.research_analysis.MODEL == "gpt-5-mini"
+    assert qualification.research_review.MODEL == "gpt-5-mini"
     for key, case in cases.items():
         assert (
             qualification.case_for(
