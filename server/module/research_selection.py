@@ -113,12 +113,7 @@ finance term, claimed benefit or vague process description does not qualify.
 ESG/climate is not excluded as a topic: tested pricing/portfolio effects qualify;
 product demand, commercialization, public incentives and conferences do not.
 
-content_kind separately describes presentation:
-research = a paper/report analyzing a question with reasoning or evidence;
-practitioner = an explanatory essay, interview or practical note;
-market_commentary = an outlook or positioning update; other = other formats.
-Do NOT relabel policy research as unrelated/non-research to express topic mismatch.
-Legal 'not research/not investment advice' disclaimers are not editorial labels.
+{CONTENT_KIND_GUIDE}
 
 investment_focus is true when the main subject is investment_methodology or
 empirical_market_research, OR the purpose is mixed_investment_analysis with a
@@ -199,6 +194,7 @@ ONLY these prevalidated choices. For one sentence START equals END. Use a short
 span that preserves the explanation; do not invent ranges or count characters.
 Use null for missing evidence. Do not summarize here.
 """
+SYSTEM = SYSTEM.replace("{CONTENT_KIND_GUIDE}", research_review.CONTENT_KIND_GUIDE)
 PRIMARY_SUBJECTS = (
     "investment_methodology",
     "empirical_market_research",

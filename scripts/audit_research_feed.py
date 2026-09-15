@@ -65,6 +65,8 @@ def run(feed_path: Path, output: Path, entry_ids: list[str] | None = None) -> di
             text = document["text"]
             digest = content_digest(text)
             result.update(
+                fetched_title=document["title"],
+                title_matches=document["title"] == item["title"],
                 fetched_digest=digest,
                 fetched_chars=len(text),
                 digest_matches=digest == item["source_digest"],

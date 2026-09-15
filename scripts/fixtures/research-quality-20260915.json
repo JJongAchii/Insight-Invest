@@ -497,6 +497,8 @@
     },
     {
       "entry_id": "daccf5b63bb5dddb3f55457c9a58430443842f7e005bf7f8338687ba3600f743",
+      "producer_entry_id": "d47dc510c1e6fa5726621c5c7a1e81940ec2da658a420d3ef55a966462a4d1bc",
+      "consumer_document_identity": "verdad-archive\u0000https://verdadcap.com/archive/hope-springs-eternal",
       "source_id": "verdad-research",
       "title": "Hope Springs Eternal",
       "url": "https://verdadcap.com/archive/hope-springs-eternal",
@@ -517,6 +519,8 @@
     },
     {
       "entry_id": "c4faaf734951879c030e976acfe0041c1af15f6f58a3cf732e125086b6708242",
+      "producer_entry_id": "ff132fd78b6a345037cf1ca829b96e41d24b2bfb88859ec463aa1d33248e59b6",
+      "consumer_document_identity": "verdad-archive\u0000https://verdadcap.com/archive/the-reflexivity-of-credit-markets",
       "source_id": "verdad-research",
       "title": "The Reflexivity of Credit Markets",
       "url": "https://verdadcap.com/archive/the-reflexivity-of-credit-markets",
@@ -539,6 +543,8 @@
     },
     {
       "entry_id": "1872fc42bfe3eafce10e3f0641eb233784d16ee88332346ea3252179cb03e177",
+      "producer_entry_id": "cbf24264d7c6f9877831ee7c21ba818b0182142039708ff33c0c3911bb25c2a0",
+      "consumer_document_identity": "verdad-archive\u0000https://verdadcap.com/archive/distribution-of-global-value",
       "source_id": "verdad-research",
       "title": "Distribution of Global Value",
       "url": "https://verdadcap.com/archive/distribution-of-global-value",

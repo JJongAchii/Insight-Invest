@@ -34,6 +34,7 @@ from qdata.radar_editorial import (  # noqa: E402
     CHANNELS,
     content_digest,
     discover_publications,
+    document_identity,
     parse_publication,
     publication_record,
 )
@@ -104,6 +105,25 @@ SELECTION_SAMPLES = frozenset(
 V7_PROMPT = "reading-brief-openai-v7-korean-editorial"
 
 
+def batch_entry_key(case: dict) -> str:
+    """Keep a legacy library ID distinct from the producer's canonical identity."""
+    consumer = case["entry_id"]
+    producer = case.get("producer_entry_id", consumer)
+    if producer != consumer:
+        legacy = case.get("consumer_document_identity", "")
+        source, separator, url = legacy.partition("\0")
+        canonical = document_identity(case["url"], case.get("doi", ""))
+        if (
+            not source
+            or not separator
+            or hashlib.sha256(legacy.encode()).hexdigest() != consumer
+            or document_identity(url) != canonical
+            or hashlib.sha256(canonical.encode()).hexdigest() != producer
+        ):
+            raise ValueError("frozen consumer/producer identity mapping differs")
+    return producer
+
+
 def fixed_cases(sample: str, sources: list[str]) -> dict[str, dict]:
     if sample == "latest":
         return {}
@@ -115,7 +135,7 @@ def fixed_cases(sample: str, sources: list[str]) -> dict[str, dict]:
         )
         path = Path(__file__).with_name("fixtures") / filename
         cases = {
-            item["entry_id"]: item
+            batch_entry_key(item): item
             for item in json.loads(path.read_text())["items"]
             if item["sample"] == sample
         }
@@ -601,14 +621,19 @@ def run(output: Path) -> int:
             raise ValueError("mini comparison requires one readable item per source")
         report["selected_entries"] = [
             {
-                key: record[key]
-                for key in (
-                    "entry_id_sha256",
-                    "source_id",
-                    "title",
-                    "url",
-                    "source_digest",
-                )
+                **{
+                    key: record[key]
+                    for key in (
+                        "entry_id_sha256",
+                        "source_id",
+                        "title",
+                        "url",
+                        "source_digest",
+                    )
+                },
+                "consumer_entry_id": cases.get(record["entry_id_sha256"], {}).get(
+                    "entry_id", record["entry_id_sha256"]
+                ),
             }
             for record in records
         ]

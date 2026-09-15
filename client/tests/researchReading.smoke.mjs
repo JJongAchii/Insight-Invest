@@ -14,9 +14,15 @@ const academicProbe = report.status === "probe_completed" && report.llm_calls ==
 const originalProbe = report.status === "original_feed_checked" && report.llm_calls === 0 && report.network_calls === 0;
 const curationProbe = report.status === "curation_projection_checked" && report.llm_calls === 0 && report.network_calls === 0;
 assert.ok(academicProbe || originalProbe || curationProbe || ["api_contract_qualified", "needs_diagnosis"].includes(report.status));
-const originalItems = academicProbe ? report.items.slice(0, 3).map((item) => ({
+const selectedEntryIds = process.argv.slice(3);
+assert.equal(new Set(selectedEntryIds).size, selectedEntryIds.length);
+const selectedItems = selectedEntryIds.length
+  ? report.items.filter((item) => selectedEntryIds.includes(item.entry_id))
+  : report.items;
+if (selectedEntryIds.length) assert.equal(selectedItems.length, selectedEntryIds.length, "Requested actual report entry missing");
+const originalItems = academicProbe ? selectedItems.slice(0, 3).map((item) => ({
   ...item, entry_id: item.entry_id_sha256, record_schema_version: item.schema_version,
-})) : report.items;
+})) : selectedItems;
 assert.ok(originalItems.length >= 1 && originalItems.length <= 3, "Use a bounded actual sample");
 assert.ok(academicProbe || originalProbe || curationProbe || report.review_prompt_version, "Use actual source-review outcomes, never mark drafts reviewed in the fixture");
 const reviewed = (item) => Boolean(item.reading_brief);

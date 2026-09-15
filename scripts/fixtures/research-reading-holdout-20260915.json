@@ -35,6 +35,8 @@
     },
     {
       "entry_id": "5c3b8ef8d50160f7d952bc901823e6535fe7689b6c87e6db118872dad7fc0722",
+      "producer_entry_id": "fc6343bb1d1ef147d20188d79f7941d58787b9fe9530d10596fa59008de69497",
+      "consumer_document_identity": "verdad-archive\u0000https://verdadcap.com/archive/echoes-of-junk-bonds-past",
       "source_id": "verdad-research",
       "title": "Echoes of Junk Bonds Past",
       "url": "https://verdadcap.com/archive/echoes-of-junk-bonds-past",

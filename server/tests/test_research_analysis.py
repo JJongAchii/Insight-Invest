@@ -879,15 +879,26 @@ def test_unknown_or_missing_content_kind_is_not_a_new_valid_brief():
 
 def test_prompt_requires_finance_terms_attribution_and_conditions():
     # Real linguistic/semantic quality is checked separately against real sources.
-    assert "금융배출량" in analysis.SYSTEM
-    assert "매출 for revenue" in analysis.SYSTEM
-    assert "independently reproduced" in analysis.SYSTEM
-    assert "Do not reconstruct broken PDF numbers" in analysis.SYSTEM
-    assert "current outlook/sector preference/positioning" in analysis.SYSTEM
+    prompt = " ".join(analysis.SYSTEM.split())
+    assert "금융배출량" in prompt
+    assert "매출 for revenue" in prompt
+    assert "independent validation" in prompt
+    assert "Never repair broken PDF digits" in prompt
+    assert "market_commentary = an outlook or positioning update" in prompt
+    assert "NOT raw 수익률" in prompt
     assert list(analysis.POINT_SCHEMA["anyOf"][1]["properties"]) == [
         "evidence_ids",
         "text_ko",
     ]
+
+
+def test_selection_writer_review_share_presentation_taxonomy():
+    from module import research_review, research_selection
+
+    guide = research_review.CONTENT_KIND_GUIDE
+    for stage in (analysis, research_selection, research_review):
+        assert stage.SYSTEM.count(guide) == 1
+    assert "practitioner = an explanatory essay, interview or practical note" in guide
 
 
 def test_accepted_topic_without_concrete_reading_value_stays_in_discovery(source):

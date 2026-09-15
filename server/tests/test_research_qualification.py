@@ -95,6 +95,66 @@ def test_frozen_batch_preserves_multiple_originals_from_one_source(
         qualification.fixed_cases(sample, sources[:-1])
 
 
+def test_extra_reading_cases_are_separate_from_all_development_batches():
+    fixtures = ROOT / "scripts/fixtures"
+    originals = qualification.json.loads(
+        (fixtures / "research-quality-20260915.json").read_text()
+    )["items"]
+    development = set()
+    for part, count in (("a", 7), ("b", 7), ("c", 7), ("d", 6)):
+        sample = f"reading-quality-20260915-{part}"
+        sources = sorted(
+            {item["source_id"] for item in originals if item["sample"] == sample}
+        )
+        cases = qualification.fixed_cases(sample, sources)
+        assert len(cases) == count
+        development.update(cases)
+    extra = qualification.fixed_cases(
+        "reading-quality-20260915-e",
+        ["cfm-research", "robeco-quant-insights", "verdad-research"],
+    )
+    assert len(development) == 27 and len(extra) == 3
+    assert not development.intersection(extra)
+    assert sorted(case["expected_lane"] for case in extra.values()) == [
+        "context",
+        "core",
+        "core",
+    ]
+
+
+def test_legacy_library_id_maps_only_to_the_same_canonical_original():
+    cases = qualification.fixed_cases(
+        "reading-quality-20260915-e",
+        ["cfm-research", "robeco-quant-insights", "verdad-research"],
+    )
+    case = next(value for value in cases.values() if "producer_entry_id" in value)
+    assert qualification.batch_entry_key(case) == case["producer_entry_id"]
+    assert case["producer_entry_id"] != case["entry_id"]
+    for key in ("entry_id", "producer_entry_id", "consumer_document_identity", "url"):
+        with pytest.raises(ValueError, match="identity mapping"):
+            qualification.batch_entry_key(
+                {**case, key: case["url"] + "-different" if key == "url" else "different"}
+            )
+
+
+def test_editorial_cache_does_not_depend_on_preserved_library_alias():
+    from module import research_analysis, research_boundary, research_selection
+    from test_research_analysis import TEXT, NOW
+    from research_review_fixtures import selection_for
+
+    item = {
+        "entry_id": "a" * 64,
+        "source_digest": "b" * 64,
+        "title": "Same original",
+        "parser_version": "fixed",
+        "analysis_scope": "full_article",
+    }
+    item["editorial_selection"] = selection_for(item, TEXT, NOW)
+    alias = {**item, "entry_id": "c" * 64}
+    for stage in (research_selection, research_boundary, research_analysis):
+        assert stage.cache_key(item) == stage.cache_key(alias)
+
+
 def test_batch_completion_cannot_borrow_manual_core_or_skip_review(monkeypatch):
     for lane, reviewed, expected in [
         ("pending", True, False),
