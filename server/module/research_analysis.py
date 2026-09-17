@@ -20,7 +20,7 @@ from datastore import research, storage
 from module import research_boundary, research_review, research_selection
 
 MODEL = "gpt-5.4-2026-03-05"
-PROMPT_VERSION = "reading-brief-openai-v15-source-attributed-note"
+PROMPT_VERSION = "reading-brief-openai-v16-document-metadata"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 8192  # Visible output AND reasoning; real PDFs exceeded 4096.
 MAX_INPUT_CHARS = 24000
@@ -77,6 +77,12 @@ finding = concrete conclusion; why_read = the explanation itself;
 limitation = a document-specific limitation, not a generic legal disclaimer.
 Unsupported or uninformative fields are null; never invent text to fill a template.
 
+When document_metadata is supplied, content_kind and quant_relevant are fixed
+candidate metadata from the full-body reader. Copy them exactly; you see only the
+chosen explanation and cannot reclassify the whole document from that fragment.
+These are NOT approval instructions. A separate reader will still check the
+metadata against the whole bounded source. Judge substantive from the actual note.
+Without document_metadata, classify the supplied source using these definitions:
 {CONTENT_KIND_GUIDE}
 quant_relevant concerns quantitative investment/asset pricing/portfolio methodology.
 substantive requires an actual source-grounded explanation, not a named framework,
@@ -332,6 +338,17 @@ def reading_evidence_plan(item: dict) -> dict | None:
     }
 
 
+def reading_metadata_plan(item: dict) -> dict | None:
+    """Whole-document attributes belong to the source reader, not an excerpt writer."""
+    if research_selection.model_state(item) != "core":
+        return None
+    decision = item["editorial_selection"]["decision"]
+    return {
+        "content_kind": decision["content_kind"],
+        "quant_relevant": decision["investment_focus"],
+    }
+
+
 def cache_key(item: dict) -> str:
     identity = [
         item["source_digest"],
@@ -346,6 +363,7 @@ def cache_key(item: dict) -> str:
     ]
     if item.get("editorial_selection"):
         identity.append(research_review.digest(reading_evidence_plan(item)))
+        identity.append(research_review.digest(reading_metadata_plan(item)))
     return hashlib.sha256(json.dumps(identity, ensure_ascii=False).encode()).hexdigest()
 
 
@@ -373,12 +391,26 @@ def _output_text(payload: dict) -> str:
 
 
 def _request_payload(
-    text: str, title: str, *, evidence_plan: dict | None = None
+    text: str,
+    title: str,
+    *,
+    evidence_plan: dict | None = None,
+    metadata_plan: dict | None = None,
 ) -> dict:
     passages = _source_passages(text)
     if not any(passage["citable"] for passage in passages):
         raise AnalysisContractError("source lacks bounded sentence evidence")
     schema = json.loads(json.dumps(BRIEF_SCHEMA))
+    if metadata_plan is not None:
+        if (
+            not isinstance(metadata_plan, dict)
+            or set(metadata_plan) != {"content_kind", "quant_relevant"}
+            or metadata_plan["content_kind"] not in CONTENT_KINDS
+            or type(metadata_plan["quant_relevant"]) is not bool
+        ):
+            raise AnalysisContractError("invalid source-reader metadata")
+        for field, value in metadata_plan.items():
+            schema["properties"][field]["enum"] = [value]
     reading_points = None
     if evidence_plan is not None:
         reading_points = {}
@@ -407,6 +439,7 @@ def _request_payload(
                 "source_title": title,
                 "source_passages": passages,
                 "reading_points": reading_points,
+                "document_metadata": metadata_plan,
                 "scope": "bounded_source_extract",
             },
             ensure_ascii=False,
@@ -424,10 +457,16 @@ def _request_payload(
 
 
 def _request_reservation(
-    text: str, title: str, *, evidence_plan: dict | None = None
+    text: str,
+    title: str,
+    *,
+    evidence_plan: dict | None = None,
+    metadata_plan: dict | None = None,
 ) -> int:
     return _reserve_payload(
-        _request_payload(text, title, evidence_plan=evidence_plan),
+        _request_payload(
+            text, title, evidence_plan=evidence_plan, metadata_plan=metadata_plan
+        ),
         INPUT_NANOUSD_PER_TOKEN,
         OUTPUT_NANOUSD_PER_TOKEN,
     )
@@ -494,11 +533,26 @@ def _response_call(
 
 
 def _model_call(
-    text: str, title: str, api_key: str, *, evidence_plan: dict | None = None
+    text: str,
+    title: str,
+    api_key: str,
+    *,
+    evidence_plan: dict | None = None,
+    metadata_plan: dict | None = None,
 ) -> tuple[dict, dict]:
     brief, usage = _response_call(
-        _request_payload(text, title, evidence_plan=evidence_plan), api_key
+        _request_payload(
+            text, title, evidence_plan=evidence_plan, metadata_plan=metadata_plan
+        ),
+        api_key,
     )
+    if metadata_plan and (
+        not isinstance(brief, dict)
+        or any(brief.get(field) != value for field, value in metadata_plan.items())
+    ):
+        raise AnalysisContractError(
+            "writer changed source-reader metadata", usage=usage
+        )
     return _ground_response(brief, text), usage
 
 
@@ -725,8 +779,12 @@ def enrich(
                 output_rate = research_review.OUTPUT_NANOUSD_PER_TOKEN
             else:
                 evidence_plan = reading_evidence_plan(item)
+                metadata_plan = reading_metadata_plan(item)
                 payload = _request_payload(
-                    text, item["title"], evidence_plan=evidence_plan
+                    text,
+                    item["title"],
+                    evidence_plan=evidence_plan,
+                    metadata_plan=metadata_plan,
                 )
                 input_rate, output_rate = (
                     INPUT_NANOUSD_PER_TOKEN,
@@ -767,7 +825,10 @@ def enrich(
                     item["title"],
                     api_key,
                     **(
-                        {"evidence_plan": evidence_plan}
+                        {
+                            "evidence_plan": evidence_plan,
+                            "metadata_plan": metadata_plan,
+                        }
                         if model_call is _model_call
                         else {}
                     ),
@@ -784,6 +845,14 @@ def enrich(
                     "analyzed_at": now.isoformat(),
                     "brief": brief,
                 }
+                if metadata_plan is not None:
+                    result["metadata_provenance"] = {
+                        "stage": "source_only_reading_selection",
+                        "decision_digest": item["editorial_selection"][
+                            "decision_digest"
+                        ],
+                        "fields": metadata_plan,
+                    }
             if any(
                 type(usage.get(name)) is not int or usage[name] <= 0
                 for name in ("input_tokens", "output_tokens")

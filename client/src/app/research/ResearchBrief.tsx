@@ -47,10 +47,13 @@ export default function ResearchBrief({ item }: { item: ResearchEntry }) {
       </div>
     );
   }
+  const formatOnlyHeld = reading.metadata_held_fields?.length === 1
+    && reading.metadata_held_fields[0] === "content_kind"
+    && Object.keys(reading.held_fields).length === 0;
   return (
     <div className="mt-4 space-y-3">
       <p className="text-xs text-ink-muted">
-        AI 읽기 요약 · {reading.status === "partial" ? "확인된 항목만 표시 · 일부 검수 보류" : "항목별 원문 대조 완료"} · 원문 {reading.analyzed_chars.toLocaleString("ko-KR")}자 분석
+        AI 읽기 요약 · {formatOnlyHeld ? "요약 내용 원문 대조 완료 · 자료형 분류 보류" : reading.status === "partial" ? "확인된 항목만 표시 · 일부 검수 보류" : "항목별 원문 대조 완료"} · 원문 {reading.analyzed_chars.toLocaleString("ko-KR")}자 분석
       </p>
       <dl className="space-y-3">
         {POINTS.map(([field, label]) => {
@@ -84,7 +87,9 @@ export default function ResearchBrief({ item }: { item: ResearchEntry }) {
           보류 항목: {POINTS.filter(([field]) => reading.held_fields[field]).map(([, label]) => label).join(" · ")}. 원문과 의미·조건을 더 확인해야 해 요약에서 제외했습니다.
         </p>
       )}
-      {reading.metadata_held && <p className="text-xs leading-5 text-ink-muted">자동 분류는 재확인이 필요합니다. 아래 원문 링크에서 자료 전체를 확인할 수 있습니다.</p>}
+      {reading.metadata_held && <p className="text-xs leading-5 text-ink-muted">{formatOnlyHeld
+        ? "자료형 분류만 보류해 배지를 표시하지 않았습니다. 요약문은 인용된 원문과 대조한 내용입니다."
+        : "자동 분류는 재확인이 필요합니다. 아래 원문 링크에서 자료 전체를 확인할 수 있습니다."}</p>}
       <div className="border-t border-edge pt-3 text-xs leading-5 text-ink-muted">
         <p>AI가 원문 일부와 요약을 대조한 읽기 도움말입니다. 오류가 남을 수 있으며, 독립 재현·성과 검증 결과가 아닙니다.</p>
       </div>

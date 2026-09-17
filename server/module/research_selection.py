@@ -12,7 +12,7 @@ from copy import deepcopy
 from module import research_boundary, research_curation, research_review
 
 MODEL = "gpt-5.4-2026-03-05"
-PROMPT_VERSION = "reading-selection-v13-mixed-substantive-reading"
+PROMPT_VERSION = "reading-selection-v14-outlook-with-analysis"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 4096
 INPUT_NANOUSD_PER_TOKEN = 2500
@@ -30,12 +30,15 @@ incidental finance sentence cannot outweigh a body about product adoption.
 Return category:
 - investment_analysis: the main question is HOW an investment rule/estimator is
   defined, WHY a pricing/risk relationship occurs, or WHAT a comparison/test finds.
-- mixed_investment_analysis: commercial framing surrounds a self-contained section
+- mixed_investment_analysis: commercial or current-market framing surrounds a self-contained section
   that actually explains an investment comparison, measurement or mechanism. Cite
   that explanation, not the product pitch. It must teach the relationship after
   removing the manager/product name; a claimed benefit or list of inputs is not
   enough. The explanation need not be the majority of the article or a tested
-  trading rule. Mixed articles can be worthwhile practitioner reading.
+  trading rule. Mixed articles can be worthwhile practitioner reading. A market
+  outlook can explain a concrete pricing/flow/risk mechanism in its body: keep its
+  market_outlook subject honest and select the mechanism. Current conditions alone
+  do not qualify; the section must explain the relationship, not merely predict it.
 - adoption_or_outlook: the main question concerns adoption, commercial viability,
   institutional reform, business/sector outlook, organizing research work, or
   describing a manager's current portfolio, positioning and product advantages.
@@ -117,10 +120,11 @@ product demand, commercialization, public incentives and conferences do not.
 
 investment_focus is true when the main subject is investment_methodology or
 empirical_market_research, OR the purpose is mixed_investment_analysis with a
-business_or_product wrapper, AND contribution_type is rule_or_measurement,
+business_or_product or market_outlook wrapper, AND contribution_type is rule_or_measurement,
 investment_mechanism or empirical_finding. Keep the wrapper's subject honest; do
 not relabel it as methodology just to admit its substantive section. Policy,
-research administration, software and current market outlook remain other subjects.
+research administration and software remain other subjects. A current outlook
+without a self-contained investment explanation remains excluded.
 For overview_or_claim/none or those other subjects set investment_focus false and
 all transferable_insight/reading_points null,
 even if content_kind is research or practitioner. Institution, PDF length and
@@ -128,7 +132,7 @@ formal publication status do not change the subject. Do not invent validation.
 reason briefly states the actual contribution or what is missing in English,
 not a recommendation score. Do not infer a hidden proprietary method.
 
-For investment-focused research/practitioner return a transferable_insight with
+For investment-focused research/practitioner, or a mixed market commentary, return a transferable_insight with
 one CONTIGUOUS span of 1–4 citable passage IDs (at most 1200 characters total)
 demonstrating that contribution,
 not merely stating that a method exists, has benefits or seeks certain outcomes.
@@ -185,8 +189,10 @@ The finding must explain what the comparison/mechanism shows;
 claims that an approach is flexible, resilient, disciplined or adds value are not
 findings. Leave them null. A generic legal disclaimer is not a research limitation.
 Do not invent a research question from a slogan or a statement of product benefits.
-For excluded subjects or market_commentary/other all reading_points must be null.
-The mixed commercial-wrapper exception still requires a literal, self-contained
+For excluded subjects or other formats all reading_points must be null. For
+market_commentary use non-null evidence ONLY for a mixed analytical section,
+never merely an outlook/positioning update.
+The mixed commercial/outlook-wrapper exception still requires a literal, self-contained
 investment explanation; its independently checked span, not its label, admits it.
 Select each evidence as {"span_id":"START:END"}, inclusive. The source passage's
 span_ends lists the allowed END IDs for that START; the response schema permits
@@ -367,22 +373,23 @@ def model_state(item: dict) -> str:
             "mixed_investment_analysis",
         } or not purpose.get("evidence_excerpts"):
             return "context"
-        mixed_section = (
-            purpose["category"] == "mixed_investment_analysis"
-            and value["primary_subject"] == "business_or_product"
-        )
+        mixed_section = purpose["category"] == "mixed_investment_analysis" and value[
+            "primary_subject"
+        ] in {"business_or_product", "market_outlook"}
         if value["primary_subject"] not in INVESTMENT_SUBJECTS and not mixed_section:
             # Research format and financial vocabulary cannot override the topic.
             # Keep contradictory model fields in the receipt for diagnosis.
             return "context"
         if (
-            value["content_kind"] == "market_commentary"
-            or value["contribution_type"] not in SUBSTANTIVE_CONTRIBUTIONS
-        ):
+            value["content_kind"] == "market_commentary" and not mixed_section
+        ) or value["contribution_type"] not in SUBSTANTIVE_CONTRIBUTIONS:
             return "context"
         if (
             value["investment_focus"] is True
-            and value["content_kind"] in {"research", "practitioner"}
+            and (
+                value["content_kind"] in {"research", "practitioner"}
+                or (mixed_section and value["content_kind"] == "market_commentary")
+            )
             and value.get("evidence_excerpts")
             and item.get("analysis_scope")
             in {"full_article", "full_pdf", "pdf_excerpt"}

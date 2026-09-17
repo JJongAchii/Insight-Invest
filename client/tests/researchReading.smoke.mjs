@@ -140,7 +140,15 @@ try {
         }
         continue;
       }
-      assert.ok(await card.getByText(item.reading_brief.status === "partial" ? "일부 검수 보류" : "원문 대조 완료", { exact: false }).count());
+      const formatOnlyHeld = item.reading_brief.metadata_held_fields?.length === 1
+        && item.reading_brief.metadata_held_fields[0] === "content_kind"
+        && Object.keys(item.reading_brief.held_fields).length === 0;
+      assert.ok(await card.getByText(formatOnlyHeld ? "자료형 분류 보류" : item.reading_brief.status === "partial" ? "일부 검수 보류" : "원문 대조 완료", { exact: false }).count());
+      if (item.reading_brief.metadata_held_fields?.includes("content_kind")) {
+        for (const label of ["방법·실증 연구", "운용 아이디어·실무", "시장 전망·해석", "기타 자료"]) {
+          assert.equal(await card.locator(".badge-neutral").filter({ hasText: new RegExp(`^${label}$`) }).count(), 0, "Do not show an unverified content-kind badge");
+        }
+      }
       const points = card.locator("dl > div");
       for (const [index, point] of Object.values(item.reading_brief.points).filter((value) => value?.evidence).entries()) {
         const row = points.nth(index);

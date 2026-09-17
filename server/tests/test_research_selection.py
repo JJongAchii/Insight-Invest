@@ -293,12 +293,37 @@ def test_mixed_article_requires_actual_investment_section(source, subject, subst
     admissible = substantive and subject in {
         *selection.INVESTMENT_SUBJECTS,
         "business_or_product",
+        "market_outlook",
     }
     assert selection.model_state(item) == ("core" if admissible else "context")
     if admissible:
         # A mixed label never bypasses the isolated source-evidence check.
         item.pop("editorial_boundary", None)
         assert selection.automatic_state(item) == "pending"
+
+
+@pytest.mark.parametrize("mixed", [True, False])
+@pytest.mark.parametrize("has_contribution", [True, False])
+def test_market_wrapper_admits_only_an_evidence_checked_explanation(
+    source, mixed, has_contribution
+):
+    item = deepcopy(source.record)
+    receipt = selection_for(item, TEXT, NOW)
+    decision = receipt["decision"]
+    decision.update(primary_subject="market_outlook", content_kind="market_commentary")
+    decision["main_purpose"]["category"] = (
+        "mixed_investment_analysis" if mixed else "adoption_or_outlook"
+    )
+    decision["contribution_type"] = (
+        "investment_mechanism" if has_contribution else "overview_or_claim"
+    )
+    receipt["decision_digest"] = selection.research_review.digest(decision)
+    item["editorial_selection"] = receipt
+    item.pop("editorial_boundary", None)
+    assert selection.model_state(item) == (
+        "core" if mixed and has_contribution else "context"
+    )
+    assert selection.automatic_state(item) != "core"
 
 
 def test_main_purpose_requires_grounded_evidence(source):

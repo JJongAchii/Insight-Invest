@@ -10,7 +10,7 @@ import re
 
 from module import research_curation, research_review
 
-POLICY_VERSION = "reading-display-v3-standalone-insight"
+POLICY_VERSION = "reading-display-v4-qualified-metadata"
 
 
 def numeric_scope_issues(claim: str, evidence: str) -> list[str]:
@@ -158,18 +158,24 @@ def reading_brief(item: dict) -> dict | None:
         if title_check["status"] == "supported" and not title_check.get("guard_issues")
         else item["title"]
     )
-    metadata_held = any(
-        checks[name]["status"] != "supported" or checks[name].get("guard_issues")
+    metadata_held_fields = [
+        name
         for name in ("title_ko", "content_kind", "quant_relevant", "substantive")
-    )
+        if checks[name]["status"] != "supported" or checks[name].get("guard_issues")
+    ]
+    metadata_held = bool(metadata_held_fields)
     return {
         "policy_version": POLICY_VERSION,
         "source_digest": item["source_digest"],
         "draft_digest": review["draft_digest"],
         "status": "partial" if held or metadata_held else "ready",
         "title_ko": title,
+        "content_kind": None
+        if "content_kind" in metadata_held_fields
+        else brief["content_kind"],
         "analyzed_chars": analysis["analyzed_chars"],
         "points": points,
         "held_fields": held,
         "metadata_held": metadata_held,
+        "metadata_held_fields": metadata_held_fields,
     }

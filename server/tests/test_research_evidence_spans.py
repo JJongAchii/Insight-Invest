@@ -34,8 +34,9 @@ def test_contiguous_span_survives_selection_reviewer_writer_and_cache_seed(sourc
     payload = boundary.request_payload(
         TEXT, "Not sent", proposed=boundary.evidence_plan(item)
     )
-    proposed_ids = json.loads(payload["input"])["proposed_evidence_ids"]
-    assert proposed_ids["insight"] == [0, 1] and proposed_ids["method"] == []
+    spans = json.loads(payload["input"])["proposed_spans"]
+    assert spans["insight"] == {"passage_ids": [0, 1], "text": " ".join(quotes)}
+    assert spans["method"] is None
     draft = analysis._request_payload(
         TEXT, "Source", evidence_plan=selected["decision"]["reading_points"]
     )

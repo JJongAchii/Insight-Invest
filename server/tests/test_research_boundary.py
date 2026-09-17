@@ -96,23 +96,50 @@ def test_payload_contains_literal_proposal_not_first_reader_labels_or_summary(so
     plan = boundary.evidence_plan(source.record)
     payload = boundary.request_payload(TEXT, "Original title", proposed=plan)
     data = boundary.json.loads(payload["input"])
-    assert set(data) == {
-        "source_passages",
-        "proposed_evidence_ids",
-        "purpose_evidence_ids",
-    }
-    passages = {p["id"]: p["text"] for p in data["source_passages"]}
-    for field, ids in data["proposed_evidence_ids"].items():
-        assert [passages[i] for i in ids] == plan[field]
-    assert set(passages) == set(data["purpose_evidence_ids"]).union(
-        *data["proposed_evidence_ids"].values()
-    )
-    assert len(data["source_passages"]) < len(analysis._source_passages(TEXT))
+    assert set(data) == {"proposed_spans", "purpose_context"}
+    for field, span in data["proposed_spans"].items():
+        if not plan[field]:
+            assert span is None
+        else:
+            assert span["text"] == " ".join(plan[field])
+            assert span["passage_ids"] == analysis._source_span_ids(TEXT, plan[field])
+    assert data["purpose_context"]["text"] == " ".join(plan["purpose"])
     assert "verdict" not in boundary.SCHEMA["properties"]
     assert "explanation" not in boundary.SCHEMA["properties"]
     assert payload["store"] is False and "tools" not in payload
     assert "previous_response_id" not in payload
     assert payload["text"]["format"]["strict"] is True
+
+
+def test_boundary_schema_requires_whole_present_span_and_absent_null():
+    sentences = [
+        "The first sentence states a risk hypothesis without supporting it.",
+        "The second compares observed default rates across two rating groups.",
+        "An unrelated product slogan is not proposed evidence.",
+    ]
+    text = " ".join(sentences)
+    plan = {"insight": sentences[:2], "method": [], "purpose": sentences[:1]}
+    payload = boundary.request_payload(text, "Hidden title", proposed=plan)
+    data = boundary.json.loads(payload["input"])
+    assert data["proposed_spans"]["insight"] == {
+        "passage_ids": [0, 1],
+        "text": " ".join(sentences[:2]),
+    }
+    assert sentences[2] not in payload["input"]
+    schema = payload["text"]["format"]["schema"]
+    assert schema["properties"]["checks"]["properties"]["insight"]["type"] == "object"
+    assert schema["properties"]["checks"]["properties"]["method"] == {"type": "null"}
+    assert schema["properties"]["object_evidence_id"]["enum"] == [None, 0, 1]
+    assert "anyOf" in boundary.SCHEMA["properties"]["checks"]["properties"]["insight"]
+
+
+def test_missing_present_check_has_specific_diagnosis_without_a_pass(source):
+    value = boundary_value()
+    value["checks"]["insight"] = None
+    with pytest.raises(
+        analysis.AnalysisContractError, match="missing proposed insight check"
+    ):
+        boundary.receipt(source.record, value, TEXT, NOW.isoformat())
 
 
 def test_diagnostic_model_uses_own_reservation_cost_and_cache(
@@ -343,9 +370,7 @@ def test_duplicate_insight_method_is_reviewed_once_without_manufactured_check(so
     plan = boundary.evidence_plan(item)
     assert plan["insight"] and plan["method"] == []
     payload = boundary.request_payload(TEXT, item["title"], proposed=plan)
-    assert (
-        boundary.json.loads(payload["input"])["proposed_evidence_ids"]["method"] == []
-    )
+    assert boundary.json.loads(payload["input"])["proposed_spans"]["method"] is None
     value = boundary_value()
     item["editorial_boundary"] = boundary.receipt(item, value, TEXT, NOW.isoformat())
     assert item["editorial_boundary"]["decision"]["checks"]["method"] is None

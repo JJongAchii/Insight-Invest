@@ -55,6 +55,15 @@ def test_regulatory_content_label_does_not_reject_supported_translations(item):
     result = reading.reading_brief(item)
     assert result["metadata_held"] and result["status"] == "partial"
     assert result["points"]["method_data"]
+    assert result["metadata_held_fields"] == ["content_kind"]
+    assert result["content_kind"] is None
+    assert review.state(item) == "rejected"  # Never rewrite the actual model verdict.
+
+
+def test_supported_presentation_label_is_projected_separately(item):
+    result = reading.reading_brief(item)
+    assert result["content_kind"] == item["analysis"]["brief"]["content_kind"]
+    assert result["metadata_held_fields"] == []
 
 
 @pytest.mark.parametrize(
@@ -161,7 +170,7 @@ def test_numeric_scope_hold_preserves_other_points_and_original_model_verdict(it
     before = deepcopy(item)
     assert review.state(item) == "accepted"
     shown = reading.reading_brief(item)
-    assert shown["policy_version"] == "reading-display-v3-standalone-insight"
+    assert shown["policy_version"] == "reading-display-v4-qualified-metadata"
     assert shown["status"] == "partial" and shown["points"]["why_read"] is None
     assert shown["points"]["method_data"] == before["analysis"]["brief"]["method_data"]
     assert item == before and review.state(item) == "accepted"

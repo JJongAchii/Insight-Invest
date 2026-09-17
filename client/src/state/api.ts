@@ -745,9 +745,11 @@ export interface ResearchEntry {
     status: "ready" | "partial";
     title_ko: string;
     analyzed_chars: number;
+    content_kind?: ResearchAnalysis["brief"]["content_kind"] | null;
     points: Pick<ResearchAnalysis["brief"], "question" | "method_data" | "finding" | "why_read" | "limitation">;
     held_fields: Partial<Record<"question" | "method_data" | "finding" | "why_read" | "limitation", string>>;
     metadata_held: boolean;
+    metadata_held_fields?: ("title_ko" | "content_kind" | "quant_relevant" | "substantive")[];
   } | null;
   evidence_dimensions?: ResearchEvidenceDimension[];
   evidence_excerpts?: Partial<Record<ResearchEvidenceDimension, string[]>>;

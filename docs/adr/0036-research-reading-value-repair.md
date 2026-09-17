@@ -126,3 +126,44 @@ run 34940265069는 7편 모두 기대한 원문 라우팅(5 core / 2 context)을
   기존 identity를 함께 보존하고, 둘의 hash와 canonical URL 일치를 코드로 검사한다.
   운영 ID를 바꾸거나 다른 글로 대체하지 않는다. 내용 기반 캐시는 사용자 라이브러리
   별칭에 독립이며 캐시 게시가 읽음/저장 기록을 다시 쓰지 않는다는 계약은 그대로다.
+
+## 요약 내용과 자료형 배지의 보류를 분리
+
+run 34942397193는 5편의 why_read 내용 대조가 모두 supported였다. Hidden Beta는
+연구 노트와 실무 해설 중 presentation 분류만 거절돼 overall rejected / reading partial이
+남았다. 두 종류는 이 피드에서 모두 허용하지만 실제 검수 결과를 accepted로 바꾸지 않는다.
+표시 v4는 보류된 metadata 필드 목록과 검수된 content_kind만 내려보낸다. 웹은 검수가
+거절한 원본 초안의 자료형 배지를 더 이상 표시하지 않는다. 자료형만 보류한 경우에는
+요약 내용 오류와 구분해 안내하며, 사실·조건·수치가 거절된 문장은 계속 표시하지 않는다.
+이는 코드만의 투영 변경이며 원문·초안·검수 receipt를 수정하거나 LLM을 다시 호출하지 않는다.
+
+## 추가 표본 실패와 입력 경계 수리 (2026-09-17 재개)
+
+B2 run 34942467882는 AQR Academic Alpha 경계 응답의 계약 오류로 중단했다.
+이전 오류 이유는 `invalid proposed-evidence check` 하나라 실제 null/길이/형식 원인을
+구분할 수 없다. 저장되지 않은 응답 내용을 추정해 원인이 확정됐다고 말하지 않는다.
+독립 E run 34944529235는 두 긍정 표본을 놓쳤다. Seven Degrees의 본문 설명을
+market_outlook hard gate가 제외했고, Echoes의 네 문장 근거를 경계 검수가 첫 문장만
+설명한 뒤 unsupported_assertion으로 처리했다. 별도 Robeco 전망 글의 context는 맞았다.
+E는 이제 수리에 사용한 회귀 표본이며 untouched holdout이라고 부르지 않는다.
+
+- 선정 v14: 시장 전망이라는 전체 형식과 본문의 자립적인 투자 설명을 분리한다.
+  mixed_investment_analysis 예외는 상업 글뿐 아니라 market_outlook에도 적용한다.
+  주제/형식을 연구로 위장하지 않으며, 전망만 있는 글은 여전히 context다. 기관 정책·
+  연구 행정·소프트웨어는 예외가 아니다. 실질적 contribution과 독립 근거 검수는 유지한다.
+- 경계 v10: flat sentence ID 목록 대신 선택한 **전체 연속 문단**을 field별로 묶어
+  전달한다. 원문 ID도 보존한다. 근거가 있으면 non-null 객체, 없으면 null만 요청
+  스키마에서 허용하고, 계약 오류는 필드·역할·근거·길이를 구분해 기록한다. 이 입력
+  수리가 의미 판정의 정확성을 보장하는 것은 아니므로 실제 재실행이 필요하다.
+- 작성 v16: 발췌문만 읽는 writer에게 문서 전체를 재분류시키지 않는다. 전체 본문 선정의
+  content_kind/quant_relevant를 후보 metadata로 전달해 schema에서 고정하고 출처 digest를
+  기록한다. writer의 substantive 판단과 전체 원문을 읽는 독립 reviewer의 모든 검수는
+  유지한다. metadata 상속은 합격 판정이 아니며 검수 거절은 그대로 표시/보류한다.
+- 표시 v4 실제 API A3 출력의 1440/390px 화면 검증 통과. Chrome의 앞선 sandbox 실행
+  충돌은 별도 임시 프로필에서 발생했고, 승인 후 재실행은 정상 종료했다. 모든 backend
+  요청을 가로채며 실제 사용자 읽음·저장 상태는 변경하지 않았다.
+
+재개 시 S3 누적 원장은 qualification $3.2199592, production $0.988313이다.
+기존 9월 합산 $5 및 qualification $4 상한을 유지한다. $8 증액 질문에 대한 승인은
+아직 없으므로 상한을 변경하지 않는다. 새 입력 규약으로 통과한 실제 API 결과와
+원문 대조를 얻기 전 운영 배포/전체 품질 완료를 주장하지 않는다.

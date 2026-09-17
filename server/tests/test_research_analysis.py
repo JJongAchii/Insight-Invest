@@ -550,6 +550,7 @@ def test_failed_requests_keep_reservation_and_stop_after_three_attempts(source):
         TEXT,
         item["title"],
         evidence_plan=analysis.reading_evidence_plan(item),
+        metadata_plan=analysis.reading_metadata_plan(item),
     )
 
 
@@ -622,6 +623,7 @@ def test_source_input_is_bounded_before_reserving_and_sending(source):
         observed["text"],
         observed["title"],
         evidence_plan=analysis.reading_evidence_plan(research.load_feed()["items"][0]),
+        metadata_plan=analysis.reading_metadata_plan(research.load_feed()["items"][0]),
     )
 
 
@@ -899,6 +901,73 @@ def test_selection_writer_review_share_presentation_taxonomy():
     for stage in (analysis, research_selection, research_review):
         assert stage.SYSTEM.count(guide) == 1
     assert "practitioner = an explanatory essay, interview or practical note" in guide
+
+
+def test_excerpt_writer_cannot_reclassify_source_reader_metadata(source):
+    item = source.record
+    item["editorial_selection"] = selection_for(item, TEXT, NOW, kind="practitioner")
+    metadata = analysis.reading_metadata_plan(item)
+    assert metadata == {"content_kind": "practitioner", "quant_relevant": True}
+    payload = analysis._request_payload(
+        TEXT,
+        item["title"],
+        metadata_plan=metadata,
+        evidence_plan=analysis.reading_evidence_plan(item),
+    )
+    data = json.loads(payload["input"])
+    assert data["document_metadata"] == metadata
+    assert len(data["source_passages"]) < len(analysis._source_passages(TEXT))
+    schema = payload["text"]["format"]["schema"]["properties"]
+    assert schema["content_kind"]["enum"] == ["practitioner"]
+    assert schema["quant_relevant"]["enum"] == [True]
+    assert "enum" not in schema["substantive"]
+    first_key = analysis.cache_key(item)
+    item["editorial_selection"] = selection_for(item, TEXT, NOW, kind="research")
+    assert analysis.cache_key(item) != first_key
+    item["editorial_selection"]["fingerprint"] = "expired"
+    assert analysis.reading_metadata_plan(item) is None
+
+
+def test_provider_cannot_silently_override_fixed_metadata(monkeypatch):
+    value = wire_brief()
+    value.update(content_kind="other", quant_relevant=False)
+    usage = {"input_tokens": 123, "output_tokens": 45}
+    monkeypatch.setattr(analysis, "_response_call", lambda *_args: (value, usage))
+    with pytest.raises(
+        analysis.AnalysisContractError, match="changed source-reader metadata"
+    ):
+        analysis._model_call(
+            TEXT,
+            "Original",
+            "test-key",
+            metadata_plan={
+                "content_kind": "practitioner",
+                "quant_relevant": True,
+            },
+        )
+
+
+def test_metadata_is_not_a_substance_or_editorial_approval(monkeypatch):
+    value = wire_brief()
+    value.update(content_kind="practitioner", substantive=False)
+    for field in analysis.FIELDS:
+        value[field] = None
+    monkeypatch.setattr(
+        analysis,
+        "_response_call",
+        lambda *_args: (value, {"input_tokens": 123, "output_tokens": 45}),
+    )
+    result, _ = analysis._model_call(
+        TEXT,
+        "Original",
+        "test-key",
+        metadata_plan={
+            "content_kind": "practitioner",
+            "quant_relevant": True,
+        },
+    )
+    assert result["substantive"] is False and result["why_read"] is None
+    assert "review" not in result
 
 
 def test_accepted_topic_without_concrete_reading_value_stays_in_discovery(source):

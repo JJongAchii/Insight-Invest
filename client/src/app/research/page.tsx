@@ -177,6 +177,8 @@ function ResearchCard({
   const [updateSavedState, { isLoading: isUpdatingSaved }] =
     useUpdateResearchSavedStateMutation();
   const authors = item.authors.filter(Boolean).join(", ");
+  const contentKind = item.reading_brief?.content_kind
+    ?? (item.reading_brief && !item.reading_brief.metadata_held ? item.analysis?.brief.content_kind : undefined);
   const laneLabel =
     item.research_lane === "core"
       ? "핵심"
@@ -264,8 +266,8 @@ function ResearchCard({
             {item.record_schema_version === 4 && (
               <>
                 {item.item_type && <span className="badge-neutral">{TYPE_LABELS[item.item_type]}</span>}
-                {hasReviewedBrief(item) && item.analysis?.brief.content_kind && (
-                  <span className="badge-neutral">{CONTENT_LABELS[item.analysis.brief.content_kind]}</span>
+                {contentKind && (
+                  <span className="badge-neutral">{CONTENT_LABELS[contentKind]}</span>
                 )}
                 {item.content_provenance && <span>{PROVENANCE_LABELS[item.content_provenance]}</span>}
               </>
