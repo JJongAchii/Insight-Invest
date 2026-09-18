@@ -165,7 +165,11 @@ def test_all_keys_are_checked_before_any_write(key):
 
 def test_context_seeds_only_selection_and_never_its_obsolete_brief(source):
     report = report_for(source.record, kind="market_commentary")
-    report["items"][0]["analysis"] = {"obsolete": "do not publish"}
+    item = report["items"][0]
+    item["editorial_selection"] = selection_for(
+        item, TEXT, NOW, kind="market_commentary", relevant=False
+    )
+    item["analysis"] = {"obsolete": "do not publish"}
     objects = publisher.plan(report, text_loader=lambda _: TEXT)
     assert len(objects) == 1 and "/selections/" in next(iter(objects))
 

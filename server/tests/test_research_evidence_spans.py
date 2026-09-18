@@ -119,6 +119,11 @@ def test_real_provider_adapter_resolves_spans_before_receipt(source, monkeypatch
             "category": "investment_analysis",
             "evidence": {"span_id": "0:1"},
         },
+        "reading_test": {
+            "question": "How are the portfolios compared?",
+            "explanation": "Synthetic explanation, not semantic acceptance.",
+            "evidence": {"span_id": "0:1"},
+        },
         "primary_subject": "investment_methodology",
         "content_kind": "research",
         "contribution_type": "rule_or_measurement",
@@ -167,6 +172,7 @@ def test_publication_reconstructs_object_citation_from_visible_duplicate(source)
     decision = selected["decision"]
     decision["evidence_excerpts"] = [p["text"] for p in passages[2:4]]
     decision["main_purpose"]["evidence_excerpts"] = [passages[3]["text"]]
+    decision["reading_test"]["evidence_excerpts"] = [passages[3]["text"]]
     decision["reading_points"] = {
         name: decision["evidence_excerpts"] for name in selection.POINT_NAMES
     }
@@ -258,8 +264,9 @@ def test_live_writer_recovers_reviewed_plan_even_for_manually_curated_core(
             "type": "null"
         }
         result = wire_brief()
-        result["method_data"] = None
-        result["finding"] = {"text_ko": "원문의 연구 질문이다.", "evidence_ids": [0]}
+        for field in analysis.FIELDS:
+            if field != "why_read":
+                result[field] = None
         return result, {"input_tokens": 100, "output_tokens": 80}
 
     monkeypatch.setattr(analysis, "_response_call", provider)

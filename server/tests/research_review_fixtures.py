@@ -3,6 +3,14 @@
 from module import research_boundary, research_review, research_selection
 
 
+def reading_test_value():
+    return {
+        "question": "How does the source compare portfolio construction methods?",
+        "explanation": "Synthetic explanation for contract tests, not a model quality result.",
+        "evidence": {"evidence_ids": [0]},
+    }
+
+
 def boundary_value(*, verdict="substantive", include_method=False):
     value = {
         "checks": {
@@ -52,6 +60,7 @@ def selection_for(item, text, now, *, kind="research", relevant=True):
                 "evidence": {"evidence_ids": [0]},
             },
             "primary_subject": "investment_methodology" if relevant else "other",
+            "reading_test": reading_test_value() if relevant else None,
             "content_kind": kind,
             "contribution_type": "investment_mechanism" if relevant else "none",
             "investment_focus": relevant,

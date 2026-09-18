@@ -70,7 +70,17 @@ def wire_brief():
     result = brief()
     for field in analysis.FIELDS:
         if result[field] is not None:
-            result[field] = {"text_ko": result[field]["text_ko"], "evidence_ids": [0]}
+            result[field] = {
+                "text_ko": result[field]["text_ko"],
+                "evidence_ids": [0],
+                "source_claims": [
+                    {
+                        "subject": "The authors",
+                        "relationship": "examine factor portfolio construction using empirical return data",
+                        "conditions": None,
+                    }
+                ],
+            }
     return result
 
 
@@ -821,12 +831,12 @@ def test_unusable_sentence_extraction_stops_before_reservation_or_request(source
     [
         ("research", "core", True),
         ("practitioner", "core", True),
-        ("market_commentary", "context", False),
-        ("other", "context", False),
+        ("market_commentary", "core", True),
+        ("other", "core", True),
         (None, "discovery", False),
     ],
 )
-def test_document_kind_controls_core_without_deleting_or_rewriting_library(
+def test_reading_decision_controls_core_without_deleting_or_rewriting_library(
     source, tmp_path, kind, expected_lane, notifiable
 ):
     research_feed.reconcile(s3=source, now=NOW)
@@ -851,6 +861,8 @@ def test_document_kind_controls_core_without_deleting_or_rewriting_library(
         },
     )
     if kind is not None:
+        # Each synthetic source has a positive document reading test. Genre is
+        # metadata, not a second admission decision; unrelated topics still fail.
         feed["items"][0]["editorial_selection"] = selection_for(
             feed["items"][0], TEXT, NOW, kind=kind
         )
@@ -890,6 +902,7 @@ def test_prompt_requires_finance_terms_attribution_and_conditions():
     assert "NOT raw 수익률" in prompt
     assert list(analysis.POINT_SCHEMA["anyOf"][1]["properties"]) == [
         "evidence_ids",
+        "source_claims",
         "text_ko",
     ]
 

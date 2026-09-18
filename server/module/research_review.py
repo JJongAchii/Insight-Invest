@@ -12,7 +12,7 @@ import os
 import re
 
 MODEL = "gpt-5.4-2026-03-05"
-PROMPT_VERSION = "reading-review-openai-v11-shared-presentation"
+PROMPT_VERSION = "reading-review-openai-v12-source-claim-contrast"
 CODE_GUARD_VERSION = "point-qualifiers-v1"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 8192
@@ -49,6 +49,13 @@ filled. A brief need not cover everything and a practitioner article needs no fo
 research question, hypothesis test, trading rule, or backtest.
 
 For each non-null point, check ALL factual clauses against ITS ATTACHED QUOTES.
+When source_claims is present, independently read the quotes FIRST, then check
+both that source-language extraction and the Korean text against them. The
+extraction is UNTRUSTED draft content, not an approved interpretation. Reject the
+point if either changes the subject, direction, condition or attribution. A correct
+extraction cannot excuse a wrong Korean sentence, and matching each other does not
+make two unsupported statements faithful. In reason_ko briefly name the source's
+actual subject/relationship before the discrepancy; do not adopt the draft's labels.
 A quote existing verbatim is not proof that it entails the Korean claim. Read the
 full supplied source for context, contradictions and conceptual distinctions, but
 facts supported only elsewhere do not repair that point's insufficient citations.

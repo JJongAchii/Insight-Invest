@@ -20,7 +20,7 @@ from datastore import research, storage
 from module import research_boundary, research_review, research_selection
 
 MODEL = "gpt-5.4-2026-03-05"
-PROMPT_VERSION = "reading-brief-openai-v16-document-metadata"
+PROMPT_VERSION = "reading-brief-openai-v17-source-claims"
 REASONING_EFFORT = "medium"
 MAX_OUTPUT_TOKENS = 8192  # Visible output AND reasoning; real PDFs exceeded 4096.
 MAX_INPUT_CHARS = 24000
@@ -29,6 +29,7 @@ INPUT_NANOUSD_PER_TOKEN = 2500
 OUTPUT_NANOUSD_PER_TOKEN = 15000
 MAX_EVIDENCE_CHARS = 1200
 MAX_EVIDENCE_PASSAGES = 4
+MAX_CONTEXT_CHARS = 4000
 CONTENT_KINDS = ("research", "practitioner", "market_commentary", "other")
 FIELDS = ("question", "method_data", "finding", "why_read", "limitation")
 SYSTEM = """Write a short Korean reading note about the original's actual explanation.
@@ -40,12 +41,27 @@ Choose the relevant citable IDs, then write only what those exact passages suppo
 Do not fill gaps with other parts of the document. Non-citable PDF fragments are
 not evidence. If an explanation is incomplete, narrow the claim or return null.
 Never infer an unreported method, sample, metric, condition or limitation.
+Adjacent source_context passages are context ONLY: use them to resolve references
+and avoid contradictions, never as uncited support for a new factual clause.
+
+For each note first extract 1–3 short source_claims in the SOURCE LANGUAGE: subject,
+relationship, and conditions (null only if no material qualifier). These are
+factual source statements, not a reasoning trace or a verdict. Keep opposing
+subjects/operations separate and retain which variable changes in which direction.
+Then translate those same statements into text_ko without adding a new cause.
+For example, "new inflows allow refinancing" and "a reversal precedes defaults"
+have DIFFERENT subjects. Do not assign the reversal's effect to the inflows.
+All source_claims must be supported by that point's selected quotes, just like the
+Korean text. If actor, direction or condition is unresolved, narrow the note or
+return null. Extracting a claim does not establish that the author's theory is true.
 
 The current format is ONE note in why_read: normally two clear Korean sentences,
 120–240 characters. It explains one measurement, comparison or causal relationship,
 not every detail in the span. The other four fields are null when the schema says
 so. No five-part paper template and no generic claims that the article is useful.
-title_ko names this specific idea, not a literal translation of an English idiom.
+title_ko conservatively translates the source title. Keep the original title if
+an idiom cannot be translated faithfully. Do not invent a new finding as a headline:
+price moves are not automatically volatility, and relative expense is not mispricing.
 reviewer_note is always empty. Retain the chosen span as literal evidence IDs.
 
 Report what the SOURCE explains, including attribution and scope:
@@ -103,9 +119,36 @@ POINT_SCHEMA = {
                     "minItems": 1,
                     "maxItems": MAX_EVIDENCE_PASSAGES,
                 },
+                "source_claims": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 3,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "subject": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 160,
+                            },
+                            "relationship": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 400,
+                            },
+                            "conditions": {
+                                "type": ["string", "null"],
+                                "minLength": 1,
+                                "maxLength": 240,
+                            },
+                        },
+                        "required": ["subject", "relationship", "conditions"],
+                        "additionalProperties": False,
+                    },
+                },
                 "text_ko": {"type": "string", "maxLength": 360},
             },
-            "required": ["evidence_ids", "text_ko"],
+            "required": ["evidence_ids", "source_claims", "text_ko"],
             "additionalProperties": False,
         },
     ]
@@ -218,7 +261,10 @@ def _ground_response(value: dict, text: str) -> dict:
         point = value.get(field)
         if point is None:
             continue
-        if not isinstance(point, dict) or set(point) != {"text_ko", "evidence_ids"}:
+        if not isinstance(point, dict) or set(point) not in (
+            {"text_ko", "evidence_ids"},
+            {"text_ko", "evidence_ids", "source_claims"},
+        ):
             raise AnalysisContractError(f"invalid structured brief {field}")
         numbers = point["evidence_ids"]
         if (
@@ -242,8 +288,35 @@ def _ground_response(value: dict, text: str) -> dict:
             "text_ko": point["text_ko"],
             "evidence": " […] ".join(excerpts),  # Explicit gaps for older clients.
             "evidence_excerpts": excerpts,
+            **(
+                {"source_claims": point["source_claims"]}
+                if "source_claims" in point
+                else {}
+            ),
         }
     return validate_brief(result, text)
+
+
+def _validate_source_claims(claims: list) -> None:
+    if not isinstance(claims, list) or not 1 <= len(claims) <= 3:
+        raise AnalysisContractError("invalid source claims")
+    for claim in claims:
+        if not isinstance(claim, dict) or set(claim) != {
+            "subject",
+            "relationship",
+            "conditions",
+        }:
+            raise AnalysisContractError("invalid source claim fields")
+        for name, limit in (
+            ("subject", 160),
+            ("relationship", 400),
+            ("conditions", 240),
+        ):
+            value = claim[name]
+            if name == "conditions" and value is None:
+                continue
+            if not isinstance(value, str) or not value.strip() or len(value) > limit:
+                raise AnalysisContractError(f"invalid source claim {name}")
 
 
 def validate_brief(value: dict, text: str) -> dict:
@@ -279,8 +352,11 @@ def validate_brief(value: dict, text: str) -> dict:
         if not isinstance(item, dict) or set(item) not in (
             {"text_ko", "evidence"},
             {"text_ko", "evidence", "evidence_excerpts"},
+            {"text_ko", "evidence", "evidence_excerpts", "source_claims"},
         ):
             raise AnalysisContractError(f"invalid structured brief {name}")
+        if "source_claims" in item:
+            _validate_source_claims(item["source_claims"])
         claim, evidence = item["text_ko"], item["evidence"]
         if not isinstance(claim, str) or not claim.strip() or len(claim) > 360:
             raise AnalysisContractError(f"invalid claim length: {name}")
@@ -412,6 +488,7 @@ def _request_payload(
         for field, value in metadata_plan.items():
             schema["properties"][field]["enum"] = [value]
     reading_points = None
+    context = []
     if evidence_plan is not None:
         reading_points = {}
         for field in FIELDS:
@@ -425,6 +502,20 @@ def _request_payload(
                     "items"
                 ]["enum"] = ids
         selected = {n for ids in reading_points.values() for n in ids}
+        # Literal nearby sentences resolve "this/reversal/it" without giving
+        # the writer another whole-document classification task. They cannot be
+        # cited: allowed evidence IDs and the post-response check remain selected.
+        context_chars = 0
+        for passage in passages:
+            if passage["id"] in selected or not any(
+                abs(passage["id"] - n) <= 2 for n in selected
+            ):
+                continue
+            if context_chars + len(passage["text"]) <= MAX_CONTEXT_CHARS:
+                context.append(
+                    {"id": passage["id"], "text": passage["text"], "citable": False}
+                )
+                context_chars += len(passage["text"])
         passages = [p for p in passages if p["id"] in selected]
         if not passages:
             raise AnalysisContractError("selection has no reading evidence")
@@ -438,6 +529,7 @@ def _request_payload(
             {
                 "source_title": title,
                 "source_passages": passages,
+                "source_context": context,
                 "reading_points": reading_points,
                 "document_metadata": metadata_plan,
                 "scope": "bounded_source_extract",
@@ -553,7 +645,27 @@ def _model_call(
         raise AnalysisContractError(
             "writer changed source-reader metadata", usage=usage
         )
-    return _ground_response(brief, text), usage
+    try:
+        if not isinstance(brief, dict):
+            raise AnalysisContractError("analysis JSON must be an object")
+        for name in FIELDS:
+            point = brief.get(name)
+            if point is None:
+                continue
+            if not isinstance(point, dict) or "source_claims" not in point:
+                raise AnalysisContractError(f"writer omitted source claims: {name}")
+            if evidence_plan is not None:
+                allowed = _source_span_ids(text, evidence_plan[name] or [])
+                ids = point.get("evidence_ids")
+                if not isinstance(ids, list) or any(
+                    type(n) is not int or n not in allowed for n in ids
+                ):
+                    raise AnalysisContractError(
+                        f"writer cited outside selected evidence: {name}"
+                    )
+        return _ground_response(brief, text), usage
+    except AnalysisContractError as exc:
+        raise AnalysisContractError(str(exc), usage=usage) from exc
 
 
 def preserve_retries(items: list[dict]) -> None:

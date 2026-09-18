@@ -79,6 +79,20 @@ def plan(report: dict, *, text_loader=analysis._public_text) -> dict:
             if purpose["evidence_excerpts"]
             else None,
         }
+        reading_test = decision["reading_test"]
+        raw["reading_test"] = (
+            {
+                "question": reading_test["question"],
+                "explanation": reading_test["explanation"],
+                "evidence": {
+                    "evidence_ids": analysis._source_span_ids(
+                        text, reading_test["evidence_excerpts"]
+                    )
+                },
+            }
+            if reading_test is not None
+            else None
+        )
         raw["reading_points"] = {
             name: {"evidence_ids": analysis._source_span_ids(text, quotes)}
             if quotes

@@ -11,7 +11,7 @@ from module import (
     research_selection as selection,
 )
 from module.research_review import literal_issues
-from research_review_fixtures import boundary_for, selection_for
+from research_review_fixtures import boundary_for, reading_test_value, selection_for
 from test_research_analysis import NOW, TEXT, source as source
 
 
@@ -32,8 +32,8 @@ def remove_selection_cache(source, tmp_path):
     [
         ("research", True, "core"),
         ("practitioner", True, "core"),
-        ("market_commentary", True, "context"),
-        ("other", True, "context"),
+        ("market_commentary", True, "core"),
+        ("other", True, "core"),
         ("research", False, "context"),
     ],
 )
@@ -59,6 +59,7 @@ def test_source_only_selection_is_first_budgeted_stage(
                 "evidence": {"evidence_ids": [0]},
             },
             "primary_subject": "investment_methodology",
+            "reading_test": reading_test_value() if insight else None,
             "content_kind": kind,
             "contribution_type": "investment_mechanism",
             "investment_focus": True,
@@ -158,6 +159,7 @@ def test_selection_only_qualification_ignores_editor_audit_and_never_drafts(
                 "evidence": {"evidence_ids": [0]},
             },
             "primary_subject": "investment_methodology",
+            "reading_test": reading_test_value(),
             "content_kind": "research",
             "contribution_type": "rule_or_measurement",
             "investment_focus": True,
@@ -387,7 +389,9 @@ def test_writer_sees_only_preselected_field_evidence():
     }
     payload = analysis._request_payload(text, "Original", evidence_plan=plan)
     sent = selection.json.loads(payload["input"])
-    assert "market crash" not in payload["input"]
+    assert all("market crash" not in p["text"] for p in sent["source_passages"])
+    assert "market crash" in sent["source_context"][0]["text"]
+    assert sent["source_context"][0]["citable"] is False
     assert sent["reading_points"]["method_data"] == [0]
     assert payload["text"]["format"]["schema"]["properties"]["finding"] == {
         "type": "null"
