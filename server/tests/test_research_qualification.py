@@ -274,6 +274,23 @@ def test_model_only_contrast_requires_unchanged_first_selection(monkeypatch):
         qualification.preserved_selections([record], {"entry": TEXT})
 
 
+def test_source_http_failure_keeps_status_but_not_sensitive_details():
+    from urllib.error import HTTPError
+
+    error = HTTPError(
+        "https://example.test/?token=private", 503, "private body", {}, None
+    )
+    assert qualification.source_failure("test-source", error) == {
+        "source_id": "test-source",
+        "error_type": "HTTPError",
+        "http_status": 503,
+    }
+    assert qualification.source_failure("test-source", ValueError("private text")) == {
+        "source_id": "test-source",
+        "error_type": "ValueError",
+    }
+
+
 def test_diagnostic_restores_model_and_prices_even_when_source_fails(
     configured, monkeypatch, tmp_path
 ):

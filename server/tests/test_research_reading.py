@@ -67,6 +67,33 @@ def test_supported_presentation_label_is_projected_separately(item):
 
 
 @pytest.mark.parametrize(
+    "claim,evidence",
+    [
+        ("P/B는 1배 미만이다.", "The P/B ratio is less than 1.0x."),
+        ("P/S는 1.00배이다.", "The P/S ratio is 1x."),
+        ("P/S는 0.60배이다.", "The P/S ratio is 0.6x."),
+    ],
+)
+def test_decimal_spelling_does_not_hide_an_equivalent_number(claim, evidence):
+    assert reading.display_issues(claim, evidence) == []
+
+
+@pytest.mark.parametrize(
+    "claim,evidence",
+    [
+        ("P/S는 1배이다.", "The P/S ratio is 1.01x."),
+        ("P/S는 0.60배이다.", "The P/S ratio is 0.61x."),
+        ("P/S는 0.6배이다.", "The unexplained result is 0.6."),
+        ("P/S는 1.0배이다.", "The P/S ratio is 11.0x."),
+    ],
+)
+def test_decimal_equality_does_not_allow_rounding_or_unexplained_metrics(
+    claim, evidence
+):
+    assert reading.display_issues(claim, evidence)
+
+
+@pytest.mark.parametrize(
     "field", ["source_digest", "title", "parser_version", "analysis_scope"]
 )
 def test_changed_source_cannot_borrow_partial_review(item, field):
@@ -170,7 +197,7 @@ def test_numeric_scope_hold_preserves_other_points_and_original_model_verdict(it
     before = deepcopy(item)
     assert review.state(item) == "accepted"
     shown = reading.reading_brief(item)
-    assert shown["policy_version"] == "reading-display-v4-qualified-metadata"
+    assert shown["policy_version"] == "reading-display-v5-equivalent-decimals"
     assert shown["status"] == "partial" and shown["points"]["why_read"] is None
     assert shown["points"]["method_data"] == before["analysis"]["brief"]["method_data"]
     assert item == before and review.state(item) == "accepted"

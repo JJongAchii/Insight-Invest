@@ -10,7 +10,17 @@ import re
 
 from module import research_curation, research_review
 
-POLICY_VERSION = "reading-display-v4-qualified-metadata"
+POLICY_VERSION = "reading-display-v5-equivalent-decimals"
+
+
+def _decimal_spelling(text: str) -> str:
+    # Textual equality only: 1.00 == 1 and 0.60 == 0.6. No rounding, damaged-PDF
+    # reconstruction, signs, percentages or financial-unit conversions.
+    return re.sub(
+        r"(?<![\w.])\d+\.\d+(?!\d|\.\d)",
+        lambda match: match[0].rstrip("0").rstrip("."),
+        text,
+    )
 
 
 def numeric_scope_issues(claim: str, evidence: str) -> list[str]:
@@ -43,8 +53,12 @@ def numeric_scope_issues(claim: str, evidence: str) -> list[str]:
         r"\s*(?:%|bp\b|bps\b|배|x\b|times\b|년|개월|일|years?\b|months?\b|days?\b|σ)"
     )
     for number in decimals:
+        canonical = _decimal_spelling(number)
+        number_pattern = re.escape(canonical) + (
+            r"0*" if "." in canonical else r"(?:\.0+)?"
+        )
         explicit_unit = all(
-            re.search(re.escape(number) + units, text, re.I)
+            re.search(r"(?<![\d.])" + number_pattern + units, text, re.I)
             for text in (claim, evidence)
         )
         if not named and not explicit_unit:
@@ -83,7 +97,9 @@ def display_issues(claim: str, evidence: str) -> list[str]:
             checked = re.sub(rf"(?<!\d){number}월", "해당 월", checked)
     if re.search(r"\bfirst[- ]order\b", evidence, re.I):
         checked = re.sub(r"(?<!\d)1차", "일차", checked)
-    issues = research_review.literal_issues(checked, evidence)
+    issues = research_review.literal_issues(
+        _decimal_spelling(checked), _decimal_spelling(evidence)
+    )
     issues.extend(numeric_scope_issues(claim, evidence))
     if re.search(r"기후를?\s*고려|기후\s*투자자", claim) and not re.search(
         r"climate|carbon|기후|탄소", evidence, re.I

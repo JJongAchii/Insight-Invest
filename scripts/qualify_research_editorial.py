@@ -124,6 +124,17 @@ def batch_entry_key(case: dict) -> str:
     return producer
 
 
+def source_failure(source_id: str, exc: Exception) -> dict:
+    """Keep a safe HTTP diagnosis, never response bodies or credential-bearing URLs."""
+    failure = {"source_id": source_id, "error_type": type(exc).__name__}
+    status = getattr(exc, "code", None)
+    if type(status) is not int:
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+    if type(status) is int and 100 <= status <= 599:
+        failure["http_status"] = status
+    return failure
+
+
 def fixed_cases(sample: str, sources: list[str]) -> dict[str, dict]:
     if sample == "latest":
         return {}
@@ -577,7 +588,7 @@ def run(output: Path) -> int:
                 )
                 return {"source_id": name, "health": records.health}, list(records)
             except Exception as exc:
-                return {"source_id": name, "error_type": type(exc).__name__}, []
+                return source_failure(name, exc), []
 
         groups = []
         with ThreadPoolExecutor(max_workers=4) as pool:
