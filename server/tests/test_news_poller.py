@@ -1,4 +1,4 @@
-"""뉴스 폴러 Lambda 핸들러 테스트 — 발행·no-candidates·env 키 전달."""
+"""뉴스 폴러 Lambda 핸들러 테스트 — 발행·no-candidates·API 미호출."""
 
 from datetime import datetime, timezone
 
@@ -49,17 +49,17 @@ def test_handler_no_candidates(app_data, monkeypatch):
     assert not (app_data / "news_briefing.json").exists()
 
 
-def test_handler_forwards_env_key(app_data, monkeypatch):
+def test_handler_never_calls_the_anthropic_api(app_data, monkeypatch):
+    """AI 큐레이션은 껐다(2026-10-23) — Lambda env 에 키가 남아 있어도 쓰지 않는다."""
+    import sys
+    from types import ModuleType
+
+    made = []
+    fake = ModuleType("anthropic")
+    fake.Anthropic = lambda **kw: made.append(kw)
+    monkeypatch.setitem(sys.modules, "anthropic", fake)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-123")
     monkeypatch.setattr(news_publish, "fetch_feeds", _items)
-    seen = {}
-
-    def _fake_curate(candidates, api_key=None, _client=None):
-        seen["api_key"] = api_key
-        from module import news_briefing as nb
-        return nb.fallback_selection(candidates), False
-
-    monkeypatch.setattr(news_publish, "curate", _fake_curate)
     out = news_poller.handler({}, None)
-    assert out["status"] == "ok"
-    assert seen["api_key"] == "test-key-123"
+    assert out["status"] == "ok" and out["curated"] is False and out["items"] == 10
+    assert made == []

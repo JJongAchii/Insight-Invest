@@ -1,15 +1,15 @@
-"""KR 뉴스 브리핑 순수 로직 — RSS 클러스터 파싱·스토리 병합·규칙 랭킹·큐레이션 검증.
+"""KR 뉴스 브리핑 순수 로직 — RSS 클러스터 파싱·스토리 병합·규칙 랭킹·선정.
 
 Google News 한국판 RSS의 item description에는 같은 사건을 다룬 타 언론사 기사
 목록이 (이스케이프된) HTML <ol>로 들어 있다. 그 크기(보도 언론사 수)를 객관적
-중요도 신호로 쓴다. I/O 없음 — fetch·LLM 호출·발행은 scripts/build_news.py 소관.
+중요도 신호로 쓴다. I/O 없음 — fetch·발행은 module.news_publish 소관.
+AI(LLM) 큐레이션은 쓰지 않는다 — 2026-10-23 사용자 결정으로 제거했다.
 스펙: docs/superpowers/specs/2026-08-14-kr-news-briefing-design.md
 """
 
 from __future__ import annotations
 
 import html
-import json
 import math
 import re
 from datetime import datetime, timedelta, timezone
@@ -131,61 +131,8 @@ def rank_candidates(items: list[dict], now_utc: datetime) -> list[dict]:
     return [{**it, "id": i} for i, it in enumerate(ranked)]
 
 
-def curation_prompt(candidates: list[dict]) -> str:
-    slim = [
-        {"id": c["id"], "title": c["title"], "source": c["source"],
-         "cluster_count": c["cluster_count"], "published_at": c["published_at"],
-         "feed": c["feed"]}
-        for c in candidates
-    ]
-    return (
-        "다음은 오늘의 한국 뉴스 후보 목록이다. cluster_count는 같은 사건을 보도한 "
-        "언론사 수(높을수록 큰 뉴스), feed는 출처 피드(general=주요뉴스, economy=경제)다.\n"
-        "오늘 꼭 알아야 할 뉴스를 종합(정치·사회·국제) 5건, 경제·금융 5건 선정하라.\n"
-        "규칙:\n"
-        "- 반드시 id로만 지목하고 제목을 다시 쓰지 마라.\n"
-        "- 같은 사건을 두 번 뽑지 마라 (섹션 간에도).\n"
-        "- 각 항목에 왜 중요한지(파급력·시장 영향·대화 소재 가치)를 한국어 80자 이내 "
-        "한 줄로 why에 써라.\n"
-        '- JSON만 출력하라: {"general": [{"id": 0, "why": "..."}], "economy": [...]}\n\n'
-        f"후보:\n{json.dumps(slim, ensure_ascii=False)}"
-    )
-
-
-def parse_curation(text: str) -> dict:
-    """모델 응답에서 JSON 오브젝트 추출 (코드펜스 허용). 실패 시 ValueError."""
-    m = re.search(r"\{.*\}", text, re.DOTALL)
-    if not m:
-        raise ValueError("응답에 JSON 없음")
-    return json.loads(m.group(0))
-
-
-def validate_curation(out: dict, candidates: list[dict]) -> list[str]:
-    """큐레이션 출력 검증 — 오류 문자열 리스트 (빈 리스트 = 통과)."""
-    errors: list[str] = []
-    ids = {c["id"] for c in candidates}
-    seen: set = set()
-    for section in ("general", "economy"):
-        rows = out.get(section)
-        if not isinstance(rows, list) or not rows:
-            errors.append(f"{section} 섹션 없음/비어있음")
-            continue
-        if len(rows) > SECTION_SIZE:
-            errors.append(f"{section} {len(rows)}건 > {SECTION_SIZE}건")
-        for r in rows:
-            rid = r.get("id") if isinstance(r, dict) else None
-            if rid not in ids:
-                errors.append(f"실존하지 않는 id {rid}")
-            elif rid in seen:
-                errors.append(f"중복 id {rid}")
-            seen.add(rid)
-            if isinstance(r, dict) and not str(r.get("why", "")).strip():
-                errors.append(f"id {rid} why 비어있음")
-    return errors
-
-
 def fallback_selection(candidates: list[dict]) -> dict:
-    """LLM 실패 시 규칙 점수순(candidates는 이미 정렬됨) feed별 상위 5건."""
+    """규칙 점수순(candidates는 이미 정렬됨) feed별 상위 5건 — 브리핑의 유일한 선정 방식이다."""
     general = [c["id"] for c in candidates if c["feed"] == "general"][:SECTION_SIZE]
     economy = [c["id"] for c in candidates if c["feed"] == "economy"][:SECTION_SIZE]
     return {
