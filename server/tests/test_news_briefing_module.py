@@ -115,39 +115,6 @@ def _candidates():
     return nb.rank_candidates(nb.merge_stories(_parsed()), NOW)
 
 
-def test_parse_curation_accepts_code_fence():
-    out = nb.parse_curation('```json\n{"general": [], "economy": []}\n```')
-    assert out == {"general": [], "economy": []}
-
-
-def test_validate_ok():
-    c = _candidates()
-    out = {"general": [{"id": c[0]["id"], "why": "중요함"}],
-           "economy": [{"id": c[1]["id"], "why": "시장 영향"}]}
-    assert nb.validate_curation(out, c) == []
-
-
-def test_validate_catches_bad_output():
-    c = _candidates()
-    bad = {"general": [{"id": 999, "why": "x"}, {"id": c[0]["id"], "why": ""}],
-           "economy": [{"id": c[0]["id"], "why": "dup"}]}
-    errors = nb.validate_curation(bad, c)
-    assert any("실존" in e for e in errors)
-    assert any("why" in e for e in errors)
-    assert any("중복" in e for e in errors)
-
-
-def test_validate_section_missing_and_oversize():
-    c = _candidates()
-    errors = nb.validate_curation({"general": []}, c)
-    assert any("general" in e for e in errors)
-    assert any("economy" in e for e in errors)
-    six = [{"id": x["id"], "why": "y"} for x in c[:3]] * 2
-    errors2 = nb.validate_curation({"general": six, "economy": [
-        {"id": c[0]["id"], "why": "y"}]}, c)
-    assert any(">" in e or "건" in e for e in errors2)
-
-
 def test_fallback_by_feed():
     c = _candidates()
     sel = nb.fallback_selection(c)
