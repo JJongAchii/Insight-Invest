@@ -8,6 +8,7 @@ import {
   Globe2,
   LayoutDashboard,
   NotebookPen,
+  Rocket,
   Search,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -76,6 +77,12 @@ export const personalNavigation: NavigationItem[] = [
     hint: "",
     icon: BellRing,
     badge: "actions",
+  },
+  {
+    href: "/ipo",
+    label: "공모주",
+    hint: "상장일 매수·매도 신호",
+    icon: Rocket,
   },
   { href: "/journal", label: "판단 기록", hint: "", icon: NotebookPen },
   {

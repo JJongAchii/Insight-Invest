@@ -18,6 +18,7 @@ import type { FormEvent } from "react";
 
 const routeContexts = [
   { prefix: "/actions", title: "검토", detail: "지금 할 일" },
+  { prefix: "/ipo", title: "공모주", detail: "상장일 매수·매도 신호" },
   { prefix: "/earnings", title: "실적 일정", detail: "주요 기업 발표와 결과" },
   { prefix: "/stocksearch", title: "시장", detail: "종목 검색" },
   { prefix: "/stock/", title: "시장", detail: "종목 상세" },

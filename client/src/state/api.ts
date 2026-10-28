@@ -599,7 +599,17 @@ export interface AttentionResponse {
 }
 
 export type ActionState = "new" | "read" | "snoozed" | "dismissed";
-export type ActionKind = "attention" | "alert" | "review" | "rebalance" | "data" | "system" | "event";
+export type ActionKind =
+  | "attention"
+  | "alert"
+  | "review"
+  | "rebalance"
+  | "data"
+  | "system"
+  | "event"
+  | "ipo_buy"
+  | "ipo_sell"
+  | "ipo_listing";
 
 export interface ActionResultMetric {
   label: string;
@@ -676,6 +686,154 @@ export interface ActionCenterResponse {
     scheduled: number;
     external: number;
   };
+}
+
+// 공모주 t01 화면(GET /ipo). 저녁 배치 산출을 그대로 읽으므로 모든 필드가 비어 있을 수 있다.
+export type IpoPosition =
+  | "signal"
+  | "holding"
+  | "sold"
+  | "unfilled"
+  | "awaiting_listing_data";
+
+/** 사용자가 직접 입력한 체결·매도. 서버는 null이 아닌 항목만 저장한다. */
+export interface IpoUserInput {
+  filled?: boolean | null;
+  entry_price?: number | null;
+  quantity?: number | null;
+  exit_price?: number | null;
+  exit_date?: string | null;
+  note?: string | null;
+  updated_at?: string | null;
+}
+
+export interface IpoRule {
+  spec?: string | null;
+  entry?: string | null;
+  exit?: string | null;
+  stop_loss?: null;
+  sizing?: string | null;
+}
+
+export interface IpoUpcoming {
+  event_id: string;
+  corp_name?: string | null;
+  market?: string | null;
+  planned_listing_date?: string | null;
+  final_price?: number | null;
+  decided?: boolean | null;
+}
+
+export type IpoStage =
+  | "filed"
+  | "bookbuilding"
+  | "priced"
+  | "subscription"
+  | "paid"
+  | "listing_scheduled";
+
+/** 진행 중(상장 전) 공모주 한 건의 일정. 날짜는 "YYYY-MM-DD" 또는 null. */
+export interface IpoCalendarItem {
+  event_id: string;
+  corp_name?: string | null;
+  market?: string | null;
+  stage?: IpoStage | null;
+  stage_label?: string | null;
+  bookbuild_start?: string | null;
+  bookbuild_end?: string | null;
+  price_announce_date?: string | null;
+  subscription_start?: string | null;
+  subscription_end?: string | null;
+  payment_date?: string | null;
+  planned_listing_date?: string | null;
+  band_low?: number | null;
+  band_high?: number | null;
+  final_price?: number | null;
+  /** 상장 전 거래일 밤(신호 계산). 상장일 공시 전이면 null. */
+  decision_night?: string | null;
+  /** 상장일 동시호가 매수. */
+  buy_session?: string | null;
+  /** 다음 거래일 종가 매도. */
+  sell_session?: string | null;
+  decided?: boolean | null;
+}
+
+export type IpoCalendarEventKind =
+  | "bookbuild"
+  | "price"
+  | "subscription"
+  | "payment"
+  | "listing"
+  | "decision"
+  | "buy"
+  | "sell";
+
+/** 날짜별 일정 평면 목록(기준일 7일 전 ~ 60일 뒤). */
+export interface IpoCalendarEvent {
+  date: string;
+  event_id: string;
+  corp_name?: string | null;
+  kind: IpoCalendarEventKind;
+  label?: string | null;
+}
+
+/** 배치 산출이 없으면 `problems`만 온다. */
+export interface IpoStatus {
+  as_of?: string | null;
+  generated_at?: string | null;
+  next_session?: string | null;
+  rule?: IpoRule | null;
+  upcoming?: IpoUpcoming[] | null;
+  calendar?: IpoCalendarItem[] | null;
+  calendar_events?: IpoCalendarEvent[] | null;
+  problems?: string[] | null;
+}
+
+export interface IpoRow {
+  event_id: string;
+  corp_name?: string | null;
+  market?: string | null;
+  listing_date?: string | null;
+  status?: "decided" | "not_eligible" | null;
+  reason?: string | null;
+  buy?: boolean | null;
+  offer_price?: number | null;
+  limit_price?: number | null;
+  score?: number | null;
+  threshold?: number | null;
+  spec?: string | null;
+  decided_at?: string | null;
+  decision_session?: string | null;
+  position?: IpoPosition | null;
+  sell_on?: string | null;
+  sell_plan?: string | null;
+  filled_estimate?: boolean | null;
+  entry_price?: number | null;
+  exit_date?: string | null;
+  exit_price?: number | null;
+  rolls?: number | null;
+  /** 비용 차감 수익(분수, 0.05 = 5%). */
+  net_base?: number | null;
+  net_stress?: number | null;
+  ticker?: string | null;
+  as_of?: string | null;
+  user?: IpoUserInput | null;
+}
+
+export interface IpoResponse {
+  status?: IpoStatus | null;
+  open?: IpoRow[] | null;
+  history?: IpoRow[] | null;
+}
+
+/** PUT /ipo/positions/{event_id}. 모든 값을 null로 보내면 입력을 지운다. */
+export interface IpoPositionInput {
+  filled: boolean | null;
+  entry_price: number | null;
+  quantity: number | null;
+  exit_price: number | null;
+  exit_date: string | null;
+  note: string | null;
 }
 
 export type ResearchEvidenceDimension = "method" | "data" | "validation" | "result";
@@ -1827,6 +1985,7 @@ export const api = createApi({
     "ResearchStatus",
     "Earnings",
     "PortfolioLedger",
+    "Ipo",
   ],
   endpoints: (builder) => ({
     // Query endpoints
@@ -2174,6 +2333,21 @@ export const api = createApi({
       }),
       invalidatesTags: ["Actions"],
     }),
+    fetchIpo: builder.query<IpoResponse, void>({
+      query: () => "/ipo",
+      providesTags: ["Ipo"],
+    }),
+    updateIpoPosition: builder.mutation<
+      { event_id: string; user: IpoUserInput | null },
+      { eventId: string; body: IpoPositionInput }
+    >({
+      query: ({ eventId, body }) => ({
+        url: `/ipo/positions/${encodeURIComponent(eventId)}`,
+        method: "PUT",
+        body,
+      }),
+      invalidatesTags: ["Ipo"],
+    }),
     fetchNotificationConfig: builder.query<NotificationConfigResponse, void>({
       query: () => "/notifications/config",
       providesTags: ["Notifications"],
@@ -2436,6 +2610,8 @@ export const {
   useMarkAllResearchReadMutation,
   useFetchEarningsQuery,
   useUpdateActionStateMutation,
+  useFetchIpoQuery,
+  useUpdateIpoPositionMutation,
   useFetchNotificationConfigQuery,
   useSubscribeNotificationsMutation,
   useUnsubscribeNotificationsMutation,
