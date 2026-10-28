@@ -29,7 +29,7 @@ LINE_DIR = Path(__file__).resolve().parents[1] / "strategies" / "ipo_open_entry"
 if str(LINE_DIR / "src") not in sys.path:
     sys.path.insert(0, str(LINE_DIR / "src"))
 
-from ipo_open_entry import evaluate, fields, rules  # noqa: E402
+from ipo_open_entry import engine, evaluate, fields, rules  # noqa: E402
 from ipo_open_entry.config import load_config  # noqa: E402
 from ipo_open_entry.models.regression import SignedRegression  # noqa: E402
 from ipo_open_entry.operate import calendar, decision  # noqa: E402
@@ -41,7 +41,7 @@ FILES = ("events", "fields", "bars", "index")
 PRICE_COLUMNS = ["open", "high", "low", "close"]
 MARKETS = ("KOSPI", "KOSDAQ")
 
-__all__ = ["NotEligible", "NotReady", "TooLate", "decide_listing", "rule"]
+__all__ = ["NotEligible", "NotReady", "TooLate", "decide_listing", "engine", "rule", "rules"]
 
 
 @functools.lru_cache(maxsize=1)
@@ -235,9 +235,7 @@ def decide_listing(
     asof = decision.check_timing(listing, lake_last, now)
 
     dev = dev_data()
-    target, target_fields, used_obs, disclosures = target_event(
-        api, event_id, listing, market, cfg
-    )
+    target, target_fields, used_obs, disclosures = target_event(api, event_id, listing, market, cfg)
     post = post_dev_events(api, dev_end(), asof, ix, cfg)
     close = kosdaq_close(dev["index"], ix, cfg, asof)
     prior_events = pd.concat([dev["events"], post["events"]], ignore_index=True)
@@ -271,9 +269,7 @@ def decide_listing(
         "train_sha256": made["train_sha256"],
         "coef_sha256": made["coef_sha256"],
         "disclosures": disclosures,
-        "post_dev_training_events": []
-        if post_table is None
-        else post_table["event_id"].tolist(),
+        "post_dev_training_events": [] if post_table is None else post_table["event_id"].tolist(),
         "excluded_contaminated": post["contaminated"],
         "features": {k: (None if pd.isna(v) else float(v)) for k, v in feats.items()},
     }

@@ -64,9 +64,11 @@ repos:
 default_language_version:
   python: python3.9
 
-# Files to exclude
+# Files to exclude — server/strategies/ 는 quant-lab에서 바이트 그대로 옮긴 사본이다(VENDOR.json 해시
+# 대조). 포맷터가 고치면 백테스트한 코드와 운영 코드가 달라진다
 exclude: |
   (?x)^(
+    server/strategies/|
     server/venv/|
     server/__pycache__/|
     client/node_modules/|
