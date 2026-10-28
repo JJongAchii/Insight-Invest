@@ -364,6 +364,31 @@ def _ipo_events(now: datetime) -> list[dict]:
                     market=row.get("market"),
                 )
             )
+    for item in status.get("calendar") or []:
+        listing = _parse_day(item.get("planned_listing_date"))
+        if listing is None or listing < today:
+            continue
+        night = item.get("decision_night")
+        out.append(
+            _event(
+                source="ipo",
+                key=f"listing:{item['event_id']}:{listing.isoformat()}",
+                kind="ipo_listing",
+                category="strategy",
+                severity="low",
+                title=f"공모주 상장 예정 · {item.get('corp_name')}",
+                detail=f"{listing.isoformat()} 상장 · t01 신호는 {night} 밤 계산"
+                if night
+                else f"{listing.isoformat()} 상장",
+                link="/ipo",
+                occurred_at=listing.isoformat(),
+                available_at=now.isoformat(),
+                data_as_of=as_of,
+                scheduled_for=listing.isoformat(),
+                name=str(item.get("corp_name")),
+                market=item.get("market"),
+            )
+        )
     problems = status.get("problems") or []
     if problems:
         out.append(

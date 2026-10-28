@@ -12,13 +12,17 @@ from module import ipo_signals, ipo_t01
 KST = dt.timezone(dt.timedelta(hours=9))
 NOW = dt.datetime(2026, 11, 2, 22, 20, tzinfo=KST)  # 월요일 밤 배치 — 다음 거래일 11/3
 SESSIONS = pd.bdate_range("2026-10-20", "2026-11-13")
+OBS_COLUMNS = ["event_id", "rcept_no", "filed_date", "metric", "value", "value_text"]
 
 
 class FakeApi:
-    def __init__(self, last: str, schedule: pd.DataFrame, events: pd.DataFrame, prices=None):
+    def __init__(
+        self, last: str, schedule: pd.DataFrame, events: pd.DataFrame, prices=None, obs=None
+    ):
         self.last = pd.Timestamp(last)
         self.sched = schedule
         self.events = events
+        self.obs = obs if obs is not None else pd.DataFrame(columns=OBS_COLUMNS)
         self.prices = (
             prices
             if prices is not None
@@ -37,6 +41,14 @@ class FakeApi:
 
     def load_ipo_events(self):
         return self.events
+
+    def load_ipo_observations(self, event_ids=None, metrics=None):
+        o = self.obs
+        if event_ids is not None:
+            o = o[o["event_id"].isin(event_ids)]
+        if metrics is not None:
+            o = o[o["metric"].isin(metrics)]
+        return o.reset_index(drop=True)
 
     def load_krx_prices(self, start, end, tickers, columns):
         p = self.prices
@@ -66,9 +78,12 @@ def _schedule(rows):
     )
 
 
-def _events(rows):
+def _events(rows, first_filed="2026-10-01"):
     return pd.DataFrame(
-        [{"event_id": e, "stock_code": t, "listing_date": pd.Timestamp(d) if d else pd.NaT}
+        [{"event_id": e, "stock_code": t, "listing_date": pd.Timestamp(d) if d else pd.NaT,
+          "corp_name": e, "market": None, "listing_type": "ipo",
+          "status": "priced" if not d else "completed",
+          "first_filed": pd.Timestamp(first_filed)}
          for e, t, d in rows]  # fmt: skip
     )
 
@@ -198,3 +213,66 @@ def test_user_entries_override_the_estimate():
                      {"filled": True, "entry_price": 15_000.0, "exit_price": 16_500.0,
                       "exit_date": "2026-11-04"})  # fmt: skip
     assert sold["position"] == "sold" and sold["exit_price"] == 16_500.0
+
+
+def _obs(event_id, rcept_no, filed, **values):
+    rows = []
+    for metric, v in values.items():
+        num = isinstance(v, (int, float))
+        rows.append(
+            {
+                "event_id": event_id,
+                "rcept_no": rcept_no,
+                "filed_date": pd.Timestamp(filed),
+                "metric": metric,
+                "value": float(v) if num else None,
+                "value_text": None if num else v,
+            }
+        )
+    return rows
+
+
+def test_calendar_shows_each_offering_stage_and_the_rule_days(app_data, monkeypatch):
+    monkeypatch.setattr(
+        ipo_t01,
+        "decide_listing",
+        lambda *a, **k: {"order": {"buy": True, "limit_mult": 1.5, "limit_price": 15_000.0},
+                         "regime": "R2", "offer_price": 10_000.0},  # fmt: skip
+    )
+    sched = _schedule([("listing", "상장확정", "111110", "2026-11-03")])
+    events = _events(
+        [("listing", "111110", None), ("sub", None, None), ("book", None, None),
+         ("old", None, None)]  # fmt: skip
+    )
+    events.loc[events["event_id"] == "old", "first_filed"] = pd.Timestamp("2026-05-01")
+    obs = pd.DataFrame(
+        _obs("listing", "L1", "2026-10-20", subscription_start="2026-10-26",
+             subscription_end="2026-10-27", payment_date="2026-10-29", final_price=10_000,
+             listing_market_code="2:코스닥시장")
+        + _obs("sub", "S1", "2026-10-15", bookbuild_start="2026-10-20",
+               bookbuild_end="2026-10-24", final_price=20_000, band_low=18_000,
+               band_high=20_000, subscription_start="2026-11-05",
+               subscription_end="2026-11-06", payment_date="2026-11-10",
+               listing_market_code="1:유가증권시장")
+        # 정정 공시가 수요예측 일정을 늦췄다 — 늦게 접수된 값이 이긴다
+        + _obs("book", "B1", "2026-10-10", bookbuild_start="2026-11-04")
+        + _obs("book", "B2", "2026-10-28", bookbuild_start="2026-11-09",
+               bookbuild_end="2026-11-13")
+    )  # fmt: skip
+    api = FakeApi("2026-11-02", sched, events, obs=obs)
+    ipo_signals.build(api, now=NOW)
+    status = storage.read_json(*ipo_signals.STATUS)
+    items = {i["event_id"]: i for i in status["calendar"]}
+    assert set(items) == {"listing", "sub", "book"}  # 일정 없이 오래된 신고는 뺀다
+    listing = items["listing"]
+    assert listing["stage"] == "listing_scheduled" and listing["market"] == "KOSDAQ"
+    assert listing["decision_night"] == "2026-11-02" and listing["sell_session"] == "2026-11-04"
+    assert items["sub"]["stage"] == "priced" and items["sub"]["market"] == "KOSPI"
+    assert items["book"]["stage"] == "bookbuilding"
+    assert items["book"]["bookbuild_start"] == "2026-11-09"
+    kinds = {(e["event_id"], e["kind"]) for e in status["calendar_events"]}
+    assert {("listing", "decision"), ("listing", "buy"), ("listing", "sell")} <= kinds
+    assert ("sub", "subscription") in kinds and ("book", "bookbuild") in kinds
+    dates = [e["date"] for e in status["calendar_events"]]
+    assert dates == sorted(dates)
+    assert not any("공모 일정" in p for p in status["problems"])

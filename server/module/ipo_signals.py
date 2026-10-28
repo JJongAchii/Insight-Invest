@@ -165,6 +165,142 @@ def position(api, rec: dict, ix, asof, ticker, override: dict) -> dict:
                                             cfg)}  # fmt: skip
 
 
+#: 진행 중 공모 일정에 읽는 관측값(상장 전 공시) — 날짜는 value_text, 가격은 value
+DATE_METRICS = (
+    "bookbuild_start",
+    "bookbuild_end",
+    "price_announce_date",
+    "subscription_start",
+    "subscription_end",
+    "payment_date",
+)
+PRICE_METRICS = ("band_low", "band_high", "final_price")
+MARKET_CODES = {"1": "KOSPI", "2": "KOSDAQ"}
+STAGE_LABELS = {
+    "filed": "신고서 제출",
+    "bookbuilding": "수요예측",
+    "priced": "공모가 확정",
+    "subscription": "청약",
+    "paid": "납입 완료 · 상장일 공시 대기",
+    "listing_scheduled": "상장일 확정",
+}
+#: 진행 중으로 보는 최초 신고서 접수 창(그보다 오래됐고 앞으로 일정도 없으면 뺀다)
+CALENDAR_LOOKBACK_DAYS = 180
+CALENDAR_WINDOW = (7, 60)  # 달력 일정: 기준일 7일 전 ~ 60일 뒤
+
+
+def _latest(obs: pd.DataFrame) -> pd.DataFrame:
+    """event_id × metric마다 가장 늦게 접수된 관측값(정정 공시가 이긴다)."""
+    obs = obs.sort_values(["event_id", "metric", "filed_date", "rcept_no"])
+    return obs.groupby(["event_id", "metric"], as_index=False).last()
+
+
+def _stage(item: dict, asof: pd.Timestamp) -> str:
+    def on_or_before(key):
+        v = item.get(key)
+        return v is not None and pd.Timestamp(v) <= asof
+
+    if item.get("planned_listing_date") is not None:
+        return "listing_scheduled"
+    if on_or_before("payment_date"):
+        return "paid"
+    if on_or_before("subscription_start"):
+        return "subscription"
+    if item.get("final_price") is not None:
+        return "priced"
+    if item.get("bookbuild_start") is not None:
+        return "bookbuilding"
+    return "filed"
+
+
+def calendar(api, asof: pd.Timestamp, sch: pd.DataFrame, decisions: dict) -> tuple[list, list]:
+    """진행 중 공모(상장 전) 일정과 날짜별 일정 목록. 상장일이 공시되면 이 규칙의 신호 계산·매수·매도일을
+    겹친다. 반환: (공모별 항목, 날짜별 일정)."""
+    ev = api.load_ipo_events()
+    first = pd.to_datetime(ev["first_filed"])
+    cur = ev[
+        (ev["listing_type"] == "ipo")
+        & (ev["status"] != "withdrawn")
+        & ev["listing_date"].isna()
+        & (first >= asof - pd.Timedelta(days=CALENDAR_LOOKBACK_DAYS))
+    ]
+    if cur.empty:
+        return [], []
+    obs = api.load_ipo_observations(
+        event_ids=cur["event_id"].tolist(),
+        metrics=[*DATE_METRICS, *PRICE_METRICS, "listing_market_code"],
+    )
+    latest = _latest(obs) if len(obs) else obs
+    planned = dict(zip(sch["event_id"], sch["planned_listing_date"], strict=True))
+    lo = asof - pd.Timedelta(days=CALENDAR_WINDOW[0])
+    hi = asof + pd.Timedelta(days=CALENDAR_WINDOW[1])
+    items, events = [], []
+    for e in cur.itertuples(index=False):
+        rows = latest[latest["event_id"] == e.event_id].set_index("metric")
+        item = {"event_id": e.event_id, "corp_name": e.corp_name}
+        for m in DATE_METRICS:
+            v = rows["value_text"].get(m) if m in rows.index else None
+            item[m] = pd.Timestamp(v) if isinstance(v, str) and v else None
+        for m in PRICE_METRICS:
+            v = rows["value"].get(m) if m in rows.index else None
+            item[m] = float(v) if v is not None and pd.notna(v) else None
+        # 각주 표시('주2)')를 공모가로 읽은 파싱 오류는 결정 경로와 같은 밴드 대조로 거른다
+        band = [item["band_low"] or math.nan, item["band_high"] or math.nan]
+        if item["final_price"] is not None and not ipo_t01.fields.plausible_price(
+            item["final_price"], *band
+        ):
+            item["final_price"] = None
+        code = (
+            rows["value_text"].get("listing_market_code")
+            if "listing_market_code" in rows.index
+            else None
+        )
+        market = e.market if isinstance(e.market, str) and e.market else None
+        item["market"] = market or MARKET_CODES.get(str(code or "").split(":")[0])
+        item["planned_listing_date"] = planned.get(e.event_id)
+        dates = [v for k, v in item.items() if k in (*DATE_METRICS, "planned_listing_date") and v]
+        if not dates and first[ev["event_id"] == e.event_id].iloc[0] < asof - pd.Timedelta(days=60):
+            continue  # 일정 공시가 하나도 없이 오래된 신고 — 사실상 멈춘 공모
+        if dates and max(dates) < lo:
+            continue  # 일정이 모두 지났는데 상장도 철회도 기록되지 않은 공모
+        item["stage"] = _stage(item, asof)
+        item["stage_label"] = STAGE_LABELS[item["stage"]]
+        rec = decisions.get(e.event_id) or {}
+        item["decided"] = bool(rec)
+        item["buy"] = rec.get("buy") if rec else None
+        d = item["planned_listing_date"]
+        if d is not None:
+            item["decision_night"] = ipo_t01.calendar.previous_session(d)
+            item["buy_session"] = d
+            item["sell_session"] = ipo_t01.next_session(d)
+        else:
+            item["decision_night"] = item["buy_session"] = item["sell_session"] = None
+        items.append(item)
+
+        def add(day, kind, label):
+            if day is not None and lo <= pd.Timestamp(day) <= hi:
+                events.append({"date": day, "event_id": e.event_id,
+                               "corp_name": e.corp_name, "kind": kind, "label": label})  # fmt: skip
+
+        end = item["bookbuild_end"]
+        add(item["bookbuild_start"], "bookbuild",
+            "수요예측 시작" + (f"(~{end:%m-%d})" if end is not None else ""))  # fmt: skip
+        add(item["price_announce_date"], "price", "공모가 확정 공고")
+        sub_end = item["subscription_end"]
+        add(item["subscription_start"], "subscription",
+            "청약" + (f"(~{sub_end:%m-%d})" if sub_end is not None else ""))  # fmt: skip
+        add(item["payment_date"], "payment", "납입")
+        add(d, "listing", "상장")
+        add(item["decision_night"], "decision", "t01 신호 계산(밤)")
+        if item["buy"]:
+            add(item["buy_session"], "buy", "매수 주문(08:30~09:00 동시호가)")
+            add(item["sell_session"], "sell", "종가 매도(15:20~15:30)")
+    items.sort(key=lambda i: (i["planned_listing_date"] or i["payment_date"]
+                              or i["subscription_start"] or pd.Timestamp.max, i["corp_name"]))  # fmt: skip
+    events.sort(key=lambda x: (x["date"], x["corp_name"], x["kind"]))
+    return items, events
+
+
 def build(api, now: dt.datetime | None = None) -> pd.DataFrame:
     """결정·보유 표를 만들고 상태를 쓴다. 반환: ipo_signals 표(결정마다 한 행)."""
     now = now or dt.datetime.now(dt.UTC)
@@ -208,6 +344,12 @@ def build(api, now: dt.datetime | None = None) -> pd.DataFrame:
                 problems.append(f"{rec.get('corp_name')}: 보유 계산 실패 — {exc}")
         rows.append(row)
     frame = pd.DataFrame(rows)
+    try:
+        cal_items, cal_events = calendar(api, asof, sch, decisions)
+    except Exception as exc:
+        logger.exception("ipo calendar failed")
+        cal_items, cal_events = [], []
+        problems.append(f"공모 일정을 만들지 못함 — {type(exc).__name__}: {exc}")
     upcoming = sch[sch["planned_listing_date"] <= asof + pd.Timedelta(days=UPCOMING_DAYS)]
     status = {
         "as_of": asof,
@@ -228,6 +370,8 @@ def build(api, now: dt.datetime | None = None) -> pd.DataFrame:
             }  # fmt: skip
             for r in upcoming.itertuples(index=False)
         ],
+        "calendar": cal_items,
+        "calendar_events": cal_events,
         "problems": problems,
     }
     storage.write_json(_jsonable(status), *STATUS)

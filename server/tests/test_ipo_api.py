@@ -144,3 +144,18 @@ def test_push_runs_after_the_evening_batch_and_before_the_pre_open_auction():
     assert "cron(40 22 ? * SUN-THU *)" in body  # 07:40 KST 월~금
     assert "SourceArn: !GetAtt ActionPollerScheduleNight.Arn" in body
     assert "SourceArn: !GetAtt ActionPollerScheduleEarly.Arn" in body
+
+
+def test_action_center_lists_scheduled_listings_without_pushing(app_data):
+    status = storage.read_json("ipo", "status.json")
+    status["calendar"] = [
+        {"event_id": "cal1", "corp_name": "사아", "market": "KOSDAQ",
+         "planned_listing_date": "2026-11-05", "decision_night": "2026-11-04"},
+        {"event_id": "cal0", "corp_name": "자차", "market": "KOSDAQ",
+         "planned_listing_date": None},
+    ]  # fmt: skip
+    storage.write_json(status, "ipo", "status.json")
+    now = datetime(2026, 11, 2, 22, 50, tzinfo=actions.KST)
+    listed = [e for e in actions._ipo_events(now) if e["kind"] == "ipo_listing"]
+    assert len(listed) == 1 and listed[0]["severity"] == "low"  # 낮음은 Web Push를 보내지 않는다
+    assert listed[0]["scheduled_for"] == "2026-11-05" and "11-04 밤" in listed[0]["detail"]
