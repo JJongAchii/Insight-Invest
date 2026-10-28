@@ -2183,6 +2183,14 @@ def build_external_events() -> pd.DataFrame:
 # ---------------------------------------------------------------- 실행
 
 
+def build_ipo_signals():
+    """공모주 t01 신호·보유 (계약 ipo-live-ops) — 다음 거래일 상장 공모주의 매수/패스·지정가와
+    보유의 2번째 거래일 종가 매도 예정. 결정은 quant-lab 결정 경로 사본(module.ipo_t01)이 한다."""
+    from module import ipo_signals
+
+    return ipo_signals.build(qdata_api)
+
+
 BUILDERS = [
     ("asset_master.parquet", build_asset_master, {}),  # qdata 유일 원천 + 안정 ID
     ("us_prices.parquet", build_us_prices, {"row_group_size": 100_000}),  # P0: US 가격 앱 추출
@@ -2210,6 +2218,7 @@ BUILDERS = [
     ("portfolio/live_nav.parquet", build_track_strategies, {}),  # 전략 실전 추적 (P7)
     ("portfolio/rebal_signals.parquet", build_rebal_signals, {}),  # active 전략 리밸 전일 신호
     ("asset_coverage.parquet", build_asset_coverage, {}),  # 모든 링크·사용자 상태 무결성
+    ("ipo/ipo_signals.parquet", build_ipo_signals, {}),  # 공모주 t01 신호·보유 (ipo-live-ops)
 ]
 
 

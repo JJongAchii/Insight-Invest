@@ -19,6 +19,8 @@ def _phase_history():
 
 def test_overview_calls_out_cross_signal_conflict(monkeypatch):
     monkeypatch.setattr(overview.regime_mod, "phase_history", _phase_history)
+    # 장중 스냅샷은 이 테스트의 대상이 아니다 — 환경(S3 접근 여부)에 따라 근거가 생기거나 빠지지 않게 고정한다
+    monkeypatch.setattr(overview, "_intraday_evidence", lambda: (None, 0, 0))
     monkeypatch.setattr(
         overview.regime_mod,
         "risk_gauge",

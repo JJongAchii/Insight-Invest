@@ -13,7 +13,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 import pandas as pd
-from datastore import action_state, meta, portfolio, portfolio_ledger
+from datastore import action_state, meta, portfolio, portfolio_ledger, storage
 from datastore import external_events as external_events_store
 from datastore import holdings as holdings_store
 from datastore import journal as journal_store
@@ -294,6 +294,121 @@ def _rebal_events(now: datetime, horizon_days: int) -> list[dict]:
     return out
 
 
+def _ipo_events(now: datetime) -> list[dict]:
+    """공모주 t01(계약 ipo-live-ops): 다음 매수 주문일·종가 매도일과 데이터 지연.
+
+    저녁 배치가 쓴 `ipo/ipo_signals.parquet`·`ipo/status.json`만 읽는다. 매수는 상장일 동시호가
+    (08:30~09:00) 전, 매도는 그날 종가 동시호가(15:20~15:30) 전에 알아야 하므로 high로 둔다.
+    """
+    out: list[dict] = []
+    try:
+        status = (
+            storage.read_json("ipo", "status.json") if storage.exists("ipo", "status.json") else {}
+        )
+        frame = (
+            storage.read_parquet("ipo", "ipo_signals.parquet")
+            if storage.exists("ipo", "ipo_signals.parquet")
+            else pd.DataFrame()
+        )
+    except Exception:
+        logger.debug("Action Center IPO load failed", exc_info=True)
+        return out
+    today = now.date()
+    as_of = status.get("as_of")
+    for row in frame.to_dict(orient="records") if not frame.empty else []:
+        if not row.get("buy"):
+            continue
+        name = str(row.get("corp_name") or row.get("event_id"))
+        position = row.get("position")
+        listing = _parse_day(row.get("listing_date"))
+        if position == "signal" and listing is not None and listing >= today:
+            limit = row.get("limit_price")
+            price = f" {limit:,.0f}원" if limit else ""
+            out.append(
+                _event(
+                    source="ipo",
+                    key=f"buy:{row['event_id']}",
+                    kind="ipo_buy",
+                    category="strategy",
+                    severity="high",
+                    title=f"공모주 매수 · {name}",
+                    detail=f"{listing.isoformat()} 동시호가 전 지정가{price}(당일 유효)",
+                    link="/ipo",
+                    occurred_at=listing.isoformat(),
+                    available_at=now.isoformat(),
+                    data_as_of=as_of,
+                    scheduled_for=listing.isoformat(),
+                    name=name,
+                    market=row.get("market"),
+                )
+            )
+        sell_on = _parse_day(row.get("sell_on"))
+        if position == "holding" and sell_on is not None and sell_on >= today:
+            rolls = int(row.get("rolls") or 0)
+            extra = f" · 하한가 이월 {rolls}회" if rolls else ""
+            out.append(
+                _event(
+                    source="ipo",
+                    key=f"sell:{row['event_id']}:{sell_on.isoformat()}",
+                    kind="ipo_sell",
+                    category="strategy",
+                    severity="high",
+                    title=f"공모주 매도 · {name}",
+                    detail=f"{sell_on.isoformat()} 종가 동시호가 매도{extra}",
+                    link="/ipo",
+                    occurred_at=sell_on.isoformat(),
+                    available_at=now.isoformat(),
+                    data_as_of=as_of,
+                    scheduled_for=sell_on.isoformat(),
+                    name=name,
+                    market=row.get("market"),
+                )
+            )
+    for item in status.get("calendar") or []:
+        listing = _parse_day(item.get("planned_listing_date"))
+        if listing is None or listing < today:
+            continue
+        night = item.get("decision_night")
+        out.append(
+            _event(
+                source="ipo",
+                key=f"listing:{item['event_id']}:{listing.isoformat()}",
+                kind="ipo_listing",
+                category="strategy",
+                severity="low",
+                title=f"공모주 상장 예정 · {item.get('corp_name')}",
+                detail=f"{listing.isoformat()} 상장 · t01 신호는 {night} 밤 계산"
+                if night
+                else f"{listing.isoformat()} 상장",
+                link="/ipo",
+                occurred_at=listing.isoformat(),
+                available_at=now.isoformat(),
+                data_as_of=as_of,
+                scheduled_for=listing.isoformat(),
+                name=str(item.get("corp_name")),
+                market=item.get("market"),
+            )
+        )
+    problems = status.get("problems") or []
+    if problems:
+        out.append(
+            _event(
+                source="ipo",
+                key=f"status:{status.get('next_session')}",
+                kind="data",
+                category="data",
+                severity="medium",
+                title="공모주 신호 확인 필요",
+                detail=" · ".join(problems)[:300],
+                link="/ipo",
+                occurred_at=status.get("next_session"),
+                available_at=now.isoformat(),
+                data_as_of=as_of,
+            )
+        )
+    return out
+
+
 def _watchlist_alert_events(now: datetime) -> list[dict]:
     try:
         items = watchlist_api.get_watchlist().get("items", [])
@@ -529,6 +644,7 @@ def build_actions(*, horizon_days: int = 30, include_dismissed: bool = False) ->
     items.extend(_watchlist_alert_events(now))
     items.extend(_review_events(now, horizon_days))
     items.extend(_rebal_events(now, horizon_days))
+    items.extend(_ipo_events(now))
     items.extend(_data_health_events(now))
     items.extend(_external_event_events(now, horizon_days))
 

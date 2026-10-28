@@ -26,6 +26,7 @@ from .routers import (
     holdings,
     insight,
     intraday,
+    ipo,
     journal,
     meta,
     news,
@@ -97,6 +98,7 @@ app.include_router(price.stock_router)
 app.include_router(intraday.router)
 app.include_router(journal.router)
 app.include_router(portfolio_ledger.router)
+app.include_router(ipo.router)
 
 
 @app.get("/")

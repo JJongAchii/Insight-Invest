@@ -1,0 +1,46 @@
+# 서버 테스트 — PR에서 돈다. main push의 deploy-api는 테스트 없이 배포하므로 병합 전에 여기서 막는다.
+#
+# 공모주 t01(계약 ipo-live-ops): quant-lab 결정 경로 사본의 해시 대조와 개발 구간 616건 결정 재현이
+# 여기서 확인된다(server/tests/test_ipo_t01_vendor.py).
+#
+# 필요한 repo secret: GH_PAT — quant-data(private) 읽기용(deploy.yml과 같은 것)
+
+name: test-server
+
+on:
+  pull_request:
+    paths: ["server/**", "scripts/**", "infra/**", ".github/workflows/test.yml"]
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: JJongAchii/quant-data
+          ref: main
+          token: ${{ secrets.GH_PAT }}
+          path: quant-data
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: server/requirements*.txt
+      - name: Install
+        run: |
+          pip install -r server/requirements.txt -r server/requirements-dev.txt
+          pip install -e "quant-data[s3]"
+      - name: Test
+        working-directory: server
+        # 앱 저장소 기본값은 운영 S3다. 테스트는 자격 없이 로컬 임시 경로만 쓴다
+        env:
+          APP_DATA: ${{ runner.temp }}/app-data
+        run: python -m pytest -q -p no:cacheprovider tests

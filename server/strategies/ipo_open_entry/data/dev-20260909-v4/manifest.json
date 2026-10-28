@@ -1,0 +1,37 @@
+{
+  "lake": {
+    "path": "/Users/achii/Quant/data-lake-snapshots/ipo-open-entry-20261023",
+    "manifest": "docs/evidence/lake-snapshot-20261023.json",
+    "manifest_sha256": "c27e370d707592b51c04301f6371f2cf3a836acbc60728ffa4b6ff2e8b94d257"
+  },
+  "window": {
+    "dev_start": "2015-06-15",
+    "dev_end": "2026-09-09",
+    "sealed_start": "2026-09-10",
+    "opened": false
+  },
+  "counts": {
+    "events": 802,
+    "by_regime": {
+      "R1": 577,
+      "R2": 225
+    },
+    "excluded": {
+      "not_listed": 108,
+      "before_first_listing_date": 43,
+      "after_dev_end": 9,
+      "no_ticker_or_market": 0,
+      "no_final_price": 23,
+      "no_listing_bar": 0
+    },
+    "bars": 20783,
+    "bars_after_listing": 26,
+    "calendar_last": "2026-09-11"
+  },
+  "files": {
+    "events": "1e2e78dfa2c34dae53bae264e2e28810b2202b7a597895498d4dfb394eb53582",
+    "fields": "68d9abc2d6bac2ff55b7aee60cd0afd9215e8bde5e62980a04bc9153c6c03daf",
+    "bars": "80888aebaea435f5fb12e0337d4d73e54a13dc648e2197b6c31c4bf0aef8dce3",
+    "index": "77c5a9b9c62356add1151d93ab924addd694bb464c8a6c3212df3252b9788afe"
+  }
+}
