@@ -40,6 +40,10 @@ DATASET = LINE_DIR / "data" / "dev-20260909-v4"
 FILES = ("events", "fields", "bars", "index")
 PRICE_COLUMNS = ["open", "high", "low", "close"]
 MARKETS = ("KOSPI", "KOSDAQ")
+#: 결정 전에 원문이 다 받아져 있어야 하는 공모의 최초 접수 창 — 개발 구간 끝 이 일수 전부터.
+#: 개발 뒤 상장 사건(학습·직전 공모 결과)과 상장 예정 대상이 이 창에 든다
+COVERAGE_DAYS = 180
+FIELD_TYPES = ("ipo", "transfer")  # quant-data가 모든 원문을 받는 유형. 나머지는 기준 문서만
 
 __all__ = ["NotEligible", "NotReady", "TooLate", "decide_listing", "engine", "rule", "rules"]
 
@@ -223,6 +227,26 @@ def kosdaq_close(dev_index: pd.DataFrame, ix: pd.DataFrame, cfg: dict, asof) -> 
 # --- 결정 -------------------------------------------------------------------------------------
 
 
+def missing_documents(api, asof, event_id: str | None = None) -> list[str]:
+    """결정에 쓰는 공모(최초 접수가 개발 구간 끝 COVERAGE_DAYS일 전 ~ asof, 그리고 대상)의 원문 중 아직
+    받지 못한 접수번호.
+
+    운영 레이크는 공시 원문을 하루 예산만큼 이어받는다(quant-data ADR-0034). 덜 받은 채로 결정하면 대상의
+    공모가·학습 사건·직전 공모 결과가 연구 레이크와 달라져 quant-lab과 다른 결정이 나온다 — 그날은 결정을
+    미룬다. 필드 유형(ipo·transfer)은 모든 원문을, 나머지는 분류에 쓰는 기준 문서만 본다.
+    """
+    since = dev_end() - pd.Timedelta(days=COVERAGE_DAYS)
+    ev = api.load_ipo_events()
+    live = ev[
+        ((ev["first_filed"] >= since) & (ev["first_filed"] <= asof)) | (ev["event_id"] == event_id)
+    ]
+    docs = api.load_ipo_documents(event_ids=live["event_id"].tolist())
+    gap = docs[(docs["filed_date"] <= asof) & (docs["parse_status"] == "not_downloaded")]
+    field = gap["event_id"].isin(live.loc[live["listing_type"].isin(FIELD_TYPES), "event_id"])
+    anchor = gap["rcept_no"].isin(live["first_rcept_no"])
+    return sorted(gap.loc[field | anchor, "rcept_no"].astype(str))
+
+
 def decide_listing(
     api, event_id: str, listing_date, market: str, now: dt.datetime | None = None
 ) -> dict:
@@ -233,6 +257,13 @@ def decide_listing(
     ix = index_frame(api, cfg, dev_end() - pd.Timedelta(days=120))
     lake_last = lake_last_date(ix)
     asof = decision.check_timing(listing, lake_last, now)
+    # 대상 필드를 읽기 전에 — 덜 받은 공시로 '부적격'을 기록하거나 다른 결정을 내지 않게
+    gaps = missing_documents(api, asof, event_id)
+    if gaps:
+        raise NotReady(
+            f"최근 공모 공시 원문 {len(gaps)}건을 아직 받지 못했다(운영 레이크가 이어받는 중, "
+            f"예: {', '.join(gaps[:3])})"
+        )
 
     dev = dev_data()
     target, target_fields, used_obs, disclosures = target_event(api, event_id, listing, market, cfg)
