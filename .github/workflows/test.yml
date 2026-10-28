@@ -40,4 +40,7 @@ jobs:
           pip install -e "quant-data[s3]"
       - name: Test
         working-directory: server
+        # 앱 저장소 기본값은 운영 S3다. 테스트는 자격 없이 로컬 임시 경로만 쓴다
+        env:
+          APP_DATA: ${{ runner.temp }}/app-data
         run: python -m pytest -q -p no:cacheprovider tests
