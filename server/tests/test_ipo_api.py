@@ -133,3 +133,14 @@ def test_action_center_flags_problems(app_data):
     now = datetime(2026, 11, 2, 22, 50, tzinfo=actions.KST)
     flagged = [e for e in actions._ipo_events(now) if e["kind"] == "data"]
     assert flagged and flagged[0]["severity"] == "medium" and "결정 대기" in flagged[0]["detail"]
+
+
+def test_push_runs_after_the_evening_batch_and_before_the_pre_open_auction():
+    """매수 주문은 상장일 08:30 전에 알아야 한다 — 22:50·07:40 KST 알림 실행이 있고 호출 권한이 있다."""
+    from pathlib import Path
+
+    body = (Path(__file__).parents[2] / "infra" / "template.yaml").read_text(encoding="utf-8")
+    assert "cron(50 13 ? * MON-FRI *)" in body  # 22:50 KST
+    assert "cron(40 22 ? * SUN-THU *)" in body  # 07:40 KST 월~금
+    assert "SourceArn: !GetAtt ActionPollerScheduleNight.Arn" in body
+    assert "SourceArn: !GetAtt ActionPollerScheduleEarly.Arn" in body

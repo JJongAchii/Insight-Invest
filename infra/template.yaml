@@ -372,6 +372,28 @@ Resources:
         - Arn: !GetAtt ActionPollerFunction.Arn
           Id: action-poller-evening
 
+  # 공모주 t01(계약 ipo-live-ops): 신호는 저녁 full 수집 맨 끝(~22:20)에 생기고 주문은 다음 날
+  # 08:30~09:00 동시호가에 낸다. 배치 직후(22:50)와 장 시작 전(07:40)에 한 번씩 더 돈다.
+  ActionPollerScheduleNight:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: insight-invest-action-poll-night
+      ScheduleExpression: cron(50 13 ? * MON-FRI *)  # 22:50 KST
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ActionPollerFunction.Arn
+          Id: action-poller-night
+
+  ActionPollerScheduleEarly:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: insight-invest-action-poll-early
+      ScheduleExpression: cron(40 22 ? * SUN-THU *)  # 07:40 KST (월~금)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ActionPollerFunction.Arn
+          Id: action-poller-early
+
   ActionPollerMorningInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -379,6 +401,22 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt ActionPollerScheduleMorning.Arn
+
+  ActionPollerNightInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ActionPollerFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ActionPollerScheduleNight.Arn
+
+  ActionPollerEarlyInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ActionPollerFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ActionPollerScheduleEarly.Arn
 
   ActionPollerEveningInvokePermission:
     Type: AWS::Lambda::Permission
