@@ -23,6 +23,7 @@ class FakeApi:
         self.sched = schedule
         self.events = events
         self.obs = obs if obs is not None else pd.DataFrame(columns=OBS_COLUMNS)
+        self.docs = pd.DataFrame(columns=["rcept_no", "event_id", "filed_date", "parse_status"])
         self.prices = (
             prices
             if prices is not None
@@ -49,6 +50,10 @@ class FakeApi:
         if metrics is not None:
             o = o[o["metric"].isin(metrics)]
         return o.reset_index(drop=True)
+
+    def load_ipo_documents(self, event_ids=None):
+        d = self.docs
+        return d[d["event_id"].isin(event_ids)] if event_ids is not None else d
 
     def load_krx_prices(self, start, end, tickers, columns):
         p = self.prices
@@ -276,3 +281,31 @@ def test_calendar_shows_each_offering_stage_and_the_rule_days(app_data, monkeypa
     dates = [e["date"] for e in status["calendar_events"]]
     assert dates == sorted(dates)
     assert not any("공모 일정" in p for p in status["problems"])
+
+
+def test_decision_waits_while_recent_filings_are_not_downloaded():
+    """운영 레이크가 공시 원문을 다 받기 전에는 결정을 미룬다(NotReady — 기록하지 않음). 2026-10-28 첫 수집은
+    상장 하루 전 공모의 공모가 확정·실적보고서를 받지 못했다 — 그대로 결정하면 '부적격'이 기록되거나
+    quant-lab과 다른 결정이 나온다."""
+    events = _events([("t", None, None), ("old", "777770", "2026-10-10")], first_filed="2026-09-01")
+    events["first_rcept_no"] = ["20260901000001", "20260901000002"]
+    events.loc[events["event_id"] == "old", "listing_type"] = "unknown"
+    api = FakeApi("2026-11-02", _schedule([]), events)
+    api.docs = pd.DataFrame(
+        {"rcept_no": ["20260901000001", "20261027000003", "20260901000002", "20260915000004"],
+         "event_id": ["t", "t", "old", "old"],
+         "filed_date": pd.to_datetime(["2026-09-01", "2026-10-27", "2026-09-01", "2026-09-15"]),
+         "parse_status": ["ok", "not_downloaded", "ok", "not_downloaded"]}
+    )  # fmt: skip
+    asof = pd.Timestamp("2026-11-02")
+    # 필드 유형(ipo)은 모든 원문, 미분류(unknown)는 기준 문서만 본다
+    assert ipo_t01.missing_documents(api, asof) == ["20261027000003"]
+    with pytest.raises(ipo_t01.NotReady, match="원문 1건"):
+        ipo_t01.decide_listing(api, "t", "2026-11-03", "KOSDAQ", NOW)
+    api.docs.loc[api.docs["rcept_no"] == "20261027000003", "parse_status"] = "ok"
+    assert ipo_t01.missing_documents(api, asof) == []
+    # 오래전에 처음 접수된 대상도 자기 원문은 다 있어야 한다
+    events.loc[events["event_id"] == "t", "first_filed"] = pd.Timestamp("2025-01-02")
+    api.docs.loc[api.docs["rcept_no"] == "20260901000001", "parse_status"] = "not_downloaded"
+    assert ipo_t01.missing_documents(api, asof) == []
+    assert ipo_t01.missing_documents(api, asof, "t") == ["20260901000001"]

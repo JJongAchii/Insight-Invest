@@ -159,3 +159,21 @@ def test_action_center_lists_scheduled_listings_without_pushing(app_data):
     listed = [e for e in actions._ipo_events(now) if e["kind"] == "ipo_listing"]
     assert len(listed) == 1 and listed[0]["severity"] == "low"  # 낮음은 Web Push를 보내지 않는다
     assert listed[0]["scheduled_for"] == "2026-11-05" and "11-04 밤" in listed[0]["detail"]
+
+
+def test_pipeline_detects_the_ipo_builder_by_its_function_name():
+    """quant-data 일일 파이프라인은 build_insights.py에 'def build_ipo_signals'가 있을 때 `--only ipo_signals`를
+    부른다(quant-data tests/test_pipeline_contract.py 짝 검사). 2026-10-28에는 '"ipo_signals"'를 찾아 늘
+    건너뛰었다 — 이름을 바꾸면 두 쪽을 함께 바꾼다."""
+    import sys
+    from pathlib import Path
+
+    scripts = Path(__file__).parents[2] / "scripts"
+    if str(scripts) not in sys.path:
+        sys.path.insert(0, str(scripts))
+    import build_insights
+
+    body = (scripts / "build_insights.py").read_text(encoding="utf-8")
+    assert "def build_ipo_signals" in body
+    names = {build_insights._builder_name(item[0]) for item in build_insights.BUILDERS}
+    assert "ipo_signals" in names
