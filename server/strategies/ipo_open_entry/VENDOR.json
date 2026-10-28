@@ -1,0 +1,35 @@
+{
+  "source": "JJongAchii/quant-lab",
+  "line": "strategies/ipo-open-entry",
+  "commit": "66a37933ea7c43694b8816186a014c92389bd491",
+  "files": {
+    "config.yaml": "134a44476e1feb14bf0e4972499f852294394924695f2de768bafee514b10b56",
+    "src/ipo_open_entry/__init__.py": "f907c318ca080d75bff614646780eaa0d86c409d3f502699cf52f1f46d0ab735",
+    "src/ipo_open_entry/config.py": "2f7cc08e225e6fa0052543e71a439c2b95b31eb5393c926296dee91781334ac0",
+    "src/ipo_open_entry/rules.py": "82a8930c1f8b9da3b44eddfb3e950eb5d8967de298146ea9f7c1b628abb3199d",
+    "src/ipo_open_entry/fields.py": "0b614a913939530f888fedd29b9d00264b1fd3cc7168b1cd18643399c198d703",
+    "src/ipo_open_entry/features.py": "a9236311d52f7c4f6c6682fb32b5b26c9547081a9953aa6391c8236e42cf2266",
+    "src/ipo_open_entry/engine.py": "fd145ae6598d22fe19498a704b200d526a152bdec9236ee94554828e6a67a0be",
+    "src/ipo_open_entry/evaluate.py": "4064d2f6fb5963e85a828ce799cc9912780740c529ac631956f53094185e123f",
+    "src/ipo_open_entry/models/__init__.py": "3fbba7a29b90452f8d5d7ebed688e0535d66540d7576d22c4277915b38415f6b",
+    "src/ipo_open_entry/models/regression.py": "75b1a32ba2bf5b071c3690e5eed87708cc4f50dd3961bc2180f17768df56f250",
+    "src/ipo_open_entry/models/linear.py": "c58a8e25897ce494e3d67ba7d1f213084355c613dc7cd082595e7bc9a94ebffa",
+    "src/ipo_open_entry/models/blocks.py": "ab747c03cc39c2ea95daad2d2595010b7e80baf1b3256e7a58b94668fd02781d",
+    "src/ipo_open_entry/models/common.py": "2b8c37a1a4bfa6626f83f8a74ad832eda661cb213c32429000778ce07cdd315a",
+    "src/ipo_open_entry/operate/__init__.py": "370c1ccdbfffd496614d8bc09614b355b3ed780a93dd9fb73ccf7ccc3c664498",
+    "src/ipo_open_entry/operate/calendar.py": "dd2fafa42f02b7791cf81c1dfecb8d3e926192ce1942b1599c8974fdb8e3c3ae",
+    "src/ipo_open_entry/operate/decision.py": "c146ffaf79785c955329400a1f595c6bfa8d9c8d81c52e3793a9d00f0416734c",
+    "docs/operating-rule-day1.md": "92a0cc1a05aaa0d207ef6b7addffe845e8905fcb48daceb3c4eb6bf64abb543c"
+  },
+  "dataset": {
+    "source": "strategies/ipo-open-entry/data/dev-20260909-v4r",
+    "path": "data/dev-20260909-v4",
+    "files": {
+      "manifest.json": "c79e8fba0aab5975ad04eea45a6cd5e89223293c9390474e1fbeca6961e5906e",
+      "events.parquet": "1e2e78dfa2c34dae53bae264e2e28810b2202b7a597895498d4dfb394eb53582",
+      "fields.parquet": "68d9abc2d6bac2ff55b7aee60cd0afd9215e8bde5e62980a04bc9153c6c03daf",
+      "bars.parquet": "80888aebaea435f5fb12e0337d4d73e54a13dc648e2197b6c31c4bf0aef8dce3",
+      "index.parquet": "77c5a9b9c62356add1151d93ab924addd694bb464c8a6c3212df3252b9788afe"
+    }
+  }
+}

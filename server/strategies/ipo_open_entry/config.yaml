@@ -1,0 +1,218 @@
+# ipo-open-entry 설계값 — 연구 brief(docs/brief.md, sha256 앞 12자리 ace1e34bdd6c) §2~§10을 옮긴 것.
+# 결과를 본 뒤 바꾸지 않는다(계약 INTENT-v2 제약 5). 바꿀 이유가 생기면 계약 개정으로 간다.
+line: ipo-open-entry
+brief_digest: ace1e34bdd6c
+objective_digest: 449c921e0dd4          # docs/objective.md (2026-10-15 개정판)
+
+lake:
+  # 기본 레이크(~/Quant/data-lake)는 다른 라인의 LAKE_IDENTITY가 묶은 동결 레이크라 쓰지 않는다
+  snapshot: ~/Quant/data-lake-snapshots/ipo-open-entry-20261023
+  mirror_tables: [krx_prices, krx_sector, krx_stock_master, krx_index_prices, krx_index_master]
+  calendar_index_code: "1001"           # 코스피 지수 거래일을 KRX 달력으로 쓴다
+  # KRX 시간외 시장(16:00~20:00, 2026-09-14~) 가격이 EC2 저녁 수집의 종가 자리를 덮어썼다(quant-data
+  # 0156ece, 2026-10-13 수정, 과거 행 미재수집). 미러 기준 2026-09-14~10-12 일봉의 4~5%가 종가 ∉ [저가, 고가].
+  # 그래서 개발 데이터의 가격은 오염 직전 거래일까지만 쓴다
+  price_clean_until: "2026-09-11"
+
+universe:
+  listing_type: ipo                     # 스팩·리츠·이전상장·분류 불명 제외
+  first_listing_date: "2015-06-15"      # 그 전은 가격제한 ±15% 체제(43건, 제외)
+  require_final_price: true
+
+regimes:                                # 상장일 기준, 시작일 포함
+  R1:
+    start: "2015-06-15"
+    open_band: [0.9, 2.0]               # 시가 = 공모가의 90~200% 동시호가
+    day1_limit_base: open               # 그날 가격제한은 시가 기준 ±30%
+  R2:
+    start: "2023-06-26"
+    open_band: [0.6, 4.0]               # 상장일 가격 범위 = 공모가의 60~400%
+    day1_limit_base: offer
+subperiods:
+  R3: "2025-07-01"                      # 확약 우선배정 시행(하위 구간 표시만)
+
+windows:
+  oos_start: "2018-01-01"               # walk-forward 평가 시작(그 전은 첫 학습창)
+  r2_start: "2023-06-26"
+
+# 상장일 기준 개발/순방향 경계(qlab.contracts.sealed_window). 과거 봉인은 없다(사용자 결정 2026-10-23).
+# dev_end = price_clean_until까지의 KRX 달력에서 끝에서 세 번째 거래일 — 3일째 종가가 있는 마지막 상장일.
+# 봉인 쪽은 순방향 계획 구간이다(그 사이 상장분은 개발에도 확증에도 쓰지 않는다). 개발 사건의 청산 일봉은
+# dev_end 뒤 이틀까지 간다.
+sealed_window:
+  dev_start: "2015-06-15"
+  dev_end: "2026-09-09"
+  sealed_start: "2026-09-10"
+  sealed_end: "2027-12-31"
+  opened: false
+
+execution:
+  horizons: [1, 2, 3]                   # 1 = 상장일 종가
+  daily_limit: 0.30
+  cap_tolerance: 0.995                  # 시가 ≥ 공모가×배수×0.995면 상한 도달로 본다
+  lower_limit_roll_max_days: 5          # 하한가 종가면 다음 거래일 종가로, 최대 5거래일
+  tie_fills: false                      # 저가 = 지정가는 미체결(주 규칙). true는 경계 보고용
+  bars_after_listing: 8                 # 상장일 포함 저장할 거래일 수(3일째 + 이월 5일)
+
+sizing:
+  slots: 7                              # 사건당 예산 b = 전일 종가 NAV / 7
+  initial_nav: 100000000                # 1억원(objective §2 용량 기준선)
+  idle_cash_return: 0.0
+  proceeds_available: next_day
+
+costs:
+  base:
+    commission_bps_per_side: 1.5
+    slippage_bps_per_side: 10.0
+    sell_tax: statutory
+  stress:
+    commission_bps_per_side: 3.0
+    slippage_bps_per_side: 25.0
+    sell_tax_bps: 30.0                  # 표본 최대 세율 고정
+  statutory_sell_tax_bps:               # 매도일 기준(시작일 포함), 농특세 포함 합계. 확증 전 법령 재확인
+    - {from: "2015-01-01", bps: 30.0}
+    - {from: "2019-05-30", bps: 25.0}
+    - {from: "2021-01-01", bps: 23.0}
+    - {from: "2023-01-01", bps: 20.0}
+    - {from: "2024-01-01", bps: 18.0}
+    - {from: "2025-01-01", bps: 15.0}
+    - {from: "2026-01-01", bps: 20.0}
+
+walk_forward:
+  refit: quarterly                      # 분기 초마다, 청산일 종가가 분기 시작 전인 사건만 학습
+
+features:
+  h7_prior_events: 10                   # 직전 10건의 같은 청산 실현 순수익 평균
+  h7_min_events: 5                      # 끝난 거래가 이보다 적으면 NaN(표본 초반)
+  market_index_code: "2001"             # 코스닥 지수 — 부호 자유 통제 변수
+  market_lookback_days: 20
+
+hurdle:
+  formula: "max(B0, B1) stress-net primary on the OOS window"
+  primary: "mean of stress-net absolute CAGR over horizons 1, 2, 3"
+
+search_budget:                          # strategy-discovery 승인 브리프 값
+  max_rounds: 8
+  max_executions: 40
+  patience_rounds: 3
+  min_improvement: 0.01
+  max_qualification_attempts: 3
+  max_technical_retries: 6
+
+# brief v2(docs/brief-v2.md) — 패턴 분석과 진입·보유·로스컷 전략 (계약 INTENT-v4)
+patterns:
+  dataset_bars_after_listing: 26        # 상장일 포함 20거래일 보유 + 하한가 이월 5일 + 1
+  horizons: [1, 2, 3, 5, 10, 20]        # 1 = 상장일 종가
+  bins: 5                               # 체제 안 분위
+  min_events_per_year: 15               # 연도별 일관성에 넣는 해의 최소 건수
+  extreme_quantile: 0.2                 # 상위·하위 20% = 크게 오른/내린 종목
+  profile_horizon: 5
+  prior_window_days: 30                 # 최근 상장 건수 창(달력일)
+  n_boot: 2000
+  seed: 20261023
+  consistency_min: 0.6                  # 전략 점수에 넣는 지표: 연도 일관성 하한
+  q_max: 0.1                            # 전략 점수에 넣는 지표: BH q 상한
+
+strategy:                               # brief v2 §7 — 탐색 공간(조합 수를 센다)
+  score_top: [0.1, 0.2, 0.3]
+  open_mult_max: [1.5, 2.0, 3.0, null]  # null = 체제 상한
+  open_mult_min: [null, 1.0]
+  holding_days: [1, 2, 3, 5, 10, 20]
+  stop_loss: [null, -0.07, -0.10, -0.15, -0.20]
+  take_profit: [null, 0.20, 0.30, 0.50]
+  min_trades: 30
+  slots: 10                             # 거래마다 전일 NAV의 1/10
+  walk_forward_start: "2018-01-01"      # 참고용 시점 순서 재선택의 평가 시작
+
+rule:                                   # brief v2 §7 탐색에서 고른 규칙(strategy-v2.json best). write_operating_rule.py가 대조한다
+  params:
+    score_top: 0.2                      # 점수가 체제 안 상위 20%
+    open_mult_max: 1.5                  # 시가/공모가 1.5배 미만
+    open_mult_min: null
+    holding_days: 20                    # 20번째 거래일 종가에 판다(하한가 종가면 이월)
+    stop_loss: -0.07                    # 진입가 대비 −7% 로스컷
+    take_profit: null
+  selected:                             # 점수 지표: +1 높을수록 점수 +, −1 낮을수록 점수 +
+    inst_ratio: -1
+    bid_top: -1
+    lockup_bid: 1
+    longterm: 1
+    inst_count: -1
+    retail_comp: -1
+    retail_deposit: -1
+    retail_count: -1
+    refund_float: -1
+    price_vs_top: -1
+    band_pos: -1
+    offer_amount: 1
+    fee_rate: -1
+    prior_ipo_mult: -1
+    recent_listings: 1
+
+# brief-day1(docs/brief-day1.md) — 상장일 당일 진입 (계약 ipo-listing-day INTENT-v1)
+day1:
+  slots: 7                              # 사건당 예산 = 전일 NAV / 7(1차 §5, t32와 비교가 되게)
+  entry_dips: [0.03, 0.05, 0.10]        # Ld: 시가 아래 지정가 비율
+  take_profits: [0.05, 0.10, 0.20]      # TPu
+  stop_losses: [0.05, 0.10]             # SLs
+  exit_menu:                            # 학습창 선택 메뉴: [익절, 손절], null = 없음
+    - [null, null]                      # C 당일 종가
+    - [0.05, null]
+    - [0.10, null]
+    - [0.20, null]
+    - [null, 0.05]
+    - [null, 0.10]
+    - [0.10, 0.05]
+    - [0.20, 0.10]
+  entry_menu: [null, 0.03, 0.05, 0.10]  # null = O 시가 매수
+  m_max_grid: [1.5, 2.0, null]          # null = 체제 상한
+  top_grid: [0.1, 0.2, 0.3, 0.4, 0.5]
+  ipo_flow_window_days: 60              # D2b: 상장일이 D−60일~D−1인 공모주
+  ipo_flow_min_events: 3
+  turnover_short: 20                    # D2c: 코스닥 거래대금 20일 / 250일
+  turnover_long: 250
+  sector_lookback: 20                   # D3: 업종·지수 20거래일 수익률
+  sector_min_cases: 3                   # D3: KSIC→KRX 업종 대응 다수결 최소 사례
+  sector_min_members: 5                 # D3: 그날 업종 종목 수가 이보다 적으면 결측(1~2종목 업종의 극단값, 성과 전 데이터 규칙)
+  gap_blocks: [H2, H3, H4, H8]          # D1 1단계: 시가 배수를 맞추는 상장 전 수요 블록
+  gap_shrinkage: 100                    # D1 1단계 R2→R1 수축 k
+  gap_min_fit: 100                      # D1 1단계 적합 표본 최소 건수(미만이면 결측)
+  random_m_buckets: [1.0, 1.5, 2.0]     # 무작위 대조의 시가 배수 구간 경계
+  random_draws: 1000
+  exclude_top: 3                        # 위험 제약 1: 총수익 상위 3건 제외
+  oos_start: "2018-01-01"
+  r2_start: "2023-06-26"
+
+# brief-av(docs/brief-av.md) — 전문가 관점 모형 (계약 ipo-analyst-view INTENT-v1)
+analyst:
+  parser_version: "2"                   # quant-data ADR-0032 발행인 정보가 든 관측값
+  original_doc_kinds: [registration, attachment]          # 최초 신고서(목록상 [첨부추가] 원본 포함)
+  profile_doc_kinds: [prospectus, prospectus_amendment]   # 모든 연도에 있는 판본만(사용자 결정 2026-10-26)
+  slots: 7                              # 사건당 예산 = 전일 NAV / 7(brief-av §5, t01과 비교가 되게)
+  oos_start: "2018-01-01"               # 평가 구간 시작(brief-av §2)
+  horizons: [1, 2, 3]                   # 청산 갈래 H1·H2·H3: 상장일·2일째·3일째 종가(§4)
+  winsor: [0.025, 0.975]                # ret 라벨 학습창 윈저라이즈 분위(§10)
+  shrinkage: 300                        # R2→R1 수축 k 기본(§11 축 4: 300·100)
+  top_grid: [0.1, 0.2, 0.3, 0.4, 0.5]   # rank 라벨의 상위 q 격자(§10)
+  settle_days: 20                       # settled20 라벨: 상장 20거래일 뒤(1개월 의무보유 해제 전)
+  settle_limit_band: 0.30               # 1~20일째 전일 대비 종가 변화가 ±30% 밖이면 기업행위로 보고 라벨 결측
+  boundary_band: 0.005                  # 결정 경계 근처 진단: 예측 |순수익| < 0.5%
+  exclude_top: 3                        # 위험 제약 1: 총수익 상위 3건 제외(사용자 기준)
+  random_m_buckets: [1.0, 1.5, 2.0]     # 무작위 대조의 시가 배수 구간 경계
+  random_draws: 1000
+  signs:                                # §9 부호(1 = +, -1 = −, null = 자유)
+    v1_discount: 1
+    v2_forecast: -1
+    v3_log_multiple: -1
+    v4_log_ps_open: -1
+    q1_op_margin: 1
+    q2_rev_growth: 1
+    o1_vc_float: -1
+    o2_release_1m: -1
+    o3_major: 1
+    s1_special: null
+  axes:                                 # §11 축 1의 블록
+    V: [v1_discount, v2_forecast, v3_log_multiple, v4_log_ps_open]
+    Q: [q1_op_margin, q2_rev_growth]
+    O: [o1_vc_float, o2_release_1m, o3_major]
+    S: [s1_special]
