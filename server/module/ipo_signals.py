@@ -55,10 +55,27 @@ def _jsonable(v):
 
 
 def schedule(api, asof: pd.Timestamp) -> pd.DataFrame:
-    """as-of 뒤 상장 예정 공모(코스피·코스닥, 공모 유형)."""
+    """as-of 뒤 상장 예정 공모(공모 유형, 코스피·코스닥 또는 시장 미확인).
+
+    레이크 이벤트의 market은 상장 뒤 KRX 첫 거래로 채워지므로 상장 전에는 비어 있다 — 상장 전 공시의 상장
+    시장 코드(최신 접수)로 채운다. 공시로도 모르면 남겨 두고 decide_next가 '결정 대기'로 알린다(조용히 빼지
+    않는다). 코넥스 등 다른 시장은 뺀다.
+    """
     sch = api.load_ipo_schedule(start=str((asof + pd.Timedelta(days=1)).date()))
-    sch = sch[(sch["listing_type"] == "ipo") & sch["market"].isin(ipo_t01.MARKETS)]
-    return sch[sch["listing_date"].isna()].reset_index(drop=True)
+    sch = sch[(sch["listing_type"] == "ipo") & sch["listing_date"].isna()].copy()
+    if sch.empty:
+        return sch.reset_index(drop=True)
+    obs = api.load_ipo_observations(
+        event_ids=sch["event_id"].tolist(), metrics=["listing_market_code"]
+    )
+    obs = obs[pd.to_datetime(obs["filed_date"]) <= asof]
+    code = _latest(obs).set_index("event_id")["value_text"] if len(obs) else pd.Series(dtype=str)
+    filed = code.map(lambda c: MARKET_CODES.get(str(c or "").split(":")[0], OTHER_MARKET))
+    known = sch["market"].where(sch["market"].isin(ipo_t01.MARKETS))
+    market = known.fillna(sch["event_id"].map(filed))
+    sch["market"] = market.astype(object).where(market.notna(), None)
+    keep = sch["market"].isna() | sch["market"].isin(ipo_t01.MARKETS)
+    return sch[keep].reset_index(drop=True)
 
 
 def decide_next(api, sch: pd.DataFrame, nxt: pd.Timestamp, decisions: dict, now) -> list[str]:
@@ -70,6 +87,9 @@ def decide_next(api, sch: pd.DataFrame, nxt: pd.Timestamp, decisions: dict, now)
     problems = []
     for e in sch[sch["planned_listing_date"] == nxt].itertuples(index=False):
         if e.event_id in decisions:
+            continue
+        if e.market not in ipo_t01.MARKETS:
+            problems.append(f"{e.corp_name}: 결정 대기 — 상장 시장을 공시에서 아직 확인하지 못했다")
             continue
         base = {
             "event_id": e.event_id,
@@ -176,6 +196,7 @@ DATE_METRICS = (
 )
 PRICE_METRICS = ("band_low", "band_high", "final_price")
 MARKET_CODES = {"1": "KOSPI", "2": "KOSDAQ"}
+OTHER_MARKET = "OTHER"  # 공시의 상장 시장이 코스피·코스닥이 아님(코넥스 등) — 이 규칙 대상 밖
 STAGE_LABELS = {
     "filed": "신고서 제출",
     "bookbuilding": "수요예측",

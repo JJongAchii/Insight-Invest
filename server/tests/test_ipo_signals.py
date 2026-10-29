@@ -309,3 +309,38 @@ def test_decision_waits_while_recent_filings_are_not_downloaded():
     api.docs.loc[api.docs["rcept_no"] == "20260901000001", "parse_status"] = "not_downloaded"
     assert ipo_t01.missing_documents(api, asof) == []
     assert ipo_t01.missing_documents(api, asof, "t") == ["20260901000001"]
+
+
+def test_schedule_takes_the_market_from_the_filing_before_listing(app_data):
+    """상장 전 레이크 이벤트의 market은 비어 있다(2026-10-29 운영 레이크의 상장 예정 6건 모두). 공시의 상장 시장
+    코드로 채우지 않으면 결정 대상이 0건이 된다. 공시로도 모르면 '결정 대기', 코넥스는 뺀다."""
+    sched = _schedule(
+        [
+            ("kq", "가", None, "2026-11-03"),
+            ("ks", "나", None, "2026-11-03"),
+            ("nx", "다", None, "2026-11-03"),
+            ("unk", "라", None, "2026-11-03"),
+        ]
+    )
+    sched["market"] = None
+    obs = pd.DataFrame(
+        [
+            {"event_id": "kq", "rcept_no": "1", "filed_date": pd.Timestamp("2026-09-01"),
+             "metric": "listing_market_code", "value": np.nan, "value_text": "2:코스닥시장"},
+            {"event_id": "ks", "rcept_no": "2", "filed_date": pd.Timestamp("2026-09-01"),
+             "metric": "listing_market_code", "value": np.nan, "value_text": "1:유가증권시장"},
+            {"event_id": "nx", "rcept_no": "3", "filed_date": pd.Timestamp("2026-09-01"),
+             "metric": "listing_market_code", "value": np.nan, "value_text": "3:코넥스시장"},
+            {"event_id": "unk", "rcept_no": "4", "filed_date": pd.Timestamp("2026-11-05"),
+             "metric": "listing_market_code", "value": np.nan, "value_text": "2:코스닥시장"},
+        ]
+    )  # fmt: skip
+    api = FakeApi("2026-11-02", sched, _events([]), obs=obs)
+    got = ipo_signals.schedule(api, pd.Timestamp("2026-11-02"))
+    assert dict(zip(got["event_id"], got["market"])) == {"kq": "KOSDAQ", "ks": "KOSPI", "unk": None}
+    problems = ipo_signals.decide_next(
+        api, got[got["event_id"] == "unk"], pd.Timestamp("2026-11-03"), {}, NOW
+    )
+    assert (
+        problems and "상장 시장" in problems[0]
+    )  # as-of 뒤 공시는 쓰지 않고, 모르면 기록 없이 대기
