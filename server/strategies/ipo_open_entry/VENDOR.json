@@ -1,9 +1,9 @@
 {
   "source": "JJongAchii/quant-lab",
   "line": "strategies/ipo-open-entry",
-  "commit": "66a37933ea7c43694b8816186a014c92389bd491",
+  "commit": "17aa1ffac491852279cc4bdc16150445ff810da1",
   "files": {
-    "config.yaml": "134a44476e1feb14bf0e4972499f852294394924695f2de768bafee514b10b56",
+    "config.yaml": "fdd94ea12a3284ee569139667e18fe6073a739a920b5c9615e1a8c7d96b2a9be",
     "src/ipo_open_entry/__init__.py": "f907c318ca080d75bff614646780eaa0d86c409d3f502699cf52f1f46d0ab735",
     "src/ipo_open_entry/config.py": "2f7cc08e225e6fa0052543e71a439c2b95b31eb5393c926296dee91781334ac0",
     "src/ipo_open_entry/rules.py": "82a8930c1f8b9da3b44eddfb3e950eb5d8967de298146ea9f7c1b628abb3199d",
@@ -19,7 +19,18 @@
     "src/ipo_open_entry/operate/__init__.py": "370c1ccdbfffd496614d8bc09614b355b3ed780a93dd9fb73ccf7ccc3c664498",
     "src/ipo_open_entry/operate/calendar.py": "dd2fafa42f02b7791cf81c1dfecb8d3e926192ce1942b1599c8974fdb8e3c3ae",
     "src/ipo_open_entry/operate/decision.py": "c146ffaf79785c955329400a1f595c6bfa8d9c8d81c52e3793a9d00f0416734c",
-    "docs/operating-rule-day1.md": "92a0cc1a05aaa0d207ef6b7addffe845e8905fcb48daceb3c4eb6bf64abb543c"
+    "docs/operating-rule-day1.md": "1b9b977ff578e1c280df931b05e6527efe4a2e5231e480ca72611f957e2f7fc5",
+    "config-signal-v1.yaml": "f2c03d1aedb6facf2aa3a7c24d230c51f3b20525127136a4fb69da55cbb9f70b",
+    "config-recall-v1.yaml": "ced0af9dbbbb265c07835c7333d0ab2cbb87e7407ffec51872815b39547771dc",
+    "src/ipo_open_entry/signal/__init__.py": "6771cb60d1a30055b3315fdeec639728f12d605c6ebc0ee6083ff6a163c901bc",
+    "src/ipo_open_entry/signal/data.py": "fbe7e4ebe7005a952c7e31292bfd740cdc7070cc3922a127ab516cc187589d9f",
+    "src/ipo_open_entry/signal/models.py": "0e0d4d9675adb7e9b406b950247713f12f5d3943559f4d0766b0fae57edaaf7f",
+    "src/ipo_open_entry/recall/__init__.py": "3dc36d5759fa9de13024913a38860e4fc1de9e315f3542b0ccfce0cabaed6b91",
+    "src/ipo_open_entry/recall/data.py": "99cf5e7dd701177b734511ee656aa74c674d69f62d794845972e29baa059492b",
+    "src/ipo_open_entry/recall/models.py": "6da7dbcdff912b3919d6db47abe3b103c0409625cf5723a8c5693b95ab2b6908",
+    "src/ipo_open_entry/recall/institution.py": "698bb2196f04c2dbf0708458ef7e1a2967b1a2ac27304bf45af6e3dca61edcfd",
+    "src/ipo_open_entry/recall/complement.py": "7d6f6c298ce75d80d051b213fb766ee17576a3023d1f061a32201e55f40b37da",
+    "src/ipo_open_entry/recall/union.py": "446469840843118c619b571e7cbc712dfebb84d65d450aba779f5def684bd54e"
   },
   "dataset": {
     "source": "strategies/ipo-open-entry/data/dev-20260909-v4r",
@@ -31,5 +42,25 @@
       "bars.parquet": "80888aebaea435f5fb12e0337d4d73e54a13dc648e2197b6c31c4bf0aef8dce3",
       "index.parquet": "77c5a9b9c62356add1151d93ab924addd694bb464c8a6c3212df3252b9788afe"
     }
+  },
+  "t12": {
+    "result": "strategies/ipo-open-entry/docs/evidence/runs/recall-v1/t12.json",
+    "trial_commit": "e81d823455754e73a61be51f2439f2c9fe0dfa7f",
+    "config_digest": "3bf9281aa50f",
+    "variant": {
+      "family": "union",
+      "selection": "oof",
+      "institution": {
+        "interactions": false,
+        "shrinkage": 1000,
+        "institutional_sign": "free"
+      },
+      "complement": {
+        "mode": "states",
+        "interactions": false,
+        "shrinkage": 300
+      }
+    },
+    "fixture_sha256": "907a055a2843dc5e9af8c7b39f3a786abe4343fa1356a5832ac486f3d259721e"
   }
 }

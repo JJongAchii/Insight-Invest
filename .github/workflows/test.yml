@@ -1,7 +1,7 @@
 # 서버 테스트 — PR에서 돈다. main push의 deploy-api는 테스트 없이 배포하므로 병합 전에 여기서 막는다.
 #
-# 공모주 t01(계약 ipo-live-ops): quant-lab 결정 경로 사본의 해시 대조와 개발 구간 616건 결정 재현이
-# 여기서 확인된다(server/tests/test_ipo_t01_vendor.py).
+# 공모주 t01·t12(계약 ipo-live-ops): quant-lab 결정 경로 사본의 해시 대조와 개발 구간 616건 결정 재현이
+# 여기서 확인된다(server/tests/test_ipo_t01_vendor.py·test_ipo_t12_vendor.py).
 #
 # 필요한 repo secret: GH_PAT — quant-data(private) 읽기용(deploy.yml과 같은 것)
 

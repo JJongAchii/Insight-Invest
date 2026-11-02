@@ -247,10 +247,11 @@ def missing_documents(api, asof, event_id: str | None = None) -> list[str]:
     return sorted(gap.loc[field | anchor, "rcept_no"].astype(str))
 
 
-def decide_listing(
-    api, event_id: str, listing_date, market: str, now: dt.datetime | None = None
-) -> dict:
-    """상장 예정 공모주 하나의 t01 결정. 결정할 수 없으면 NotReady·TooLate·NotEligible을 낸다."""
+def prepare(api, event_id: str, listing_date, market: str, now: dt.datetime | None = None) -> dict:
+    """결정 입력(결정 시점·대상·개발 뒤 사건·피처 한 행). 규칙마다 같고 t12(`module.ipo_t12`)도 쓴다.
+
+    결정할 수 없으면 NotReady·TooLate·NotEligible을 낸다.
+    """
     cfg = config()
     listing = pd.Timestamp(listing_date).normalize()
     now = now or dt.datetime.now(dt.UTC)
@@ -275,34 +276,63 @@ def decide_listing(
     feats = decision.target_features(
         target, target_fields, prior_events, prior_fields, prior_bars, close, asof, cfg
     )
-    qs = decision.quarter_start(listing)
-    post_table = decision.post_dev_table(dev, post, close, cfg)
-    horizons = [int(h) for h in cfg["execution"]["horizons"]]
-    train = decision.training_table(dev_table(), post_table, qs, horizons)
     row = pd.DataFrame([{**{c: target[c] for c in evaluate.KEY_COLUMNS}, **feats.to_dict()}])
-    made = decision.decide(make_strategy, train, row)
-    order = decision.order(target, made, cfg)
     return {
-        "spec": rule()["spec"],
-        "event_id": event_id,
+        "cfg": cfg,
+        "listing": listing,
+        "asof": asof,
+        "lake_last": lake_last,
+        "target": target,
+        "disclosures": disclosures,
+        "dev": dev,
+        "post": post,
+        "close": close,
+        "feats": feats,
+        "qs": decision.quarter_start(listing),
+        "row": row,
+    }
+
+
+def record(ctx: dict, spec: str, order: dict, post_table: pd.DataFrame | None) -> dict:
+    """결정 기록의 공통 부분(규칙별 점수·근거는 부르는 쪽이 더한다)."""
+    target, feats = ctx["target"], ctx["feats"]
+    return {
+        "spec": spec,
+        "event_id": target["event_id"],
         "corp_name": target["corp_name"],
-        "market": market,
-        "listing_date": listing,
-        "decision_session": asof,
-        "lake_last_date": lake_last,
+        "market": target["market"],
+        "listing_date": ctx["listing"],
+        "decision_session": ctx["asof"],
+        "lake_last_date": ctx["lake_last"],
         "offer_price": target["offer_price"],
         "regime": target["regime"],
         "order": order,
+        "disclosures": ctx["disclosures"],
+        "post_dev_training_events": [] if post_table is None else post_table["event_id"].tolist(),
+        "excluded_contaminated": ctx["post"]["contaminated"],
+        "features": {k: (None if pd.isna(v) else float(v)) for k, v in feats.items()},
+    }
+
+
+def decide_listing(
+    api, event_id: str, listing_date, market: str, now: dt.datetime | None = None
+) -> dict:
+    """상장 예정 공모주 하나의 t01 결정. 결정할 수 없으면 NotReady·TooLate·NotEligible을 낸다."""
+    ctx = prepare(api, event_id, listing_date, market, now)
+    cfg = ctx["cfg"]
+    post_table = decision.post_dev_table(ctx["dev"], ctx["post"], ctx["close"], cfg)
+    horizons = [int(h) for h in cfg["execution"]["horizons"]]
+    train = decision.training_table(dev_table(), post_table, ctx["qs"], horizons)
+    made = decision.decide(make_strategy, train, ctx["row"])
+    order = decision.order(ctx["target"], made, cfg)
+    return {
+        **record(ctx, rule()["spec"], order, post_table),
         "score": made["score"],
         "threshold": made["threshold"],
         "q": made["q"],
         "train_events": made["train_events"],
         "train_sha256": made["train_sha256"],
         "coef_sha256": made["coef_sha256"],
-        "disclosures": disclosures,
-        "post_dev_training_events": [] if post_table is None else post_table["event_id"].tolist(),
-        "excluded_contaminated": post["contaminated"],
-        "features": {k: (None if pd.isna(v) else float(v)) for k, v in feats.items()},
     }
 
 

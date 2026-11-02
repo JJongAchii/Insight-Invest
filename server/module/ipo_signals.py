@@ -1,7 +1,8 @@
 """공모주 신호·보유 산출 (계약 ipo-live-ops) — 저녁 배치(build_insights `ipo_signals`)가 부른다.
 
-운용 규칙: quant-lab op-day1-v2(t01 매수, 손절 없음) + 2일째 종가 매도(하한가 종가면 다음 거래일 종가로
-최대 5거래일 이월). 결정 계산은 `module.ipo_t01`(quant-lab 결정 경로 사본)이 한다.
+운용 규칙: quant-lab recall-v1 t12 매수(계약 v2, 2026-11-02 t01에서 전환, 손절 없음) + 2일째 종가 매도(하한가
+종가면 다음 거래일 종가로 최대 5거래일 이월). 결정 계산은 `RULE`(`module.ipo_t12`, quant-lab 결정 경로 사본)이
+한다. 전환 전에 t01(op-day1-v2)로 쓴 결정은 그대로 둔다 — 결정마다 `spec`에 규칙 이름이 남는다.
 
 저장(APP_DATA 아래)
 - `ipo/decisions.json`: event_id → 결정 기록. 한 번 쓴 기록은 다시 쓰지 않는다(덮어쓰지 않는 기록)
@@ -22,9 +23,12 @@ import math
 import pandas as pd
 
 from datastore import storage
-from module import ipo_t01
+from module import ipo_t01, ipo_t12
 
 logger = logging.getLogger(__name__)
+
+#: 지금 결정을 내는 규칙(계약 ipo-live-ops v2) — 입력 적재·보유 계산은 t01 모듈의 공통 함수를 쓴다
+RULE = ipo_t12
 
 DECISIONS = ("ipo", "decisions.json")
 POSITIONS = ("ipo", "positions.json")
@@ -100,7 +104,7 @@ def decide_next(api, sch: pd.DataFrame, nxt: pd.Timestamp, decisions: dict, now)
             "decided_at": now.astimezone(KST).isoformat(timespec="seconds"),
         }
         try:
-            made = ipo_t01.decide_listing(api, e.event_id, nxt, e.market, now)
+            made = RULE.decide_listing(api, e.event_id, nxt, e.market, now)
         except ipo_t01.NotReady as exc:
             problems.append(f"{e.corp_name}: 결정 대기 — {exc}")
             continue
@@ -312,7 +316,7 @@ def calendar(api, asof: pd.Timestamp, sch: pd.DataFrame, decisions: dict) -> tup
             "청약" + (f"(~{sub_end:%m-%d})" if sub_end is not None else ""))  # fmt: skip
         add(item["payment_date"], "payment", "납입")
         add(d, "listing", "상장")
-        add(item["decision_night"], "decision", "t01 신호 계산(밤)")
+        add(item["decision_night"], "decision", "매수 신호 계산(밤)")
         if item["buy"]:
             add(item["buy_session"], "buy", "매수 주문(08:30~09:00 동시호가)")
             add(item["sell_session"], "sell", "종가 매도(15:20~15:30)")
@@ -348,7 +352,8 @@ def build(api, now: dt.datetime | None = None) -> pd.DataFrame:
     for rec in decisions.values():
         row = {k: rec.get(k) for k in ("event_id", "corp_name", "market", "listing_date",
                                         "status", "reason", "buy", "offer_price", "score",
-                                        "threshold", "spec", "decided_at", "decision_session")}  # fmt: skip
+                                        "threshold", "spec", "decided_at", "decision_session",
+                                        "additional_buy", "decision_reason")}  # fmt: skip
         order = rec.get("order") or {}
         row["limit_price"] = order.get("limit_price")
         if rec.get("buy"):
@@ -376,7 +381,8 @@ def build(api, now: dt.datetime | None = None) -> pd.DataFrame:
         "as_of": asof,
         "generated_at": now.astimezone(KST).isoformat(timespec="seconds"),
         "next_session": nxt,
-        "rule": {"spec": ipo_t01.rule()["spec"], "entry": "공모가 × 1.5 호가 내림 당일 유효 지정가",
+        "rule": {"spec": RULE.rule()["spec"], "stage": RULE.rule()["stage"],
+                 "entry": "공모가 × 1.5 호가 내림 당일 유효 지정가",
                  "exit": "2번째 거래일 종가(하한가 종가면 다음 거래일 종가, 최대 5거래일)",
                  "stop_loss": None,
                  "sizing": f"한 종목에 전일 계좌 평가금액의 1/{cfg['sizing']['slots']}"},  # fmt: skip

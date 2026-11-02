@@ -1,0 +1,68 @@
+experiment: recall-v1
+run_id: ipo-recall-v1-discovery-20261030
+seed: 20261030
+baseline_commit: c9a405cd8df61309afbfa386c314a32f6ff867f5
+brief_sha256: 88e043ed68f5fdb4a54ad6e119a7e57548749b79d7c0e64c7d268fad3492be53
+dataset_manifest_sha256: c79e8fba0aab5975ad04eea45a6cd5e89223293c9390474e1fbeca6961e5906e
+dev_start: '2015-06-15'
+dev_end: '2026-09-09'
+price_end: '2026-09-11'
+evaluation_start: '2018-01-01'
+sealed_start: '2026-09-10'
+sealed_end: '2027-12-31'
+entry_cap: 1.5
+horizon: 2
+blocks:
+- H1
+- H1p
+- H4
+- H5
+- H6
+- H7
+- H8
+- H9
+q_grid:
+- 0.1
+- 0.2
+- 0.3
+- 0.4
+- 0.5
+shrinkage: 300
+inner_quarters: 8
+inner_min_train: 80
+inner_min_oof: 60
+fallback_q: 0.2
+smoke_quarter: '2017-10-01'
+primary_metric: stress-net-absolute-cagr-h2
+hurdle_increment: 0.005
+max_rounds: 4
+max_executions: 12
+patience_rounds: 2
+min_improvement: 0.0025
+max_qualification_attempts: 3
+max_technical_retries: 6
+top_k_omit: 3
+risk_constraints:
+- exclude-top3-positive
+- cash-within-nav
+secondary_diagnostics:
+- base-net CAGR
+- absolute Sharpe
+- excess return
+- hit rate
+- tails
+- q stability
+raw_institution_columns:
+- h2_lockup_bid
+- h2_lockup_alloc
+- h3_bookbuild_ratio
+- h3_bid_top
+interaction_columns:
+- h1p_float_ratio
+- h1_unlocked_inst
+- h4_retail_comp
+shrinkage_menu:
+- 300
+- 1000
+min_state: 30
+min_leaf_fillable: 30

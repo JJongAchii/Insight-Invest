@@ -28,7 +28,7 @@ strategy_args:
   entry_cap: 1.5
 dataset: data/dev-20260909-v4
 dataset_manifest_sha256: c79e8fba0aab5975ad04eea45a6cd5e89223293c9390474e1fbeca6961e5906e
-frozen_code_sha256: ea7665e583ef5c2750a8517aedbc2ef91bf13d422391dba11e38191781e8a0ef
+frozen_code_sha256: 872b3718259ce12086c4af07fa0fddfa967870aea20dda98dd56eb3f37222d5b
 evaluation_summary_sha256: 1e75ef914082a263097c62a4b84b263952b56e56dbe971a43f2a64ceba5f48a1
 record_horizons:
 - 1

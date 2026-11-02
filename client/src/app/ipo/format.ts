@@ -117,6 +117,12 @@ const MARKET_LABEL: Record<string, string> = {
 export const marketLabel = (market: string | null | undefined): string =>
   market ? MARKET_LABEL[market.toUpperCase()] ?? market : "—";
 
+/** 결정한 규칙(spec) → 짧은 이름. 2026-11-02부터 t12, 그 전 결정은 t01. */
+const RULE_LABEL: Record<string, string> = { "op-day1-v2": "t01", "recall-v1-t12": "t12" };
+
+export const ruleLabel = (spec: string | null | undefined): string | null =>
+  spec ? RULE_LABEL[spec] ?? spec : null;
+
 export const POSITION_META: Record<IpoPosition, { label: string; style: string }> = {
   signal: { label: "신호", style: "bg-primary-500/15 text-primary-300" },
   holding: { label: "보유", style: "bg-warning/15 text-warning" },

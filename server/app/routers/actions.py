@@ -295,7 +295,7 @@ def _rebal_events(now: datetime, horizon_days: int) -> list[dict]:
 
 
 def _ipo_events(now: datetime) -> list[dict]:
-    """공모주 t01(계약 ipo-live-ops): 다음 매수 주문일·종가 매도일과 데이터 지연.
+    """공모주 신호(계약 ipo-live-ops, v2부터 t12): 다음 매수 주문일·종가 매도일과 데이터 지연.
 
     저녁 배치가 쓴 `ipo/ipo_signals.parquet`·`ipo/status.json`만 읽는다. 매수는 상장일 동시호가
     (08:30~09:00) 전, 매도는 그날 종가 동시호가(15:20~15:30) 전에 알아야 하므로 high로 둔다.
@@ -377,7 +377,7 @@ def _ipo_events(now: datetime) -> list[dict]:
                 category="strategy",
                 severity="low",
                 title=f"공모주 상장 예정 · {item.get('corp_name')}",
-                detail=f"{listing.isoformat()} 상장 · t01 신호는 {night} 밤 계산"
+                detail=f"{listing.isoformat()} 상장 · 매수 신호는 {night} 밤 계산"
                 if night
                 else f"{listing.isoformat()} 상장",
                 link="/ipo",

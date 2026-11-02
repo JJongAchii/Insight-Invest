@@ -1,0 +1,37 @@
+experiment: signal-v1
+run_id: ipo-signal-v1-20261029
+seed: 20261029
+baseline_commit: ace7b761d8443bb8e25930859de0dfb70355e18f
+brief_sha256: 0b34b2a7d8c59d817c1426a380a48ce335152009da154f991d64395c35a50338
+dataset_manifest_sha256: c79e8fba0aab5975ad04eea45a6cd5e89223293c9390474e1fbeca6961e5906e
+dev_start: '2015-06-15'
+dev_end: '2026-09-09'
+price_end: '2026-09-11'
+evaluation_start: '2018-01-01'
+sealed_start: '2026-09-10'
+sealed_end: '2027-12-31'
+entry_cap: 1.5
+horizon: 2
+blocks: [H1, H1p, H4, H5, H6, H7, H8, H9]
+q_grid: [0.1, 0.2, 0.3, 0.4, 0.5]
+shrinkage: 300
+hinge_shrinkage_menu: [300, 1000]
+hinge_knots:
+  median: [0.5]
+  quartiles: [0.25, 0.75]
+inner_quarters: 8
+inner_min_train: 80
+inner_min_oof: 60
+fallback_q: 0.2
+smoke_quarter: '2017-10-01'
+primary_metric: stress-net-absolute-cagr-h2
+hurdle_increment: 0.005
+max_rounds: 4
+max_executions: 12
+patience_rounds: 2
+min_improvement: 0.0025
+max_qualification_attempts: 3
+max_technical_retries: 6
+top_k_omit: 3
+risk_constraints: [exclude-top3-positive, cash-within-nav]
+secondary_diagnostics: [base-net CAGR, absolute Sharpe, excess return, hit rate, tails, q stability]

@@ -688,7 +688,7 @@ export interface ActionCenterResponse {
   };
 }
 
-// 공모주 t01 화면(GET /ipo). 저녁 배치 산출을 그대로 읽으므로 모든 필드가 비어 있을 수 있다.
+// 공모주 신호 화면(GET /ipo). 저녁 배치 산출을 그대로 읽으므로 모든 필드가 비어 있을 수 있다.
 export type IpoPosition =
   | "signal"
   | "holding"
@@ -709,6 +709,8 @@ export interface IpoUserInput {
 
 export interface IpoRule {
   spec?: string | null;
+  /** 규칙의 검증 단계(예: 개발 구간 후보 · 순방향 확증 전). */
+  stage?: string | null;
   entry?: string | null;
   exit?: string | null;
   stop_loss?: null;
@@ -802,6 +804,9 @@ export interface IpoRow {
   score?: number | null;
   threshold?: number | null;
   spec?: string | null;
+  /** t12: 원래 t01이 패스한 사건을 체결 상태 보완으로 산 경우. */
+  additional_buy?: boolean | null;
+  decision_reason?: string | null;
   decided_at?: string | null;
   decision_session?: string | null;
   position?: IpoPosition | null;

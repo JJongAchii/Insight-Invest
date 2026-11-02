@@ -216,3 +216,46 @@ analyst:
     Q: [q1_op_margin, q2_rev_growth]
     O: [o1_vc_float, o2_release_1m, o3_major]
     S: [s1_special]
+
+# brief-hx(docs/brief-hx.md) — 보유·정리 판단 (계약 ipo-hold-exit INTENT-v1)
+hold:
+  max_days: 20                          # 상장일 포함 최대 보유 거래일(20번째 거래일 종가가 마지막 매도)
+  market_lookback_days: 5               # s_mkt5: 코스닥 지수 5거래일 로그 수익률
+  oos_start: "2018-01-01"               # 평가 구간 시작(av-v1과 같은 사건 집합). 배분은 sizing(전일 NAV/7)
+  exclude_top: 3                        # 위험 제약: 총수익 상위 3건 제외 > 0
+  shuffle_draws: 200                    # 진단: 같은 분기 안에서 매도 결정을 사건끼리 섞은 무작위 대조
+  winsor: [0.025, 0.975]                # 학습 라벨 윈저라이즈 분위(학습창)
+  pre15_window_days: 5                  # x_pre15: 상장 15일 확약 해제가 앞으로 5달력일 안
+  min_cell_events: 20                   # C5 칸·close0 칸의 최소 학습 사건 수
+  close0_buckets: 3                     # close0 "open-bucket": 체제 안 시가 배수 3분위
+  domain_m_max: 2.0                     # domain "m<2": 학습을 시가/공모가 < 2.0 사건으로
+  c1_clv_menu: [0.5, 0.7]               # C1 종가 위치 문턱 메뉴(결과 전 고정)
+  c2_shrinkage_menu: [300, 100]         # C2 R2→R1 수축 k
+  c5_clv: 0.5                           # C5 '강함' 칸의 종가 위치 문턱
+  c5_menu: [1, 2, 3, 5, 10, 20]         # C5 계획: j번째 거래일 시가 매도(20 = 끝까지 보유)
+  lsm_ridge_menu: [0.1, 1.0]            # C3 능선 강도(피처 분산 1/12 대비 배수)
+  signs:                                # §9 부호(하루 더 보유하는 가치에 대해, null = 자유)
+    s_limit_up: 1
+    s_clv: 1
+    s_day: 1
+    s_wick: -1
+    s_cum: -1
+    s_turn: -1
+    s_value_rel: 1
+    s_dd: 1
+    s_mkt5: 1
+    x_pre15: -1
+    d: -1
+    s_limit_down: null
+    p_m_open: -1
+    h2_lockup_alloc: 1
+    h1p_float_ratio: -1
+    h3_bookbuild_ratio: 1
+    h4_refund: null
+    h8_log_float_value: null
+  feature_sets:                         # C2 피처 집합(§11 축)
+    path: [s_limit_up, s_clv, s_day, s_wick, s_cum, s_turn, s_value_rel, s_dd, s_mkt5, x_pre15, d, s_limit_down]
+    path+pre: [s_limit_up, s_clv, s_day, s_wick, s_cum, s_turn, s_value_rel, s_dd, s_mkt5, x_pre15, d, s_limit_down, p_m_open, h2_lockup_alloc, h1p_float_ratio, h3_bookbuild_ratio, h4_refund, h8_log_float_value]
+  lsm_basis:                            # C3 기저(§11 축)
+    small: [s_cum, s_limit_up, s_clv, s_value_rel]
+    medium: [s_cum, s_limit_up, s_clv, s_value_rel, s_day, s_wick, s_turn, s_mkt5, p_m_open]
