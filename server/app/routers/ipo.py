@@ -1,4 +1,4 @@
-"""공모주 t01 화면 API (계약 ipo-live-ops).
+"""공모주 신호 화면 API (계약 ipo-live-ops — v2부터 t12 매수, 그 전 결정은 t01).
 
 저녁 배치(`build_insights --only ipo_signals`)가 쓴 `ipo/ipo_signals.parquet`·`ipo/status.json`을 읽고,
 사용자가 입력한 실제 체결·매도(`ipo/positions.json`)를 겹쳐 돌려준다. 결정을 여기서 계산하지 않는다.

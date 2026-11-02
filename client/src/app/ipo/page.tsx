@@ -31,6 +31,7 @@ import {
   marketLabel,
   positionMeta,
   returnTone,
+  ruleLabel,
 } from "./format";
 import { EmptyLine, Field, Pill, Section } from "./parts";
 
@@ -43,12 +44,24 @@ function EnteredTag({ entered }: { entered: boolean }) {
   ) : null;
 }
 
+function RuleTag({ row }: { row: IpoRow }) {
+  const label = ruleLabel(row.spec);
+  if (!label) return null;
+  return (
+    <span className="num text-[11px] text-ink-muted" title={row.spec ?? undefined}>
+      {label}
+      {row.additional_buy ? " · 패스 보완 매수" : ""}
+    </span>
+  );
+}
+
 function RowTitle({ row }: { row: IpoRow }) {
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
       <h3 className="truncate text-[15px] font-semibold text-ink">{row.corp_name ?? row.event_id}</h3>
       <span className="badge-neutral">{marketLabel(row.market)}</span>
       {row.ticker && <span className="num text-[11px] text-ink-muted">{row.ticker}</span>}
+      <RuleTag row={row} />
     </div>
   );
 }
@@ -130,7 +143,10 @@ function JudgementCell({ row }: { row: IpoRow }) {
   const j = judgement(row);
   return (
     <div className="min-w-0">
-      <Pill className={j.style}>{j.label}</Pill>
+      <span className="inline-flex flex-wrap items-center gap-1.5">
+        <Pill className={j.style}>{j.label}</Pill>
+        <RuleTag row={row} />
+      </span>
       {j.reason && <p className="mt-1 text-[11px] leading-4 text-ink-muted">{j.reason}</p>}
     </div>
   );
@@ -311,7 +327,7 @@ export default function IpoPage() {
       <PageHeader
         eyebrow="IPO signals"
         title="공모주 신호"
-        description="t01 매수 + 2번째 거래일 종가 매도 · 연구 규칙(op-day1-v2)"
+        description={`${ruleLabel(rule?.spec) ?? "t12"} 매수 + 2번째 거래일 종가 매도 · ${rule?.stage ?? "연구 규칙"}`}
         meta={
           <>
             <span>기준일 {status.as_of ? fmtDay(status.as_of) : "확인 중"}</span>
@@ -424,10 +440,12 @@ export default function IpoPage() {
               {rule?.sizing && <li>비중 · {rule.sizing}</li>}
               <li>손절 없음</li>
               {rule?.spec && <li className="num">규칙 {rule.spec}</li>}
+              {rule?.stage && <li>단계 · {rule.stage}</li>}
             </ul>
             <p className="mt-2">
-              개발 구간 검증 결과이며 실제 성과를 보장하지 않습니다. 이 화면은 신호만 보여 주며 주문을 내지
-              않습니다.
+              개발 구간 검증 결과이며 실제 성과를 보장하지 않습니다. 2026-11-02부터 매수 판단은 t12(기관 수요 반응 점수
+              + t01 패스 종목의 체결 가능성 보완)이고, 그 전 기록은 t01로 판단했습니다. 이 화면은 신호만 보여 주며
+              주문을 내지 않습니다.
             </p>
           </section>
         </>

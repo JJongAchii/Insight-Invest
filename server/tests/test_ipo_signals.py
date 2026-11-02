@@ -143,7 +143,7 @@ def test_next_listing_is_decided_once_and_not_ready_is_not_recorded(app_data, mo
         return {"order": {"buy": True, "limit_mult": 1.5, "limit_price": 15_000.0},
                 "regime": "R2", "offer_price": 10_000.0, "score": 0.2}  # fmt: skip
 
-    monkeypatch.setattr(ipo_t01, "decide_listing", fake_decide)
+    monkeypatch.setattr(ipo_signals.RULE, "decide_listing", fake_decide)
     sched = _schedule(
         [
             ("a", "가", "111110", "2026-11-03"),
@@ -239,7 +239,7 @@ def _obs(event_id, rcept_no, filed, **values):
 
 def test_calendar_shows_each_offering_stage_and_the_rule_days(app_data, monkeypatch):
     monkeypatch.setattr(
-        ipo_t01,
+        ipo_signals.RULE,
         "decide_listing",
         lambda *a, **k: {"order": {"buy": True, "limit_mult": 1.5, "limit_price": 15_000.0},
                          "regime": "R2", "offer_price": 10_000.0},  # fmt: skip
