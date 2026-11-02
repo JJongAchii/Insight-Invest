@@ -753,6 +753,8 @@ export interface IpoCalendarItem {
   final_price?: number | null;
   /** 상장 전 거래일 밤(신호 계산). 상장일 공시 전이면 null. */
   decision_night?: string | null;
+  /** 신호 계산 밤이 지났는데 결정이 없고 아직 매수 주문을 낼 수 있다(API가 기준일로 판단). */
+  decision_missing?: boolean | null;
   /** 상장일 동시호가 매수. */
   buy_session?: string | null;
   /** 다음 거래일 종가 매도. */
@@ -789,6 +791,8 @@ export interface IpoStatus {
   calendar?: IpoCalendarItem[] | null;
   calendar_events?: IpoCalendarEvent[] | null;
   problems?: string[] | null;
+  /** 저녁 배치가 반영되지 않았다 — next_session이 지났거나 그날 밤 마감이 지났다(API가 판단). */
+  stale?: boolean | null;
 }
 
 export interface IpoRow {

@@ -389,7 +389,9 @@ export default function IpoPage() {
             meta={status.next_session ? `${fmtDayLabel(status.next_session)} 시가 동시호가` : undefined}
           >
             {signals.length === 0 ? (
-              <EmptyLine>다음 거래일 매수 신호 없음</EmptyLine>
+              <EmptyLine>
+                {status.stale ? "저녁 배치 미반영 — 매수 여부 확인 필요" : "다음 거래일 매수 신호 없음"}
+              </EmptyLine>
             ) : (
               <div className="grid gap-3 xl:grid-cols-2">
                 {signals.map((row) => (

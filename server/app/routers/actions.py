@@ -22,6 +22,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from . import attention, overview
+from . import ipo as ipo_api
 from . import watchlist as watchlist_api
 
 logger = logging.getLogger(__name__)
@@ -313,6 +314,8 @@ def _ipo_events(now: datetime) -> list[dict]:
     except Exception:
         logger.debug("Action Center IPO load failed", exc_info=True)
         return out
+    # 배치가 반영되지 않은 날은 화면과 같은 '저녁 배치 미반영' 문제를 붙여 경고를 낸다
+    status = ipo_api.with_freshness(status, now) if status else status
     today = now.date()
     as_of = status.get("as_of")
     for row in frame.to_dict(orient="records") if not frame.empty else []:

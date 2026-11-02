@@ -121,7 +121,9 @@ def test_action_center_raises_buy_and_sell_days(app_data):
     sell = next(e for e in events if e["kind"] == "ipo_sell")
     assert "하한가 이월 1회" in sell["detail"]
     later = datetime(2026, 11, 4, 8, 0, tzinfo=actions.KST)
-    assert actions._ipo_events(later) == []  # 지난 매수·매도일은 다시 띄우지 않는다
+    # 지난 매수·매도일은 다시 띄우지 않는다. 11/3 밤 배치가 없으니 남는 것은 배치 미반영 경고뿐이다
+    left = actions._ipo_events(later)
+    assert [e["kind"] for e in left] == ["data"] and "저녁 배치 미반영" in left[0]["detail"]
 
 
 def test_action_center_flags_problems(app_data):
@@ -133,6 +135,67 @@ def test_action_center_flags_problems(app_data):
     now = datetime(2026, 11, 2, 22, 50, tzinfo=actions.KST)
     flagged = [e for e in actions._ipo_events(now) if e["kind"] == "data"]
     assert flagged and flagged[0]["severity"] == "medium" and "결정 대기" in flagged[0]["detail"]
+
+
+def _status(**extra):
+    return {"as_of": "2026-11-02", "next_session": "2026-11-03", "problems": [], **extra}
+
+
+@pytest.mark.parametrize(
+    ("now", "stale"),
+    [
+        (datetime(2026, 11, 3, 8, 0), False),  # 11/3 시가 주문은 11/2 밤 결정이 맞다
+        (datetime(2026, 11, 3, 22, 44), False),  # 11/3 밤 배치 마감 전
+        (datetime(2026, 11, 3, 22, 45), True),  # 마감이 지나도 11/3 기준 결정이 없다
+        (datetime(2026, 11, 4, 7, 40), True),
+    ],
+)
+def test_freshness_flags_a_missed_evening_batch(now, stale):
+    out = ipo.with_freshness(_status(problems=["기존 문제"]), now.replace(tzinfo=ipo.KST))
+    assert out["stale"] is stale
+    if stale:
+        assert out["problems"][0].startswith("저녁 배치 미반영 — 신호 기준일 2026-11-02")
+        assert out["problems"][1:] == ["기존 문제"]
+    else:
+        assert out["problems"] == ["기존 문제"]
+
+
+def test_freshness_marks_listings_whose_decision_night_passed_without_a_decision():
+    """2026-11-02 실제 형태: 10/30 배치 상태로 11/2 밤을 넘기면 11/3 상장 래블업은 '결정 없음'이다."""
+    status = {
+        "as_of": "2026-10-30",
+        "next_session": "2026-11-02",
+        "problems": [],
+        "calendar": [
+            {"event_id": "lab", "planned_listing_date": "2026-11-03",
+             "decision_night": "2026-11-02", "decided": False},
+            {"event_id": "est", "planned_listing_date": "2026-11-04",
+             "decision_night": "2026-11-03", "decided": False},
+            {"event_id": "done", "planned_listing_date": "2026-11-03",
+             "decision_night": "2026-11-02", "decided": True},
+            {"event_id": "old", "planned_listing_date": "2026-11-02",
+             "decision_night": "2026-10-30", "decided": False},
+            {"event_id": "nodate", "planned_listing_date": None, "decision_night": None},
+        ],
+    }  # fmt: skip
+    out = ipo.with_freshness(status, datetime(2026, 11, 2, 22, 50, tzinfo=ipo.KST))
+    assert out["stale"] is True
+    missing = {c["event_id"]: c["decision_missing"] for c in out["calendar"]}
+    assert missing == {"lab": True, "est": False, "done": False, "old": False, "nodate": False}
+    assert status["problems"] == []  # 원본 상태를 바꾸지 않는다
+    # 상장일 아침 동시호가 전까지는 주문을 낼 수 있어 표시하고, 그 뒤에는 내리지 않는다
+    morning = ipo.with_freshness(status, datetime(2026, 11, 3, 8, 30, tzinfo=ipo.KST))
+    assert next(c for c in morning["calendar"] if c["event_id"] == "lab")["decision_missing"]
+    noon = ipo.with_freshness(status, datetime(2026, 11, 3, 12, 0, tzinfo=ipo.KST))
+    assert not next(c for c in noon["calendar"] if c["event_id"] == "lab")["decision_missing"]
+
+
+def test_get_marks_a_stale_status(app_data, monkeypatch):
+    monkeypatch.setattr(ipo, "_now", lambda: datetime(2026, 11, 4, 8, 0, tzinfo=ipo.KST))
+    out = ipo.get_ipo()["status"]
+    assert out["stale"] is True and out["problems"][0].startswith("저녁 배치 미반영")
+    monkeypatch.setattr(ipo, "_now", lambda: datetime(2026, 11, 2, 23, 0, tzinfo=ipo.KST))
+    assert ipo.get_ipo()["status"]["stale"] is False
 
 
 def test_push_runs_after_the_evening_batch_and_before_the_pre_open_auction():
