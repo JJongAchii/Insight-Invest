@@ -169,6 +169,7 @@ function ScheduleCard({ item }: { item: IpoCalendarItem }) {
         <span className="badge-neutral">{marketLabel(item.market)}</span>
         <StageBadge item={item} />
         {item.decided && <Pill className="bg-primary-500/15 text-primary-300">신호 계산됨</Pill>}
+        {item.decision_missing && <Pill className="bg-warning/15 text-warning">결정 없음 · 확인 필요</Pill>}
       </div>
       <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-secondary">
         <span>
