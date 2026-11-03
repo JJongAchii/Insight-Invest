@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from app.routers import ipo
 from datastore import storage
 from module import ipo_signals, ipo_t01
 
@@ -281,6 +282,27 @@ def test_calendar_shows_each_offering_stage_and_the_rule_days(app_data, monkeypa
     dates = [e["date"] for e in status["calendar_events"]]
     assert dates == sorted(dates)
     assert not any("공모 일정" in p for p in status["problems"])
+
+
+def test_calendar_keeps_the_listing_date_on_listing_night(app_data):
+    """상장일 밤(기준일 = 상장일) 레이크가 아직 상장을 연결하지 못해도 예정일을 잃지 않는다. 2026-11-03 래블업이
+    '납입 완료 · 상장일 공시 대기'로 일정 목록에 남았다 — 다음 거래일부터 읽는 결정용 일정에서 예정일을 가져왔다."""
+    sched = _schedule([("lab", "래블업", None, "2026-11-03")])
+    events = _events([("lab", None, None)])
+    obs = pd.DataFrame(
+        _obs("lab", "L1", "2026-10-21", subscription_start="2026-10-22",
+             subscription_end="2026-10-23", payment_date="2026-10-27", final_price=19_000,
+             listing_market_code="2:코스닥시장")
+    )  # fmt: skip
+    api = FakeApi("2026-11-03", sched, events, obs=obs)
+    ipo_signals.build(api, now=dt.datetime(2026, 11, 3, 21, 33, tzinfo=KST))
+    status = storage.read_json(*ipo_signals.STATUS)
+    (item,) = status["calendar"]
+    assert item["planned_listing_date"] == "2026-11-03"
+    assert item["stage"] == "listing_scheduled"
+    out = ipo.with_freshness(status, dt.datetime(2026, 11, 3, 22, 20, tzinfo=KST))
+    assert out["calendar"][0]["listed"]  # 화면 목록에서 빠진다
+    assert status["upcoming"] == []  # 결정 대상은 여전히 다음 거래일부터
 
 
 def test_decision_waits_while_recent_filings_are_not_downloaded():
