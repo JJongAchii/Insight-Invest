@@ -305,9 +305,13 @@ def _stage(item: dict, asof: pd.Timestamp) -> str:
     return "filed"
 
 
-def calendar(api, asof: pd.Timestamp, sch: pd.DataFrame, decisions: dict) -> tuple[list, list]:
+def calendar(api, asof: pd.Timestamp, decisions: dict) -> tuple[list, list]:
     """진행 중 공모(상장 전) 일정과 날짜별 일정 목록. 상장일이 공시되면 이 규칙의 신호 계산·매수·매도일을
-    겹친다. 반환: (공모별 항목, 날짜별 일정)."""
+    겹친다. 반환: (공모별 항목, 날짜별 일정).
+
+    예정일은 결정용 `schedule`(다음 거래일부터)이 아니라 전체 일정에서 읽는다 — 레이크는 상장을 하루 뒤에야
+    연결하므로(DART 종목코드·업종 이름), 상장일 밤 그 종목이 예정일 없이 '납입 완료'로 남았다(2026-11-03 래블업).
+    """
     ev = api.load_ipo_events()
     first = pd.to_datetime(ev["first_filed"])
     cur = ev[
@@ -323,6 +327,7 @@ def calendar(api, asof: pd.Timestamp, sch: pd.DataFrame, decisions: dict) -> tup
         metrics=[*DATE_METRICS, *PRICE_METRICS, "listing_market_code"],
     )
     latest = _latest(obs) if len(obs) else obs
+    sch = api.load_ipo_schedule()
     planned = dict(zip(sch["event_id"], sch["planned_listing_date"], strict=True))
     lo = asof - pd.Timedelta(days=CALENDAR_WINDOW[0])
     hi = asof + pd.Timedelta(days=CALENDAR_WINDOW[1])
@@ -448,7 +453,7 @@ def build(api, now: dt.datetime | None = None) -> pd.DataFrame:
         rows.append(row)
     frame = pd.DataFrame(rows)
     try:
-        cal_items, cal_events = calendar(api, asof, sch, decisions)
+        cal_items, cal_events = calendar(api, asof, decisions)
     except Exception as exc:
         logger.exception("ipo calendar failed")
         cal_items, cal_events = [], []
