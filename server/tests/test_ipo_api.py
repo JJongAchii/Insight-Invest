@@ -190,6 +190,30 @@ def test_freshness_marks_listings_whose_decision_night_passed_without_a_decision
     assert not next(c for c in noon["calendar"] if c["event_id"] == "lab")["decision_missing"]
 
 
+def test_freshness_marks_offerings_that_already_listed():
+    """상장일 동시호가(09:00)가 지나면 이미 상장한 종목 — 화면 목록에서 뺀다. 상장일 공시 전은 상장 전이다."""
+    status = {
+        "as_of": "2026-11-02",
+        "next_session": "2026-11-03",
+        "problems": [],
+        "calendar": [
+            {"event_id": "today", "planned_listing_date": "2026-11-03", "decided": True},
+            {"event_id": "past", "planned_listing_date": "2026-10-30", "decided": True},
+            {"event_id": "later", "planned_listing_date": "2026-11-05", "decided": False},
+            {"event_id": "nodate", "planned_listing_date": None},
+        ],
+    }  # fmt: skip
+
+    def listed(now):
+        out = ipo.with_freshness(status, now)
+        return {c["event_id"]: c["listed"] for c in out["calendar"]}
+
+    before = listed(datetime(2026, 11, 3, 8, 45, tzinfo=ipo.KST))
+    assert before == {"today": False, "past": True, "later": False, "nodate": False}
+    after = listed(datetime(2026, 11, 3, 9, 5, tzinfo=ipo.KST))
+    assert after == {"today": True, "past": True, "later": False, "nodate": False}
+
+
 def test_get_marks_a_stale_status(app_data, monkeypatch):
     monkeypatch.setattr(ipo, "_now", lambda: datetime(2026, 11, 4, 8, 0, tzinfo=ipo.KST))
     out = ipo.get_ipo()["status"]
@@ -240,3 +264,15 @@ def test_pipeline_detects_the_ipo_builder_by_its_function_name():
     assert "def build_ipo_signals" in body
     names = {build_insights._builder_name(item[0]) for item in build_insights.BUILDERS}
     assert "ipo_signals" in names
+
+
+def test_open_only_buy_notification_says_to_cancel_after_the_open(app_data):
+    """진입 규칙(계약 v3) 뒤의 매수 알림은 동시호가 지정가와 9시 미체결 취소를 함께 알린다."""
+    frame = storage.read_parquet("ipo", "ipo_signals.parquet")
+    frame.loc[frame["event_id"] == "buy1", "fill_rule"] = "open-only"
+    frame["additional_buy"] = frame["event_id"] == "buy1"
+    storage.write_parquet(frame, "ipo", "ipo_signals.parquet")
+    now = datetime(2026, 11, 2, 22, 50, tzinfo=actions.KST)
+    buy = next(e for e in actions._ipo_events(now) if e["kind"] == "ipo_buy")
+    assert "보완 매수 · 장전 동시호가 지정가 15,000원" in buy["detail"]
+    assert "9시 시가에 체결 안 되면 바로 취소" in buy["detail"]

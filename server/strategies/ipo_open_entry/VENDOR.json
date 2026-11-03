@@ -1,7 +1,7 @@
 {
   "source": "JJongAchii/quant-lab",
   "line": "strategies/ipo-open-entry",
-  "commit": "17aa1ffac491852279cc4bdc16150445ff810da1",
+  "commit": "db5465dfd709033490f5b94f4b4c7999d4fba01d",
   "files": {
     "config.yaml": "fdd94ea12a3284ee569139667e18fe6073a739a920b5c9615e1a8c7d96b2a9be",
     "src/ipo_open_entry/__init__.py": "f907c318ca080d75bff614646780eaa0d86c409d3f502699cf52f1f46d0ab735",
@@ -30,7 +30,10 @@
     "src/ipo_open_entry/recall/models.py": "6da7dbcdff912b3919d6db47abe3b103c0409625cf5723a8c5693b95ab2b6908",
     "src/ipo_open_entry/recall/institution.py": "698bb2196f04c2dbf0708458ef7e1a2967b1a2ac27304bf45af6e3dca61edcfd",
     "src/ipo_open_entry/recall/complement.py": "7d6f6c298ce75d80d051b213fb766ee17576a3023d1f061a32201e55f40b37da",
-    "src/ipo_open_entry/recall/union.py": "446469840843118c619b571e7cbc712dfebb84d65d450aba779f5def684bd54e"
+    "src/ipo_open_entry/recall/union.py": "446469840843118c619b571e7cbc712dfebb84d65d450aba779f5def684bd54e",
+    "config-entry-t12-v1.yaml": "15dfdeaa17511c0089814ae2822c8a6ccb4be0576e01865ffa20f397844d1c34",
+    "src/ipo_open_entry/entry_t12/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/ipo_open_entry/entry_t12/execution.py": "34f4116848c3414fe786c73ea458cd9ef8d0032958c7c83e0f3a4f7fba635509"
   },
   "dataset": {
     "source": "strategies/ipo-open-entry/data/dev-20260909-v4r",
@@ -62,5 +65,23 @@
       }
     },
     "fixture_sha256": "907a055a2843dc5e9af8c7b39f3a786abe4343fa1356a5832ac486f3d259721e"
+  },
+  "entry": {
+    "result": "strategies/ipo-open-entry/docs/evidence/runs/entry-t12-v1/t06.json",
+    "audit": "strategies/ipo-open-entry/audits/AUDIT-leak-auditor-20261102-ipo-entry-limit-20261102-discovery-final-r2.md",
+    "trial_id": "t06",
+    "trial_commit": "fa14323004e4e0803f1088b487067330a7047472",
+    "config_digest": "8455ab64e29b",
+    "variant": {
+      "selection": "t12",
+      "limit": {
+        "kind": "conviction",
+        "complement": 1.25,
+        "primary": 1.5,
+        "strong": null
+      },
+      "fill": "open-only"
+    },
+    "fixture_sha256": "13a81e2dddcaf81b2efc05f8749ba6064fed0f73fba0c581f698b142674036e6"
   }
 }

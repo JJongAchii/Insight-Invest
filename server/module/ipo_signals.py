@@ -4,14 +4,18 @@
 종가면 다음 거래일 종가로 최대 5거래일 이월). 결정 계산은 `RULE`(`module.ipo_t12`, quant-lab 결정 경로 사본)이
 한다. 전환 전에 t01(op-day1-v2)로 쓴 결정은 그대로 둔다 — 결정마다 `spec`에 규칙 이름이 남는다.
 
+주문(계약 v3, 2026-11-03부터): entry-t12-v1 t06 — 1차 매수 공모가 × 1.5, 보완 매수 × 1.25 지정가를 장전
+동시호가에 내고 시가에 체결되지 않으면 9시 직후 취소한다. 결정 기록의 `entry`에 진입 규칙이 남고, 그 전 결정
+(`entry` 없음)은 1.5배 당일 유효 지정가 그대로 추정한다. 배분 안내는 그날 매수 신호 n개에 가용 현금 n등분.
+
 저장(APP_DATA 아래)
 - `ipo/decisions.json`: event_id → 결정 기록. 한 번 쓴 기록은 다시 쓰지 않는다(덮어쓰지 않는 기록)
 - `ipo/positions.json`: event_id → 사용자가 입력한 실제 체결·매도(화면에서 수정). 배치는 읽기만 한다
 - `ipo/status.json`: 데이터 상태(레이크 날짜·다음 거래일·상장 예정·문제)
 - `ipo/ipo_signals.parquet`: 결정마다 한 행 — 신호·체결 추정·매도 예정·결과(빌더 반환값)
 
-체결 추정은 백테스트 엔진 규칙 그대로다: 시가 < 지정가면 시가, 아니면 그날 저가가 지정가 아래로 내려갔을
-때 지정가. 사용자 입력이 있으면 그것이 이긴다.
+체결 추정은 백테스트 엔진 규칙 그대로다: 시가 < 지정가면 시가, 아니면(당일 유효 지정가일 때만) 그날 저가가
+지정가 아래로 내려갔을 때 지정가. 시가 전용 주문은 첫 갈래만 남는다. 사용자 입력이 있으면 그것이 이긴다.
 """
 
 from __future__ import annotations
@@ -35,8 +39,19 @@ POSITIONS = ("ipo", "positions.json")
 STATUS = ("ipo", "status.json")
 #: 운용 매도: 2번째 거래일 종가(1 = 상장일 종가)
 SELL_HORIZON = 2
-#: 배정 비율 안내(백테스트 가정: 거래마다 전일 평가금액의 1/slots)
 UPCOMING_DAYS = 21
+#: 진입 규칙별 안내 문구(결정 기록의 entry.fill) — 화면·알림이 같은 문장을 쓴다
+ORDER_METHOD = {
+    "open-only": "장전 동시호가(08:30~09:00)에 지정가 → 9시 시가에 체결 안 되면 바로 취소(장중 매수 없음)",
+    "gfd": "장전 동시호가(08:30~09:00) 전 당일 유효 지정가",
+}
+ENTRY_TEXT = (
+    "1차 매수 공모가 × 1.5 · 보완 매수 공모가 × 1.25(호가 내림) · " + ORDER_METHOD["open-only"]
+)
+SIZING_TEXT = (
+    "상장일 아침 그날 매수 신호 n개에 가용 현금을 n등분(1개 100%, 2개 50%씩) · 수량 = 배정액 ÷ 주문 가격"
+    "(내림) · 전날 산 종목을 보유 중이면 남은 현금만 · 시가가 주문 가격보다 낮으면 실제 투입은 더 적다"
+)
 KST = dt.timezone(dt.timedelta(hours=9))
 
 
@@ -141,8 +156,60 @@ def _bars(api, rec: dict, ix: pd.DataFrame, asof: pd.Timestamp, ticker: str) -> 
     return ipo_t01.event_bars(events, prices, cal, n)
 
 
+def fill_rule(rec: dict) -> str:
+    """결정 기록의 체결 방식 — 진입 규칙(entry)이 없는 전환 전 결정은 당일 유효 지정가."""
+    return str((rec.get("entry") or {}).get("fill") or "gfd")
+
+
+def entry_estimate(
+    engine, open_: float, low: float, limit: float, cap_threshold: float, tie_fills: bool, fill: str
+) -> tuple[bool, float]:
+    """체결 추정. 시가 전용은 엔진의 첫 갈래(상한 시가가 아니고 시가 < 지정가)만 남긴다
+    (quant-lab `entry_t12.execution.build_trades`의 open-only와 같은 규칙)."""
+    filled, entry = engine.entry_fill(open_, low, limit, cap_threshold, tie_fills)
+    if fill == "gfd":
+        return filled, entry
+    if fill != "open-only":
+        raise ValueError(f"모르는 체결 방식: {fill}")
+    at_open = filled and open_ < cap_threshold and open_ < limit
+    return (True, float(open_)) if at_open else (False, math.nan)
+
+
+def explain(rec: dict) -> str | None:
+    """매수·패스 이유를 쉬운 문장으로(결정 기록의 점수·문턱에서)."""
+    if rec.get("status") != "decided":
+        return rec.get("reason")
+    score, cut = rec.get("score"), rec.get("threshold")
+    if score is None or cut is None:
+        return None
+    buy = bool(rec.get("buy"))
+    if rec.get("spec") != ipo_t12.SPEC:  # 전환 전 t01 결정
+        verdict = "이상 → 매수" if buy else "미달 → 매수 안 함"
+        return f"패턴 점수({score:.3f})가 문턱({cut:.3f}) {verdict}"
+    head = f"기관 수요 반응 점수({score:.3f})"
+    if buy and not rec.get("additional_buy"):
+        return f"{head}가 문턱({cut:.3f}) 이상 → 1차 매수"
+    sup, sup_cut = rec.get("supplement_score"), rec.get("supplement_threshold")
+    known = sup is not None and sup_cut is not None
+    if buy:
+        tail = (
+            f"체결 가능성 점수({sup:.3f})가 보완 문턱({sup_cut:.3f}) 이상"
+            if known
+            else "체결 가능성 점수가 보완 문턱 이상"
+        )
+        return f"{head}는 문턱({cut:.3f}) 미달이지만 이전 규칙(t01)이 패스한 종목 중 {tail} → 보완 매수"
+    parts = [f"{head}가 문턱({cut:.3f}) 미달"]
+    if rec.get("baseline_buy"):
+        parts.append("이전 규칙(t01) 매수 종목은 보완 대상이 아님")
+    elif not rec.get("supplement_active"):
+        parts.append("이번 분기 보완 모형 비활성")
+    elif known:
+        parts.append(f"체결 가능성 점수({sup:.3f})도 보완 문턱({sup_cut:.3f}) 미달")
+    return " · ".join(parts) + " → 매수 안 함"
+
+
 def position(api, rec: dict, ix, asof, ticker, override: dict) -> dict:
-    """매수 결정 하나의 체결·매도 상태(백테스트 엔진 규칙 + 사용자 입력)."""
+    """매수 결정 하나의 체결·매도 상태(백테스트 엔진 규칙 + 진입 규칙의 체결 방식 + 사용자 입력)."""
     cfg = ipo_t01.config()
     engine = ipo_t01.engine
     rules = ipo_t01.rules
@@ -160,9 +227,9 @@ def position(api, rec: dict, ix, asof, ticker, override: dict) -> dict:
     cap_threshold = (
         float(cfg["execution"]["cap_tolerance"]) * rules.cap_multiple(regime, cfg) * offer
     )
-    filled, entry = engine.entry_fill(
-        float(day0["open"].iloc[0]), float(day0["low"].iloc[0]), limit, cap_threshold,
-        bool(cfg["execution"]["tie_fills"]),
+    filled, entry = entry_estimate(
+        engine, float(day0["open"].iloc[0]), float(day0["low"].iloc[0]), limit, cap_threshold,
+        bool(cfg["execution"]["tie_fills"]), fill_rule(rec),
     )  # fmt: skip
     if override.get("filled") is not None:
         filled = bool(override["filled"])
@@ -293,6 +360,11 @@ def calendar(api, asof: pd.Timestamp, sch: pd.DataFrame, decisions: dict) -> tup
         rec = decisions.get(e.event_id) or {}
         item["decided"] = bool(rec)
         item["buy"] = rec.get("buy") if rec else None
+        order = (rec.get("order") or {}) if rec else {}
+        item["limit_price"] = order.get("limit_price")
+        item["limit_mult"] = order.get("limit_mult")
+        item["additional_buy"] = rec.get("additional_buy") if rec else None
+        item["explain"] = explain(rec) if rec else None
         d = item["planned_listing_date"]
         if d is not None:
             item["decision_night"] = ipo_t01.calendar.previous_session(d)
@@ -356,6 +428,11 @@ def build(api, now: dt.datetime | None = None) -> pd.DataFrame:
                                         "additional_buy", "decision_reason")}  # fmt: skip
         order = rec.get("order") or {}
         row["limit_price"] = order.get("limit_price")
+        row["limit_mult"] = order.get("limit_mult")
+        row["entry_spec"] = (rec.get("entry") or {}).get("spec")
+        row["fill_rule"] = fill_rule(rec)
+        row["order_method"] = ORDER_METHOD[row["fill_rule"]]
+        row["explain"] = explain(rec)
         if rec.get("buy"):
             ticker = (
                 events["stock_code"].get(rec["event_id"])
@@ -382,10 +459,11 @@ def build(api, now: dt.datetime | None = None) -> pd.DataFrame:
         "generated_at": now.astimezone(KST).isoformat(timespec="seconds"),
         "next_session": nxt,
         "rule": {"spec": RULE.rule()["spec"], "stage": RULE.rule()["stage"],
-                 "entry": "공모가 × 1.5 호가 내림 당일 유효 지정가",
+                 "entry_spec": RULE.entry_rule()["spec"], "entry_stage": RULE.entry_rule()["stage"],
+                 "entry": ENTRY_TEXT,
                  "exit": "2번째 거래일 종가(하한가 종가면 다음 거래일 종가, 최대 5거래일)",
                  "stop_loss": None,
-                 "sizing": f"한 종목에 전일 계좌 평가금액의 1/{cfg['sizing']['slots']}"},  # fmt: skip
+                 "sizing": SIZING_TEXT},  # fmt: skip
         "upcoming": [
             {
                 "event_id": r.event_id,

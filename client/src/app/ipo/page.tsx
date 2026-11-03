@@ -29,13 +29,15 @@ import {
   judgement,
   kstToday,
   marketLabel,
+  orderKind,
   positionMeta,
   returnTone,
   ruleLabel,
 } from "./format";
 import { EmptyLine, Field, Pill, Section } from "./parts";
 
-const ORDER_NOTE = "공모가 × 1.5 호가 내림 · 당일 유효 지정가 · 동시호가 08:30~09:00 전 주문";
+/** 진입 규칙이 없는 전환 전(2026-11-03 이전) 결정의 주문 방법. */
+const LEGACY_ORDER_NOTE = "공모가 × 1.5 호가 내림 · 당일 유효 지정가 · 동시호가 08:30~09:00 전 주문";
 const SELL_NOTE = "종가 동시호가 15:20~15:30";
 
 function EnteredTag({ entered }: { entered: boolean }) {
@@ -50,7 +52,7 @@ function RuleTag({ row }: { row: IpoRow }) {
   return (
     <span className="num text-[11px] text-ink-muted" title={row.spec ?? undefined}>
       {label}
-      {row.additional_buy ? " · 패스 보완 매수" : ""}
+      {row.additional_buy ? " · 보완 매수" : ""}
     </span>
   );
 }
@@ -79,10 +81,19 @@ function EditButton({ row, onEdit }: { row: IpoRow; onEdit: (row: IpoRow) => voi
   );
 }
 
-function SignalCard({ row }: { row: IpoRow }) {
+function SignalCard({ row, sameDay }: { row: IpoRow; sameDay: number }) {
+  const kind = orderKind(row);
+  const share = sameDay > 0 ? Math.round(100 / sameDay) : 100;
   return (
-    <article className="rounded-xl border border-edge bg-raised/40 p-4">
-      <RowTitle row={row} />
+    <article className="rounded-xl border border-primary-400/40 bg-primary-500/5 p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Pill className="bg-primary-500 text-white">매수</Pill>
+        {kind && <span className="text-xs font-medium text-ink-secondary">{kind}</span>}
+      </div>
+      <div className="mt-2">
+        <RowTitle row={row} />
+      </div>
+      {row.explain && <p className="mt-2 text-xs leading-5 text-ink-secondary">{row.explain}</p>}
       <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
         <Field label="상장일">{fmtDayLabel(row.listing_date)}</Field>
         <Field label="공모가">
@@ -95,7 +106,28 @@ function SignalCard({ row }: { row: IpoRow }) {
           {row.sell_on ? `${fmtDayLabel(row.sell_on)} 종가` : row.sell_plan ?? "—"}
         </Field>
       </dl>
-      <p className="mt-3 text-[11px] leading-5 text-ink-muted">{ORDER_NOTE}</p>
+      <p className="mt-3 text-[11px] leading-5 text-ink-muted">{row.order_method ?? LEGACY_ORDER_NOTE}</p>
+      {row.fill_rule === "open-only" && (
+        <p className="mt-1 text-[11px] leading-5 text-ink-muted">
+          배정: 가용 현금의 {share}%(이날 매수 {sameDay}종목) · 수량 = 배정액 ÷ 주문 가격(내림)
+        </p>
+      )}
+    </article>
+  );
+}
+
+function PassCard({ row }: { row: IpoRow }) {
+  const j = judgement(row);
+  return (
+    <article className="rounded-xl border border-dashed border-edge bg-surface/40 p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Pill className={j.style}>{j.label}</Pill>
+        <span className="text-xs text-ink-muted">{fmtDayLabel(row.listing_date)} 상장 · 주문 없음</span>
+      </div>
+      <div className="mt-2">
+        <RowTitle row={row} />
+      </div>
+      {j.reason && <p className="mt-2 text-xs leading-5 text-ink-secondary">{j.reason}</p>}
     </article>
   );
 }
@@ -308,11 +340,14 @@ export default function IpoPage() {
   const problems = (status.problems ?? []).filter((p): p is string => typeof p === "string" && p.length > 0);
   const rule = status.rule ?? null;
 
-  const { signals, holdings } = useMemo(() => {
+  const { signals, holdings, passes } = useMemo(() => {
     const open = data?.open ?? [];
+    const next = data?.status?.next_session ?? null;
     return {
       signals: open.filter((row) => row.position === "signal"),
       holdings: open.filter((row) => row.position === "holding"),
+      // 다음 거래일 상장인데 사지 않기로 한 종목 — 왜 안 사는지 같은 칸에서 보여 준다
+      passes: (data?.history ?? []).filter((row) => !row.buy && next != null && row.listing_date === next),
     };
   }, [data]);
 
@@ -388,14 +423,21 @@ export default function IpoPage() {
             title="다음 거래일 주문"
             meta={status.next_session ? `${fmtDayLabel(status.next_session)} 시가 동시호가` : undefined}
           >
-            {signals.length === 0 ? (
+            {signals.length === 0 && passes.length === 0 ? (
               <EmptyLine>
                 {status.stale ? "저녁 배치 미반영 — 매수 여부 확인 필요" : "다음 거래일 매수 신호 없음"}
               </EmptyLine>
             ) : (
               <div className="grid gap-3 xl:grid-cols-2">
                 {signals.map((row) => (
-                  <SignalCard key={row.event_id} row={row} />
+                  <SignalCard
+                    key={row.event_id}
+                    row={row}
+                    sameDay={signals.filter((s) => s.listing_date === row.listing_date).length}
+                  />
+                ))}
+                {passes.map((row) => (
+                  <PassCard key={row.event_id} row={row} />
                 ))}
               </div>
             )}
@@ -443,11 +485,14 @@ export default function IpoPage() {
               <li>손절 없음</li>
               {rule?.spec && <li className="num">규칙 {rule.spec}</li>}
               {rule?.stage && <li>단계 · {rule.stage}</li>}
+              {rule?.entry_spec && <li className="num">진입 규칙 {rule.entry_spec}</li>}
+              {rule?.entry_stage && <li>진입 단계 · {rule.entry_stage}</li>}
             </ul>
             <p className="mt-2">
               개발 구간 검증 결과이며 실제 성과를 보장하지 않습니다. 2026-11-02부터 매수 판단은 t12(기관 수요 반응 점수
-              + t01 패스 종목의 체결 가능성 보완)이고, 그 전 기록은 t01로 판단했습니다. 이 화면은 신호만 보여 주며
-              주문을 내지 않습니다.
+              + t01 패스 종목의 체결 가능성 보완)이고, 그 전 기록은 t01로 판단했습니다. 2026-11-03부터 주문은 1차 매수
+              공모가 × 1.5, 보완 매수 × 1.25를 장전 동시호가에 걸고 9시 시가에 체결되지 않으면 취소하며, 그 전 결정은
+              1.5배 당일 유효 지정가로 기록돼 있습니다. 이 화면은 신호만 보여 주며 주문을 내지 않습니다.
             </p>
           </section>
         </>

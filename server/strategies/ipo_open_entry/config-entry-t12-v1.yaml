@@ -1,0 +1,50 @@
+experiment: entry-t12-v1
+run_id: ipo-entry-t12-v1-discovery-20261102
+seed: 20261030  # recall-v1 t12와 같은 시드(선택 재현)
+dataset_manifest_sha256: c79e8fba0aab5975ad04eea45a6cd5e89223293c9390474e1fbeca6961e5906e
+dev_start: '2015-06-15'
+dev_end: '2026-09-09'
+price_end: '2026-09-11'
+evaluation_start: '2018-01-01'
+sealed_start: '2026-09-10'
+sealed_end: '2027-12-31'
+horizon: 2
+# 매수 선택: recall-v1 t12(quant-lab 17aa1ffa, config digest 3bf9281aa50f)를 그대로 다시 계산한다
+selection_variant:
+  family: union
+  selection: oof
+  institution:
+    interactions: false
+    shrinkage: 1000
+    institutional_sign: free
+  complement:
+    mode: states
+    interactions: false
+    shrinkage: 300
+baseline_artifact: strategies/ipo-open-entry/docs/evidence/runs/recall-v1/t12.json
+# 진입 실행의 미리 정한 값 집합(brief-entry-t12-v1 §4, 계약 v2의 6칸). 이 밖의 값은 새 승인이 필요하다
+limit_mults: [1.25, 1.5]
+fills: [gfd, open-only]
+strong_min_history: 10  # 강한 확신 계단은 v2 범위 밖(값 집합에 2.0 없음)
+smoke_quarter: '2017-10-01'
+primary_metric: stress-net-absolute-cagr-h2
+hurdle_increment: 0.005
+max_rounds: 2
+max_executions: 6
+patience_rounds: 2
+min_improvement: 0.0025
+max_qualification_attempts: 3
+max_technical_retries: 6
+top_k_omit: 3
+risk_constraints:
+- exclude-top3-positive
+- cash-within-nav
+secondary_diagnostics:
+- base-net CAGR
+- fill state counts and returns (open, intraday, unfilled)
+- paired event changes versus the 1.5x GFD baseline
+- comparison with the 2026-10-30 t01 entry-v1 constants (branch ipo-entry-limits-20261030)
+- missed winners and avoided losses
+- full-account sizing (slots=1)
+- open-sized quantity upper bound (diagnostic D, not executable)
+- MDD, monthly returns, absolute Sharpe

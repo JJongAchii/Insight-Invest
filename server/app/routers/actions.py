@@ -327,6 +327,14 @@ def _ipo_events(now: datetime) -> list[dict]:
         if position == "signal" and listing is not None and listing >= today:
             limit = row.get("limit_price")
             price = f" {limit:,.0f}원" if limit else ""
+            kind = "보완 매수 · " if row.get("additional_buy") else ""
+            if row.get("fill_rule") == "open-only":
+                detail = (
+                    f"{listing.isoformat()} {kind}장전 동시호가 지정가{price} · "
+                    "9시 시가에 체결 안 되면 바로 취소"
+                )
+            else:
+                detail = f"{listing.isoformat()} 동시호가 전 지정가{price}(당일 유효)"
             out.append(
                 _event(
                     source="ipo",
@@ -335,7 +343,7 @@ def _ipo_events(now: datetime) -> list[dict]:
                     category="strategy",
                     severity="high",
                     title=f"공모주 매수 · {name}",
-                    detail=f"{listing.isoformat()} 동시호가 전 지정가{price}(당일 유효)",
+                    detail=detail,
                     link="/ipo",
                     occurred_at=listing.isoformat(),
                     available_at=now.isoformat(),

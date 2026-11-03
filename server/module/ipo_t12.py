@@ -11,8 +11,10 @@ t12는 recall-v1 개발 구간 탐색(과학 실행 12회, 누수 감사 pass)�
    체결 상태 라벨 포함). 개발 구간 뒤 사건은 t01과 같은 표에 같은 함수(`signal.data.exact_labels`)로 라벨을 붙인다
 2. 학습: 분기 시작 전에 상장하고 라벨(세 청산과 체결 상태)이 확정된 사건(`recall.data.mature_before`)
 3. 결정: `recall.models.Model`(t12 변형) fit → decide(대상 한 행). 1차 점수(기관 반응)가 문턱 이상이면 매수,
-   아니면 원래 t01이 패스한 사건 중 체결 상태 보완 점수가 보완 문턱 이상이면 매수. 주문은 공모가 × 1.5 호가 내림
-   당일 유효 지정가
+   아니면 원래 t01이 패스한 사건 중 체결 상태 보완 점수가 보완 문턱 이상이면 매수
+4. 주문(계약 v3, 2026-11-03부터): quant-lab entry-t12-v1 t06(`entry_t12.execution.limit_mults`, VENDOR.json의
+   entry 절). 1차 매수 공모가 × 1.5, 보완 매수 공모가 × 1.25 호가 내림 지정가를 장전 동시호가에 내고, 시가에
+   체결되지 않으면 9시 직후 취소한다(시가 단일가 전용). t12의 학습 라벨(1.5배 당일 지정가 체결 상태)은 그대로다
 """
 
 from __future__ import annotations
@@ -24,11 +26,13 @@ import json
 import math
 
 import pandas as pd
+import yaml
 
 # ipo_t01을 먼저 불러야 결정 경로 사본(server/strategies/ipo_open_entry/src)이 sys.path에 들어간다
 from module import ipo_t01
 
 # isort: split
+from ipo_open_entry.entry_t12 import execution as entry_execution
 from ipo_open_entry.operate import decision
 from ipo_open_entry.recall import data as recall_data
 from ipo_open_entry.recall.complement import STATES
@@ -40,7 +44,20 @@ from module.ipo_t01 import NotEligible, NotReady, TooLate
 SPEC = "recall-v1-t12"
 STAGE = "개발 구간 후보 · 순방향 확증 전(2026-11-02 전환)"
 
-__all__ = ["NotEligible", "NotReady", "TooLate", "SPEC", "decide_listing", "rule"]
+ENTRY_SPEC = "entry-t12-v1-t06"
+ENTRY_STAGE = "개발 구간 후보 · 순방향 확증 전(2026-11-03 전환)"
+
+__all__ = [
+    "NotEligible",
+    "NotReady",
+    "TooLate",
+    "SPEC",
+    "ENTRY_SPEC",
+    "decide_listing",
+    "entry_limit_mult",
+    "entry_rule",
+    "rule",
+]
 
 
 @functools.lru_cache(maxsize=1)
@@ -58,6 +75,56 @@ def rule() -> dict:
         "config_digest": v["config_digest"],
         "variant": v["variant"],
     }
+
+
+@functools.lru_cache(maxsize=1)
+def entry_vendor() -> dict:
+    """진입 규칙 출처(quant-lab entry-t12-v1 t06 산출·trial 커밋·변형) — vendor 스크립트가 기록한다."""
+    return json.loads((ipo_t01.LINE_DIR / "VENDOR.json").read_text())["entry"]
+
+
+@functools.lru_cache(maxsize=1)
+def entry_config() -> dict:
+    return yaml.safe_load((ipo_t01.LINE_DIR / "config-entry-t12-v1.yaml").read_text())
+
+
+def entry_rule() -> dict:
+    """결정 기록에 남기는 진입 규칙(지정가 배수 규칙과 체결 방식)."""
+    v = entry_vendor()
+    return {
+        "spec": ENTRY_SPEC,
+        "stage": ENTRY_STAGE,
+        "trial_commit": v["trial_commit"],
+        "config_digest": v["config_digest"],
+        "limit": v["variant"]["limit"],
+        "fill": v["variant"]["fill"],
+    }
+
+
+def entry_limit_mult(made: dict, qs: pd.Timestamp) -> float | None:
+    """t12 결정 한 행의 지정가 배수 — quant-lab `entry_t12.execution.limit_mults` 그대로(패스면 None).
+
+    t06 규칙은 강한 확신 계단이 없어(strong = None) 그 행의 보완 매수 여부만 읽는다.
+    """
+    if not made["buy"]:
+        return None
+    row = pd.DataFrame(
+        [
+            {
+                "event_id": "target",
+                "quarter": qs,
+                "buy": True,
+                "additional_buy": bool(made["additional_buy"]),
+                "score": float(made["score"]),
+                "threshold": float(made["threshold"]),
+            }
+        ]
+    )
+    cfg = entry_config()
+    mult = entry_execution.limit_mults(
+        row, entry_vendor()["variant"]["limit"], cfg["limit_mults"], int(cfg["strong_min_history"])
+    )
+    return float(mult.iloc[0])
 
 
 def make_model() -> Model:
@@ -146,8 +213,11 @@ def decide_listing(
     post_table = post_dev_table(ctx["dev"], ctx["post"], ctx["close"], cfg)
     train = training_table(dev_table(), post_table, ctx["qs"])
     made = decide(train, ctx["row"], ctx["qs"])
-    order = decision.order(ctx["target"], made, cfg)
+    order = decision.order(
+        ctx["target"], {**made, "limit_mult": entry_limit_mult(made, ctx["qs"])}, cfg
+    )
     return {
         **ipo_t01.record(ctx, SPEC, order, post_table),
         **{k: v for k, v in made.items() if k not in ("buy", "limit_mult")},
+        "entry": entry_rule(),
     }

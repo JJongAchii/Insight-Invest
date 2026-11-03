@@ -344,3 +344,83 @@ def test_schedule_takes_the_market_from_the_filing_before_listing(app_data):
     assert (
         problems and "상장 시장" in problems[0]
     )  # as-of 뒤 공시는 쓰지 않고, 모르면 기록 없이 대기
+
+
+def _t06(event_id, listing, additional=False):
+    """진입 규칙(entry-t12-v1 t06, 계약 v3) 뒤의 t12 결정 기록."""
+    rec = _decided(event_id, listing, limit=12_500.0 if additional else 15_000.0)
+    rec["order"]["limit_mult"] = 1.25 if additional else 1.5
+    return {**rec, "spec": "recall-v1-t12", "additional_buy": additional,
+            "entry": {"spec": "entry-t12-v1-t06", "fill": "open-only"}}  # fmt: skip
+
+
+def test_open_only_entry_fills_only_at_the_open():
+    """시가 전용: 시가가 지정가 아래면 시가에 체결, 시가가 지정가 이상이면 장중에 내려와도 미체결."""
+    rec = _t06("e", "2026-11-03")
+    dipped = _bars("555550", "2026-11-03", [16_000.0], [14_000.0], [15_500.0])
+    assert _position(rec, dipped, "2026-11-03")["position"] == "unfilled"
+    # 같은 봉에서 전환 전(당일 유효 지정가) 결정은 지정가에 장중 체결로 추정한다 — 기록은 그대로
+    legacy = _position(_decided("e", "2026-11-03"), dipped, "2026-11-03")
+    assert legacy["position"] == "holding" and legacy["entry_price"] == 15_000.0
+    opened = _bars("555550", "2026-11-03", [12_000.0], [11_500.0], [12_500.0])
+    out = _position(rec, opened, "2026-11-03")
+    assert out["position"] == "holding" and out["entry_price"] == 12_000.0
+
+
+def test_supplement_buy_uses_its_own_lower_limit():
+    rec = _t06("e", "2026-11-03", additional=True)  # 지정가 12,500(1.25배)
+    above = _bars("555550", "2026-11-03", [13_000.0], [12_000.0], [12_800.0])
+    assert _position(rec, above, "2026-11-03")["position"] == "unfilled"
+
+
+def test_explanations_say_why_in_plain_words():
+    base = {"status": "decided", "spec": "recall-v1-t12", "score": 0.0119, "threshold": 0.1063}
+    passed = ipo_signals.explain({**base, "buy": False, "supplement_active": False})
+    assert passed.startswith("기관 수요 반응 점수(0.012)가 문턱(0.106) 미달")
+    assert passed.endswith("→ 매수 안 함") and "보완 모형 비활성" in passed
+    t01_buy = ipo_signals.explain({**base, "buy": False, "baseline_buy": True,
+                                   "supplement_active": True})  # fmt: skip
+    assert "이전 규칙(t01) 매수 종목은 보완 대상이 아님" in t01_buy
+    sup = ipo_signals.explain({**base, "buy": True, "additional_buy": True,
+                               "supplement_score": 0.4, "supplement_threshold": 0.3})  # fmt: skip
+    assert sup.endswith("→ 보완 매수") and "보완 문턱(0.300) 이상" in sup
+    first = ipo_signals.explain({**base, "score": 0.2, "buy": True, "additional_buy": False})
+    assert first == "기관 수요 반응 점수(0.200)가 문턱(0.106) 이상 → 1차 매수"
+    legacy = ipo_signals.explain({**base, "spec": "op-day1-v2", "buy": False})
+    assert legacy == "패턴 점수(0.012)가 문턱(0.106) 미달 → 매수 안 함"
+    assert ipo_signals.explain({"status": "not_eligible", "reason": "확정 공모가가 없다"}) == (
+        "확정 공모가가 없다"
+    )
+
+
+def test_batch_rows_and_status_carry_the_entry_rule(app_data, monkeypatch):
+    def fake_decide(api, event_id, listing, market, now):
+        additional = event_id == "sup"
+        return {"spec": "recall-v1-t12", "regime": "R2", "offer_price": 10_000.0,
+                "order": {"buy": event_id != "pass", "limit_mult": None if event_id == "pass"
+                          else (1.25 if additional else 1.5),
+                          "limit_price": None if event_id == "pass"
+                          else (12_500.0 if additional else 15_000.0)},
+                "score": 0.05 if event_id != "first" else 0.2, "threshold": 0.1,
+                "additional_buy": additional, "baseline_buy": False, "supplement_active": True,
+                "supplement_score": 0.4 if additional else 0.1, "supplement_threshold": 0.3,
+                "entry": {"spec": "entry-t12-v1-t06", "fill": "open-only"}}  # fmt: skip
+
+    monkeypatch.setattr(ipo_signals.RULE, "decide_listing", fake_decide)
+    sched = _schedule([("first", "가", "111110", "2026-11-03"), ("sup", "나", "222220", "2026-11-03"),
+                       ("pass", "다", "333330", "2026-11-03")])  # fmt: skip
+    events = _events([("first", "111110", None), ("sup", "222220", None), ("pass", "333330", None)])
+    frame = ipo_signals.build(FakeApi("2026-11-02", sched, events), now=NOW).set_index("event_id")
+    assert (
+        frame.loc["first", "fill_rule"] == "open-only" and frame.loc["first", "limit_mult"] == 1.5
+    )
+    assert frame.loc["sup", "limit_mult"] == 1.25 and frame.loc["sup", "explain"].endswith(
+        "보완 매수"
+    )
+    assert "9시 시가에 체결 안 되면 바로 취소" in frame.loc["first", "order_method"]
+    assert frame.loc["pass", "explain"].endswith("→ 매수 안 함")
+    status = storage.read_json(*ipo_signals.STATUS)
+    assert status["rule"]["entry_spec"] == "entry-t12-v1-t06"
+    assert "1차 매수 공모가 × 1.5" in status["rule"]["entry"]
+    assert "보완 매수 공모가 × 1.25" in status["rule"]["entry"]
+    assert "가용 현금을 n등분" in status["rule"]["sizing"]

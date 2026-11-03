@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""공모주 결정 경로(t01·t12)를 quant-lab에서 바이트 그대로 옮긴다(계약 ipo-live-ops II_ENGINE·II_T12).
+"""공모주 결정 경로(t01·t12·진입 규칙)를 quant-lab에서 바이트 그대로 옮긴다(계약 ipo-live-ops II_ENGINE·II_T12·II_ENTRY).
 
     python scripts/vendor_ipo_t01.py --quant-lab ~/Quant/quant-lab --commit <quant-lab 커밋>
 
@@ -7,7 +7,8 @@
 파일별 sha256을 `VENDOR.json`에 남긴다. 옮긴 파일은 손으로 고치지 않는다 — 테스트
 (`server/tests/test_ipo_t01_vendor.py`)가 해시를 대조한다. quant-lab 쪽 규칙이 바뀌면 이 스크립트를 새
 커밋으로 다시 돌린다. t12 일치 테스트의 기준 파일(`server/tests/fixtures/ipo_t12_decisions.csv`)도 같은
-커밋의 t12 산출에서 만든다.
+커밋의 t12 산출에서 만든다. 진입 규칙(entry-t12-v1 t06, 계약 v3)의 기준 파일
+(`server/tests/fixtures/ipo_entry_t06_orders.csv`)은 같은 커밋의 t06 산출에서 만든다.
 """
 
 import argparse
@@ -51,6 +52,10 @@ FILES = (
     "src/ipo_open_entry/recall/institution.py",
     "src/ipo_open_entry/recall/complement.py",
     "src/ipo_open_entry/recall/union.py",
+    # 진입 규칙(entry-t12-v1 t06, 계약 v3): 보완 매수 1.25배·1차 매수 1.5배, 시가 단일가 전용 체결
+    "config-entry-t12-v1.yaml",
+    "src/ipo_open_entry/entry_t12/__init__.py",
+    "src/ipo_open_entry/entry_t12/execution.py",
 )
 #: t12 산출(개발 구간 평가 사건 616건의 결정) → 일치 테스트 기준 파일
 T12_RESULT = "docs/evidence/runs/recall-v1/t12.json"
@@ -66,6 +71,11 @@ T12_COLUMNS = (
     "supplement_score",
     "supplement_threshold",
 )
+#: 진입 규칙 산출(t12 매수 130건의 지정가 배수·시가 전용 체결 상태) → 일치 테스트 기준 파일
+ENTRY_RESULT = "docs/evidence/runs/entry-t12-v1/t06.json"
+ENTRY_AUDIT = "audits/AUDIT-leak-auditor-20261102-ipo-entry-limit-20261102-discovery-final-r2.md"
+ENTRY_FIXTURE = Path(__file__).resolve().parents[1] / "server/tests/fixtures/ipo_entry_t06_orders.csv"
+ENTRY_COLUMNS = ("event_id", "buy", "additional_buy", "limit_mult", "fill_state")
 #: 운용 규칙의 학습 데이터셋(개발 구간 2015-06-15~2026-09-09 상장분) — data/dev-20260909-v4 → v4r
 DATASET = ("events", "fields", "bars", "index")
 DATASET_SRC = "data/dev-20260909-v4r"
@@ -115,6 +125,9 @@ def main() -> None:
     t12 = json.loads(_show(args.quant_lab, commit, T12_RESULT))
     rows = pd.DataFrame(t12["events"])[list(T12_COLUMNS)].sort_values("event_id")
     rows.to_csv(T12_FIXTURE, index=False, float_format="%.17g")
+    entry = json.loads(_show(args.quant_lab, commit, ENTRY_RESULT))
+    rows = pd.DataFrame(entry["events"])[list(ENTRY_COLUMNS)].sort_values("event_id")
+    rows.to_csv(ENTRY_FIXTURE, index=False, float_format="%.17g")
     record = {
         "source": "JJongAchii/quant-lab",
         "line": LINE,
@@ -127,6 +140,15 @@ def main() -> None:
             "config_digest": t12["config_digest"],
             "variant": t12["variant"],
             "fixture_sha256": hashlib.sha256(T12_FIXTURE.read_bytes()).hexdigest(),
+        },
+        "entry": {
+            "result": f"{LINE}/{ENTRY_RESULT}",
+            "audit": f"{LINE}/{ENTRY_AUDIT}",
+            "trial_id": entry["trial_id"],
+            "trial_commit": entry["code_commit"],
+            "config_digest": entry["config_digest"],
+            "variant": entry["variant"],
+            "fixture_sha256": hashlib.sha256(ENTRY_FIXTURE.read_bytes()).hexdigest(),
         },
     }
     (DEST / "VENDOR.json").write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n")
