@@ -17,6 +17,7 @@ import {
   fmtWon,
   marketLabel,
   mondayOf,
+  orderKind,
 } from "./format";
 import { EmptyLine, Pill, Section } from "./parts";
 
@@ -157,6 +158,29 @@ function TradePlan({ item }: { item: IpoCalendarItem }) {
   );
 }
 
+/** 결정한 종목: 매수(주문 종류·가격) 또는 패스(이유). 결정 전이면 아무것도 그리지 않는다. */
+function DecisionLine({ item }: { item: IpoCalendarItem }) {
+  if (!item.decided) return null;
+  if (item.buy) {
+    return (
+      <div className="mt-3 rounded-xl border border-primary-400/40 bg-primary-500/10 px-3 py-2.5 text-sm text-ink">
+        <span className="inline-flex flex-wrap items-center gap-2">
+          <Pill className="bg-primary-500 text-white">매수</Pill>
+          {orderKind(item) && <span className="text-xs text-ink-secondary">{orderKind(item)}</span>}
+          <span className="num font-semibold">{fmtWon(item.limit_price)}</span>
+        </span>
+        {item.explain && <p className="mt-1 text-[11px] leading-5 text-ink-muted">{item.explain}</p>}
+      </div>
+    );
+  }
+  return (
+    <div className="mt-3 rounded-xl border border-dashed border-edge bg-surface/40 px-3 py-2.5 text-sm text-ink">
+      <Pill className="bg-raised text-ink-secondary">패스 · 매수 안 함</Pill>
+      {item.explain && <p className="mt-1 text-[11px] leading-5 text-ink-muted">{item.explain}</p>}
+    </div>
+  );
+}
+
 function ScheduleCard({ item }: { item: IpoCalendarItem }) {
   const band =
     item.band_low != null || item.band_high != null
@@ -168,7 +192,6 @@ function ScheduleCard({ item }: { item: IpoCalendarItem }) {
         <h3 className="truncate text-[15px] font-semibold text-ink">{item.corp_name ?? item.event_id}</h3>
         <span className="badge-neutral">{marketLabel(item.market)}</span>
         <StageBadge item={item} />
-        {item.decided && <Pill className="bg-primary-500/15 text-primary-300">신호 계산됨</Pill>}
         {item.decision_missing && <Pill className="bg-warning/15 text-warning">결정 없음 · 확인 필요</Pill>}
       </div>
       <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-secondary">
@@ -180,7 +203,8 @@ function ScheduleCard({ item }: { item: IpoCalendarItem }) {
         </span>
       </p>
       <Timeline item={item} />
-      <TradePlan item={item} />
+      <DecisionLine item={item} />
+      {!(item.decided && !item.buy) && <TradePlan item={item} />}
     </article>
   );
 }
@@ -334,8 +358,9 @@ export default function IpoSchedule({
   today: string;
 }) {
   const [view, setView] = useState<View>("list");
+  // 이미 상장한 종목(상장일 9시 동시호가가 지남)은 목록에서 뺀다 — 결과는 아래 '기록'에 있다
   const items = useMemo(
-    () => [...calendar].sort((a, b) => sortKey(a).localeCompare(sortKey(b))),
+    () => calendar.filter((item) => !item.listed).sort((a, b) => sortKey(a).localeCompare(sortKey(b))),
     [calendar]
   );
   const empty = items.length === 0 && events.length === 0;

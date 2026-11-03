@@ -711,6 +711,9 @@ export interface IpoRule {
   spec?: string | null;
   /** 규칙의 검증 단계(예: 개발 구간 후보 · 순방향 확증 전). */
   stage?: string | null;
+  /** 진입 규칙(지정가 배수·체결 방식) 이름과 단계. */
+  entry_spec?: string | null;
+  entry_stage?: string | null;
   entry?: string | null;
   exit?: string | null;
   stop_loss?: null;
@@ -760,6 +763,14 @@ export interface IpoCalendarItem {
   /** 다음 거래일 종가 매도. */
   sell_session?: string | null;
   decided?: boolean | null;
+  /** 결정한 경우: 매수 여부·주문 가격·배수·보완 매수 여부·이유(쉬운 문장). */
+  buy?: boolean | null;
+  limit_price?: number | null;
+  limit_mult?: number | null;
+  additional_buy?: boolean | null;
+  explain?: string | null;
+  /** 상장일 동시호가(09:00)가 지나 이미 상장한 종목(API가 한국 시간으로 판단) — 목록에서 뺀다. */
+  listed?: boolean | null;
 }
 
 export type IpoCalendarEventKind =
@@ -811,6 +822,15 @@ export interface IpoRow {
   /** t12: 원래 t01이 패스한 사건을 체결 상태 보완으로 산 경우. */
   additional_buy?: boolean | null;
   decision_reason?: string | null;
+  /** 매수·패스 이유(쉬운 문장, 배치가 점수·문턱에서 만든다). */
+  explain?: string | null;
+  /** 주문 지정가 배수(1차 1.5, 보완 1.25). */
+  limit_mult?: number | null;
+  /** 진입 규칙(2026-11-03부터 entry-t12-v1-t06). 그 전 결정은 null. */
+  entry_spec?: string | null;
+  /** 체결 방식: open-only(시가에만, 9시 미체결 취소) · gfd(당일 유효 지정가). */
+  fill_rule?: "open-only" | "gfd" | null;
+  order_method?: string | null;
   decided_at?: string | null;
   decision_session?: string | null;
   position?: IpoPosition | null;

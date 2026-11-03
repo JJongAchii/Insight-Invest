@@ -102,7 +102,9 @@ def with_freshness(status: dict, now: datetime) -> dict:
                 listing > today or (listing == today and local.time() < PRE_OPEN_END)
             )
             missing = not item.get("decided") and passed(_day(item.get("decision_night"))) and ahead
-            calendar.append({**item, "decision_missing": bool(missing)})
+            # 상장일 동시호가가 지났으면 이미 상장한 종목 — 화면 목록에서 뺀다(달력 날짜 칸에는 남는다)
+            listed = listing is not None and not ahead
+            calendar.append({**item, "decision_missing": bool(missing), "listed": bool(listed)})
         out["calendar"] = calendar
     return out
 

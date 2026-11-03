@@ -118,7 +118,11 @@ export const marketLabel = (market: string | null | undefined): string =>
   market ? MARKET_LABEL[market.toUpperCase()] ?? market : "—";
 
 /** 결정한 규칙(spec) → 짧은 이름. 2026-11-02부터 t12, 그 전 결정은 t01. */
-const RULE_LABEL: Record<string, string> = { "op-day1-v2": "t01", "recall-v1-t12": "t12" };
+const RULE_LABEL: Record<string, string> = {
+  "op-day1-v2": "t01",
+  "recall-v1-t12": "t12",
+  "entry-t12-v1-t06": "시가 전용 진입",
+};
 
 export const ruleLabel = (spec: string | null | undefined): string | null =>
   spec ? RULE_LABEL[spec] ?? spec : null;
@@ -134,11 +138,11 @@ export const POSITION_META: Record<IpoPosition, { label: string; style: string }
 export const positionMeta = (position: IpoRow["position"]) =>
   position ? POSITION_META[position] ?? { label: position, style: "bg-raised text-ink-secondary" } : null;
 
-/** 판단: 매수 / 패스 / 판단 불가. */
+/** 판단: 매수 / 패스 / 판단 불가. 이유는 배치가 만든 쉬운 문장(explain)을 먼저 쓴다. */
 export const judgement = (
   row: IpoRow
 ): { label: string; style: string; reason: string | null } => {
-  const reason = row.reason ?? null;
+  const reason = row.explain ?? row.reason ?? null;
   if (row.status === "not_eligible") {
     return { label: "판단 불가", style: "bg-raised text-ink-muted", reason };
   }
@@ -146,7 +150,7 @@ export const judgement = (
     return { label: "매수", style: "bg-primary-500/15 text-primary-300", reason };
   }
   if (row.status === "decided") {
-    return { label: "패스", style: "bg-raised text-ink-secondary", reason };
+    return { label: "패스 · 매수 안 함", style: "bg-raised text-ink-secondary", reason };
   }
   return { label: "미확인", style: "bg-raised text-ink-muted", reason };
 };
@@ -183,4 +187,13 @@ export const apiErrorMessage = (error: unknown, fallback: string): string => {
     }
   }
   return fallback;
+};
+
+/** 주문 종류: 1차 매수(공모가 × 1.5) · 보완 매수(공모가 × 1.25). 배수가 없으면 null. */
+export const orderKind = (
+  row: Pick<IpoRow, "additional_buy" | "limit_mult">
+): string | null => {
+  const mult = row.limit_mult;
+  if (mult == null) return row.additional_buy ? "보완 매수" : null;
+  return `${row.additional_buy ? "보완 매수" : "1차 매수"} · 공모가 × ${mult}`;
 };
