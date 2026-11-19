@@ -134,7 +134,23 @@ def decide_next(api, sch: pd.DataFrame, nxt: pd.Timestamp, decisions: dict, now)
             continue
         decisions[e.event_id] = _jsonable({**base, **made, "status": "decided",
                                             "buy": bool(made["order"]["buy"])})  # fmt: skip
+        lag = stock_lag(made)
+        if lag:
+            problems.append(f"{e.corp_name}: {lag}")
     return problems
+
+
+def stock_lag(rec: dict) -> str | None:
+    """결정이 그날 지수보다 이른 주식 시세로 났으면 그 사실. 저녁 회차가 KRX 주식 시세를 미루고 지수 축만 먼저
+    발행한 밤이다(quant-data ADR-0035, 2026-11-19 수능일). 직전 공모주 거래 결과(H7)만 하루 늦다."""
+    stock, session = rec.get("stock_last_date"), rec.get("decision_session")
+    if stock is None or session is None or pd.Timestamp(stock) >= pd.Timestamp(session):
+        return None
+    stock, session = pd.Timestamp(stock), pd.Timestamp(session)
+    return (
+        f"데이터 지연 — KRX 주식 시세가 {stock:%Y-%m-%d}까지만 반영됐다. 결정은 {session:%Y-%m-%d} 지수와 "
+        f"공시로 냈고, 직전 공모주 거래 결과는 {stock:%Y-%m-%d} 종가까지다(확인 필요)"
+    )
 
 
 def _bars(api, rec: dict, ix: pd.DataFrame, asof: pd.Timestamp, ticker: str) -> pd.DataFrame:
