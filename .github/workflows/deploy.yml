@@ -135,13 +135,29 @@ jobs:
       - name: Build and push image
         run: |
           echo "${{ secrets.GH_PAT }}" > /tmp/ghtoken
+          # Lambda는 이미지 인덱스(매니페스트 목록)를 받지 않는다. 러너 Docker가 증명(attestation)을 붙여 인덱스로
+          # 내보내기 시작해 2026-11-20 배포가 'media type … not supported'로 롤백됐다 — 단일 매니페스트로 만든다.
           DOCKER_BUILDKIT=1 docker build \
+            --provenance=false --sbom=false \
             --secret id=gh_token,src=/tmp/ghtoken \
             -t ${{ steps.ecr.outputs.registry }}/$ECR_REPO:${{ github.sha }} server/
           docker push ${{ steps.ecr.outputs.registry }}/$ECR_REPO:${{ github.sha }}
-          DIGEST=$(aws ecr describe-images --repository-name $ECR_REPO \
+          read -r DIGEST MEDIA < <(aws ecr describe-images --repository-name $ECR_REPO \
             --image-ids imageTag=${{ github.sha }} \
-            --query 'imageDetails[0].imageDigest' --output text)
+            --query 'imageDetails[0].[imageDigest,imageManifestMediaType]' --output text)
+          case "$MEDIA" in
+            *index*|*manifest.list*)
+              # 그래도 인덱스로 올라갔으면 그 안의 실행 이미지(증명 매니페스트는 platform unknown) 하나를 배포한다
+              DIGEST=$(aws ecr batch-get-image --repository-name $ECR_REPO \
+                --image-ids imageDigest=$DIGEST --query 'images[0].imageManifest' --output text \
+                | jq -r '[.manifests[] | select(.platform.architecture != "unknown")]
+                         | if length == 1 then .[0].digest else empty end')
+              if [ -z "$DIGEST" ]; then
+                echo "::error::ECR 이미지 인덱스($MEDIA)에서 실행 이미지를 하나로 정하지 못했다 — Lambda가 거부한다"
+                exit 1
+              fi
+              echo "이미지 인덱스 → 실행 이미지 매니페스트 $DIGEST 로 배포" ;;
+          esac
           echo "IMAGE_URI=${{ steps.ecr.outputs.registry }}/$ECR_REPO@$DIGEST" >> $GITHUB_ENV
 
       - name: Wait for protected web proxy
