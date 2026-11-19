@@ -186,7 +186,8 @@ def post_dev_events(api, end, asof, ix: pd.DataFrame, cfg: dict) -> dict:
         raise ValueError(f"같은 종목코드의 상장 사건이 둘 이상: {sorted(ev.loc[dup, 'ticker'])}")
     if ev.empty:
         empty = pd.DataFrame(columns=["event_id", "day", "date", *PRICE_COLUMNS])
-        return {"events": ev, "fields": pd.DataFrame(), "bars": empty, "contaminated": []}
+        return {"events": ev, "fields": pd.DataFrame(), "bars": empty, "contaminated": [],
+                "stock_last": None}  # fmt: skip
     obs = api.load_ipo_observations(event_ids=ev["event_id"].tolist())
     table = fields.build_fields(obs, ev)
     ev["offer_price"] = ev["event_id"].map(table["final_price"])
@@ -199,6 +200,8 @@ def post_dev_events(api, end, asof, ix: pd.DataFrame, cfg: dict) -> dict:
         columns=PRICE_COLUMNS,
     )
     prices["date"] = pd.to_datetime(prices["date"]).astype("datetime64[ns]")
+    # 지수만 먼저 발행된 밤(quant-data ADR-0035)에는 주식 시세가 as-of보다 이르다 — 결정 기록에 남긴다
+    stock_last = prices["date"].max() if len(prices) else None
     cal = trading_calendar(ix, prices, pd.Timestamp(asof))
     bars = event_bars(ev, prices, cal, int(cfg["execution"]["bars_after_listing"]))
     day0 = bars[bars["day"] == 0].set_index("event_id")
@@ -212,6 +215,7 @@ def post_dev_events(api, end, asof, ix: pd.DataFrame, cfg: dict) -> dict:
         "fields": table.loc[ev.loc[keep, "event_id"]],
         "bars": bars[~bars["event_id"].isin(bad)].reset_index(drop=True),
         "contaminated": list(bad),
+        "stock_last": stock_last,
     }
 
 
@@ -304,6 +308,7 @@ def record(ctx: dict, spec: str, order: dict, post_table: pd.DataFrame | None) -
         "listing_date": ctx["listing"],
         "decision_session": ctx["asof"],
         "lake_last_date": ctx["lake_last"],
+        "stock_last_date": ctx["post"].get("stock_last"),
         "offer_price": target["offer_price"],
         "regime": target["regime"],
         "order": order,

@@ -12,7 +12,7 @@ from module import ipo_signals, ipo_t01
 
 KST = dt.timezone(dt.timedelta(hours=9))
 NOW = dt.datetime(2026, 11, 2, 22, 20, tzinfo=KST)  # 월요일 밤 배치 — 다음 거래일 11/3
-SESSIONS = pd.bdate_range("2026-10-20", "2026-11-13")
+SESSIONS = pd.bdate_range("2026-10-20", "2026-11-27")
 OBS_COLUMNS = ["event_id", "rcept_no", "filed_date", "metric", "value", "value_text"]
 
 
@@ -130,6 +130,34 @@ def _decided(event_id, listing, buy=True, limit=15_000.0):
         "threshold": 0.05,
         "spec": "op-day1-v2",
     }
+
+
+def test_a_decision_from_an_index_only_night_is_shown_as_data_lag(app_data, monkeypatch):
+    """2026-11-19 수능일: 저녁 회차가 KRX 주식 시세를 미루고 지수 축만 먼저 냈다(quant-data ADR-0035).
+    결정은 그날 지수로 내되, 주식 시세가 하루 늦다는 사실을 status 문제로 보인다(조용한 누락 금지)."""
+    monkeypatch.setattr(
+        ipo_signals.RULE,
+        "decide_listing",
+        lambda *a, **k: {"order": {"buy": False, "limit_mult": None, "limit_price": None},
+                         "decision_session": pd.Timestamp("2026-11-19"),
+                         "stock_last_date": pd.Timestamp("2026-11-18")},  # fmt: skip
+    )
+    sched = _schedule([("hana", "하나에어로다이내믹스", None, "2026-11-20")])
+    api = FakeApi("2026-11-19", sched, _events([("hana", None, None)]))
+    ipo_signals.build(api, now=dt.datetime(2026, 11, 19, 21, 19, tzinfo=KST))
+    status = storage.read_json(*ipo_signals.STATUS)
+    (problem,) = status["problems"]
+    assert problem.startswith(
+        "하나에어로다이내믹스: 데이터 지연 — KRX 주식 시세가 2026-11-18까지만"
+    )
+    assert "결정은 2026-11-19 지수" in problem and "확인 필요" in problem
+    assert storage.read_json(*ipo_signals.DECISIONS)["hana"]["stock_last_date"] == "2026-11-18"
+
+
+@pytest.mark.parametrize("stock", ["2026-11-19", None])
+def test_a_decision_with_current_stock_prices_has_no_lag(stock):
+    rec = {"decision_session": "2026-11-19", "stock_last_date": stock}
+    assert ipo_signals.stock_lag(rec) is None
 
 
 def test_next_listing_is_decided_once_and_not_ready_is_not_recorded(app_data, monkeypatch):
