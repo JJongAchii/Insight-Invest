@@ -3,6 +3,8 @@ import { ACCESS_COOKIE_NAME } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+// The production Lambda can take longer than ten seconds to start after a release.
+export const maxDuration = 60;
 
 type RouteContext = { params: Promise<{ path: string[] }> };
 
