@@ -8,6 +8,7 @@ import {
   Globe2,
   LayoutDashboard,
   NotebookPen,
+  Radio,
   Rocket,
   Search,
 } from "lucide-react";
@@ -17,28 +18,37 @@ export interface NavigationItem {
   href: string;
   label: string;
   hint: string;
+  mobileLabel?: string;
   icon: LucideIcon;
   activePrefixes?: string[];
   badge?: "actions" | "research";
 }
 
-export const marketNavigation: NavigationItem[] = [
+export const dailyNavigation: NavigationItem[] = [
   {
     href: "/home",
     label: "시장 브리핑",
-    hint: "시황 · 경제 · 읽을거리",
+    hint: "장중 해설 · 아침과 마감",
+    mobileLabel: "브리핑",
     icon: LayoutDashboard,
   },
+  { href: "/ipo", label: "공모주 신호", hint: "상장일 매수·매도 신호", mobileLabel: "공모주", icon: Rocket },
+  { href: "/feed", label: "속보 피드", hint: "Slack으로 받은 속보", mobileLabel: "속보", icon: Radio },
+];
+
+export const marketNavigation: NavigationItem[] = [
   {
     href: "/insight",
     label: "한국 시장",
     hint: "지수 · 수급 · 섹터",
+    mobileLabel: "한국 시장",
     icon: ChartNoAxesCombined,
   },
   {
     href: "/regime",
     label: "경제 · 매크로",
     hint: "금리 · 물가 · 경기 국면",
+    mobileLabel: "경제",
     icon: Globe2,
   },
   {
@@ -77,12 +87,6 @@ export const personalNavigation: NavigationItem[] = [
     hint: "",
     icon: BellRing,
     badge: "actions",
-  },
-  {
-    href: "/ipo",
-    label: "공모주",
-    hint: "상장일 매수·매도 신호",
-    icon: Rocket,
   },
   { href: "/journal", label: "판단 기록", hint: "", icon: NotebookPen },
   {

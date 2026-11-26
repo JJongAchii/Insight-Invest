@@ -8,6 +8,17 @@
 
 화면 구성과 후속 우선순위는 [시장·경제·리서치 중심 개선 검토](docs/reviews/2026-09-07-market-research.md)를 참고한다.
 
+홈은 한국 증시 장중·마감의 대표 해설에서 현재 장세와 비교가 되는 시점, 수급·정책 등 해석에 영향을 준
+근거, 다음에 확인할 조건을 읽을 수 있다. 마감판은 실제 마감 보도, 장중판은 신선한 KRX 관측과 시황 원문이
+있을 때 기존 구독 작성 한도에서 발행된다. 각 문단에서 근거 원문을 열 수 있다.
+대표 해설이 없는 시각에는 두 지수의 장중 경로와 업종별 등락, 특정 종목의 상승·하락 기여도를 보여준다.
+기존 10분 KRX 폴러가 같은 시각의 자료로 해설을 만들어 `app/market_desk/input.json`에 저장한다.
+홈은 `GET /market-desk`로 저장된 글을 읽는다. 지수 배경을 다룬 보도는 원문과 보도 시각을 표시하고,
+편집기가 특정 구간의 원인을 확인한 해설에는 해당 관측 시각과 근거를 표시한다. ai-company 편집기가 발송 완료한
+Slack 브리핑·속보와 새 해설을 `app/market_desk/board.json`에 게시한다. 시세 수집, 원문 발표,
+글 발행 시각은 각각 KST로 표시한다. 공모주 신호는 같은 홈에서 기존 배치 판정을 확인한다.
+개별 기업 공시와 정기 브리핑은 각각 전용 영역에서 읽을 수 있다. [편집기 운영 절차](https://github.com/JJongAchii/quant-ai-company/blob/main/docs/runbooks/insight-market-desk.md)
+
 `Action Center`는 기존 Attention·Watchlist·Holdings·Journal·Strategy·Data Trust를
 공통 Event 계약으로 묶는다. 가격 기준 교차, Thesis 검토일, 리밸런싱, 데이터 이상을
 한 Inbox/Calendar에 표시하고 판단 근거를 Decision Journal 초안으로 넘길 수 있다.

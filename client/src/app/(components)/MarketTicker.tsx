@@ -29,6 +29,11 @@ function TickerEmbed({ theme, onRetry }: { theme: "dark" | "light"; onRetry: () 
     container.innerHTML = `<div class="tradingview-widget-container__widget"></div>
       <div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank"><span class="blue-text">Track all markets on TradingView</span></a><span> · 지연 가능</span></div>`;
     root.appendChild(container);
+    // Keep the embed's attribution above the mobile menu when TradingView changes its height.
+    const size = new ResizeObserver(([entry]) => {
+      document.documentElement.style.setProperty("--ticker-content-height", `${Math.ceil(entry.contentRect.height)}px`);
+    });
+    size.observe(container);
     let disposed = false;
     let frame: HTMLIFrameElement | null = null;
     const failed = () => { if (!disposed) setStatus("error"); };
@@ -70,6 +75,8 @@ function TickerEmbed({ theme, onRetry }: { theme: "dark" | "light"; onRetry: () 
       disposed = true;
       window.clearTimeout(timeout);
       observer.disconnect();
+      size.disconnect();
+      document.documentElement.style.removeProperty("--ticker-content-height");
       window.removeEventListener("message", onMessage);
       script.onerror = null;
       container.remove();

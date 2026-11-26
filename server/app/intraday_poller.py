@@ -16,6 +16,7 @@ import pandas as pd
 
 from datastore import storage
 from module import kr_intraday as ki
+from module.market_desk import market_input
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +115,14 @@ def handler(event, context):
             logger.warning("ETF 장중 스냅샷 저장 실패 — 직전 파일 유지", exc_info=True)
     else:
         logger.warning("ETF 장중 응답이 비어 있음 — 직전 스냅샷 유지")
+    # The web app and the private editor share observations, never model credentials.
+    try:
+        storage.write_json(market_input(timeline, latest, now), "market_desk", "input.json")
+        desk_status = "ok"
+    except Exception:
+        logger.exception("장중 해설 관측값 저장 실패")
+        desk_status = "degraded"
     return {"status": "ok", "tickers": len(latest),
             "etfs": len(etf_latest), "etf_status": etf_status,
+            "market_desk_status": desk_status,
             "polls": int(timeline["as_of"].nunique())}

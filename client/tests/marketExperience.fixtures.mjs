@@ -187,6 +187,49 @@ export const news = {
   },
 };
 export function fixtureFor(path, params, mode) {
+  if (path === "ipo") return {
+    status: { next_session: date, calendar: [{ planned_listing_date: date, decision_missing: mode === "stale" }] },
+    open: [], history: [],
+  };
+  if (path === "market-desk") {
+    if (mode === "empty") return { state: "awaiting", today: date, session: null, session_state: "awaiting", policy_coverage: [], board: null };
+    const stamp = `${date}T10:15:00+09:00`;
+    const filing = { id: "firm", origin: "desk", kind: "filing", status: "analysis", headline: "단일기업 공급계약",
+      fact: "공급 조건이 공시됐습니다.", observation: "", interpretation: "기업 매출에 영향을 줍니다.", watch: "",
+      published_at: `${date}T10:30:00+09:00`, observed_at: null, sources: [] };
+    const wire = { title: "코스피, 외국인 매도세에 장중 반락", publisher: "시황통신", published_at: `${date}T09:23:00+09:00`, url: "https://example.org/index-report" };
+    return { state: mode === "stale" ? "stale" : "ready", today: date,
+      lead: mode === "lead" ? { phase: "close", trade_date: date, as_of: `${date}T16:05:00+09:00`,
+        cutoff: `${date}T16:15:00+09:00`, published_at: `${date}T16:18:00+09:00`, close_at: `${date}T15:30:00+09:00`,
+        headline: "기관이 지킨 반등, 외국인은 매도 전환", reading: { text: "전일 낙폭에서 회복한 폭은 제한적입니다.", sources: [wire] },
+        qualification: { text: "마감 집계에서 기관과 외국인의 수급이 갈렸습니다.", sources: [wire] },
+        watch: "다음 거래일 외국인 수급을 확인합니다.", comparison: { index: "코스피", previous_points: -100, current_points: 10, share_pct: 10 } } : null,
+      session: mode === "company" ? null : { observed_at: stamp, headline: "코스피는 상승, 코스닥은 하락", market: "두 시장의 전일 대비 방향이 갈렸습니다.",
+        sectors: "업종 등락률의 격차를 확인했습니다.", watch: "업종 간 차이가 이어지는지 확인합니다." },
+      session_state: mode === "company" ? "awaiting" : "latest", policy_coverage: [], board: {
+      checked_at: stamp, market_at: stamp, filings_at: stamp, monitoring: true,
+      market_reports: [wire, { ...wire, title: "관측 이후 보도", published_at: stamp, url: "https://example.org/later" }],
+      issues: mode === "company" ? [filing] : [filing,
+        { id: "prior", origin: "desk", kind: "move", status: "analysis", headline: "지난 거래일의 지수 배경",
+          fact: "지난 거래일의 변동", observation: "", interpretation: "이전 거래일의 원인", watch: "",
+          published_at: stamp, observed_at: "2026-09-04T14:10:00+09:00", sources: [wire] },
+        { id: "move", origin: "desk", kind: "move", status: "unconfirmed", headline: "코스피 장중 변화",
+        fact: "직전 관측 대비 변화가 감지됐습니다.", observation: "", interpretation: "", watch: "",
+        published_at: stamp, observed_at: stamp, sources: [] },
+        ...(mode === "explained" ? [{ id: "cause", origin: "desk", kind: "move", status: "analysis", headline: "수급 보도로 확인한 코스피 반락",
+          fact: "시장 보도가 외국인 순매도를 확인했습니다.", observation: "10시 관측", interpretation: "해당 변동 구간의 설명", watch: "",
+          published_at: stamp, observed_at: stamp, sources: [wire] }] : []),
+        { id: "old", origin: "reporter", kind: "news", status: "reported", headline: "이전 속보",
+          fact: "앞서 발송한 본문", observation: "", interpretation: "", watch: "",
+          published_at: `${date}T09:00:00+09:00`, observed_at: null, sources: [] },
+        { id: "report", origin: "reporter", kind: "news", status: "reported", headline: "발송된 속보",
+          fact: "확인된 속보 본문", observation: "", interpretation: "", watch: "",
+          published_at: stamp, observed_at: null,
+          sources: [{ title: "발표 원문", url: "https://example.com/announcement", publisher: "시험 기관", published_at: stamp }] }],
+      briefings: [{ id: "morning", kind: "am", as_of: `${date}T07:00:00+09:00`,
+        published_at: `${date}T07:30:00+09:00`, body: "아침 발행본 요약\n\n주요 숫자\n\n<https://example.com/source|공식 발표>" }],
+    } };
+  }
   if (path === "overview")
     return mode === "empty"
       ? { ...overview, horizons: [], evidence: [], conflicts: [] }

@@ -38,6 +38,68 @@ export interface NewsQueryParams {
   search_query?: string;
 }
 
+export interface DeskArticle {
+  id: string;
+  origin?: "desk" | "reporter";
+  kind: "move" | "filing" | "news";
+  status: "unconfirmed" | "analysis" | "reported";
+  headline: string;
+  fact: string;
+  interpretation: string;
+  watch: string;
+  published_at: string;
+  observed_at: string | null;
+  observation: string;
+  sources: { title: string; publisher: string; url: string; published_at: string; license_url?: string | null; license_name?: string | null }[];
+  followups?: DeskArticle["sources"];
+}
+
+export interface DeskBrief {
+  id: string;
+  kind: "am" | "pm";
+  published_at: string;
+  as_of: string;
+  body: string;
+}
+
+export interface DeskLead {
+  phase: "intraday" | "close";
+  trade_date: string;
+  as_of: string;
+  cutoff: string;
+  close_at: string;
+  published_at: string;
+  headline: string;
+  reading: { text: string; sources: DeskArticle["sources"] };
+  qualification: { text: string; sources: DeskArticle["sources"] };
+  watch: string;
+  comparison?: { index: string; previous_points: number; current_points: number; share_pct: number } | null;
+}
+
+export interface MarketDeskResponse {
+  state: "ready" | "awaiting" | "stale" | "unavailable";
+  lead?: DeskLead | null;
+  today: string;
+  session: {
+    observed_at: string;
+    headline: string;
+    market: string;
+    sectors: string;
+    watch: string;
+  } | null;
+  session_state: "latest" | "delayed" | "previous" | "awaiting" | "unavailable";
+  policy_coverage: { headline: string; source: DeskArticle["sources"][number] }[];
+  board: {
+    checked_at: string;
+    monitoring: boolean;
+    market_at: string | null;
+    filings_at: string | null;
+    issues: DeskArticle[];
+    briefings: DeskBrief[];
+    market_reports?: DeskArticle["sources"];
+  } | null;
+}
+
 export interface NewsBriefingItem {
   title: string;
   url: string;
@@ -2427,6 +2489,9 @@ export const api = createApi({
       }),
       providesTags: ["News"],
     }),
+    fetchMarketDesk: builder.query<MarketDeskResponse, void>({
+      query: () => "/market-desk",
+    }),
     fetchNewsBriefing: builder.query<NewsBriefingResponse, void>({
       query: () => "/news/briefing",
       providesTags: ["News"],
@@ -2650,6 +2715,7 @@ export const {
   // News hooks
   useFetchNewsQuery,
   useFetchNewsBriefingQuery,
+  useFetchMarketDeskQuery,
   // KR insight hooks
   useFetchInsightFlowsTopQuery,
   useFetchInsightFlowsMarketQuery,
