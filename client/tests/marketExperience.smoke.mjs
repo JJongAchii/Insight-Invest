@@ -107,12 +107,19 @@ try {
   await check("Read existing market updates, published briefs and Slack reports", async () => {
     const desk = page.getByRole("region", { name: "장중 시장 해설" });
     await page.getByRole("link", { name: /공모주 신호.*매수 없음/ }).waitFor();
-    await desk.getByRole("heading", { name: "코스피 장중 변화" }).waitFor();
+    await desk.getByRole("heading", { name: "코스피는 상승, 코스닥은 하락" }).waitFor();
+    await desk.getByRole("link", { name: "코스피, 외국인 매도세에 장중 반락" }).waitFor();
+    assert.doesNotMatch(await desk.innerText(), /단일기업|아침 브리핑|지난 거래일의 지수 배경|관측 이후 보도/);
+    await desk.locator("summary").filter({ hasText: "코스피 장중 변화" }).click();
     await desk.getByText("원인 미확인").waitFor();
-    await desk.getByRole("button", { name: /아침 브리핑/ }).click();
-    await desk.getByText("브리핑 전문 읽기").click();
-    assert.equal(await desk.getByRole("link", { name: "공식 발표" }).getAttribute("href"), "https://example.com/source");
-    await desk.getByRole("link", { name: /최근 속보.*발송된 속보/ }).click();
+    const filing = page.getByRole("region", { name: "기업 공시·주요 뉴스" });
+    await filing.locator("summary").filter({ hasText: "단일기업 공급계약" }).click();
+    await filing.getByText("기업 매출에 영향을 줍니다.").waitFor();
+    const briefs = page.getByRole("region", { name: "아침·마감 브리핑" });
+    await briefs.locator("summary").filter({ hasText: "아침 브리핑" }).click();
+    await briefs.getByText("브리핑 전문 읽기").click();
+    assert.equal(await briefs.getByRole("link", { name: "공식 발표" }).getAttribute("href"), "https://example.com/source");
+    await page.getByRole("link", { name: /최근 속보.*발송된 속보/ }).click();
     const feed = page.getByRole("region", { name: "Slack 발송 속보" });
     await feed.getByText("확인된 속보 본문").waitFor();
     assert.equal(new URL(page.url()).searchParams.get("item"), "report");
@@ -122,6 +129,20 @@ try {
     await feed.getByText("확인된 속보 본문").waitFor();
     await page.goBack();
     await desk.getByRole("heading", { name: "장중 시장 해설" }).waitFor();
+  });
+  await check("A corporate-only edition never becomes the market explanation", async () => {
+    mode = "company";
+    await page.reload();
+    const desk = page.getByRole("region", { name: "장중 시장 해설" });
+    await desk.getByText(/같은 시각에 수집한 장중 시황을 기다리고/).waitFor();
+    assert.doesNotMatch(await desk.innerText(), /단일기업|아침 브리핑/);
+    await page.getByRole("region", { name: "기업 공시·주요 뉴스" }).getByText("단일기업 공급계약").waitFor();
+    mode = "explained";
+    await page.reload();
+    await desk.getByRole("heading", { name: "수급 보도로 확인한 코스피 반락" }).waitFor();
+    await desk.getByText("해당 변동 구간의 설명").waitFor();
+    mode = "normal";
+    await page.reload();
   });
   await visible(page, "금리와 환율의 변화");
   await check(
@@ -279,13 +300,10 @@ try {
       await phone.getByRole("heading", { name: "시장 브리핑", exact: true }).waitFor();
       await visible(phone, "금리와 환율의 변화");
       const desk = phone.getByRole("region", { name: "장중 시장 해설" });
-      const chooser = desk.getByRole("combobox", { name: "읽을 글 선택" });
-      const chooserBounds = await chooser.boundingBox();
-      const articleBounds = await desk.locator("article").boundingBox();
-      assert.ok(chooserBounds && articleBounds && chooserBounds.y + chooserBounds.height <= articleBounds.y);
-      await chooser.selectOption("morning");
-      await desk.getByRole("heading", { name: "아침 브리핑", exact: true }).waitFor();
-      await chooser.selectOption("move");
+      await desk.getByRole("heading", { name: "코스피는 상승, 코스닥은 하락" }).waitFor();
+      const briefs = phone.getByRole("region", { name: "아침·마감 브리핑" });
+      await briefs.locator("summary").filter({ hasText: "아침 브리핑" }).click();
+      await briefs.getByText("아침 발행본 요약", { exact: false }).waitFor();
       const nav = phone.locator("nav.fixed");
       assert.deepEqual(
         await nav

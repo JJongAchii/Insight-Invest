@@ -63,7 +63,17 @@ export interface DeskBrief {
 }
 
 export interface MarketDeskResponse {
-  state: "ready" | "awaiting" | "stale";
+  state: "ready" | "awaiting" | "stale" | "unavailable";
+  today: string;
+  session: {
+    observed_at: string;
+    headline: string;
+    market: string;
+    sectors: string;
+    watch: string;
+  } | null;
+  session_state: "latest" | "delayed" | "previous" | "awaiting" | "unavailable";
+  policy_coverage: { headline: string; source: DeskArticle["sources"][number] }[];
   board: {
     checked_at: string;
     monitoring: boolean;
@@ -71,6 +81,7 @@ export interface MarketDeskResponse {
     filings_at: string | null;
     issues: DeskArticle[];
     briefings: DeskBrief[];
+    market_reports?: DeskArticle["sources"];
   } | null;
 }
 

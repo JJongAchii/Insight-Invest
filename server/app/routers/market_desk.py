@@ -55,17 +55,87 @@ class Board(BaseModel):
     filings_at: AwareDatetime | None
     issues: list[Issue] = Field(max_length=15)
     briefings: list[Brief] = Field(max_length=2)
+    market_reports: list[Source] = Field(default_factory=list, max_length=3)
+
+
+class SessionReading(BaseModel):
+    observed_at: AwareDatetime
+    headline: str
+    market: str
+    sectors: str
+    watch: str
+
+
+def _read_session(now):
+    try:
+        packet = storage.read_json("market_desk", "input.json")
+        if not packet.get("session"):
+            return None, "awaiting"
+        reading = SessionReading.model_validate(packet["session"])
+        day = reading.observed_at.astimezone(KST).date()
+        if packet["version"] != 1 or packet["trade_date"] != day.isoformat() or reading.observed_at > now:
+            raise ValueError("invalid market reading date or version")
+    except FileNotFoundError:
+        return None, "awaiting"
+    except Exception:
+        logger.exception("장중 시황 수집본 조회 실패")
+        return None, "unavailable"
+    if day < now.date():
+        return reading, "previous"
+    regular_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
+    if now.weekday() < 5 and min(now, regular_close) - reading.observed_at > timedelta(minutes=25):
+        return reading, "delayed"
+    return reading, "latest"
+
+
+def _policy_coverage(board, reading):
+    """Contemporaneous policy reporting. These links are context, never evidence of index causation."""
+    if not board or not reading:
+        return []
+    cutoff = reading.observed_at - timedelta(minutes=20)
+    day = reading.observed_at.astimezone(KST).date()
+    items = []
+    seen = set()
+    for issue in sorted(board.issues, key=lambda row: row.published_at, reverse=True):
+        if issue.kind != "news" or issue.published_at > reading.observed_at or not issue.sources:
+            continue
+        bank = next((bank for bank, aliases in (("BOK", ("한국은행", "한은", "금통위")), ("Fed", ("연준", "FOMC")))
+                     if any(alias in issue.headline for alias in aliases)), None)
+        if not bank:
+            continue
+        if "금리" in issue.headline and any(word in issue.headline for word in ("인상", "인하", "동결")):
+            terms = ("금리", "긴축", "인상", "인하", "동결")
+        elif "성장률" in issue.headline and "전망" in issue.headline:
+            terms = ("성장", "전망", "GDP")
+        else:
+            continue
+        # The published summary may rely on several sources. All must already have been public.
+        if (bank, terms) in seen or any(src.published_at > cutoff or src.published_at.astimezone(KST).date() != day
+                                for src in issue.sources):
+            continue
+        source = next((src for src in issue.sources if any(term in src.title for term in terms)), None)
+        if source:
+            seen.add((bank, terms))
+            items.append({"headline": issue.headline, "source": source})
+    return items
 
 
 @router.get("")
 def get_market_desk():
+    now = datetime.now(KST)
+    session, session_state = _read_session(now)
+    board = None
     try:
         board = Board.model_validate(storage.read_json("market_desk", "board.json"))
     except FileNotFoundError:
-        return {"state": "awaiting", "board": None}
+        state = "awaiting"
     except Exception:
         logger.exception("장중 해설 발행본 조회 실패")
-        raise HTTPException(503, "장중 해설을 불러올 수 없습니다.") from None
-    now = datetime.now(KST)
-    stale = now - board.checked_at > timedelta(minutes=25 if is_open_kst(now) else 100)
-    return {"state": "stale" if stale else "ready", "board": board}
+        if session is None:
+            raise HTTPException(503, "장중 해설을 불러올 수 없습니다.") from None
+        state = "unavailable"
+    else:
+        stale = now - board.checked_at > timedelta(minutes=25 if is_open_kst(now) else 100)
+        state = "stale" if stale else "ready"
+    return {"state": state, "board": board, "today": now.date(), "session": session,
+            "session_state": session_state, "policy_coverage": _policy_coverage(board, session)}

@@ -22,13 +22,44 @@ def test_compare_adjacent_observations_even_without_yesterdays_close():
         ("KOSPI", -0.98, "%"), ("전자", -1.1, "%p")]
     assert packet["moves"][1]["companies"] == ["테스트기업"]
     assert packet["observed_at"] == now.isoformat()
+    assert packet["session"] is None  # KOSDAQ was not collected
+
+
+def test_session_explains_intraday_reversal_and_sector_concentration_from_aligned_samples():
+    now = datetime(2026, 11, 26, 11, 5, tzinfo=KST)
+    levels = [("09:05", 102, 105), ("10:05", 101, 103), ("11:05", 100.5, 101), ("11:15", 200, 200)]
+    rows = pd.DataFrame([
+        {"trade_date": "2026-11-26", "as_of": f"2026-11-26 {time}", "kind": "index", "key": key,
+         "level": level, "chg_pct": level - 100, "n": None}
+        for time, kospi, kosdaq in levels for key, level in [("KOSPI", kospi), ("KOSDAQ", kosdaq)]
+    ])
+    stocks = pd.DataFrame([
+        {"as_of": f"2026-11-26 {time}", "sector": sector, "chg_pct": chg, "cap": cap, "name": name, "value": 5}
+        for sector, name, cap, chg, time in [
+            ("증권", "대형증권", 80, 5, "11:05"), *[("증권", "기타증권", 5, 1, "11:05")] * 4,
+            *[("운송", "운송기업", 2, -1, "11:05")] * 5, ("소수업종", "단일기업", 5, 99, "11:05"),
+            *[("기타", "미분류", 5, 99, "11:05")] * 5, ("증권", "다음수집", 9999, 70, "11:15"),
+        ]
+    ])
+    session = market_input(rows, stocks, now)["session"]
+    assert session["observed_at"] == now.isoformat()
+    assert session["headline"] == "코스닥, 오전 상승분의 80% 반납"
+    assert "09:05 수집 때 +5.00%" in session["market"] and "11:05에는 +1.00%" in session["market"]
+    assert "10:05~11:05" in session["market"] and "코스닥 -1.94%" in session["market"]
+    assert "증권(+4.20%)" in session["sectors"] and "운송(-1.00%)" in session["sectors"]
+    assert "95%가 대형증권" in session["sectors"]
+    assert "대형증권 외 종목" in session["watch"]
+    rows.loc[rows["key"].eq("KOSDAQ"), "chg_pct"] = None
+    no_baseline = market_input(rows, stocks.iloc[0:0], now)["session"]
+    assert "전일 종가 미확인" in no_baseline["market"] and no_baseline["sectors"] == ""
 
 
 def test_repeated_home_reads_only_serve_saved_edition(tmp_path, monkeypatch):
     monkeypatch.setenv("APP_DATA", str(tmp_path))
     monkeypatch.delenv("API_TOKEN", raising=False)
     client = TestClient(app)
-    assert client.get("/market-desk").json() == {"state": "awaiting", "board": None}
+    empty = client.get("/market-desk").json()
+    assert empty["state"] == empty["session_state"] == "awaiting" and empty["board"] is empty["session"] is None
     stamp = (datetime.now(KST) - timedelta(days=3)).isoformat()
     board = {"version": 1, "checked_at": stamp, "market_at": None, "filings_at": None, "issues": [],
              "briefings": [{"id": "sent", "kind": "am", "body": "이미 발송된 브리핑", "published_at": stamp, "as_of": stamp}]}
@@ -42,3 +73,36 @@ def test_repeated_home_reads_only_serve_saved_edition(tmp_path, monkeypatch):
     assert client.post("/market-desk").status_code == 405
     path.write_text("{}")
     assert client.get("/market-desk").status_code == 503
+
+
+def test_session_can_publish_first_and_policy_news_is_time_bounded(tmp_path, monkeypatch):
+    monkeypatch.setenv("APP_DATA", str(tmp_path))
+    monkeypatch.delenv("API_TOKEN", raising=False)
+    client = TestClient(app)
+    at = (datetime.now(KST) - timedelta(days=1)).replace(hour=14, minute=0)
+    stamp = at.isoformat()
+    session = {"observed_at": stamp, "headline": "두 지수 엇갈림", "market": "지수 흐름", "sectors": "", "watch": ""}
+    packet = {"version": 1, "trade_date": at.date().isoformat(), "session": session}
+    storage.write_json(packet, "market_desk", "input.json")
+    saved = client.get("/market-desk").json()
+    assert saved["session"]["headline"] == session["headline"] and saved["state"] == "awaiting"
+    assert saved["session_state"] == "previous"
+    def issue(headline, kind, minutes):
+        published = (at - timedelta(minutes=minutes)).isoformat()
+        return {"id": headline, "kind": kind, "status": "reported", "headline": headline, "fact": headline,
+                "interpretation": "", "watch": "", "published_at": published, "observed_at": None, "observation": "",
+                "sources": [{"publisher": "시험 통신사", "title": headline, "published_at": published, "url": "https://example.org/news"}]}
+    eligible = issue("한은, 기준금리 인상", "news", 45)
+    board = {"version": 1, "checked_at": stamp, "market_at": stamp, "filings_at": None, "briefings": [], "issues": [
+        eligible, issue("한은 기준금리 인하 전망", "news", -5), issue("한은 성장률 전망 상향", "news", 15),
+        issue("한은 성장률 전망 하향", "news", 24 * 60), issue("기업 단일판매계약 공시", "filing", 50),
+    ]}
+    storage.write_json(board, "market_desk", "board.json")
+    saved = client.get("/market-desk").json()
+    assert [x["headline"] for x in saved["policy_coverage"]] == [eligible["headline"]]
+    storage.write_json({}, "market_desk", "board.json")
+    assert client.get("/market-desk").json()["session"]["headline"] == session["headline"]
+    storage.write_json(board, "market_desk", "board.json")
+    storage.write_json({**packet, "trade_date": "2000-01-01"}, "market_desk", "input.json")
+    degraded = client.get("/market-desk").json()
+    assert degraded["session_state"] == "unavailable" and degraded["board"]["issues"]

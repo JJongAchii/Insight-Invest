@@ -192,13 +192,28 @@ export function fixtureFor(path, params, mode) {
     open: [], history: [],
   };
   if (path === "market-desk") {
-    if (mode === "empty") return { state: "awaiting", board: null };
+    if (mode === "empty") return { state: "awaiting", today: date, session: null, session_state: "awaiting", policy_coverage: [], board: null };
     const stamp = `${date}T10:15:00+09:00`;
-    return { state: mode === "stale" ? "stale" : "ready", board: {
+    const filing = { id: "firm", origin: "desk", kind: "filing", status: "analysis", headline: "단일기업 공급계약",
+      fact: "공급 조건이 공시됐습니다.", observation: "", interpretation: "기업 매출에 영향을 줍니다.", watch: "",
+      published_at: `${date}T10:30:00+09:00`, observed_at: null, sources: [] };
+    const wire = { title: "코스피, 외국인 매도세에 장중 반락", publisher: "시황통신", published_at: `${date}T09:23:00+09:00`, url: "https://example.org/index-report" };
+    return { state: mode === "stale" ? "stale" : "ready", today: date,
+      session: mode === "company" ? null : { observed_at: stamp, headline: "코스피는 상승, 코스닥은 하락", market: "두 시장의 전일 대비 방향이 갈렸습니다.",
+        sectors: "업종 등락률의 격차를 확인했습니다.", watch: "업종 간 차이가 이어지는지 확인합니다." },
+      session_state: mode === "company" ? "awaiting" : "latest", policy_coverage: [], board: {
       checked_at: stamp, market_at: stamp, filings_at: stamp, monitoring: true,
-      issues: [{ id: "move", origin: "desk", kind: "move", status: "unconfirmed", headline: "코스피 장중 변화",
+      market_reports: [wire, { ...wire, title: "관측 이후 보도", published_at: stamp, url: "https://example.org/later" }],
+      issues: mode === "company" ? [filing] : [filing,
+        { id: "prior", origin: "desk", kind: "move", status: "analysis", headline: "지난 거래일의 지수 배경",
+          fact: "지난 거래일의 변동", observation: "", interpretation: "이전 거래일의 원인", watch: "",
+          published_at: stamp, observed_at: "2026-09-04T14:10:00+09:00", sources: [wire] },
+        { id: "move", origin: "desk", kind: "move", status: "unconfirmed", headline: "코스피 장중 변화",
         fact: "직전 관측 대비 변화가 감지됐습니다.", observation: "", interpretation: "", watch: "",
         published_at: stamp, observed_at: stamp, sources: [] },
+        ...(mode === "explained" ? [{ id: "cause", origin: "desk", kind: "move", status: "analysis", headline: "수급 보도로 확인한 코스피 반락",
+          fact: "시장 보도가 외국인 순매도를 확인했습니다.", observation: "10시 관측", interpretation: "해당 변동 구간의 설명", watch: "",
+          published_at: stamp, observed_at: stamp, sources: [wire] }] : []),
         { id: "old", origin: "reporter", kind: "news", status: "reported", headline: "이전 속보",
           fact: "앞서 발송한 본문", observation: "", interpretation: "", watch: "",
           published_at: `${date}T09:00:00+09:00`, observed_at: null, sources: [] },
