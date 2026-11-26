@@ -187,6 +187,10 @@ export const news = {
   },
 };
 export function fixtureFor(path, params, mode) {
+  if (path === "ipo") return {
+    status: { next_session: date, calendar: [{ planned_listing_date: date, decision_missing: mode === "stale" }] },
+    open: [], history: [],
+  };
   if (path === "market-desk") {
     if (mode === "empty") return { state: "awaiting", board: null };
     const stamp = `${date}T10:15:00+09:00`;

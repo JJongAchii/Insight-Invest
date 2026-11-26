@@ -27,8 +27,10 @@ import { useFetchIpoQuery } from "@/state/api";
 export default function Home() {
   const [personalOpen, setPersonalOpen] = useState(false);
   const ipo = useFetchIpoQuery();
-  const session = ipo.data?.status?.next_session;
-  const reliable = session && !ipo.error && !ipo.data?.status?.stale && !ipo.data?.status?.problems?.length && ipo.data?.open;
+  const status = ipo.data?.status;
+  const session = status?.next_session;
+  const missingDecision = status?.calendar?.some(row => row.planned_listing_date === session && row.decision_missing);
+  const reliable = session && !ipo.error && !status?.stale && !status?.problems?.length && !missingDecision && ipo.data?.open;
   const signals = ipo.data?.open?.filter(row => row.position === "signal" && row.listing_date === session).length;
 
   return (

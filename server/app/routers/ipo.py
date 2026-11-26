@@ -118,6 +118,8 @@ def get_ipo():
     if storage.exists(*SIGNALS):
         frame = storage.read_parquet(*SIGNALS)
         rows = [{k: _clean(v) for k, v in r.items()} for r in frame.to_dict(orient="records")]
+    elif status:
+        status["problems"] = [*(status.get("problems") or []), "해당 배치의 공모주 신호 파일을 확인할 수 없습니다."]
     for row in rows:
         user = overrides.get(row.get("event_id"))
         row["user"] = user or None

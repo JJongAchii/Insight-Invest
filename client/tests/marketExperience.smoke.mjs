@@ -100,6 +100,7 @@ try {
   await page.goto("/home");
   await check("Read existing market updates, published briefs and Slack reports", async () => {
     const desk = page.getByRole("region", { name: "장중 시장 해설" });
+    await page.getByRole("link", { name: /공모주 신호.*매수 없음/ }).waitFor();
     await desk.getByRole("heading", { name: "코스피 장중 변화" }).waitFor();
     await desk.getByText("원인 미확인").waitFor();
     await desk.getByRole("button", { name: /아침 브리핑/ }).click();
@@ -259,6 +260,14 @@ try {
       await phone.goto("/home");
       await visible(phone, "시장 브리핑");
       await visible(phone, "금리와 환율의 변화");
+      const desk = phone.getByRole("region", { name: "장중 시장 해설" });
+      const chooser = desk.getByRole("combobox", { name: "읽을 글 선택" });
+      const chooserBounds = await chooser.boundingBox();
+      const articleBounds = await desk.locator("article").boundingBox();
+      assert.ok(chooserBounds && articleBounds && chooserBounds.y + chooserBounds.height <= articleBounds.y);
+      await chooser.selectOption("morning");
+      await desk.getByRole("heading", { name: "아침 브리핑", exact: true }).waitFor();
+      await chooser.selectOption("move");
       const nav = phone.locator("nav.fixed");
       assert.deepEqual(
         await nav
@@ -295,6 +304,7 @@ try {
       await page.reload();
       await visible(page, "2,626.00");
       await visible(page, "2026-09-07 · 정산 종가");
+      await page.getByRole("link", { name: /공모주 신호.*산출 상태 확인/ }).waitFor();
     },
   );
   await check(

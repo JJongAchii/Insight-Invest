@@ -88,6 +88,11 @@ def test_get_without_batch_output_says_so(tmp_path, monkeypatch):
     assert "산출이 아직 없다" in out["status"]["problems"][0]
 
 
+def test_status_without_signal_file_reports_missing_output(app_data):
+    (app_data / "ipo" / "ipo_signals.parquet").unlink()
+    assert any("신호 파일" in p for p in ipo.get_ipo()["status"]["problems"])
+
+
 def test_user_fill_is_stored_validated_and_cleared(app_data):
     saved = ipo.update_position(
         "buy1", ipo.PositionRequest(filled=True, entry_price=14_800.0, quantity=10)

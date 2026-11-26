@@ -89,20 +89,23 @@ export default function MarketDesk() {
       {board && <span className={styles.meta}>{error || data.state === "stale" ? "갱신 지연 · 마지막 확인 " : "마지막 확인 "}{date(board.checked_at)} KST</span>}
     </header>
     {selected ? <div className={styles.layout}>
-      <article key={selected.id} className={styles.article}>
-        <div className={styles.byline}>{edition(selected)} <span>발행 {date(selected.published_at)} KST</span></div>
-        <h3>{title(selected)}</h3>
-        {"body" in selected ? <BriefBody entry={selected} /> : <IssueBody entry={selected} />}
-      </article>
       {all.length > 1 && <nav className={styles.editions} aria-label="최근 해설과 브리핑">
         {hasDesk && hasNews ? <div className={styles.streams}>
           <button type="button" aria-pressed={!showNews} onClick={() => { setStream("desk"); choose(null); }}>해설·브리핑</button>
           <button type="button" aria-pressed={showNews} onClick={() => { setStream("reporter"); choose(null); }}>Slack 속보</button>
         </div> : <h3>최근 발행글</h3>}
-        {entries.map(item => <button key={item.id} type="button" aria-pressed={item.id === selected.id} onClick={() => choose(item.id)}>
-          <span>{edition(item)} · {date(item.published_at)}</span>{title(item)}
+        <select className={styles.chooser} aria-label="읽을 글 선택" value={selected.id} onChange={event => choose(event.target.value)}>
+          {entries.map(item => <option key={item.id} value={item.id}>{formatTime.format(new Date(item.published_at))} · {title(item)}</option>)}
+        </select>
+        {entries.map(item => <button className={styles.edition} key={item.id} type="button" aria-pressed={item.id === selected.id} onClick={() => choose(item.id)}>
+          <span>{"headline" in item && `${edition(item)} · `}{date(item.published_at)}</span>{title(item)}
         </button>)}
       </nav>}
+      <article key={selected.id} className={styles.article}>
+        <div className={styles.byline}>{edition(selected)} <span>발행 {date(selected.published_at)} KST</span></div>
+        <h3>{title(selected)}</h3>
+        {"body" in selected ? <BriefBody entry={selected} /> : <IssueBody entry={selected} />}
+      </article>
     </div> : <div className={styles.empty}>
       {error ? <>발행글을 불러오지 못했습니다. <button type="button" onClick={() => refetch()}>다시 불러오기</button></>
         : isLoading ? "최근 발행글을 불러오는 중입니다."
