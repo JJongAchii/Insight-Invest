@@ -4,9 +4,34 @@ import pandas as pd
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.routers.market_desk import _current_lead
 from datastore import storage
 from module.kr_intraday import KST
 from module.market_desk import market_input
+
+
+def test_representative_article_uses_current_session_and_only_completed_closes():
+    close = datetime(2026, 11, 26, 15, 30, tzinfo=KST)
+    now = close + timedelta(minutes=45)
+    stamp = (now - timedelta(minutes=10)).isoformat()
+    source = {"title": "시황 원문", "publisher": "통신사", "url": "https://example.org/market", "published_at": stamp}
+    passage = {"text": "현재 장세를 비교 시점의 근거와 함께 읽습니다.", "sources": [source]}
+    item = {"phase": "close", "trade_date": now.date().isoformat(), "close_at": close.isoformat(),
+            "as_of": stamp, "cutoff": stamp, "published_at": now.isoformat(), "headline": "코스피 장세 해석",
+            "reading": passage, "qualification": passage, "watch": "다음 거래일 수급을 봅니다."}
+    assert _current_lead(item, now).phase == "close"
+    assert _current_lead(item, now + timedelta(days=1)) is None
+    assert _current_lead({**item, "as_of": (close-timedelta(minutes=5)).isoformat()}, now) is None
+    assert _current_lead({**item, "published_at": (now+timedelta(minutes=5)).isoformat()}, now) is None
+    future = {**passage, "sources": [{**source, "published_at": now.isoformat()}]}
+    assert _current_lead({**item, "reading": future}, now) is None
+    early = close.replace(hour=11)
+    early_source = {**passage, "sources": [{**source, "published_at": early.isoformat()}]}
+    live = {**item, "phase": "intraday", "as_of": early.isoformat(), "cutoff": early.isoformat(),
+            "published_at": early.isoformat(), "reading": early_source, "qualification": early_source}
+    assert _current_lead(live, early + timedelta(minutes=60))
+    assert _current_lead(live, early + timedelta(minutes=91)) is None
+    assert _current_lead(live, close) is None
 
 
 def test_compare_adjacent_observations_even_without_yesterdays_close():

@@ -141,6 +141,16 @@ try {
     await page.reload();
     await desk.getByRole("heading", { name: "수급 보도로 확인한 코스피 반락" }).waitFor();
     await desk.getByText("해당 변동 구간의 설명").waitFor();
+    mode = "lead";
+    await page.reload();
+    const lead = page.getByRole("region", { name: "한국 증시 마감 해설" });
+    await lead.getByRole("heading", { name: "기관이 지킨 반등, 외국인은 매도 전환" }).waitFor();
+    await lead.getByText("10%", { exact: true }).waitFor();
+    await lead.getByText("근거 원문 1건").click();
+    assert.equal(await lead.getByRole("list", { name: "시장 해설의 근거 원문" }).getByRole("link").getAttribute("href"), "https://example.org/index-report");
+    assert.equal(await desk.isVisible(), false);
+    await page.locator("summary").filter({ hasText: "장중 시세와 관련 보도" }).click();
+    await desk.getByRole("heading", { name: "코스피는 상승, 코스닥은 하락" }).waitFor();
     mode = "normal";
     await page.reload();
   });

@@ -199,6 +199,11 @@ export function fixtureFor(path, params, mode) {
       published_at: `${date}T10:30:00+09:00`, observed_at: null, sources: [] };
     const wire = { title: "코스피, 외국인 매도세에 장중 반락", publisher: "시황통신", published_at: `${date}T09:23:00+09:00`, url: "https://example.org/index-report" };
     return { state: mode === "stale" ? "stale" : "ready", today: date,
+      lead: mode === "lead" ? { phase: "close", trade_date: date, as_of: `${date}T16:05:00+09:00`,
+        cutoff: `${date}T16:15:00+09:00`, published_at: `${date}T16:18:00+09:00`, close_at: `${date}T15:30:00+09:00`,
+        headline: "기관이 지킨 반등, 외국인은 매도 전환", reading: { text: "전일 낙폭에서 회복한 폭은 제한적입니다.", sources: [wire] },
+        qualification: { text: "마감 집계에서 기관과 외국인의 수급이 갈렸습니다.", sources: [wire] },
+        watch: "다음 거래일 외국인 수급을 확인합니다.", comparison: { index: "코스피", previous_points: -100, current_points: 10, share_pct: 10 } } : null,
       session: mode === "company" ? null : { observed_at: stamp, headline: "코스피는 상승, 코스닥은 하락", market: "두 시장의 전일 대비 방향이 갈렸습니다.",
         sectors: "업종 등락률의 격차를 확인했습니다.", watch: "업종 간 차이가 이어지는지 확인합니다." },
       session_state: mode === "company" ? "awaiting" : "latest", policy_coverage: [], board: {

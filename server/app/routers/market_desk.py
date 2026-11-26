@@ -1,7 +1,7 @@
 """Serve finished publications. This endpoint has no access to an editorial runtime."""
 
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
@@ -21,6 +21,51 @@ class Source(BaseModel):
     published_at: AwareDatetime
     license_url: HttpUrl | None = None
     license_name: str | None = None
+
+
+class LeadPassage(BaseModel):
+    text: str = Field(min_length=15, max_length=350)
+    sources: list[Source] = Field(min_length=1, max_length=4)
+
+
+class CloseComparison(BaseModel):
+    index: Literal["코스피", "코스닥"]
+    previous_points: float = Field(allow_inf_nan=False)
+    current_points: float = Field(allow_inf_nan=False)
+    share_pct: float = Field(ge=0, le=100)
+
+
+class MarketLead(BaseModel):
+    phase: Literal["intraday", "close"]
+    trade_date: date
+    as_of: AwareDatetime
+    cutoff: AwareDatetime
+    close_at: AwareDatetime
+    published_at: AwareDatetime
+    headline: str = Field(min_length=1, max_length=75)
+    reading: LeadPassage
+    qualification: LeadPassage
+    watch: str = Field(min_length=1, max_length=170)
+    comparison: CloseComparison | None = None
+
+
+def _current_lead(raw, now):
+    if not raw:
+        return None
+    try:
+        lead = MarketLead.model_validate(raw)
+    except ValueError:
+        logger.warning("시장 해설 발행 형식 오류")
+        return None
+    if (lead.trade_date != now.date() or any(stamp.astimezone(KST).date() != lead.trade_date
+            for stamp in (lead.as_of, lead.cutoff, lead.close_at))
+            or not lead.as_of <= lead.cutoff <= lead.published_at <= now):
+        return None
+    if any(src.published_at > lead.as_of for block in (lead.reading, lead.qualification) for src in block.sources):
+        return None
+    if lead.phase == "close":
+        return lead if lead.as_of >= lead.close_at else None
+    return lead if now < lead.close_at and now - lead.as_of <= timedelta(minutes=90) else None
 
 
 class Issue(BaseModel):
@@ -125,8 +170,11 @@ def get_market_desk():
     now = datetime.now(KST)
     session, session_state = _read_session(now)
     board = None
+    lead = None
     try:
-        board = Board.model_validate(storage.read_json("market_desk", "board.json"))
+        raw = storage.read_json("market_desk", "board.json")
+        board = Board.model_validate(raw)
+        lead = _current_lead(raw.get("lead"), now)
     except FileNotFoundError:
         state = "awaiting"
     except Exception:
@@ -137,5 +185,5 @@ def get_market_desk():
     else:
         stale = now - board.checked_at > timedelta(minutes=25 if is_open_kst(now) else 100)
         state = "stale" if stale else "ready"
-    return {"state": state, "board": board, "today": now.date(), "session": session,
+    return {"state": state, "board": board, "lead": lead, "today": now.date(), "session": session,
             "session_state": session_state, "policy_coverage": _policy_coverage(board, session)}

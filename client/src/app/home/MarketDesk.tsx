@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowRight, ArrowUpRight, ChevronDown } from "lucide-react";
-import { useFetchMarketDeskQuery, type DeskArticle, type DeskBrief } from "@/state/api";
+import { useFetchMarketDeskQuery, type DeskArticle, type DeskBrief, type DeskLead } from "@/state/api";
 import styles from "./marketDesk.module.css";
 
 const formatTime = new Intl.DateTimeFormat("ko-KR", {
@@ -89,6 +89,38 @@ function EntryList({ entries }: { entries: Entry[] }) {
   </li>)}</ul>;
 }
 
+function SessionLead({ lead }: { lead: DeskLead }) {
+  const closed = lead.phase === "close";
+  const comparison = lead.comparison;
+  const originals = [...new Map([...lead.reading.sources, ...lead.qualification.sources].map(src => [src.url, src])).values()];
+  return <section className={styles.desk} aria-labelledby="lead-title">
+    <header className={styles.header}>
+      <h2 id="lead-title">{closed ? "한국 증시 마감 해설" : "한국 증시 장중 해설"}</h2>
+      <span className={styles.meta}>{date(lead.as_of)} KST 시황 보도 기준</span>
+    </header>
+    <article className={styles.lead}>
+      <h3>{lead.headline}</h3>
+      {comparison && <div className={styles.comparison}>
+        <strong>{comparison.share_pct.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}%</strong>
+        <span>{comparison.index}가 전날 {comparison.previous_points < 0 ? "낙폭에서 되찾은 비율" : "상승분에서 반납한 비율"}
+          <small>전날 {Math.abs(comparison.previous_points).toLocaleString("ko-KR")}포인트 {comparison.previous_points < 0 ? "하락" : "상승"}
+          {" · "}오늘 {Math.abs(comparison.current_points).toLocaleString("ko-KR")}포인트 {comparison.current_points > 0 ? "상승" : "하락"}</small>
+        </span>
+      </div>}
+      <div className={styles.argument}>{[lead.reading, lead.qualification].map((passage, i) => <p key={i}>{passage.text}{" "}
+        {passage.sources.map(src => <sup key={src.url}><a href={src.url} target="_blank" rel="noopener noreferrer"
+          aria-label={`${src.publisher} 원문 · ${src.title}`}>[{originals.findIndex(ref => ref.url === src.url) + 1}]</a></sup>)}
+      </p>)}</div>
+      <div className={styles.nextCheck}><h4>{closed ? "다음 거래일에 볼 것" : "남은 장에서 볼 것"}</h4><p>{lead.watch}</p></div>
+      <details className={styles.more}>
+        <summary>근거 원문 {originals.length}건</summary>
+        <Sources items={originals} label="시장 해설의 근거 원문" timeLabel="보도" />
+        <p className={styles.meta}>작성 자료 마감 {date(lead.cutoff)} · 발행 {date(lead.published_at)} KST</p>
+      </details>
+    </article>
+  </section>;
+}
+
 export default function MarketDesk() {
   const { data, error, isLoading, refetch } = useFetchMarketDeskQuery(undefined, refresh);
   const board = data?.board;
@@ -109,7 +141,7 @@ export default function MarketDesk() {
   const companyNews = editions.filter(item => item.kind !== "move");
   const latestReport = board && reports(board.issues)[0];
   const policy = session ? data?.policy_coverage ?? [] : [];
-  return <><section className={styles.desk} aria-labelledby="desk-title">
+  const observationsSection = <section className={styles.desk} aria-labelledby="desk-title">
     <header className={styles.header}>
       <h2 id="desk-title">장중 시장 해설</h2>
       {session && <span className={styles.meta}>
@@ -163,7 +195,14 @@ export default function MarketDesk() {
       {checked(board.checked_at, !!error || data.state === "stale")}
       <span>DART 확인 {board.filings_at ? date(board.filings_at) : "최근 조회 없음"}{board.monitoring && (!board.filings_at || Date.parse(board.checked_at) - Date.parse(board.filings_at) > 15 * 60_000) && " · 지연"}</span>
     </footer>}
-  </section>
+  </section>;
+  return <>
+    {data?.lead ? <>
+      <SessionLead lead={data.lead} />
+      <details className={styles.observations}><summary>장중 시세와 관련 보도 <ChevronDown size={16} aria-hidden /></summary>
+        {observationsSection}
+      </details>
+    </> : observationsSection}
     {latestReport && <div className={styles.desk}><Link className={styles.flash} href={`/feed?item=${encodeURIComponent(latestReport.id)}`}>
       <span>최근 속보</span><strong>{latestReport.headline}</strong>{date(latestReport.published_at)}<ArrowRight size={15} aria-hidden />
     </Link></div>}

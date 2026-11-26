@@ -62,8 +62,23 @@ export interface DeskBrief {
   body: string;
 }
 
+export interface DeskLead {
+  phase: "intraday" | "close";
+  trade_date: string;
+  as_of: string;
+  cutoff: string;
+  close_at: string;
+  published_at: string;
+  headline: string;
+  reading: { text: string; sources: DeskArticle["sources"] };
+  qualification: { text: string; sources: DeskArticle["sources"] };
+  watch: string;
+  comparison?: { index: string; previous_points: number; current_points: number; share_pct: number } | null;
+}
+
 export interface MarketDeskResponse {
   state: "ready" | "awaiting" | "stale" | "unavailable";
+  lead?: DeskLead | null;
   today: string;
   session: {
     observed_at: string;
