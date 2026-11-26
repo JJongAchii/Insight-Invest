@@ -98,6 +98,17 @@ try {
   const desktop = await contextFor({ width: 1440, height: 1000 });
   const page = await desktop.newPage();
   await page.goto("/home");
+  await check("Read existing market updates, published briefs and Slack reports", async () => {
+    const desk = page.getByRole("region", { name: "장중 시장 해설" });
+    await desk.getByRole("heading", { name: "코스피 장중 변화" }).waitFor();
+    await desk.getByText("원인 미확인").waitFor();
+    await desk.getByRole("button", { name: /아침 브리핑/ }).click();
+    await desk.getByText("브리핑 전문 읽기").click();
+    assert.equal(await desk.getByRole("link", { name: "공식 발표" }).getAttribute("href"), "https://example.com/source");
+    await desk.getByRole("button", { name: "Slack 속보" }).click();
+    await desk.getByText("확인된 속보 본문").waitFor();
+    await desk.getByRole("button", { name: "해설·브리핑" }).click();
+  });
   await visible(page, "금리와 환율의 변화");
   await check(
     "Market, economy and research visible; personal tools secondary",

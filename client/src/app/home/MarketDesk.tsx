@@ -1,0 +1,116 @@
+"use client";
+
+import { useState } from "react";
+import { ArrowUpRight } from "lucide-react";
+import { useFetchMarketDeskQuery, type DeskArticle, type DeskBrief } from "@/state/api";
+import styles from "./marketDesk.module.css";
+
+const formatTime = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+});
+type Entry = DeskArticle | DeskBrief;
+const date = (stamp: string) => <time dateTime={stamp}>{formatTime.format(new Date(stamp))}</time>;
+const edition = (item: Entry) => {
+  if (item.kind === "am") return "아침 브리핑";
+  if (item.kind === "pm") return "마감 브리핑";
+  if (item.kind === "filing") return "기업 공시";
+  if (item.kind === "move") return "시세 변화";
+  return "주요 뉴스";
+};
+const title = (item: Entry) => "headline" in item ? item.headline : edition(item);
+const decode = (s: string) => s.replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&");
+
+function PublicationText({ text }: { text: string }) {
+  // Slack's published format contains labelled links and single-asterisk emphasis. Keep text escaped by React.
+  return <div className={styles.prose}>{text.split(/(<https?:\/\/[^<>\s|]+(?:\|[^<>]*)?>|\*[^*\n]+\*)/g).map((part, i) => {
+    if (part.startsWith("<http") && part.endsWith(">")) {
+      const [href, label] = part.slice(1, -1).split("|", 2);
+      return <a key={i} href={decode(href)} target="_blank" rel="noopener noreferrer">{decode(label || href)}</a>;
+    }
+    if (part.startsWith("*") && part.endsWith("*")) return <strong key={i}>{decode(part.slice(1, -1))}</strong>;
+    return decode(part);
+  })}</div>;
+}
+
+function BriefBody({ entry }: { entry: DeskBrief }) {
+  const paragraphs = entry.body.trim().split(/\n\s*\n/);
+  return <>
+    <p className={styles.meta}>자료 기준 {date(entry.as_of)} KST</p>
+    <PublicationText text={paragraphs.slice(0, 2).join("\n\n")} />
+    {paragraphs.length > 2 && <details className={styles.more}>
+      <summary>브리핑 전문 읽기</summary>
+      <PublicationText text={paragraphs.slice(2).join("\n\n")} />
+    </details>}
+  </>;
+}
+
+function Sources({ items, label }: { items: DeskArticle["sources"]; label: string }) {
+  return <ul className={styles.sources} aria-label={label}>{items.map(src => <li key={src.url}>
+    <a href={src.url} target="_blank" rel="noopener noreferrer">{src.title} <ArrowUpRight size={13} aria-hidden /></a>
+    <span>{src.publisher} · 발표 {date(src.published_at)} KST
+      {src.license_url && <> · <a href={src.license_url} target="_blank" rel="noopener noreferrer">{src.license_name || "출처 이용 조건"}</a></>}
+    </span>
+  </li>)}</ul>;
+}
+
+function IssueBody({ entry }: { entry: DeskArticle }) {
+  return <>
+    {entry.status === "unconfirmed" && <p className={styles.caution}>원인 미확인</p>}
+    {entry.fact !== entry.headline && <PublicationText text={entry.fact} />}
+    {entry.interpretation && <div className={styles.section}><h4>{entry.kind === "filing" ? "기업에 미치는 영향" : "시장에 미치는 영향"}</h4><p>{entry.interpretation}</p></div>}
+    {entry.observation && entry.observation !== entry.fact && <p className={styles.meta}>{entry.observation}</p>}
+    {entry.observed_at && <p className={styles.meta}>KRX 시세 수집 {date(entry.observed_at)} KST · 원천 약 20분 지연</p>}
+    {entry.watch && <div className={styles.section}><h4>다음 확인할 점</h4><p>{entry.watch}</p></div>}
+    {entry.sources.length > 0 && <Sources items={entry.sources} label="분석 근거" />}
+    {!!entry.followups?.length && <div className={styles.section}><h4>이후 확인된 관련 자료</h4>
+      <Sources items={entry.followups} label="후속 보도와 공시" />
+    </div>}
+  </>;
+}
+
+export default function MarketDesk() {
+  const { data, error, isLoading, refetch } = useFetchMarketDeskQuery(undefined, {
+    pollingInterval: 2 * 60 * 1000, skipPollingIfUnfocused: true,
+  });
+  const [chosen, choose] = useState<string | null>(null);
+  const [stream, setStream] = useState<"desk" | "reporter">("desk");
+  const board = data?.board;
+  const all: Entry[] = board ? [...board.issues, ...board.briefings]
+    .sort((a, b) => Date.parse(b.published_at) - Date.parse(a.published_at)) : [];
+  const isNews = (item: Entry) => "origin" in item && item.origin === "reporter";
+  const hasDesk = all.some(item => !isNews(item));
+  const hasNews = all.some(isNews);
+  const showNews = hasNews && (stream === "reporter" || !hasDesk);
+  const entries = all.filter(item => isNews(item) === showNews);
+  const selected = entries.find(item => item.id === chosen) ?? entries[0];
+  return <section className={styles.desk} aria-labelledby="desk-title">
+    <header className={styles.header}>
+      <h2 id="desk-title">장중 시장 해설</h2>
+      {board && <span className={styles.meta}>{error || data.state === "stale" ? "갱신 지연 · 마지막 확인 " : "마지막 확인 "}{date(board.checked_at)} KST</span>}
+    </header>
+    {selected ? <div className={styles.layout}>
+      <article key={selected.id} className={styles.article}>
+        <div className={styles.byline}>{edition(selected)} <span>발행 {date(selected.published_at)} KST</span></div>
+        <h3>{title(selected)}</h3>
+        {"body" in selected ? <BriefBody entry={selected} /> : <IssueBody entry={selected} />}
+      </article>
+      {all.length > 1 && <nav className={styles.editions} aria-label="최근 해설과 브리핑">
+        {hasDesk && hasNews ? <div className={styles.streams}>
+          <button type="button" aria-pressed={!showNews} onClick={() => { setStream("desk"); choose(null); }}>해설·브리핑</button>
+          <button type="button" aria-pressed={showNews} onClick={() => { setStream("reporter"); choose(null); }}>Slack 속보</button>
+        </div> : <h3>최근 발행글</h3>}
+        {entries.map(item => <button key={item.id} type="button" aria-pressed={item.id === selected.id} onClick={() => choose(item.id)}>
+          <span>{edition(item)} · {date(item.published_at)}</span>{title(item)}
+        </button>)}
+      </nav>}
+    </div> : <div className={styles.empty}>
+      {error ? <>발행글을 불러오지 못했습니다. <button type="button" onClick={() => refetch()}>다시 불러오기</button></>
+        : isLoading ? "최근 발행글을 불러오는 중입니다."
+        : <>{board ? "아직 발행된 해설이 없습니다." : "첫 시장 해설 발행을 기다리고 있습니다."} <a href="#reading">경제 뉴스 보기</a></>}
+    </div>}
+    {board && <footer className={styles.footer}>
+      <span>KRX 수집 {board.market_at ? date(board.market_at) : "확인 전"}{board.monitoring && (!board.market_at || Date.parse(board.checked_at) - Date.parse(board.market_at) > 25 * 60_000) && " · 지연"}</span>
+      <span>DART 확인 {board.filings_at ? date(board.filings_at) : "최근 조회 없음"}{board.monitoring && (!board.filings_at || Date.parse(board.checked_at) - Date.parse(board.filings_at) > 15 * 60_000) && " · 지연"}</span>
+    </footer>}
+  </section>;
+}

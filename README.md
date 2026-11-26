@@ -8,6 +8,12 @@
 
 화면 구성과 후속 우선순위는 [시장·경제·리서치 중심 개선 검토](docs/reviews/2026-09-07-market-research.md)를 참고한다.
 
+홈 상단의 장중 시장 해설은 `GET /market-desk`로 마지막 발행본을 읽는다. 기존 10분 KRX 폴러가
+`app/market_desk/input.json`에 관측 구간과 변화를 기록하고, ai-company 편집기가 발송 완료한
+Slack 브리핑·속보와 새 해설을 `app/market_desk/board.json`에 게시한다. 시세 수집, 원문 발표,
+글 발행 시각은 각각 KST로 표시한다. 공모주 신호는 같은 홈에서 기존 배치 판정을 확인한다.
+발행 파일이 도착하기 전에는 첫 발행 대기를 표시한다. [편집기 운영 절차](https://github.com/JJongAchii/quant-ai-company/blob/main/docs/runbooks/insight-market-desk.md)
+
 `Action Center`는 기존 Attention·Watchlist·Holdings·Journal·Strategy·Data Trust를
 공통 Event 계약으로 묶는다. 가격 기준 교차, Thesis 검토일, 리밸런싱, 데이터 이상을
 한 Inbox/Calendar에 표시하고 판단 근거를 Decision Journal 초안으로 넘길 수 있다.

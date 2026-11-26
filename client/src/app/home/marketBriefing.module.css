@@ -24,6 +24,8 @@
   line-height: 1.7;
   color: var(--text-secondary);
 }
+.ipoLink { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; color: var(--primary-soft); font-size: 13px; font-weight: 600; }
+.ipoLink span { color: var(--text-secondary); font-weight: 400; }
 .textLink {
   display: inline-flex;
   align-items: center;

@@ -187,6 +187,21 @@ export const news = {
   },
 };
 export function fixtureFor(path, params, mode) {
+  if (path === "market-desk") {
+    if (mode === "empty") return { state: "awaiting", board: null };
+    const stamp = `${date}T10:15:00+09:00`;
+    return { state: mode === "stale" ? "stale" : "ready", board: {
+      checked_at: stamp, market_at: stamp, filings_at: stamp, monitoring: true,
+      issues: [{ id: "move", origin: "desk", kind: "move", status: "unconfirmed", headline: "코스피 장중 변화",
+        fact: "직전 관측 대비 변화가 감지됐습니다.", observation: "", interpretation: "", watch: "",
+        published_at: stamp, observed_at: stamp, sources: [] },
+        { id: "report", origin: "reporter", kind: "news", status: "reported", headline: "발송된 속보",
+          fact: "확인된 속보 본문", observation: "", interpretation: "", watch: "",
+          published_at: stamp, observed_at: null, sources: [] }],
+      briefings: [{ id: "morning", kind: "am", as_of: `${date}T07:00:00+09:00`,
+        published_at: `${date}T07:30:00+09:00`, body: "아침 발행본 요약\n\n주요 숫자\n\n<https://example.com/source|공식 발표>" }],
+    } };
+  }
   if (path === "overview")
     return mode === "empty"
       ? { ...overview, horizons: [], evidence: [], conflicts: [] }

@@ -28,6 +28,7 @@ from .routers import (
     intraday,
     ipo,
     journal,
+    market_desk,
     meta,
     news,
     notifications,
@@ -99,6 +100,7 @@ app.include_router(intraday.router)
 app.include_router(journal.router)
 app.include_router(portfolio_ledger.router)
 app.include_router(ipo.router)
+app.include_router(market_desk.router)
 
 
 @app.get("/")
