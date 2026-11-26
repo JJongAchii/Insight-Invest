@@ -301,6 +301,9 @@ try {
       await visible(phone, "금리와 환율의 변화");
       const desk = phone.getByRole("region", { name: "장중 시장 해설" });
       await desk.getByRole("heading", { name: "코스피는 상승, 코스닥은 하락" }).waitFor();
+      const wire = await desk.getByRole("link", { name: "코스피, 외국인 매도세에 장중 반락" }).boundingBox();
+      const sector = await desk.getByRole("heading", { name: "어느 업종에서 갈렸나" }).boundingBox();
+      assert.ok(wire && sector && wire.y + wire.height <= sector.y);
       const briefs = phone.getByRole("region", { name: "아침·마감 브리핑" });
       await briefs.locator("summary").filter({ hasText: "아침 브리핑" }).click();
       await briefs.getByText("아침 발행본 요약", { exact: false }).waitFor();

@@ -26,7 +26,8 @@
 .background li a { line-height: 1.6; word-break: keep-all; overflow-wrap: anywhere; }
 .background li > span { display: block; margin-top: 2px; }
 .background svg { display: inline; }
-.background .sources { border-top: 0; margin-top: 3px; padding-top: 0; }
+.article .sources { border-top: 0; margin-top: 2px; padding-top: 0; }
+.article .sources li { padding-top: 0; font-size: 14px; }
 .records { border-top: 1px solid var(--border); }
 .records > h3 { padding: 12px 22px 0; }
 .cause { margin: 0 22px 16px; padding-left: 12px; border-left: 2px solid var(--border); color: var(--text-secondary); font-size: 14px; line-height: 1.6; }

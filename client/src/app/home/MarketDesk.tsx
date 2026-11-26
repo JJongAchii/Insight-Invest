@@ -109,7 +109,6 @@ export default function MarketDesk() {
   const companyNews = editions.filter(item => item.kind !== "move");
   const latestReport = board && reports(board.issues)[0];
   const policy = session ? data?.policy_coverage ?? [] : [];
-  const hasCoverage = marketReports.length > 0 || policy.length > 0;
   return <><section className={styles.desk} aria-labelledby="desk-title">
     <header className={styles.header}>
       <h2 id="desk-title">장중 시장 해설</h2>
@@ -118,10 +117,14 @@ export default function MarketDesk() {
         KRX 수집 {date(session.observed_at)} KST · 시세 약 20분 지연
       </span>}
     </header>
-    <div className={hasCoverage ? styles.readingGrid : undefined}><div>
+    <div className={policy.length ? styles.readingGrid : undefined}><div>
     {session && <article className={styles.article}>
       <h3>{session.headline}</h3>
       <p className={styles.prose}>{session.market}</p>
+      {marketReports.length > 0 && <div className={styles.section}>
+        <h4>언론이 짚은 장중 배경</h4>
+        <Sources items={marketReports} label="당일 지수 흐름을 설명한 보도" timeLabel="보도" />
+      </div>}
       {session.sectors && <div className={styles.section}><h4>어느 업종에서 갈렸나</h4><p>{session.sectors}</p></div>}
       {session.watch && <div className={styles.section}><h4>다음 확인할 점</h4><p>{session.watch}</p></div>}
     </article>}
@@ -143,12 +146,8 @@ export default function MarketDesk() {
         : "관련 보도·공시의 첫 발행본을 기다리고 있습니다."}
     </p>}
     </div>
-    {hasCoverage && <aside className={styles.coverage} aria-label="시황 관련 보도">
-    {!!marketReports.length && <div className={styles.background}>
-      <h3>언론이 짚은 장중 배경</h3>
-      <Sources items={marketReports} label="당일 지수 흐름을 설명한 보도" timeLabel="보도" />
-    </div>}
-    {policy.length > 0 && <div className={styles.background}>
+    {policy.length > 0 && <aside className={styles.coverage} aria-label="정책·경제 보도">
+      <div className={styles.background}>
       <h3>같은 날 나온 정책·경제 보도</h3>
       <ul>{policy.map(({ headline, source }) => <li key={source.url + headline}>
         <a href={source.url} target="_blank" rel="noopener noreferrer">{headline} <ArrowUpRight size={13} aria-hidden /></a>
@@ -156,7 +155,8 @@ export default function MarketDesk() {
           {source.license_url && <> · <a href={source.license_url} target="_blank" rel="noopener noreferrer">{source.license_name || "출처 이용 조건"}</a></>}
         </span>
       </li>)}</ul>
-    </div>}</aside>}
+      </div>
+    </aside>}
     </div>
     {observations.length > 0 && <div className={styles.records}><h3>시간대별 변동 기록</h3><EntryList entries={observations} /></div>}
     {board && <footer className={styles.footer}>
