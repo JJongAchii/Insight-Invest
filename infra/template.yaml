@@ -67,17 +67,54 @@ Resources:
     Type: AWS::IAM::User
     Properties:
       Path: /insight-invest/
-      Policies:
-        - PolicyName: publish-market-desk
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action: s3:GetObject
-                Resource: !Sub arn:${AWS::Partition}:s3:::${DataBucket}/app/market_desk/input.json
-              - Effect: Allow
-                Action: s3:PutObject
-                Resource: !Sub arn:${AWS::Partition}:s3:::${DataBucket}/app/market_desk/board.json
+
+  MarketDeskPublisherRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: credentials.iot.amazonaws.com }
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnEquals:
+                aws:SourceArn: !Sub arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:rolealias/insight-invest-market-desk
+
+  MarketDeskObjectAccess:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: market-desk-objects
+      Users: [!Ref MarketDeskPublisher]
+      Roles: [!Ref MarketDeskPublisherRole]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: s3:GetObject
+            Resource: !Sub arn:${AWS::Partition}:s3:::${DataBucket}/app/market_desk/input.json
+          - Effect: Allow
+            Action: s3:PutObject
+            Resource: !Sub arn:${AWS::Partition}:s3:::${DataBucket}/app/market_desk/board.json
+
+  MarketDeskRoleAlias:
+    Type: AWS::IoT::RoleAlias
+    Properties:
+      RoleAlias: insight-invest-market-desk
+      RoleArn: !GetAtt MarketDeskPublisherRole.Arn
+      CredentialDurationSeconds: 3600
+
+  MarketDeskCertificatePolicy:
+    Type: AWS::IoT::Policy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: iot:AssumeRoleWithCertificate
+            Resource: !GetAtt MarketDeskRoleAlias.RoleAliasArn
 
   ApiRole:
     Type: AWS::IAM::Role
@@ -548,6 +585,9 @@ Resources:
       SourceArn: !GetAtt ResearchPollerSchedule.Arn
 
 Outputs:
+  MarketDeskCertificatePolicy:
+    Description: IoT policy to attach to the production news worker's public certificate
+    Value: !Ref MarketDeskCertificatePolicy
   MarketDeskPublisherUser:
     Description: Publisher principal for the private market desk
     Value: !Ref MarketDeskPublisher
