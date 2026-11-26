@@ -1,0 +1,28 @@
+name: Verify published market desk
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  home:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npx --no-install playwright install --with-deps chromium
+      - name: Read the current edition on the signed-in production home
+        env:
+          SITE_ACCESS_CODE: ${{ secrets.SITE_ACCESS_CODE }}
+        run: node tests/publishedMarketDesk.smoke.mjs
