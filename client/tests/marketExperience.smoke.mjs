@@ -46,6 +46,7 @@ async function contextFor(viewport) {
       mode === "error" &&
       [
         "overview",
+        "market-desk",
         "research",
         "news/briefing",
         "regime/kr",
@@ -86,6 +87,11 @@ async function noOverflow(page) {
     "Page must not scroll horizontally",
   );
 }
+async function openMarketDetails(page) {
+  const summary = page.locator("summary").filter({ hasText: "시장 지표와 수급" });
+  await summary.click();
+  await page.getByRole("region", { name: "주요 지수와 경제 지표" }).waitFor();
+}
 async function capture(page, name) {
   await page.evaluate(() => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -106,14 +112,26 @@ try {
     await desk.getByRole("button", { name: /아침 브리핑/ }).click();
     await desk.getByText("브리핑 전문 읽기").click();
     assert.equal(await desk.getByRole("link", { name: "공식 발표" }).getAttribute("href"), "https://example.com/source");
-    await desk.getByRole("button", { name: "Slack 속보" }).click();
-    await desk.getByText("확인된 속보 본문").waitFor();
-    await desk.getByRole("button", { name: "해설·브리핑" }).click();
+    await desk.getByRole("link", { name: /최근 속보.*발송된 속보/ }).click();
+    const feed = page.getByRole("region", { name: "Slack 발송 속보" });
+    await feed.getByText("확인된 속보 본문").waitFor();
+    assert.equal(new URL(page.url()).searchParams.get("item"), "report");
+    assert.deepEqual(await feed.locator("summary strong").allTextContents(), ["발송된 속보", "이전 속보"]);
+    assert.equal(await feed.getByRole("link", { name: "발표 원문" }).getAttribute("href"), "https://example.com/announcement");
+    await page.reload();
+    await feed.getByText("확인된 속보 본문").waitFor();
+    await page.goBack();
+    await desk.getByRole("heading", { name: "장중 시장 해설" }).waitFor();
   });
   await visible(page, "금리와 환율의 변화");
   await check(
-    "Market, economy and research visible; personal tools secondary",
+    "Daily destinations are directly accessible and market data loads on demand",
     async () => {
+      const daily = page.getByRole("region", { name: "매일 확인" });
+      assert.deepEqual(await daily.locator("a").evaluateAll(links => links.map(a => a.getAttribute("href"))),
+        ["/home", "/ipo", "/feed"]);
+      assert.equal(requests.some(url => url.endsWith("/overview")), false);
+      await openMarketDetails(page);
       await visible(page, "시간축별 시장 흐름");
       await visible(page, "새로 들어온 리서치");
       assert.equal(
@@ -258,7 +276,7 @@ try {
       const mobile = await contextFor({ width: 390, height: 844 });
       const phone = await mobile.newPage();
       await phone.goto("/home");
-      await visible(phone, "시장 브리핑");
+      await phone.getByRole("heading", { name: "시장 브리핑", exact: true }).waitFor();
       await visible(phone, "금리와 환율의 변화");
       const desk = phone.getByRole("region", { name: "장중 시장 해설" });
       const chooser = desk.getByRole("combobox", { name: "읽을 글 선택" });
@@ -274,8 +292,17 @@ try {
           .locator("a")
           .allTextContents()
           .then((items) => items.map((text) => text.replace(/\d/g, "").trim())),
-        ["브리핑", "한국 시장", "경제", "리서치", "종목"],
+        ["브리핑", "공모주", "속보", "한국 시장", "경제"],
       );
+      await nav.getByRole("link", { name: "공모주", exact: true }).click();
+      await phone.getByRole("heading", { name: "공모주 신호", exact: true }).waitFor();
+      await nav.getByRole("link", { name: "속보", exact: true }).click();
+      const feed = phone.getByRole("region", { name: "Slack 발송 속보" });
+      await feed.locator("summary").filter({ hasText: "발송된 속보" }).press("Enter");
+      await feed.getByText("확인된 속보 본문").waitFor();
+      await noOverflow(phone);
+      await nav.getByRole("link", { name: "브리핑", exact: true }).click();
+      await openMarketDetails(phone);
       await phone
         .getByRole("button", { name: "관측 근거 1개", exact: true })
         .press("Enter");
@@ -302,6 +329,7 @@ try {
       mode = "stale";
       await page.goto("/home");
       await page.reload();
+      await openMarketDetails(page);
       await visible(page, "2,626.00");
       await visible(page, "2026-09-07 · 정산 종가");
       await page.getByRole("link", { name: /공모주 신호.*산출 상태 확인/ }).waitFor();
@@ -312,6 +340,7 @@ try {
     async () => {
       mode = "empty";
       await page.reload();
+      await openMarketDetails(page);
       await visible(page, "관측값 미확인");
       await visible(page, "시간축별 요약이 아직 없습니다");
       await visible(page, "이 분류에 등록된 자료가 없습니다");
@@ -325,6 +354,7 @@ try {
       mode = "error";
       await page.goto("/home");
       await page.reload();
+      await openMarketDetails(page);
       await visible(page, "시장 요약을 불러오지 못했습니다");
       await visible(page, "리서치를 불러오지 못했습니다");
       await visible(page, "최신 경제 헤드라인 테스트");
@@ -337,6 +367,18 @@ try {
       await capture(page, "error-state");
     },
   );
+  await check("Feed provides recovery on failure, an empty edition, and an expired link", async () => {
+    await page.goto("/feed");
+    const feed = page.getByRole("region", { name: "Slack 발송 속보" });
+    await feed.getByRole("button", { name: "다시 불러오기" }).waitFor();
+    mode = "empty";
+    await feed.getByRole("button", { name: "다시 불러오기" }).click();
+    await feed.getByText("최근 발송된 속보가 없습니다.", { exact: false }).waitFor();
+    mode = "normal";
+    await page.goto("/feed?item=expired");
+    await feed.getByText("선택한 속보가 최근 발송 목록에서 만료됐습니다.").waitFor();
+    assert.equal(await feed.locator("details[open]").count(), 0);
+  });
   assert.deepEqual(errors, [], "No uncaught browser errors");
   await writeFile(
     `${output}/results.json`,

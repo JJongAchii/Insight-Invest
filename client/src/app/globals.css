@@ -54,7 +54,7 @@ body,
     --secondary-rgb: 56 189 248;
     --focus: #c4b5fd;
     --font-data: "SF Mono", ui-monospace, "Fira Code", monospace;
-    --market-ticker-height: 79px;
+    --market-ticker-height: max(79px, calc(var(--ticker-content-height, 0px) + 1px));
     --mobile-nav-height: 63px;
     --app-bottom-inset: calc(var(--market-ticker-height) + var(--mobile-nav-height) + env(safe-area-inset-bottom));
 

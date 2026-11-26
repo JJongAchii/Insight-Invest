@@ -94,9 +94,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
         <div className="mx-auto w-full max-w-[1560px] flex-grow">{children}</div>
       </main>
       <MarketTicker />
-      <MobileBottomNav
-        researchUnseenCount={researchUnseenCount}
-      />
+      <MobileBottomNav />
       {!isMobileSidebarOpen && <PullToRefresh />}
       <PwaManager />
     </div>

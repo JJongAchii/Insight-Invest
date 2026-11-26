@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowUpRight } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, ArrowUpRight, ChevronDown } from "lucide-react";
 import { useFetchMarketDeskQuery, type DeskArticle, type DeskBrief } from "@/state/api";
 import styles from "./marketDesk.module.css";
 
@@ -9,7 +10,13 @@ const formatTime = new Intl.DateTimeFormat("ko-KR", {
   timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
 });
 type Entry = DeskArticle | DeskBrief;
+const refresh = { pollingInterval: 120_000, skipPollingIfUnfocused: true, refetchOnFocus: true };
+const newestFirst = (a: Entry, b: Entry) => Date.parse(b.published_at) - Date.parse(a.published_at);
+const reports = (issues: DeskArticle[]) => issues.filter(item => item.origin === "reporter").sort(newestFirst);
 const date = (stamp: string) => <time dateTime={stamp}>{formatTime.format(new Date(stamp))}</time>;
+const checked = (stamp: string, delayed: boolean) => <span className={styles.meta}>
+  {delayed ? "갱신 지연 · 마지막 확인 " : "마지막 확인 "}{date(stamp)} KST
+</span>;
 const edition = (item: Entry) => {
   if (item.kind === "am") return "아침 브리핑";
   if (item.kind === "pm") return "마감 브리핑";
@@ -69,31 +76,23 @@ function IssueBody({ entry }: { entry: DeskArticle }) {
 }
 
 export default function MarketDesk() {
-  const { data, error, isLoading, refetch } = useFetchMarketDeskQuery(undefined, {
-    pollingInterval: 2 * 60 * 1000, skipPollingIfUnfocused: true,
-  });
+  const { data, error, isLoading, refetch } = useFetchMarketDeskQuery(undefined, refresh);
   const [chosen, choose] = useState<string | null>(null);
-  const [stream, setStream] = useState<"desk" | "reporter">("desk");
   const board = data?.board;
-  const all: Entry[] = board ? [...board.issues, ...board.briefings]
-    .sort((a, b) => Date.parse(b.published_at) - Date.parse(a.published_at)) : [];
-  const isNews = (item: Entry) => "origin" in item && item.origin === "reporter";
-  const hasDesk = all.some(item => !isNews(item));
-  const hasNews = all.some(isNews);
-  const showNews = hasNews && (stream === "reporter" || !hasDesk);
-  const entries = all.filter(item => isNews(item) === showNews);
+  const entries = board ? [...board.issues.filter(item => item.origin !== "reporter"), ...board.briefings].sort(newestFirst) : [];
+  const latestReport = board && reports(board.issues)[0];
   const selected = entries.find(item => item.id === chosen) ?? entries[0];
   return <section className={styles.desk} aria-labelledby="desk-title">
     <header className={styles.header}>
       <h2 id="desk-title">장중 시장 해설</h2>
-      {board && <span className={styles.meta}>{error || data.state === "stale" ? "갱신 지연 · 마지막 확인 " : "마지막 확인 "}{date(board.checked_at)} KST</span>}
+      {board && checked(board.checked_at, !!error || data.state === "stale")}
     </header>
+    {latestReport && <Link className={styles.flash} href={`/feed?item=${encodeURIComponent(latestReport.id)}`}>
+      <span>최근 속보</span><strong>{latestReport.headline}</strong>{date(latestReport.published_at)}<ArrowRight size={15} aria-hidden />
+    </Link>}
     {selected ? <div className={styles.layout}>
-      {all.length > 1 && <nav className={styles.editions} aria-label="최근 해설과 브리핑">
-        {hasDesk && hasNews ? <div className={styles.streams}>
-          <button type="button" aria-pressed={!showNews} onClick={() => { setStream("desk"); choose(null); }}>해설·브리핑</button>
-          <button type="button" aria-pressed={showNews} onClick={() => { setStream("reporter"); choose(null); }}>Slack 속보</button>
-        </div> : <h3>최근 발행글</h3>}
+      {entries.length > 1 && <nav className={styles.editions} aria-label="최근 해설과 브리핑">
+        <h3>최근 해설과 브리핑</h3>
         <select className={styles.chooser} aria-label="읽을 글 선택" value={selected.id} onChange={event => choose(event.target.value)}>
           {entries.map(item => <option key={item.id} value={item.id}>{formatTime.format(new Date(item.published_at))} · {title(item)}</option>)}
         </select>
@@ -115,5 +114,30 @@ export default function MarketDesk() {
       <span>KRX 수집 {board.market_at ? date(board.market_at) : "확인 전"}{board.monitoring && (!board.market_at || Date.parse(board.checked_at) - Date.parse(board.market_at) > 25 * 60_000) && " · 지연"}</span>
       <span>DART 확인 {board.filings_at ? date(board.filings_at) : "최근 조회 없음"}{board.monitoring && (!board.filings_at || Date.parse(board.checked_at) - Date.parse(board.filings_at) > 15 * 60_000) && " · 지연"}</span>
     </footer>}
+  </section>;
+}
+
+export function ReporterFeed({ itemId }: { itemId?: string }) {
+  const { data, error, isLoading, refetch } = useFetchMarketDeskQuery(undefined, refresh);
+  const board = data?.board;
+  const entries = board ? reports(board.issues) : [];
+  return <section className={styles.desk} aria-labelledby="feed-title">
+    <header className={styles.header}>
+      <h2 id="feed-title">Slack 발송 속보</h2>
+      {board && checked(board.checked_at, !!error || data.state === "stale")}
+    </header>
+    {entries.length ? <>
+      {itemId && !entries.some(item => item.id === itemId) && <p className={styles.empty}>선택한 속보가 최근 발송 목록에서 만료됐습니다.</p>}
+      <ul className={styles.feedList}>{entries.map(item => <li key={item.id}>
+        <details open={item.id === itemId}>
+          <summary>{date(item.published_at)}<strong>{item.headline}</strong><ChevronDown size={16} aria-hidden /></summary>
+          <div className={styles.feedBody}><IssueBody entry={item} /></div>
+        </details>
+      </li>)}</ul>
+    </> : <div className={styles.empty}>
+      {error ? <>속보를 불러오지 못했습니다. <button type="button" onClick={() => refetch()}>다시 불러오기</button></>
+        : isLoading ? "최근 속보를 불러오는 중입니다."
+        : <>최근 발송된 속보가 없습니다. <Link href="/home#reading">경제 뉴스 보기</Link></>}
+    </div>}
   </section>;
 }

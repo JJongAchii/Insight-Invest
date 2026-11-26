@@ -6,7 +6,7 @@
 }
 .masthead {
   display: flex;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
   gap: 20px;
   padding: 12px 0 0;
@@ -24,8 +24,34 @@
   line-height: 1.7;
   color: var(--text-secondary);
 }
-.ipoLink { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; color: var(--primary-soft); font-size: 13px; font-weight: 600; }
-.ipoLink span { color: var(--text-secondary); font-weight: 400; }
+.ipoLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.ipoLink strong { margin-left: 8px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.ipoLink[data-signal="true"] strong, .ipoLink > svg:first-child { color: var(--primary-soft); }
+.ipoLink:hover, .marketDetails summary:hover { background: var(--surface-raised); }
+.marketDetails { border-block: 1px solid var(--border); }
+.marketDetails > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 4px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+}
+.marketDetails > summary::-webkit-details-marker { display: none; }
+.marketDetails[open] > summary svg { transform: rotate(180deg); }
+.marketContents { display: grid; gap: 20px; padding-block: 6px 20px; }
 .textLink {
   display: inline-flex;
   align-items: center;
@@ -398,11 +424,11 @@ button.quoteDate {
     gap: 20px;
   }
   .masthead {
-    align-items: start;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
   }
-  .masthead > a {
-    display: none;
-  }
+  .ipoLink strong { margin-left: auto; }
   .quote {
     padding: 16px;
   }

@@ -52,13 +52,15 @@ async function check(name, callback) { await callback(); passed.push(name); cons
 async function geometry(page, mobile) {
   // Even reduced-motion transitions settle on the next rendered frame.
   await page.waitForFunction((isMobile) => {
-    const rect = document.querySelector('aside[aria-label="글로벌 시장 시세"]').getBoundingClientRect();
+    const bar = document.querySelector('aside[aria-label="글로벌 시장 시세"]');
+    const rect = bar.getBoundingClientRect();
+    const widgetHeight = bar.querySelector(".tradingview-widget-container").getBoundingClientRect().height;
+    const reservedHeight = Math.max(79, Math.ceil(widgetHeight) + 1);
     const bottom = isMobile ? document.querySelector('nav[aria-label="주요 탐색"]').getBoundingClientRect().top : innerHeight;
-    return Math.round(rect.height) === 79 && Math.abs(rect.bottom - bottom) <= 1;
+    return Math.round(rect.height) === reservedHeight && Math.abs(rect.bottom - bottom) <= 1;
   }, mobile);
   const rect = await bar(page).boundingBox(), viewport = page.viewportSize();
   assert.ok(rect.x >= 0 && rect.x + rect.width <= viewport.width + 1);
-  assert.equal(Math.round(rect.height), 79);
   if (mobile) {
     const nav = await page.getByRole("navigation", { name: "주요 탐색" }).boundingBox();
     assert.ok(Math.abs(rect.y + rect.height - nav.y) <= 1);
@@ -76,7 +78,7 @@ try {
     await page.goto("/home"); await ready(page);
     const frame = await bar(page).locator("iframe").elementHandle(), before = scriptRequests;
     assert.equal(await page.locator(".tradingview-widget-container").count(), 1);
-    for (const path of ["/insight", "/regime", "/research", "/stocksearch", "/earnings", "/data-trust", "/home"]) {
+    for (const path of ["/ipo", "/feed", "/insight", "/regime", "/research", "/stocksearch", "/earnings", "/data-trust", "/home"]) {
       await page.locator(`a[href="${path}"]:visible`).first().click();
       await page.waitForURL((url) => url.pathname === path);
       assert.equal(await frame.evaluate((el) => el.isConnected), true);

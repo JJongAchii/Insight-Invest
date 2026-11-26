@@ -2,11 +2,16 @@
 
 import { useAppSelector } from "@/app/redux";
 import { ChevronDown, ShieldCheck, X } from "lucide-react";
-import { marketNavigation as workspaces, personalNavigation as tools, isActiveRoute } from "@/lib/navigation";
+import { dailyNavigation, marketNavigation, personalNavigation as tools, isActiveRoute } from "@/lib/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
+
+const groups = [
+  { title: "매일 확인", items: dailyNavigation },
+  { title: "시장과 리서치", items: marketNavigation },
+];
 
 const CountBadge = ({ count, label }: { count: number; label: string }) => {
   if (count <= 0) return null;
@@ -39,7 +44,7 @@ const Sidebar = ({
   );
   const pathname = usePathname();
   const utilityRouteActive = tools.some((item) =>
-    isActiveRoute(pathname, item.href)
+    isActiveRoute(pathname, item.href, item.activePrefixes)
   );
 
   useEffect(() => {
@@ -51,8 +56,8 @@ const Sidebar = ({
   return (
     <aside
       data-collapsed={isSidebarCollapsed}
-      className={`group fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col overflow-hidden border-r border-edge bg-surface/95 shadow-2xl shadow-black/30 backdrop-blur-xl transition-all duration-200 md:translate-x-0 md:shadow-none ${
-        isMobileOpen ? "translate-x-0" : "-translate-x-full"
+      className={`group fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col overflow-hidden border-r border-edge bg-surface/95 shadow-2xl shadow-black/30 backdrop-blur-xl transition-all duration-200 md:visible md:translate-x-0 md:shadow-none ${
+        isMobileOpen ? "visible translate-x-0" : "invisible -translate-x-full"
       } ${isSidebarCollapsed ? "md:w-[72px]" : "md:w-56"}`}
       aria-label="주요 탐색"
     >
@@ -92,63 +97,67 @@ const Sidebar = ({
         </button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-5" aria-label="시장과 리서치">
-        <p
-          className={`${isSidebarCollapsed ? "md:hidden" : ""} mb-3 px-3 font-mono text-[11px] tracking-[0.04em] text-ink-muted`}
-        >
-          시장과 리서치
-        </p>
-        <div className="space-y-1.5">
-          {workspaces.map((item) => {
-            const active = isActiveRoute(
-              pathname,
-              item.href,
-              item.activePrefixes
-            );
-            const count =
-              item.badge === "actions"
-                ? actionCount
-                : item.badge === "research"
-                  ? researchUnseenCount
-                  : 0;
-            const badgeLabel =
-              item.badge === "actions" ? "검토할 항목" : "새 리서치";
-            const Icon = item.icon;
+      <nav className="flex-1 overflow-y-auto px-3 py-5" aria-label="전체 메뉴">
+        {groups.map(({ title, items }) => (
+          <section key={title} aria-label={title} className="mb-5">
+            <p
+              className={`${isSidebarCollapsed ? "md:hidden" : ""} mb-2 px-3 text-[11px] font-medium text-ink-muted`}
+            >
+              {title}
+            </p>
+            <div className="space-y-1.5">
+              {items.map((item) => {
+                const active = isActiveRoute(
+                  pathname,
+                  item.href,
+                  item.activePrefixes
+                );
+                const count =
+                  item.badge === "actions"
+                    ? actionCount
+                    : item.badge === "research"
+                      ? researchUnseenCount
+                      : 0;
+                const badgeLabel =
+                  item.badge === "actions" ? "검토할 항목" : "새 리서치";
+                const Icon = item.icon;
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                title={isSidebarCollapsed ? item.label : undefined}
-                aria-current={active ? "page" : undefined}
-                className={`relative flex min-h-[48px] items-center gap-3 rounded-xl border px-3 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 ${
-                  isSidebarCollapsed ? "md:justify-center md:px-0" : ""
-                } ${
-                  active
-                    ? "border-primary-400/25 bg-gradient-to-r from-primary-500/15 to-secondary-400/5 text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_10px_28px_rgba(3,5,14,0.16)]"
-                    : "border-transparent text-ink-secondary hover:border-primary-400/10 hover:bg-primary-500/[0.05] hover:text-ink"
-                }`}
-              >
-                {active && (
-                  <span className="absolute -left-px h-5 w-[3px] rounded-r bg-gradient-to-b from-secondary-400 to-primary-400 shadow-[0_0_10px_rgba(124,91,255,0.35)]" />
-                )}
-                <Icon
-                  size={18}
-                  strokeWidth={1.75}
-                  className={active ? "text-[color:var(--primary)]" : ""}
-                  aria-hidden
-                />
-                <span className={`${isSidebarCollapsed ? "md:hidden" : ""} min-w-0`}>
-                  <span className="block text-[13px] font-semibold">{item.label}</span>
-                  <span className="mt-0.5 block text-[10px] text-ink-muted">
-                    {item.hint}
-                  </span>
-                </span>
-                <CountBadge count={count} label={badgeLabel} />
-              </Link>
-            );
-          })}
-        </div>
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    title={isSidebarCollapsed ? item.label : undefined}
+                    aria-current={active ? "page" : undefined}
+                    className={`relative flex min-h-[48px] items-center gap-3 rounded-xl border px-3 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 ${
+                      isSidebarCollapsed ? "md:justify-center md:px-0" : ""
+                    } ${
+                      active
+                        ? "border-primary-400/25 bg-gradient-to-r from-primary-500/15 to-secondary-400/5 text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_10px_28px_rgba(3,5,14,0.16)]"
+                        : "border-transparent text-ink-secondary hover:border-primary-400/10 hover:bg-primary-500/[0.05] hover:text-ink"
+                    }`}
+                  >
+                    {active && (
+                      <span className="absolute -left-px h-5 w-[3px] rounded-r bg-gradient-to-b from-secondary-400 to-primary-400 shadow-[0_0_10px_rgba(124,91,255,0.35)]" />
+                    )}
+                    <Icon
+                      size={18}
+                      strokeWidth={1.75}
+                      className={active ? "text-[color:var(--primary)]" : ""}
+                      aria-hidden
+                    />
+                    <span className={`${isSidebarCollapsed ? "md:hidden" : ""} min-w-0`}>
+                      <span className="block text-[13px] font-semibold">{item.label}</span>
+                      <span className="mt-0.5 block text-[10px] text-ink-muted">
+                        {item.hint}
+                      </span>
+                    </span>
+                    <CountBadge count={count} label={badgeLabel} />
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        ))}
 
         <details
           className={`${isSidebarCollapsed ? "md:hidden" : ""} mt-6 border-t border-edge pt-3`}

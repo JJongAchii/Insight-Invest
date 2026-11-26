@@ -1,10 +1,11 @@
 "use client";
 
 import {
-  ArrowUpRight,
   CalendarDays,
   ChevronDown,
+  ChevronRight,
   Globe2,
+  Rocket,
   Search,
 } from "lucide-react";
 import Link from "next/link";
@@ -26,6 +27,7 @@ import { useFetchIpoQuery } from "@/state/api";
 
 export default function Home() {
   const [personalOpen, setPersonalOpen] = useState(false);
+  const [marketOpen, setMarketOpen] = useState(false);
   const ipo = useFetchIpoQuery();
   const status = ipo.data?.status;
   const session = status?.next_session;
@@ -36,42 +38,32 @@ export default function Home() {
   return (
     <div className={styles.page}>
       <header className={styles.masthead}>
-        <div>
-          <h1>시장 브리핑</h1>
-          <Link className={styles.ipoLink} href="/ipo">
-            공모주 신호
-            {reliable ? <span>{session.slice(5).replace("-", "/")} 매수 {signals ? `${signals}건` : "없음"}</span>
-              : <span>{ipo.isLoading ? "확인 중" : "산출 상태 확인"}</span>}
-            <ArrowUpRight size={14} aria-hidden />
-          </Link>
-        </div>
-        <Link href="/data-trust" className={styles.textLink}>
-          출처와 데이터 상태 <ArrowUpRight size={15} aria-hidden />
+        <h1>시장 브리핑</h1>
+        <Link className={styles.ipoLink} href="/ipo" data-signal={Boolean(reliable && signals)}>
+          <Rocket size={16} aria-hidden /> 공모주 신호
+          <strong>{reliable ? `${session.slice(5).replace("-", "/")} 매수 ${signals ? `${signals}건` : "없음"}`
+            : ipo.isLoading ? "확인 중" : "산출 상태 확인"}</strong>
+          <ChevronRight size={15} aria-hidden />
         </Link>
       </header>
       <MarketDesk />
-      <nav className={styles.jumpLinks} aria-label="분석 바로가기">
-        <Link href="/regime">
-          <Globe2 size={15} aria-hidden />
-          경제 지표
-        </Link>
-        <Link href="/earnings">
-          <CalendarDays size={15} aria-hidden />
-          실적 일정
-        </Link>
-        <Link href="/stocksearch">
-          <Search size={15} aria-hidden />
-          종목 비교
-        </Link>
-        <a href="#reading">
-          뉴스 · 리서치 <ChevronDown size={14} aria-hidden />
-        </a>
-      </nav>
-      <section className={styles.quoteBoard} aria-label="주요 지수와 경제 지표">
-        <MarketTiles />
-        <MacroSnapshot />
-      </section>
-      <MarketOverview />
+      <details className={styles.marketDetails} onToggle={event => setMarketOpen(event.currentTarget.open)}>
+        <summary>시장 지표와 수급 <ChevronDown size={17} aria-hidden /></summary>
+        {marketOpen && <div className={styles.marketContents}>
+          <section className={styles.quoteBoard} aria-label="주요 지수와 경제 지표">
+            <MarketTiles />
+            <MacroSnapshot />
+          </section>
+          <MarketOverview />
+          <FlowsTopCard />
+          <SpotlightLane />
+          <nav className={styles.jumpLinks} aria-label="분석 바로가기">
+            <Link href="/regime"><Globe2 size={15} aria-hidden /> 경제 지표</Link>
+            <Link href="/earnings"><CalendarDays size={15} aria-hidden /> 실적 일정</Link>
+            <Link href="/stocksearch"><Search size={15} aria-hidden /> 종목 비교</Link>
+          </nav>
+        </div>}
+      </details>
       <section
         id="reading"
         className={styles.readingGrid}
@@ -80,8 +72,6 @@ export default function Home() {
         <NewsBriefingCard />
         <ResearchPreview />
       </section>
-      <FlowsTopCard />
-      <SpotlightLane />
       <details
         className={styles.personalTools}
         onToggle={(event) => setPersonalOpen(event.currentTarget.open)}
