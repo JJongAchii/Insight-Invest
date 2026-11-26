@@ -63,6 +63,22 @@ Parameters:
     Description: VAPID contact subject
 
 Resources:
+  MarketDeskPublisher:
+    Type: AWS::IAM::User
+    Properties:
+      Path: /insight-invest/
+      Policies:
+        - PolicyName: publish-market-desk
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub arn:${AWS::Partition}:s3:::${DataBucket}/app/market_desk/input.json
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub arn:${AWS::Partition}:s3:::${DataBucket}/app/market_desk/board.json
+
   ApiRole:
     Type: AWS::IAM::Role
     Properties:
@@ -532,5 +548,8 @@ Resources:
       SourceArn: !GetAtt ResearchPollerSchedule.Arn
 
 Outputs:
+  MarketDeskPublisherUser:
+    Description: Publisher principal for the private market desk
+    Value: !Ref MarketDeskPublisher
   FunctionUrl:
     Value: !GetAtt ApiUrl.FunctionUrl
