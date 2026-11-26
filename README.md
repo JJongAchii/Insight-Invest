@@ -19,6 +19,8 @@ Slack 브리핑·속보와 새 해설을 `app/market_desk/board.json`에 게시�
 글 발행 시각은 각각 KST로 표시한다. 공모주 신호는 같은 홈에서 기존 배치 판정을 확인한다.
 개별 기업 공시와 정기 브리핑은 각각 전용 영역에서 읽을 수 있다. [편집기 운영 절차](https://github.com/JJongAchii/quant-ai-company/blob/main/docs/runbooks/insight-market-desk.md)
 
+발행 전용 IAM 사용자 이름은 CloudFormation `insight-invest-api` 스택의 `MarketDeskPublisherUser` 출력에서 확인한다. 릴리스 운영자가 이 사용자의 자격 증명을 회사 편집기에 공급한다.
+
 `Action Center`는 기존 Attention·Watchlist·Holdings·Journal·Strategy·Data Trust를
 공통 Event 계약으로 묶는다. 가격 기준 교차, Thesis 검토일, 리밸런싱, 데이터 이상을
 한 Inbox/Calendar에 표시하고 판단 근거를 Decision Journal 초안으로 넘길 수 있다.

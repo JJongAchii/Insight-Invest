@@ -190,6 +190,23 @@ jobs:
               WebPushSubject=https://insight-invest-ten.vercel.app \
             --no-fail-on-empty-changeset
 
+      - name: Check the market desk through the production home proxy
+        shell: bash
+        env:
+          SITE_ACCESS_CODE: ${{ secrets.SITE_ACCESS_CODE }}
+        run: |
+          site=https://insight-invest-ten.vercel.app
+          cookies=$(mktemp)
+          trap 'rm -f "$cookies"' EXIT
+          jq -cn '{accessCode: env.SITE_ACCESS_CODE}' |
+            curl -fsS --max-time 30 -c "$cookies" -H 'Content-Type: application/json' \
+              --data-binary @- "$site/api/auth/login" | jq -e '.authenticated == true' >/dev/null
+          curl -fsS --max-time 110 -b "$cookies" "$site/api/backend/market-desk" |
+            jq -ce 'select((.state == "ready" or .state == "stale" or .state == "awaiting")
+              and (if .session == null then .session_state == "awaiting"
+                   else (.session.observed_at | type == "string") and (.session.market | length > 0) end))
+              | {state, session_state, observed_at: .session.observed_at, edition: .lead.phase}'
+
       - name: Smoke test
         run: |
           aws lambda invoke --function-name insight-invest-research-poller \
