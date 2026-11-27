@@ -30,7 +30,6 @@ from .routers import (
     journal,
     market_desk,
     meta,
-    news,
     notifications,
     optimization,
     overview,
@@ -86,7 +85,6 @@ app.include_router(backtest.router)
 app.include_router(earnings.router)
 app.include_router(regime.router)
 app.include_router(insight.router)
-app.include_router(news.router)
 app.include_router(optimization.router)
 app.include_router(watchlist.router)
 app.include_router(holdings.router)

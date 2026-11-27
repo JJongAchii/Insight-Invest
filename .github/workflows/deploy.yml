@@ -182,7 +182,6 @@ jobs:
             --capabilities CAPABILITY_IAM \
             --parameter-overrides ImageUri=$IMAGE_URI ApiToken=${{ secrets.API_TOKEN }} \
               KrxId=${{ secrets.KRX_ID }} KrxPw=${{ secrets.KRX_PW }} \
-              AnthropicApiKey=${{ secrets.ANTHROPIC_API_KEY }} \
               OpenAIApiKey=${{ secrets.OPENAI_API_KEY }} \
               ResearchAnalysisEnabled=true \
               WebPushPublicKey=${{ secrets.WEB_PUSH_PUBLIC_KEY }} \
@@ -206,6 +205,15 @@ jobs:
               and (if .session == null then .session_state == "awaiting"
                    else (.session.observed_at | type == "string") and (.session.market | length > 0) end))
               | {state, session_state, observed_at: .session.observed_at, edition: .lead.phase}'
+          # 뉴스 화면이 같은 발행본을 읽는지, 그리고 마지막으로 본 시각을 기록할 수 있는지 확인한다.
+          # 과거 시각은 표식을 되돌리지 않으므로 운영 상태를 바꾸지 않고 쓰기 권한만 검증한다.
+          curl -fsS --max-time 110 -b "$cookies" "$site/api/backend/market-desk/news" |
+            jq -ce 'select((.state == "ready" or .state == "stale" or .state == "awaiting")
+              and (.items | type == "array") and (.unseen | type == "number"))
+              | {state, news: (.items | length), urgent: ([.items[] | select(.priority == "urgent")] | length)}'
+          curl -fsS --max-time 110 -b "$cookies" -X PUT -H 'Content-Type: application/json' \
+            --data '{"through":"2000-01-01T00:00:00+00:00"}' "$site/api/backend/market-desk/news/seen" |
+            jq -ce 'select(.seen_through | type == "string") | {unseen, seen_through}'
 
       - name: Smoke test
         run: |
@@ -213,6 +221,11 @@ jobs:
             /tmp/research-poller.json >/dev/null
           jq -e '.ok == true and .delivery_ready == true and (.projection.records > 0)' \
             /tmp/research-poller.json
+          # 긴급 뉴스 알림 폴러가 발행본과 전송 영수증을 읽을 수 있는지 (중복 전송은 영수증이 막는다)
+          aws lambda invoke --function-name insight-invest-news-poller \
+            /tmp/news-poller.json >/dev/null
+          jq -e '.ok == true and (.state == "ready" or .state == "stale" or .state == "awaiting")' \
+            /tmp/news-poller.json
           URL=$(aws cloudformation describe-stacks --stack-name insight-invest-api \
             --query 'Stacks[0].Outputs[?OutputKey==`FunctionUrl`].OutputValue' --output text)
           curl -sf "$URL/health" | grep healthy

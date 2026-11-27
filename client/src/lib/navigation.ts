@@ -7,8 +7,8 @@ import {
   FlaskConical,
   Globe2,
   LayoutDashboard,
+  Newspaper,
   NotebookPen,
-  Radio,
   Rocket,
   Search,
 } from "lucide-react";
@@ -21,7 +21,7 @@ export interface NavigationItem {
   mobileLabel?: string;
   icon: LucideIcon;
   activePrefixes?: string[];
-  badge?: "actions" | "research";
+  badge?: "actions" | "research" | "news";
 }
 
 export const dailyNavigation: NavigationItem[] = [
@@ -33,7 +33,14 @@ export const dailyNavigation: NavigationItem[] = [
     icon: LayoutDashboard,
   },
   { href: "/ipo", label: "공모주 신호", hint: "상장일 매수·매도 신호", mobileLabel: "공모주", icon: Rocket },
-  { href: "/feed", label: "속보 피드", hint: "Slack으로 받은 속보", mobileLabel: "속보", icon: Radio },
+  {
+    href: "/news",
+    label: "주요 뉴스",
+    hint: "경제 · 세계 · 공시",
+    mobileLabel: "뉴스",
+    icon: Newspaper,
+    badge: "news",
+  },
 ];
 
 export const marketNavigation: NavigationItem[] = [

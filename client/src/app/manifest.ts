@@ -14,6 +14,13 @@ export default function manifest(): MetadataRoute.Manifest {
     categories: ["finance", "productivity"],
     shortcuts: [
       {
+        name: "주요 뉴스",
+        short_name: "뉴스",
+        description: "원문을 확인해 정리한 시장·경제·기업 소식",
+        url: "/news?source=shortcut",
+        icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }],
+      },
+      {
         name: "Action Center",
         short_name: "Actions",
         description: "지금 확인할 투자 Action",

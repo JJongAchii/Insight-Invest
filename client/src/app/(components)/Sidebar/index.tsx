@@ -32,11 +32,13 @@ const Sidebar = ({
   isMobileOpen,
   onMobileClose,
   researchUnseenCount,
+  newsUnseenCount,
   actionCount,
 }: {
   isMobileOpen: boolean;
   onMobileClose: () => void;
   researchUnseenCount: number;
+  newsUnseenCount: number;
   actionCount: number;
 }) => {
   const isSidebarCollapsed = useAppSelector(
@@ -112,14 +114,14 @@ const Sidebar = ({
                   item.href,
                   item.activePrefixes
                 );
-                const count =
+                const [count, badgeLabel] =
                   item.badge === "actions"
-                    ? actionCount
+                    ? [actionCount, "검토할 항목"]
                     : item.badge === "research"
-                      ? researchUnseenCount
-                      : 0;
-                const badgeLabel =
-                  item.badge === "actions" ? "검토할 항목" : "새 리서치";
+                      ? [researchUnseenCount, "새 리서치"]
+                      : item.badge === "news"
+                        ? [newsUnseenCount, "새 뉴스"]
+                        : [0, ""];
                 const Icon = item.icon;
 
                 return (

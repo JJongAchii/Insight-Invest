@@ -19,6 +19,9 @@ const browser = await chromium.launch({
 });
 const results = [];
 let mode = "normal";
+let newsSeen;
+let seenRecords = 0;
+let failNextSeenRecord = false;
 const mutations = [];
 const requests = [];
 const errors = [];
@@ -42,13 +45,23 @@ async function contextFor(viewport) {
     const path = url.pathname.split("/api/backend/")[1];
     requests.push(url.pathname + url.search);
     if (route.request().method() !== "GET") mutations.push(path);
+    if (path === "market-desk/news/seen") {
+      seenRecords += 1;
+      if (failNextSeenRecord) {
+        failNextSeenRecord = false;
+        return route.fulfill({ status: 503, contentType: "application/json", body: '{"detail":"Synthetic failure"}' });
+      }
+      // "behind": a server whose clock trails the newest article keeps answering with an earlier, changing time.
+      newsSeen = mode === "behind" ? `2026-09-07T10:${String(seenRecords).padStart(2, "0")}:00+09:00`
+        : route.request().postDataJSON().through;
+    }
     const fail =
       mode === "error" &&
       [
         "overview",
         "market-desk",
+        "market-desk/news",
         "research",
-        "news/briefing",
         "regime/kr",
         "insight/index",
         "insight/flows/top",
@@ -59,7 +72,7 @@ async function contextFor(viewport) {
       body: JSON.stringify(
         fail
           ? { detail: "Synthetic failure" }
-          : fixtureFor(path, url.searchParams, mode),
+          : fixtureFor(path, url.searchParams, mode, newsSeen),
       ),
     });
   });
@@ -104,31 +117,70 @@ try {
   const desktop = await contextFor({ width: 1440, height: 1000 });
   const page = await desktop.newPage();
   await page.goto("/home");
-  await check("Read existing market updates, published briefs and Slack reports", async () => {
+  await check("Read market updates, published briefs and the latest news on the home", async () => {
     const desk = page.getByRole("region", { name: "장중 시장 해설" });
     await page.getByRole("link", { name: /공모주 신호.*매수 없음/ }).waitFor();
     await desk.getByRole("heading", { name: "코스피는 상승, 코스닥은 하락" }).waitFor();
     await desk.getByRole("link", { name: "코스피, 외국인 매도세에 장중 반락" }).waitFor();
-    assert.doesNotMatch(await desk.innerText(), /단일기업|아침 브리핑|지난 거래일의 지수 배경|관측 이후 보도/);
+    assert.doesNotMatch(await desk.innerText(), /단일기업|기준금리 동결|아침 브리핑|지난 거래일의 지수 배경|관측 이후 보도/);
     await desk.locator("summary").filter({ hasText: "코스피 장중 변화" }).click();
     await desk.getByText("원인 미확인").waitFor();
-    const filing = page.getByRole("region", { name: "기업 공시·주요 뉴스" });
-    await filing.locator("summary").filter({ hasText: "단일기업 공급계약" }).click();
-    await filing.getByText("기업 매출에 영향을 줍니다.").waitFor();
     const briefs = page.getByRole("region", { name: "아침·마감 브리핑" });
     await briefs.locator("summary").filter({ hasText: "아침 브리핑" }).click();
     await briefs.getByText("브리핑 전문 읽기").click();
     assert.equal(await briefs.getByRole("link", { name: "공식 발표" }).getAttribute("href"), "https://example.com/source");
-    await page.getByRole("link", { name: /최근 속보.*발송된 속보/ }).click();
-    const feed = page.getByRole("region", { name: "Slack 발송 속보" });
-    await feed.getByText("확인된 속보 본문").waitFor();
-    assert.equal(new URL(page.url()).searchParams.get("item"), "report");
-    assert.deepEqual(await feed.locator("summary strong").allTextContents(), ["발송된 속보", "이전 속보"]);
-    assert.equal(await feed.getByRole("link", { name: "발표 원문" }).getAttribute("href"), "https://example.com/announcement");
-    await page.reload();
-    await feed.getByText("확인된 속보 본문").waitFor();
-    await page.goBack();
-    await desk.getByRole("heading", { name: "장중 시장 해설" }).waitFor();
+    const news = page.getByRole("region", { name: "주요 뉴스" });
+    await news.getByText("한은, 기준금리 연 2.50%로 동결").waitFor();
+    assert.deepEqual(await news.locator("summary strong").allTextContents(),
+      ["단일기업 공급계약", "한은, 기준금리 연 2.50%로 동결", "해협 통항 재개", "이전 소식"]);
+    const filing = news.locator("details").filter({ hasText: "단일기업 공급계약" });
+    await filing.locator("summary").click();
+    await filing.getByRole("heading", { name: "기업에 미치는 영향" }).waitFor();
+    await filing.getByText("기업 매출에 영향을 줍니다.").waitFor();
+    assert.equal(await page.getByRole("region", { name: "기업 공시·주요 뉴스" }).count(), 0);
+    assert.equal(await page.getByText("경제 뉴스 브리핑").count(), 0);
+    assert.equal(await page.getByRole("region", { name: "매일 확인" }).getByLabel("새 뉴스 3개").count(), 1);
+    assert.equal(mutations.includes("market-desk/news/seen"), false, "Previewing news on the home is not reading it");
+  });
+  await check("The news page groups a week by day, explains each article and records the visit", async () => {
+    await page.getByRole("region", { name: "주요 뉴스" }).getByRole("link", { name: /새 소식 3건 · 전체 보기/ }).click();
+    await page.getByRole("heading", { name: "주요 뉴스", level: 1 }).waitFor();
+    const feed = page.getByRole("region", { name: "뉴스 목록" });
+    await feed.getByText("최근 뉴스 4건").waitFor();
+    assert.deepEqual(await feed.getByRole("heading", { level: 2 }).allTextContents(), ["9월 7일 월요일3건", "9월 6일 일요일1건"]);
+    assert.deepEqual(await feed.locator("summary strong").allTextContents(),
+      ["단일기업 공급계약", "한은, 기준금리 연 2.50%로 동결", "해협 통항 재개", "이전 소식"]);
+    const report = feed.locator("details").filter({ hasText: "한은, 기준금리 연 2.50%로 동결" });
+    // The list shows the original article's title and publisher; the editor's summary waits behind the row.
+    assert.match(await report.locator("summary").innerText(), /^10:15\s+새 소식\s+경제\s+시험 기관\s+한은, 기준금리 연 2\.50%로 동결$/);
+    assert.equal(await report.getByText("확인된 뉴스 본문").isVisible(), false);
+    await report.locator("summary").click();
+    await report.getByRole("heading", { name: "왜 중요한가" }).waitFor();
+    await report.getByText("대출금리와 환율에 영향을 줍니다.").waitFor();
+    assert.equal(await report.getByRole("link", { name: "시험 기관 원문" }).getAttribute("href"), "https://example.com/announcement");
+    assert.equal(await report.getByRole("link", { name: "공공누리 제1유형" }).getAttribute("href"), "https://example.com/licence");
+    const urgent = feed.locator("li").filter({ hasText: "해협 통항 재개" });
+    assert.equal(await urgent.getAttribute("data-urgent"), "true");
+    assert.match(await urgent.locator("summary").innerText(), /긴급\s+후속\s+세계정세/);
+    const old = feed.locator("details").filter({ hasText: "이전 소식" });
+    assert.match(await old.locator("summary").innerText(), /^18:00\s+뉴스\s+이전 소식$/);
+    await old.locator("summary").click();
+    assert.equal(await old.getByRole("link", { name: "공식 발표" }).getAttribute("href"), "https://example.com/source");
+    await page.waitForFunction(() => !document.querySelector('[aria-label="새 뉴스 3개"]'));
+    assert.equal(newsSeen, "2026-09-07T10:30:00+09:00", "The visit is recorded through the newest article shown");
+    assert.equal(await feed.getByText("새 소식 3건").count(), 1, "What was new at arrival stays marked during the visit");
+    await feed.getByRole("button", { name: "기업 공시 1" }).click();
+    assert.deepEqual(await feed.locator("summary strong").allTextContents(), ["단일기업 공급계약"]);
+    await feed.getByRole("button", { name: "전체 4" }).click();
+    await page.goto("/feed?item=urgent");
+    await page.waitForURL((url) => url.pathname === "/news" && url.searchParams.get("item") === "urgent");
+    const linked = page.getByRole("region", { name: "뉴스 목록" }).locator("details[open]");
+    await linked.getByText("봉쇄 해제가 공식 확인됐습니다.").waitFor();
+    assert.match(await linked.locator("summary").innerText(), /세계정세\s+시험 통신\s+해협 통항 재개$/);
+    assert.equal(await linked.count(), 1);
+    assert.equal(await feed.getByText("새 소식", { exact: false }).count(), 0, "A later visit starts with nothing unseen");
+    await page.goto("/home");
+    await page.getByRole("region", { name: "장중 시장 해설" }).getByRole("heading", { name: "장중 시장 해설" }).waitFor();
   });
   await check("A corporate-only edition never becomes the market explanation", async () => {
     mode = "company";
@@ -136,7 +188,7 @@ try {
     const desk = page.getByRole("region", { name: "장중 시장 해설" });
     await desk.getByText(/같은 시각에 수집한 장중 시황을 기다리고/).waitFor();
     assert.doesNotMatch(await desk.innerText(), /단일기업|아침 브리핑/);
-    await page.getByRole("region", { name: "기업 공시·주요 뉴스" }).getByText("단일기업 공급계약").waitFor();
+    await page.getByRole("region", { name: "주요 뉴스" }).getByText("단일기업 공급계약").waitFor();
     mode = "explained";
     await page.reload();
     await desk.getByRole("heading", { name: "수급 보도로 확인한 코스피 반락" }).waitFor();
@@ -154,27 +206,17 @@ try {
     mode = "normal";
     await page.reload();
   });
-  await visible(page, "금리와 환율의 변화");
+  await visible(page, "한은, 기준금리 연 2.50%로 동결");
   await check(
     "Daily destinations are directly accessible and market data loads on demand",
     async () => {
       const daily = page.getByRole("region", { name: "매일 확인" });
       assert.deepEqual(await daily.locator("a").evaluateAll(links => links.map(a => a.getAttribute("href"))),
-        ["/home", "/ipo", "/feed"]);
+        ["/home", "/ipo", "/news"]);
       assert.equal(requests.some(url => url.endsWith("/overview")), false);
       await openMarketDetails(page);
       await visible(page, "시간축별 시장 흐름");
       await visible(page, "새로 들어온 리서치");
-      assert.equal(
-        await page
-          .getByRole("button", { name: "경제 · 시장", exact: true })
-          .getAttribute("aria-pressed"),
-        "true",
-      );
-      assert.equal(
-        await page.getByText("종합 뉴스 테스트 항목").isVisible(),
-        false,
-      );
       const personal = page
         .locator("details")
         .filter({ has: page.locator("summary", { hasText: "개인 투자 도구" }) })
@@ -308,7 +350,7 @@ try {
       const phone = await mobile.newPage();
       await phone.goto("/home");
       await phone.getByRole("heading", { name: "시장 브리핑", exact: true }).waitFor();
-      await visible(phone, "금리와 환율의 변화");
+      await visible(phone, "한은, 기준금리 연 2.50%로 동결");
       const desk = phone.getByRole("region", { name: "장중 시장 해설" });
       await desk.getByRole("heading", { name: "코스피는 상승, 코스닥은 하락" }).waitFor();
       const wire = await desk.getByRole("link", { name: "코스피, 외국인 매도세에 장중 반락" }).boundingBox();
@@ -323,15 +365,17 @@ try {
           .locator("a")
           .allTextContents()
           .then((items) => items.map((text) => text.replace(/\d/g, "").trim())),
-        ["브리핑", "공모주", "속보", "한국 시장", "경제"],
+        ["브리핑", "공모주", "뉴스", "한국 시장", "경제"],
       );
       await nav.getByRole("link", { name: "공모주", exact: true }).click();
       await phone.getByRole("heading", { name: "공모주 신호", exact: true }).waitFor();
-      await nav.getByRole("link", { name: "속보", exact: true }).click();
-      const feed = phone.getByRole("region", { name: "Slack 발송 속보" });
-      await feed.locator("summary").filter({ hasText: "발송된 속보" }).press("Enter");
-      await feed.getByText("확인된 속보 본문").waitFor();
+      await nav.getByRole("link", { name: /뉴스/ }).click();
+      const feed = phone.getByRole("region", { name: "뉴스 목록" });
+      const report = feed.locator("details").filter({ hasText: "한은, 기준금리 연 2.50%로 동결" });
+      await report.locator("summary").press("Enter");
+      await report.getByText("대출금리와 환율에 영향을 줍니다.").waitFor();
       await noOverflow(phone);
+      await capture(phone, "mobile-news");
       await nav.getByRole("link", { name: "브리핑", exact: true }).click();
       await openMarketDetails(phone);
       await phone
@@ -380,7 +424,7 @@ try {
     },
   );
   await check(
-    "Failed regions report errors while economic RSS remains usable",
+    "Failed regions report their own errors",
     async () => {
       mode = "error";
       await page.goto("/home");
@@ -388,27 +432,44 @@ try {
       await openMarketDetails(page);
       await visible(page, "시장 요약을 불러오지 못했습니다");
       await visible(page, "리서치를 불러오지 못했습니다");
-      await visible(page, "최신 경제 헤드라인 테스트");
-      assert.ok(
-        requests.some(
-          (url) => url.includes("/news?") && url.includes("category=economy"),
-        ),
-      );
+      await page.getByRole("region", { name: "주요 뉴스" }).getByText("뉴스를 불러오지 못했습니다.").waitFor();
       await noOverflow(page);
       await capture(page, "error-state");
     },
   );
-  await check("Feed provides recovery on failure, an empty edition, and an expired link", async () => {
-    await page.goto("/feed");
-    const feed = page.getByRole("region", { name: "Slack 발송 속보" });
+  await check("The news page recovers from a failure, an empty list and an expired link", async () => {
+    await page.goto("/news");
+    const feed = page.getByRole("region", { name: "뉴스 목록" });
     await feed.getByRole("button", { name: "다시 불러오기" }).waitFor();
     mode = "empty";
     await feed.getByRole("button", { name: "다시 불러오기" }).click();
-    await feed.getByText("최근 발송된 속보가 없습니다.", { exact: false }).waitFor();
+    await feed.getByText("최근 발행된 뉴스가 없습니다.", { exact: false }).waitFor();
     mode = "normal";
-    await page.goto("/feed?item=expired");
-    await feed.getByText("선택한 속보가 최근 발송 목록에서 만료됐습니다.").waitFor();
+    await page.goto("/news?item=expired");
+    await feed.getByText("선택한 뉴스는 최근 목록에서 지나갔습니다.").waitFor();
     assert.equal(await feed.locator("details[open]").count(), 0);
+    await capture(page, "desktop-news");
+  });
+  await check("A visit is recorded once per newest article and a failed record is tried again", async () => {
+    const feed = page.getByRole("region", { name: "뉴스 목록" });
+    const badge = page.getByRole("region", { name: "매일 확인" }).getByLabel(/새 뉴스 \d+개/);
+    newsSeen = undefined; seenRecords = 0; mode = "behind";
+    await page.goto("/news");
+    await feed.getByText("최근 뉴스 4건").waitFor();
+    // The answer 10:01 trails the 10:15 and 10:30 articles, so two stay unseen however often it is asked.
+    await page.waitForFunction(() => document.querySelector('[aria-label="새 뉴스 2개"]'));
+    await page.waitForTimeout(1200);
+    assert.equal(seenRecords, 1, "An answer that falls short of the newest article is not chased in a loop");
+    newsSeen = undefined; seenRecords = 0; mode = "normal"; failNextSeenRecord = true;
+    await page.goto("/news");
+    await feed.getByText("최근 뉴스 4건").waitFor();
+    await page.waitForTimeout(600);
+    assert.equal(seenRecords, 1);
+    assert.equal(await badge.getAttribute("aria-label"), "새 뉴스 3개", "A failed record leaves the news unseen");
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await badge.waitFor({ state: "detached" });
+    assert.equal(seenRecords, 2, "The next read of the list records the visit");
+    assert.equal(newsSeen, "2026-09-07T10:30:00+09:00");
   });
   assert.deepEqual(errors, [], "No uncaught browser errors");
   await writeFile(

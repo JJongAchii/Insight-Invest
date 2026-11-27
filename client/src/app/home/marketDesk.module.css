@@ -2,15 +2,8 @@
 .header, .footer { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 5px 16px; padding: 14px 22px; }
 .header { border-bottom: 1px solid var(--border); }
 .header h2 { font-size: 16px; font-weight: 650; }
-.desk .flash {
-  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px;
-  min-height: 44px; padding: 9px 22px;
-  color: var(--text-secondary); text-decoration: none; font-size: 13px;
-}
-.flash span { color: var(--primary-soft); font-size: 12px; font-weight: 650; }
-.flash strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-.flash time, .feedList time { color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.flash:hover, .feedList summary:hover { background: var(--surface-raised); }
+.feedList time { color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.feedList summary:hover { background: var(--surface-raised); }
 .article { padding: 20px 22px 16px; max-width: 88ch; min-width: 0; overflow-wrap: anywhere; }
 .readingGrid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(230px, 1fr); }
 .coverage { min-width: 0; border-left: 1px solid var(--border); }
@@ -82,13 +75,6 @@
 @media (max-width: 700px) {
   .header, .footer, .article, .background, .eventBlock, .records > h3 { padding-inline: 16px; }
   .cause { margin-inline: 16px; }
-  .desk .flash { padding-inline: 16px; grid-template-columns: auto 1fr auto; gap: 2px 8px; }
-  .flash time { grid-column: 2; grid-row: 1; font-size: 11px; }
-  .flash strong {
-    grid-column: 1 / 3; grid-row: 2; display: -webkit-box; -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2; white-space: normal; word-break: keep-all; overflow-wrap: anywhere;
-  }
-  .flash svg { grid-column: 3; grid-row: 1 / 3; }
   .feedList summary { grid-template-columns: minmax(0, 1fr) 16px; gap: 4px 12px; padding: 13px 16px; }
   .feedList summary strong { grid-column: 1; }
   .feedList summary svg { grid-column: 2; grid-row: 1 / 3; }

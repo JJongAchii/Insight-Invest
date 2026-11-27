@@ -12,6 +12,7 @@ import { usePathname } from "next/navigation";
 import {
   useAcknowledgeResearchSeenMutation,
   useFetchActionsQuery,
+  useFetchDeskNewsStatusQuery,
   useFetchResearchStatusQuery,
 } from "@/state/api";
 
@@ -36,6 +37,12 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
     refetchOnFocus: true,
     refetchOnReconnect: true,
   });
+  const { data: newsStatus } = useFetchDeskNewsStatusQuery(undefined, {
+    pollingInterval: 120_000,
+    skipPollingIfUnfocused: true,
+    refetchOnFocus: true,
+    refetchOnReconnect: true,
+  });
   const [acknowledgeResearchSeen] = useAcknowledgeResearchSeenMutation();
 
   useEffect(() => {
@@ -44,6 +51,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   }, [acknowledgeResearchSeen, researchStatus?.generated_at, researchStatus?.initialized]);
 
   const researchUnseenCount = researchStatus?.unseen ?? 0;
+  const newsUnseenCount = newsStatus?.unseen ?? 0;
   const actionCount = actionStatus?.counts.badge ?? actionStatus?.counts.actionable ?? 0;
 
   useEffect(() => {
@@ -73,6 +81,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
         isMobileOpen={isMobileSidebarOpen}
         onMobileClose={() => setIsMobileSidebarOpen(false)}
         researchUnseenCount={researchUnseenCount}
+        newsUnseenCount={newsUnseenCount}
         actionCount={actionCount}
       />
       {isMobileSidebarOpen && (
@@ -94,7 +103,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
         <div className="mx-auto w-full max-w-[1560px] flex-grow">{children}</div>
       </main>
       <MarketTicker />
-      <MobileBottomNav />
+      <MobileBottomNav newsUnseenCount={newsUnseenCount} />
       {!isMobileSidebarOpen && <PullToRefresh />}
       <PwaManager />
     </div>

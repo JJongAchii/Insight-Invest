@@ -78,7 +78,7 @@ try {
     await page.goto("/home"); await ready(page);
     const frame = await bar(page).locator("iframe").elementHandle(), before = scriptRequests;
     assert.equal(await page.locator(".tradingview-widget-container").count(), 1);
-    for (const path of ["/ipo", "/feed", "/insight", "/regime", "/research", "/stocksearch", "/earnings", "/data-trust", "/home"]) {
+    for (const path of ["/ipo", "/news", "/insight", "/regime", "/research", "/stocksearch", "/earnings", "/data-trust", "/home"]) {
       await page.locator(`a[href="${path}"]:visible`).first().click();
       await page.waitForURL((url) => url.pathname === path);
       assert.equal(await frame.evaluate((el) => el.isConnected), true);
@@ -179,7 +179,8 @@ try {
   });
   await liveContext.close();
   assert.deepEqual(errors, []);
-  assert.ok(mutations.every((path) => path === "research/seen"), "Only the existing, mocked research acknowledgement is allowed");
+  assert.ok(mutations.every((path) => ["research/seen", "market-desk/news/seen"].includes(path)),
+    "Only the mocked acknowledgements of visiting research and news are allowed");
   await writeFile(`${output}/results.json`, JSON.stringify({ passed, browserErrors: errors, mockedMutations: mutations, fixtures: "All app APIs and failure scenarios are synthetic; final TradingView scenario uses the real official widget", liveScriptRequests: liveScripts }, null, 2));
   console.log(`${passed.length} checks passed.`);
 } catch (error) { if (page && !page.isClosed()) await capture(page, "failure"); console.error(errors); throw error; }

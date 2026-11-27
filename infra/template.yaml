@@ -33,11 +33,6 @@ Parameters:
     Type: String
     NoEcho: true
     Description: KRX 정보데이터시스템 로그인 PW (폴러 전용)
-  AnthropicApiKey:
-    Type: String
-    NoEcho: true
-    Default: ""
-    Description: 뉴스 큐레이션용 Anthropic API 키 (뉴스 폴러 전용 — 없으면 규칙 폴백)
   OpenAIApiKey:
     Type: String
     NoEcho: true
@@ -150,6 +145,7 @@ Resources:
                   - !Sub arn:aws:s3:::${DataBucket}/app/notification_deliveries.parquet
                   - !Sub arn:aws:s3:::${DataBucket}/app/research_read_state.parquet
                   - !Sub arn:aws:s3:::${DataBucket}/app/research_seen_state.json
+                  - !Sub arn:aws:s3:::${DataBucket}/app/market_desk/news_seen.json
                   - !Sub arn:aws:s3:::${DataBucket}/app/decision_journal.parquet
                   - !Sub arn:aws:s3:::${DataBucket}/app/decision_journal_reviews.parquet
 
@@ -295,14 +291,24 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: news-publish
+        - PolicyName: news-notifications
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              - Effect: Allow  # 뉴스 브리핑 1파일만 쓰기 (스펙 §9-1 — 읽기 불필요)
+              - Effect: Allow  # 없는 파일(첫 발행·첫 구독 전)을 권한 오류가 아닌 404로 받는다
+                Action: [s3:ListBucket]
+                Resource: !Sub arn:aws:s3:::${DataBucket}
+              - Effect: Allow  # 편집 발행본은 읽기만 한다
+                Action: [s3:GetObject]
+                Resource:
+                  - !Sub arn:aws:s3:::${DataBucket}/app/market_desk/board.json
+                  - !Sub arn:aws:s3:::${DataBucket}/app/notification_subscriptions.parquet
+                  - !Sub arn:aws:s3:::${DataBucket}/app/notification_deliveries.parquet
+              - Effect: Allow  # 전송 영수증과 만료 구독 해제
                 Action: [s3:PutObject]
                 Resource:
-                  - !Sub arn:aws:s3:::${DataBucket}/app/news_briefing.json
+                  - !Sub arn:aws:s3:::${DataBucket}/app/notification_subscriptions.parquet
+                  - !Sub arn:aws:s3:::${DataBucket}/app/notification_deliveries.parquet
 
   NewsPollerFunction:
     Type: AWS::Lambda::Function
@@ -318,45 +324,29 @@ Resources:
       Environment:
         Variables:
           APP_DATA: !Sub s3://${DataBucket}/app
-          ANTHROPIC_API_KEY: !Ref AnthropicApiKey
+          WEB_PUSH_PUBLIC_KEY: !Ref WebPushPublicKey
+          WEB_PUSH_PRIVATE_KEY: !Ref WebPushPrivateKey
+          WEB_PUSH_SUBJECT: !Ref WebPushSubject
 
-  # 주중 09~19시 KST 매시 정각 (UTC 00~10시) — 08시는 UTC 자정을 넘어 별도 룰
-  NewsPollerScheduleDay:
+  # 편집기는 뉴스를 게시한 직후 발행본을 다시 쓴다. 2분마다 읽어 긴급 뉴스만 알리고 중복은 delivery
+  # receipt가 막는다. 홀수 분에 돌려 같은 영수증 파일을 쓰는 Research 폴러(:02/:12/...)·Action 폴러(짝수 분)와 겹치지 않는다.
+  NewsPollerSchedule:
     Type: AWS::Events::Rule
     Properties:
-      Name: insight-invest-news-poll-day
-      ScheduleExpression: cron(0 0-10 ? * MON-FRI *)
+      Name: insight-invest-news-poll
+      ScheduleExpression: cron(1/2 * * * ? *)
       State: ENABLED
       Targets:
         - Arn: !GetAtt NewsPollerFunction.Arn
-          Id: news-poller-day
+          Id: news-poller
 
-  # 주중 08시 KST = 전날 23시 UTC (월 08시 = 일 23시 UTC → SUN-THU)
-  NewsPollerScheduleDawn:
-    Type: AWS::Events::Rule
-    Properties:
-      Name: insight-invest-news-poll-dawn
-      ScheduleExpression: cron(0 23 ? * SUN-THU *)
-      State: ENABLED
-      Targets:
-        - Arn: !GetAtt NewsPollerFunction.Arn
-          Id: news-poller-dawn
-
-  NewsPollerDayInvokePermission:
+  NewsPollerInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref NewsPollerFunction
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
-      SourceArn: !GetAtt NewsPollerScheduleDay.Arn
-
-  NewsPollerDawnInvokePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref NewsPollerFunction
-      Action: lambda:InvokeFunction
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt NewsPollerScheduleDawn.Arn
+      SourceArn: !GetAtt NewsPollerSchedule.Arn
 
   ActionPollerRole:
     Type: AWS::IAM::Role
@@ -410,7 +400,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Name: insight-invest-action-poll-morning
-      ScheduleExpression: cron(45 0 ? * MON-FRI *)  # 09:45 KST
+      ScheduleExpression: cron(46 0 ? * MON-FRI *)  # 09:46 KST — 짝수 분: 뉴스 알림 폴러(홀수 분)와 영수증 파일을 함께 쓰지 않는다
       State: ENABLED
       Targets:
         - Arn: !GetAtt ActionPollerFunction.Arn

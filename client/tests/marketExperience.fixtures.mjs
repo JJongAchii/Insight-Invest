@@ -157,36 +157,35 @@ export const researchItems = [
   is_read: false,
   is_saved: false,
 }));
-const article = {
-  url: "https://example.com/news",
-  source: "UI 검증용 뉴스",
-  published_at: `${date}T08:00:00+09:00`,
-  cluster_count: 4,
-  sources: ["fixture"],
-  related_topics: ["금리", "환율"],
-};
-export const news = {
-  active: true,
-  as_of: `${date}T09:00:00+09:00`,
-  edition: "morning",
-  sections: {
-    economy: [
-      {
-        ...article,
-        title: "금리와 환율의 변화, 이번 주 경제 지표에서 확인할 것",
-        why: "정책 기대의 변화가 채권과 외환 시장에 어떻게 나타나는지 살펴봅니다.",
-      },
-      {
-        ...article,
-        url: "https://example.com/news/2",
-        title: "주요 기업의 실적 발표를 앞두고 확인할 산업별 흐름",
-        why: "매출과 이익 전망의 변화가 어느 업종에 집중되는지 확인할 수 있습니다.",
-      },
-    ],
-    general: [{ ...article, title: "종합 뉴스 테스트 항목" }],
-  },
-};
-export function fixtureFor(path, params, mode) {
+const article = (id, time, fields) => ({
+  id, kind: "news", origin: "reporter", status: "reported", category: null, priority: "major", update: false,
+  attribution: null, summary: "", significance: "", change: "", interpretation: "", watch: "", body: null,
+  sources: [], followups: [], licenses: [], published_at: time, publisher: null,
+  ...fields, title: fields.title ?? fields.headline,
+});
+// 최신순. 어제 글 하나는 분류·요약 없이 발행 원문만 가진 판본이다.
+export const deskNews = [
+  article("firm", `${date}T10:30:00+09:00`, {
+    kind: "filing", origin: "desk", status: "analysis", priority: null, headline: "단일기업 공급계약", publisher: "금융감독원 DART",
+    summary: "공급 조건이 공시됐습니다.", interpretation: "기업 매출에 영향을 줍니다.",
+  }),
+  article("report", `${date}T10:15:00+09:00`, {
+    category: "경제", headline: "시험 기관: 한은, 기준금리 동결", title: "한은, 기준금리 연 2.50%로 동결", publisher: "시험 기관",
+    summary: "확인된 뉴스 본문",
+    significance: "대출금리와 환율에 영향을 줍니다.",
+    sources: [{ title: "", url: "https://example.com/announcement", publisher: "시험 기관", published_at: `${date}T10:00:00+09:00` }],
+    licenses: [{ url: "https://example.com/licence", name: "공공누리 제1유형" }],
+  }),
+  article("urgent", `${date}T09:40:00+09:00`, {
+    category: "세계정세", priority: "urgent", update: true, attribution: "시험 통신", headline: "해협 통항 재개", publisher: "시험 통신",
+    summary: "통항이 다시 시작됐습니다.", change: "봉쇄 해제가 공식 확인됐습니다.",
+  }),
+  article("old", "2026-09-06T18:00:00+09:00", {
+    priority: null, headline: "이전 소식", body: "*[주요] 앞서 발행한 본문*\n<https://example.com/source|공식 발표>",
+  }),
+];
+/** `seen`은 뉴스를 마지막으로 본 시각이다. 화면이 기록하면 테스트가 다음 응답에 넘겨준다. */
+export function fixtureFor(path, params, mode, seen) {
   if (path === "ipo") return {
     status: { next_session: date, calendar: [{ planned_listing_date: date, decision_missing: mode === "stale" }] },
     open: [], history: [],
@@ -219,13 +218,9 @@ export function fixtureFor(path, params, mode) {
         ...(mode === "explained" ? [{ id: "cause", origin: "desk", kind: "move", status: "analysis", headline: "수급 보도로 확인한 코스피 반락",
           fact: "시장 보도가 외국인 순매도를 확인했습니다.", observation: "10시 관측", interpretation: "해당 변동 구간의 설명", watch: "",
           published_at: stamp, observed_at: stamp, sources: [wire] }] : []),
-        { id: "old", origin: "reporter", kind: "news", status: "reported", headline: "이전 속보",
-          fact: "앞서 발송한 본문", observation: "", interpretation: "", watch: "",
-          published_at: `${date}T09:00:00+09:00`, observed_at: null, sources: [] },
-        { id: "report", origin: "reporter", kind: "news", status: "reported", headline: "발송된 속보",
-          fact: "확인된 속보 본문", observation: "", interpretation: "", watch: "",
-          published_at: stamp, observed_at: null,
-          sources: [{ title: "발표 원문", url: "https://example.com/announcement", publisher: "시험 기관", published_at: stamp }] }],
+        { id: "report", origin: "reporter", kind: "news", status: "reported", headline: "한은, 기준금리 동결",
+          fact: "확인된 뉴스 본문", observation: "", interpretation: "", watch: "",
+          published_at: stamp, observed_at: null, sources: [] }],
       briefings: [{ id: "morning", kind: "am", as_of: `${date}T07:00:00+09:00`,
         published_at: `${date}T07:30:00+09:00`, body: "아침 발행본 요약\n\n주요 숫자\n\n<https://example.com/source|공식 발표>" }],
     } };
@@ -313,23 +308,15 @@ export function fixtureFor(path, params, mode) {
               research_lane: params.get("lane") || "core",
             })),
     };
-  if (path === "news/briefing")
-    return mode === "empty" ? { active: false } : news;
-  if (path === "news")
-    return {
-      articles:
-        mode === "empty"
-          ? []
-          : [
-              {
-                ...article,
-                id: "live",
-                title: "최신 경제 헤드라인 테스트",
-                summary: null,
-              },
-            ],
-      fetched_at: date,
-    };
+  if (path.startsWith("market-desk/news")) {
+    const items = mode === "empty" ? [] : mode === "company" ? deskNews.slice(0, 1) : deskNews;
+    const seenThrough = items.length ? seen ?? "2026-09-06T23:00:00+09:00" : null;
+    const unseen = items.filter(item => Date.parse(item.published_at) > Date.parse(seenThrough)).length;
+    if (path !== "market-desk/news")
+      return { unseen, latest_at: items[0]?.published_at ?? null, seen_through: seenThrough };
+    return { state: items.length ? "ready" : "awaiting", checked_at: items.length ? `${date}T10:35:00+09:00` : null,
+      items, seen_through: seenThrough, unseen };
+  }
   if (path === "actions")
     return { items: [], counts: { badge: 4, actionable: 4 } };
   if (path === "insight/spotlight") return { active: false, groups: [] };
