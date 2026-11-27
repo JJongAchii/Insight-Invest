@@ -109,3 +109,13 @@ def record_delivery(event_id: str, sub_id: str) -> None:
     )
     out = pd.concat([frame, row], ignore_index=True) if not frame.empty else row
     storage.write_parquet(out.reindex(columns=DELIVERY_COLUMNS), DELIVERIES_FILE)
+
+
+def delivered_events(prefix: str, since: datetime) -> set[str]:
+    """Events with this id prefix delivered to any device since `since` — a daily allowance counts these."""
+    frame = _read(DELIVERIES_FILE, DELIVERY_COLUMNS)
+    if frame.empty:
+        return set()
+    sent = pd.to_datetime(frame["sent_at"], utc=True)
+    chosen = frame[frame["event_id"].astype(str).str.startswith(prefix) & (sent >= pd.Timestamp(since).tz_convert("UTC"))]
+    return set(chosen["event_id"])

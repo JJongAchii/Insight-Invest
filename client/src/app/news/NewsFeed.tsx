@@ -15,6 +15,8 @@ const clock = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", hour: "
 const longDay = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", weekday: "long" });
 
 const TOPICS = [
+  // 장중 노트가 근거로 인용한 시황·특징주 원문(데스크 글).
+  { key: "market", label: "시장", categories: ["시장"] },
   { key: "economy", label: "경제·금융", categories: ["경제", "거시경제", "금융"] },
   { key: "industry", label: "산업·기술", categories: ["산업", "기술"] },
   { key: "trade", label: "무역·에너지", categories: ["무역", "에너지"] },

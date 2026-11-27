@@ -38,8 +38,73 @@ export interface DeskLead {
   comparison?: { index: string; previous_points: number; current_points: number; share_pct: number } | null;
 }
 
+export interface MapStock {
+  ticker: string;
+  name: string;
+  sector: string;
+  chg_pct: number;
+  value: number;
+  contrib_pp?: number;
+  multiple?: number;
+  market?: string;
+}
+
+export interface MapMarket {
+  approx_chg_pct: number;
+  /** 기여 절댓값 합 가운데 상위 10종목의 비중(0~1). */
+  top10_share: number | null;
+  breadth: {
+    up: number; down: number; flat: number; median: number; up10: number; down10: number;
+    limit_up: MapStock[]; limit_down: MapStock[];
+  };
+  contributors: { up: MapStock[]; down: MapStock[] };
+  sectors: { sector: string; contrib_pp: number; median: number; n: number }[];
+}
+
+/** 장중 시장 지도 — KRX 같은 시각 스냅샷으로 계산, 모델 없음(스펙 2026-11-27 §5). */
+export interface MarketMap {
+  state: "latest" | "delayed" | "closed" | "previous" | "awaiting" | "unavailable";
+  trade_date?: string;
+  observed_at?: string;
+  indices?: Record<"KOSPI" | "KOSDAQ", { level: number | null; chg_pct: number | null }>;
+  markets?: Record<"KOSPI" | "KOSDAQ", MapMarket>;
+  value_spikes?: MapStock[];
+  value_spikes_state?: "ready" | "unavailable";
+  groups?: { id: string; name: string; direction: "up" | "down"; members: { ticker: string; name: string; chg_pct: number }[] }[];
+}
+
+export type EvidenceLabel = "데이터" | "보도" | "해석";
+
+export interface DeskNote {
+  id: string;
+  kind: "scheduled" | "urgent";
+  slot: "open" | "morning" | "afternoon" | "preclose" | "close" | null;
+  trigger: { kind: string; title?: string } | null;
+  observed_at: string;
+  published_at: string;
+  headline: string;
+  drivers: { text: string; label: EvidenceLabel; sources: DeskArticle["sources"] }[];
+  stocks: { name: string; ticker: string | null; chg_pct: number | null; reason: string; label: EvidenceLabel; sources: DeskArticle["sources"] }[];
+  since_last: string;
+  watch: string[];
+  sources: DeskArticle["sources"];
+}
+
+export interface SinceNote {
+  from: string;
+  to: string;
+  indices: Record<string, { from: number; to: number; delta: number }>;
+  new_limit_up: { ticker: string; name: string }[];
+  new_limit_down: { ticker: string; name: string }[];
+  new_leaders: { ticker: string; name: string }[];
+  new_spikes: { ticker: string; name: string }[];
+}
+
 export interface MarketDeskResponse {
   state: "ready" | "awaiting" | "stale" | "unavailable";
+  map: MarketMap;
+  notes: DeskNote[];
+  since_note: SinceNote | null;
   lead?: DeskLead | null;
   today: string;
   session: {

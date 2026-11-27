@@ -9,7 +9,7 @@ from pydantic import AwareDatetime, BaseModel, Field, HttpUrl
 
 from datastore import desk_news as news_store
 from datastore import storage
-from module import desk_news
+from module import desk_news, market_map
 from module.kr_intraday import KST, is_open_kst
 
 router = APIRouter(prefix="/market-desk", tags=["market desk"])
@@ -112,6 +112,88 @@ class Board(BaseModel):
     market_reports: list[Source] = Field(default_factory=list, max_length=3)
 
 
+Label = Literal["데이터", "보도", "해석"]
+
+
+class Claim(BaseModel):
+    text: str = Field(min_length=1, max_length=240)
+    label: Label
+    sources: list[Source] = Field(default_factory=list, max_length=4)
+
+
+class NoteStock(BaseModel):
+    name: str = Field(min_length=1, max_length=40)
+    ticker: str | None = None
+    chg_pct: float | None = Field(default=None, allow_inf_nan=False)
+    reason: str = Field(min_length=1, max_length=160)
+    label: Label
+    sources: list[Source] = Field(default_factory=list, max_length=4)
+
+
+class Note(BaseModel):
+    """ai-company 장중 노트 한 편. 문장마다 근거 종류가 붙는다(스펙 2026-11-27 §6.4)."""
+    id: str
+    kind: Literal["scheduled", "urgent"]
+    slot: Literal["open", "morning", "afternoon", "preclose", "close"] | None = None
+    trigger: dict | None = None
+    observed_at: AwareDatetime
+    published_at: AwareDatetime
+    headline: str = Field(min_length=1, max_length=80)
+    drivers: list[Claim] = Field(min_length=1, max_length=3)
+    stocks: list[NoteStock] = Field(default_factory=list, max_length=5)
+    since_last: str = Field(default="", max_length=240)
+    watch: list[str] = Field(default_factory=list, max_length=2)
+    sources: list[Source] = Field(default_factory=list, max_length=12)
+
+
+def _today_notes(raw, now):
+    """당일 노트만, 발행 순서대로. 형식이 틀린 한 편은 빼고 나머지를 보인다."""
+    notes = []
+    for item in (raw or {}).get("notes") or []:
+        try:
+            note = Note.model_validate(item)
+        except ValueError:
+            logger.warning("장중 노트 형식 오류 — 한 편 제외: %s", item.get("id") if isinstance(item, dict) else None)
+            continue
+        if note.observed_at.astimezone(KST).date() == now.date():
+            notes.append(note)
+    return sorted(notes, key=lambda note: note.published_at)
+
+
+MAP_KEY = "kr_intraday_map.json"
+
+
+def _saved_map(now):
+    """지도와 당일 시계열. 상태: latest(25분 이내), delayed(장중인데 오래됨), closed(오늘 장이 끝남), previous(지난 거래일)."""
+    try:
+        saved = storage.read_json(MAP_KEY)
+    except FileNotFoundError:
+        return {"state": "awaiting"}, []
+    except Exception:
+        logger.exception("장중 시장 지도 조회 실패")
+        return {"state": "unavailable"}, []
+    latest = saved["latest"]
+    observed = datetime.fromisoformat(latest["observed_at"])
+    if saved["trade_date"] != now.date().isoformat():
+        state = "previous"
+    elif now - observed <= timedelta(minutes=25):
+        state = "latest"
+    else:
+        state = "delayed" if is_open_kst(now) else "closed"
+    return {"state": state, **latest}, saved.get("series") or []
+
+
+def _since_note(notes, series):
+    """가장 최근 노트의 지도 시각과 최신 수집 사이에 달라진 것."""
+    if not notes or len(series) < 2:
+        return None
+    noted = notes[-1].observed_at
+    earlier = [entry for entry in series if datetime.fromisoformat(entry["observed_at"]) <= noted]
+    if not earlier or earlier[-1] is series[-1]:
+        return None
+    return market_map.since(earlier[-1], series[-1])
+
+
 class SessionReading(BaseModel):
     observed_at: AwareDatetime
     headline: str
@@ -192,16 +274,19 @@ def _saved_board(now):
 def get_market_desk():
     now = datetime.now(KST)
     session, session_state = _read_session(now)
+    map_, series = _saved_map(now)
     try:
         raw, board, state = _saved_board(now)
         lead = _current_lead(raw.get("lead"), now) if raw else None
+        notes = _today_notes(raw, now)
     except Exception:
         logger.exception("장중 해설 발행본 조회 실패")
-        if session is None:
+        if session is None and map_["state"] in {"awaiting", "unavailable"}:
             raise HTTPException(503, "장중 해설을 불러올 수 없습니다.") from None
-        board, lead, state = None, None, "unavailable"
+        board, lead, state, notes = None, None, "unavailable", []
     return {"state": state, "board": board, "lead": lead, "today": now.date(), "session": session,
-            "session_state": session_state, "policy_coverage": _policy_coverage(board, session)}
+            "session_state": session_state, "policy_coverage": _policy_coverage(board, session),
+            "map": map_, "notes": notes, "since_note": _since_note(notes, series) if map_["state"] in ("latest", "closed") else None}
 
 
 class NewsSeen(BaseModel):

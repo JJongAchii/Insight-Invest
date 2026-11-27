@@ -1,0 +1,79 @@
+/* 시장 지도와 장중 노트 — 숫자는 고정폭, 근거 종류는 글자로 보이고 색은 보조다. */
+.card { overflow: hidden; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+.header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 5px 16px; padding: 14px 22px; border-bottom: 1px solid var(--border); }
+.header h2 { font-size: 16px; font-weight: 650; }
+.meta { color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.meta[data-state="delayed"] { color: var(--warning); }
+.link { display: inline-flex; align-items: center; gap: 4px; color: var(--primary-soft); font-size: 12px; font-weight: 500; }
+.link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.empty { padding: 15px 22px; color: var(--text-secondary); font-size: 14px; line-height: 1.6; }
+.empty button { color: var(--primary-soft); text-decoration: underline; text-underline-offset: 3px; }
+
+.indices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid var(--border); }
+.index { padding: 14px 22px; }
+.index + .index { border-left: 1px solid var(--border); }
+.index span { display: block; color: var(--text-secondary); font-size: 13px; font-weight: 600; }
+.index strong { display: inline-block; margin-top: 4px; font-family: var(--font-data); font-size: clamp(20px, 2.2vw, 26px); font-weight: 600; font-variant-numeric: tabular-nums; }
+.index em { margin-left: 8px; font-style: normal; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.index small { display: block; margin-top: 4px; color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+.up { color: var(--gains); }
+.down { color: var(--losses); }
+
+.block { padding: 14px 22px; border-bottom: 1px solid var(--border); }
+.block:last-child { border-bottom: 0; }
+.block h3 { margin-bottom: 8px; color: var(--text-secondary); font-size: 13px; font-weight: 650; }
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 28px; }
+.pair h4 { margin-bottom: 4px; color: var(--text-muted); font-size: 12px; font-weight: 600; }
+.pair > div > div + div { margin-top: 10px; }
+.block ul[aria-label] { margin-top: 0; padding-top: 0; border-top: 0; }
+.rows { list-style: none; }
+.rows li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: baseline; gap: 10px; padding: 4px 0; font-size: 14px; }
+.rows li > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rows li > span:not(:first-child) { font-variant-numeric: tabular-nums; text-align: right; }
+.rows li > span.contrib { min-width: 64px; color: var(--text-muted); font-size: 12px; }
+.rows li > span.name { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.rows li > span.name > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mention { flex: none; color: var(--primary-soft); font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+.breadth { font-size: 14px; line-height: 1.7; font-variant-numeric: tabular-nums; }
+.breadth b { font-weight: 600; }
+.breadth .note { color: var(--text-muted); font-size: 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; line-height: 1.5; }
+.chip b { font-weight: 600; }
+.chip span { color: var(--text-muted); font-size: 12px; }
+
+/* 장중 노트 */
+.note { padding: clamp(16px, 2.6vw, 26px); }
+.note > h3 { font-size: clamp(21px, 2.8vw, 30px); line-height: 1.35; font-weight: 700; letter-spacing: -.03em; text-wrap: pretty; word-break: keep-all; }
+.note h4 { margin: 18px 0 6px; color: var(--text-secondary); font-size: 13px; font-weight: 650; }
+.claims { list-style: none; counter-reset: claim; }
+.claims li { counter-increment: claim; display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 4px; padding: 5px 0; font-size: 15px; line-height: 1.7; word-break: keep-all; overflow-wrap: anywhere; }
+.claims li::before { content: counter(claim); color: var(--text-muted); font-size: 13px; font-variant-numeric: tabular-nums; padding-top: 2px; }
+.stockList { list-style: none; }
+.stockList li { padding: 5px 0; font-size: 15px; line-height: 1.7; word-break: keep-all; overflow-wrap: anywhere; }
+.stockList b { font-weight: 600; }
+.stockList .figure { margin: 0 6px; font-variant-numeric: tabular-nums; }
+.label { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px solid var(--border-strong); border-radius: 4px; color: var(--text-secondary); font-size: 11px; line-height: 1.6; vertical-align: 1px; white-space: nowrap; }
+.label[data-label="보도"] { border-color: color-mix(in srgb, var(--primary) 45%, transparent); color: var(--primary-soft); }
+.label[data-label="해석"] { border-style: dashed; }
+.cite { margin-left: 4px; font-size: 12px; color: var(--primary-soft); text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+.since { margin-top: 16px; padding: 10px 12px; border-radius: 8px; background: var(--surface-raised); font-size: 14px; line-height: 1.7; }
+.since b { margin-right: 6px; font-weight: 600; }
+.watch { list-style: none; }
+.watch li { padding: 3px 0 3px 12px; border-left: 2px solid var(--primary); font-size: 15px; line-height: 1.7; }
+.watch li + li { margin-top: 6px; }
+.more { margin-top: 16px; font-size: 14px; }
+.more summary { cursor: pointer; color: var(--primary-soft); }
+.earlier { border-top: 1px solid var(--border); }
+.earlier > summary { padding: 12px 22px; cursor: pointer; color: var(--text-secondary); font-size: 14px; }
+.earlier li { padding: 6px 22px; font-size: 14px; }
+.earlier time { margin-right: 10px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.after { padding: 12px 22px; border-top: 1px solid var(--border); font-size: 14px; line-height: 1.7; }
+.after b { margin-right: 6px; color: var(--text-secondary); font-weight: 650; }
+
+@media (max-width: 700px) {
+  .header, .index, .block, .empty, .earlier > summary, .earlier li, .after { padding-inline: 16px; }
+  .pair { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .rows li { font-size: 13px; }
+}

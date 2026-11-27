@@ -1,8 +1,8 @@
 """KR 장중 폴러 — Lambda 엔트리포인트 (스펙 2026-08-11 D1).
 
 서빙과 같은 컨테이너 이미지에서 CMD 오버라이드("app.intraday_poller.handler")로
-뜬다. EventBridge는 UTC 00:05~05:55와 06:05~06:35 두 룰로 나눠
-09:05~15:35 KST에 정확히 10분 간격으로 호출한다.
+뜬다. EventBridge는 UTC 00:05~05:55와 06:05~06:55 두 룰로 나눠
+09:05~15:55 KST에 정확히 10분 간격으로 호출한다. KRX 시세가 약 20분 늦어 15:30 종가는 15:55 폴에 들어온다.
 실패 시 파일을 갱신하지 않고 예외를 올린다 — 강등은 서빙의 스테일 가드 책임이므로
 여기서 삼키지 않는다.
 """
@@ -11,12 +11,13 @@ import logging
 import os
 from datetime import datetime
 
-import numpy as np
 import pandas as pd
 
 from datastore import storage
 from module import kr_intraday as ki
+from module import market_map
 from module.market_desk import market_input
+from module.market_groups import load_themes
 
 logger = logging.getLogger(__name__)
 
@@ -24,10 +25,15 @@ INDICES = {"KOSPI": "1001", "KOSDAQ": "2001"}
 LATEST_KEY = "kr_intraday_latest.parquet"
 ETF_LATEST_KEY = "kr_intraday_etf_latest.parquet"
 TIMELINE_KEY = "kr_intraday_timeline.parquet"
+MAP_KEY = "kr_intraday_map.json"
+BASELINE_PATH = ("insight", "kr_value_baseline.parquet")
+# 야간 배치가 며칠 실패해도 20거래일 평균은 크게 변하지 않는다. 그보다 오래되면 쏠림을 비운다. 달력일로 세서
+# 추석·설 연휴(평일 5일 남짓 휴장) 다음 날의 하루 묵은 기준선을 버리지 않는다 — 약 5~7거래일.
+BASELINE_MAX_AGE_DAYS = 10
 
 
 def _fetch_krx(today: str):
-    """pykrx 5호출. KRX_ID/KRX_PW는 Lambda env — pykrx가 import 시점에 로그인하고
+    """pykrx 5호출(직전 종가 2호출은 _prev_index_closes). KRX_ID/KRX_PW는 Lambda env — pykrx가 import 시점에 로그인하고
     세션 만료(1h)는 pykrx 1.2+ get_auth_session이 자동 재로그인한다."""
     from pykrx import stock  # lazy: env 자격증명 로그인 선행
 
@@ -54,31 +60,57 @@ def _sector_map() -> pd.DataFrame:
     return latest[["ticker", "sector", "name"]].drop_duplicates("ticker")
 
 
+def _index_daily(start: str, end: str, code: str) -> pd.DataFrame:
+    from pykrx import stock  # lazy: env 자격증명 로그인 선행
+
+    return stock.get_index_ohlcv_by_date(start, end, code)
+
+
 def _prev_index_closes(trade_date: str) -> dict[str, float]:
-    """미러(krx_index_prices)의 최신 행이 전영업일 종가가 아니면 그 지수는
-    통째로 뺀다. 야간 파이프라인이 실패해도 미러는 그냥 며칠 전 값을 들고
-    있으므로, 프레시니스를 안 보면 폴러가 그 값을 '오늘 등락률'인 양 조용히
-    거짓말한다 — 이 설계에서 유일하게 강등이 아니라 거짓말하는 실패 경로였다
-    (2026-08 스모크에서 7/28 스테일 미러로 +6%/+20% 왜곡 실측). 빠진 키는
-    index_rows()가 chg_pct=NaN으로 넘기고, 서빙이 그걸 null로 강등한다."""
-    lake = os.environ["QDATA_LAKE"]
-    df = pd.read_parquet(f"{lake}/clean/krx_index_prices.parquet",
-                         columns=["date", "index_code", "close"],
-                         filters=[("index_code", "in", list(INDICES.values()))])
-    code_to_key = {v: k for k, v in INDICES.items()}
-    prev_bday = str(np.busday_offset(trade_date, -1, roll="backward"))
+    """KRX가 준 직전 거래일 종가. 거래일은 KRX가 알므로 공휴일 다음 날에도 맞고, 야간 미러가 며칠 낡아도 그 값을
+    '전일 종가'로 쓰는 일이 없다(2026-08 스모크의 7/28 스테일 미러 +6%/+20% 왜곡). 조회가 실패하거나 직전 거래일이
+    없으면 그 지수만 빼고, index_rows()가 chg_pct=NaN으로 넘겨 서빙이 null로 강등한다."""
+    end = pd.Timestamp(trade_date)
     out = {}
-    for code, g in df.groupby("index_code"):
-        g = g.sort_values("date")
-        max_date = pd.Timestamp(g["date"].iloc[-1]).strftime("%Y-%m-%d")
-        key = code_to_key.get(code, code)
-        if max_date != prev_bday:
-            logger.warning(
-                f"{key} 지수 미러 스테일 — 최신 {max_date}, 기대 전영업일 "
-                f"{prev_bday}({trade_date} 기준) — chg_pct 생략")
+    for key, code in INDICES.items():
+        try:
+            daily = _index_daily((end - pd.Timedelta(days=20)).strftime("%Y%m%d"), end.strftime("%Y%m%d"), code)
+            before = daily[pd.to_datetime(daily.index) < end]
+        except Exception:
+            logger.warning(f"{key} 직전 거래일 종가 조회 실패 — chg_pct 생략", exc_info=True)
             continue
-        out[key] = float(g["close"].iloc[-1])
+        if before.empty:
+            logger.warning(f"{key} 직전 거래일 종가 없음({trade_date} 기준) — chg_pct 생략")
+            continue
+        out[key] = float(before["종가"].iloc[-1])
     return out
+
+
+def _value_baseline(trade_date: str) -> pd.DataFrame | None:
+    """야간 배치가 만든 종목별 평소 거래대금. 없거나 오래됐으면 None — 쏠림만 비운다."""
+    try:
+        df = storage.read_parquet(*BASELINE_PATH)
+    except (FileNotFoundError, OSError):
+        return None
+    if df.empty:
+        return None
+    as_of = pd.Timestamp(df["as_of"].max()).strftime("%Y-%m-%d")
+    if as_of >= trade_date or (pd.Timestamp(trade_date) - pd.Timestamp(as_of)).days > BASELINE_MAX_AGE_DAYS:
+        logger.warning(f"거래대금 기준선 {as_of} — {trade_date} 기준으로 쓰지 않음")
+        return None
+    return df[["ticker", "avg_value"]]
+
+
+def _publish_map(rows: pd.DataFrame, latest: pd.DataFrame, trade_date: str, observed_at: str) -> dict:
+    """지도와 당일 시계열(노트 이후 변화용). 날짜가 바뀌면 시계열을 새로 시작한다."""
+    indices = {r.key: {"level": float(r.level), "chg_pct": None if pd.isna(r.chg_pct) else float(r.chg_pct)}
+               for r in rows[rows["kind"].eq("index")].itertuples()}
+    built = market_map.build_map(latest, indices, _value_baseline(trade_date), load_themes(), observed_at)
+    previous = storage.read_json(MAP_KEY) if storage.exists(MAP_KEY) else None
+    series = previous["series"] if previous and previous.get("trade_date") == trade_date else []
+    storage.write_json({"version": 1, "trade_date": trade_date, "latest": built,
+                        "series": [*series, market_map.series_entry(built)]}, MAP_KEY)
+    return built
 
 
 def handler(event, context):
@@ -115,14 +147,21 @@ def handler(event, context):
             logger.warning("ETF 장중 스냅샷 저장 실패 — 직전 파일 유지", exc_info=True)
     else:
         logger.warning("ETF 장중 응답이 비어 있음 — 직전 스냅샷 유지")
+    # A map failure must not stop the snapshot the rest of the app reads.
+    try:
+        built = _publish_map(rows, latest, trade_date, now.replace(second=0, microsecond=0).isoformat())
+        map_status = "ok"
+    except Exception:
+        logger.exception("장중 시장 지도 저장 실패")
+        built, map_status = None, "degraded"
     # The web app and the private editor share observations, never model credentials.
     try:
-        storage.write_json(market_input(timeline, latest, now), "market_desk", "input.json")
+        storage.write_json(market_input(timeline, latest, now, built), "market_desk", "input.json")
         desk_status = "ok"
     except Exception:
         logger.exception("장중 해설 관측값 저장 실패")
         desk_status = "degraded"
     return {"status": "ok", "tickers": len(latest),
             "etfs": len(etf_latest), "etf_status": etf_status,
-            "market_desk_status": desk_status,
+            "market_desk_status": desk_status, "map_status": map_status,
             "polls": int(timeline["as_of"].nunique())}

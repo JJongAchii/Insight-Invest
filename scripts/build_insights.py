@@ -748,6 +748,22 @@ def build_sector_perf() -> pd.DataFrame:
     return df
 
 
+def build_value_baseline() -> pd.DataFrame:
+    """EC2 일일 배치: 장중 시장 지도의 '평소 하루 거래대금' — 최근 20거래일 종목별 평균 (스펙 2026-11-27 §5).
+
+    마지막 거래일까지 넣어 다음 거래일 장중에 쓴다. 장중 Lambda가 330MB 전 기간 시세를 읽지 않게 배치가 만든다.
+    """
+    from module import market_map
+
+    daily = qdata_api.load_krx_prices(
+        start=(pd.Timestamp.today() - pd.Timedelta(days=45)).strftime("%Y-%m-%d"), columns=["value"]
+    )
+    as_of = pd.Timestamp(daily["date"].max())
+    out = market_map.value_baseline(daily, (as_of + pd.Timedelta(days=1)).strftime("%Y-%m-%d"))
+    out["as_of"] = as_of.strftime("%Y-%m-%d")
+    return out
+
+
 def build_market_groups() -> pd.DataFrame:
     """EC2 일일 배치: 섹터·테마 요약/종목/추이를 같은 파일로 원자적 발행."""
     from module import market_groups
@@ -2203,6 +2219,7 @@ BUILDERS = [
     ("insight/sector_index.parquet", build_sector_index, {}),
     ("insight/sector_perf.parquet", build_sector_perf, {}),
     ("insight/market_groups.parquet", build_market_groups, {"row_group_size": 1}),
+    ("insight/kr_value_baseline.parquet", build_value_baseline, {}),  # 장중 지도 거래대금 기준선
     ("insight/valuation_daily.parquet", build_valuation_daily, {}),
     ("insight/signal_study.parquet", build_signal_study, {}),  # Track B: 신호 이벤트 스터디
     ("insight/factor_returns.parquet", build_factor_returns, {}),  # Track B: 팩터 렌즈

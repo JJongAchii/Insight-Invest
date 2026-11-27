@@ -1,0 +1,434 @@
+{
+ "source": "2026-11-27 11:05 KRX 스냅샷으로 계산한 지도. 날짜만 UI 고정 날짜(2026-09-07)로 바꿨다.",
+ "map": {
+  "version": 1,
+  "trade_date": "2026-09-07",
+  "observed_at": "2026-09-07T11:05:00+09:00",
+  "indices": {
+   "KOSPI": {
+    "level": 4794.49,
+    "chg_pct": 1.77
+   },
+   "KOSDAQ": {
+    "level": 692.99,
+    "chg_pct": 5.69
+   }
+  },
+  "markets": {
+   "KOSPI": {
+    "approx_chg_pct": 1.77,
+    "top10_share": 0.44,
+    "breadth": {
+     "up": 704,
+     "down": 172,
+     "flat": 59,
+     "median": 1.4,
+     "up10": 12,
+     "down10": 0,
+     "limit_up": [],
+     "limit_down": []
+    },
+    "contributors": {
+     "up": [
+      {
+       "ticker": "005930",
+       "name": "삼성전자",
+       "sector": "전기·전자",
+       "chg_pct": 1.4,
+       "value": 707945015450.0,
+       "contrib_pp": 0.363
+      },
+      {
+       "ticker": "000660",
+       "name": "SK하이닉스",
+       "sector": "전기·전자",
+       "chg_pct": 1.04,
+       "value": 1022136526500.0,
+       "contrib_pp": 0.2
+      },
+      {
+       "ticker": "005935",
+       "name": "삼성전자우",
+       "sector": "전기·전자",
+       "chg_pct": 2.63,
+       "value": 129789961950.0,
+       "contrib_pp": 0.075
+      },
+      {
+       "ticker": "006400",
+       "name": "삼성SDI",
+       "sector": "전기·전자",
+       "chg_pct": 6.7,
+       "value": 108797296500.0,
+       "contrib_pp": 0.058
+      },
+      {
+       "ticker": "373220",
+       "name": "LG에너지솔루션",
+       "sector": "전기·전자",
+       "chg_pct": 2.98,
+       "value": 25786093250.0,
+       "contrib_pp": 0.055
+      }
+     ],
+     "down": [
+      {
+       "ticker": "055550",
+       "name": "신한지주",
+       "sector": "기타금융",
+       "chg_pct": -2.48,
+       "value": 19853203900.0,
+       "contrib_pp": -0.025
+      },
+      {
+       "ticker": "105560",
+       "name": "KB금융",
+       "sector": "기타금융",
+       "chg_pct": -1.45,
+       "value": 31969070750.0,
+       "contrib_pp": -0.019
+      },
+      {
+       "ticker": "086790",
+       "name": "하나금융지주",
+       "sector": "기타금융",
+       "chg_pct": -2.01,
+       "value": 22249263650.0,
+       "contrib_pp": -0.017
+      },
+      {
+       "ticker": "005830",
+       "name": "DB손해보험",
+       "sector": "보험",
+       "chg_pct": -3.82,
+       "value": 7855375400.0,
+       "contrib_pp": -0.011
+      },
+      {
+       "ticker": "316140",
+       "name": "우리금융지주",
+       "sector": "기타금융",
+       "chg_pct": -1.6,
+       "value": 6782411475.0,
+       "contrib_pp": -0.01
+      }
+     ]
+    },
+    "sectors": [
+     {
+      "sector": "전기·전자",
+      "contrib_pp": 0.978,
+      "median": 3.61,
+      "n": 84
+     },
+     {
+      "sector": "운송장비·부품",
+      "contrib_pp": 0.196,
+      "median": 2.18,
+      "n": 64
+     },
+     {
+      "sector": "기타금융",
+      "contrib_pp": 0.122,
+      "median": 1.27,
+      "n": 97
+     },
+     {
+      "sector": "음식료·담배",
+      "contrib_pp": -0.021,
+      "median": 0.26,
+      "n": 45
+     },
+     {
+      "sector": "통신",
+      "contrib_pp": -0.014,
+      "median": -0.62,
+      "n": 5
+     },
+     {
+      "sector": "부동산",
+      "contrib_pp": -0.001,
+      "median": 0.36,
+      "n": 23
+     }
+    ]
+   },
+   "KOSDAQ": {
+    "approx_chg_pct": 5.69,
+    "top10_share": 0.29,
+    "breadth": {
+     "up": 1461,
+     "down": 219,
+     "flat": 156,
+     "median": 2.32,
+     "up10": 93,
+     "down10": 3,
+     "limit_up": [
+      {
+       "ticker": "129920",
+       "name": "대성하이텍",
+       "sector": "기계·장비",
+       "chg_pct": 29.9,
+       "value": 16621465765.0
+      },
+      {
+       "ticker": "088280",
+       "name": "쏘닉스",
+       "sector": "전기·전자",
+       "chg_pct": 29.95,
+       "value": 1298827499.0
+      },
+      {
+       "ticker": "317830",
+       "name": "에스피시스템스",
+       "sector": "기계·장비",
+       "chg_pct": 29.93,
+       "value": 2721829220.0
+      },
+      {
+       "ticker": "381620",
+       "name": "제닉스로보틱스",
+       "sector": "기계·장비",
+       "chg_pct": 29.98,
+       "value": 17455558605.0
+      },
+      {
+       "ticker": "439960",
+       "name": "코스모로보틱스",
+       "sector": "의료·정밀기기",
+       "chg_pct": 30.0,
+       "value": 34116949394.0
+      },
+      {
+       "ticker": "070300",
+       "name": "퀀텀레일",
+       "sector": "IT 서비스",
+       "chg_pct": 29.83,
+       "value": 1244748853.0
+      }
+     ],
+     "limit_down": []
+    },
+    "contributors": {
+     "up": [
+      {
+       "ticker": "277810",
+       "name": "레인보우로보틱스",
+       "sector": "기계·장비",
+       "chg_pct": 12.21,
+       "value": 116381108500.0,
+       "contrib_pp": 0.295
+      },
+      {
+       "ticker": "247540",
+       "name": "에코프로비엠",
+       "sector": "전기·전자",
+       "chg_pct": 11.71,
+       "value": 18122936900.0,
+       "contrib_pp": 0.273
+      },
+      {
+       "ticker": "086520",
+       "name": "에코프로",
+       "sector": "금융",
+       "chg_pct": 9.84,
+       "value": 32290722250.0,
+       "contrib_pp": 0.228
+      },
+      {
+       "ticker": "196170",
+       "name": "알테오젠",
+       "sector": "일반서비스",
+       "chg_pct": 6.93,
+       "value": 54895543450.0,
+       "contrib_pp": 0.219
+      },
+      {
+       "ticker": "036930",
+       "name": "주성엔지니어링",
+       "sector": "기계·장비",
+       "chg_pct": 9.33,
+       "value": 136411982200.0,
+       "contrib_pp": 0.159
+      }
+     ],
+     "down": [
+      {
+       "ticker": "241710",
+       "name": "코스메카코리아",
+       "sector": "화학",
+       "chg_pct": -5.39,
+       "value": 10797990300.0,
+       "contrib_pp": -0.02
+      },
+      {
+       "ticker": "251970",
+       "name": "펌텍코리아",
+       "sector": "화학",
+       "chg_pct": -2.14,
+       "value": 1779880000.0,
+       "contrib_pp": -0.006
+      },
+      {
+       "ticker": "222800",
+       "name": "심텍",
+       "sector": "전기·전자",
+       "chg_pct": -0.49,
+       "value": 50042992550.0,
+       "contrib_pp": -0.005
+      },
+      {
+       "ticker": "425420",
+       "name": "티에프이",
+       "sector": "전기·전자",
+       "chg_pct": -2.08,
+       "value": 4686308350.0,
+       "contrib_pp": -0.004
+      },
+      {
+       "ticker": "351320",
+       "name": "넥사다이내믹스",
+       "sector": "기계·장비",
+       "chg_pct": -6.16,
+       "value": 2229038205.0,
+       "contrib_pp": -0.003
+      }
+     ]
+    },
+    "sectors": [
+     {
+      "sector": "기계·장비",
+      "contrib_pp": 1.325,
+      "median": 4.26,
+      "n": 188
+     },
+     {
+      "sector": "전기·전자",
+      "contrib_pp": 1.186,
+      "median": 3.86,
+      "n": 317
+     },
+     {
+      "sector": "일반서비스",
+      "contrib_pp": 0.914,
+      "median": 3.54,
+      "n": 148
+     },
+     {
+      "sector": "섬유·의류",
+      "contrib_pp": 0.003,
+      "median": 0.53,
+      "n": 22
+     },
+     {
+      "sector": "통신",
+      "contrib_pp": 0.004,
+      "median": 1.0,
+      "n": 9
+     },
+     {
+      "sector": "기타제조",
+      "contrib_pp": 0.006,
+      "median": 1.51,
+      "n": 16
+     }
+    ]
+   }
+  },
+  "value_spikes": [
+   {
+    "ticker": "053800",
+    "name": "안랩",
+    "sector": "IT 서비스",
+    "chg_pct": 7.42,
+    "value": 172388814550.0,
+    "market": "KOSDAQ",
+    "multiple": 5.75
+   }
+  ],
+  "value_spikes_state": "ready",
+  "groups": [
+   {
+    "id": "robotics",
+    "name": "로봇·자동화",
+    "direction": "up",
+    "members": [
+     {
+      "ticker": "466100",
+      "name": "클로봇",
+      "chg_pct": 23.56
+     },
+     {
+      "ticker": "056080",
+      "name": "유진로봇",
+      "chg_pct": 13.52
+     },
+     {
+      "ticker": "277810",
+      "name": "레인보우로보틱스",
+      "chg_pct": 12.21
+     },
+     {
+      "ticker": "348340",
+      "name": "뉴로메카",
+      "chg_pct": 10.1
+     },
+     {
+      "ticker": "388720",
+      "name": "유일로보틱스",
+      "chg_pct": 8.51
+     },
+     {
+      "ticker": "108490",
+      "name": "로보티즈",
+      "chg_pct": 7.13
+     }
+    ]
+   },
+   {
+    "id": "batteries",
+    "name": "2차전지",
+    "direction": "up",
+    "members": [
+     {
+      "ticker": "247540",
+      "name": "에코프로비엠",
+      "chg_pct": 11.71
+     },
+     {
+      "ticker": "066970",
+      "name": "엘앤에프",
+      "chg_pct": 10.79
+     },
+     {
+      "ticker": "086520",
+      "name": "에코프로",
+      "chg_pct": 9.84
+     }
+    ]
+   },
+   {
+    "id": "defense-aerospace",
+    "name": "방산·우주",
+    "direction": "up",
+    "members": [
+     {
+      "ticker": "272210",
+      "name": "한화시스템",
+      "chg_pct": 12.74
+     },
+     {
+      "ticker": "079550",
+      "name": "LIG디펜스앤에어로스페이스",
+      "chg_pct": 9.62
+     },
+     {
+      "ticker": "077970",
+      "name": "STX엔진",
+      "chg_pct": 7.91
+     }
+    ]
+   }
+  ]
+ }
+}

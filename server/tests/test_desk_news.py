@@ -143,3 +143,19 @@ def test_filing_title_and_registry_are_shown_as_filed():
     item = desk_news.normalize([issue(origin="desk", kind="filing", headline=filed["title"], fact=filed["title"],
                                       sources=[filed])])[0]
     assert (item["title"], item["publisher"]) == (filed["title"], "금융감독원 DART")
+
+
+def test_a_report_the_intraday_note_quoted_is_market_news_under_its_original_title():
+    # ai-company `DeskStore.quoted`: a market report a note relied on, listed once under 시장.
+    from app.routers.market_desk import Issue
+
+    source = {"title": "코스닥, 로봇주 강세에 5%대 급등", "publisher": "시황통신", "url": "https://example.org/robot",
+              "published_at": "2026-11-27T10:20:00+09:00"}
+    market = issue(id="market-1f2e", origin="desk", headline=source["title"], category="시장", priority="major",
+                   significance="", fact="11:09 장중 노트가 근거로 인용한 원문입니다.", sources=[source],
+                   published_at=source["published_at"])
+    Issue.model_validate(market)
+    [item] = desk_news.normalize([market])
+    assert (item["title"], item["publisher"], item["category"], item["priority"], item["origin"]) == (
+        "코스닥, 로봇주 강세에 5%대 급등", "시황통신", "시장", "major", "desk")
+    assert item["summary"] == "11:09 장중 노트가 근거로 인용한 원문입니다."

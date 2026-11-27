@@ -348,3 +348,21 @@ def test_macro_results_keep_recent_release_dates_in_the_existing_action_window(
     monkeypatch.setattr(bi.external_events, "fetch_fomc_events", empty)
     bi.build_external_events()
     assert called == ["test-key"]
+
+
+def test_value_baseline_covers_the_twenty_sessions_through_the_latest_close(monkeypatch):
+    days = pd.bdate_range("2026-10-20", "2026-11-26")
+    daily = pd.DataFrame({"date": days, "ticker": "053800", "value": [float(i) for i in range(len(days))]})
+    asked = {}
+
+    def load(**kwargs):
+        asked.update(kwargs)
+        return daily.copy()
+
+    monkeypatch.setattr(bi.qdata_api, "load_krx_prices", load)
+    out = bi.build_value_baseline()
+    last20 = [float(i) for i in range(len(days))][-20:]
+    row = out.set_index("ticker").loc["053800"]
+    assert row["avg_value"] == pytest.approx(sum(last20) / 20)
+    assert pd.Timestamp(row["as_of"]) == pd.Timestamp("2026-11-26")
+    assert asked["columns"] == ["value"]

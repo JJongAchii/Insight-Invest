@@ -1,5 +1,28 @@
 // Synthetic UI fixtures. These values are not observations or research results.
+import { readFileSync } from "node:fs";
+
 export const date = "2026-09-07";
+// The map is computed from a real 2026-11-27 11:05 KRX snapshot and dated to the fixture day.
+export const marketMap = JSON.parse(readFileSync(new URL("./fixtures/market_map_1105.json", import.meta.url))).map;
+const wireSource = { title: "코스닥 매수 사이드카 발동", publisher: "시황통신", url: "https://example.org/sidecar",
+  published_at: `${date}T10:25:00+09:00` };
+export const note = {
+  id: `note/${date}/morning`, kind: "scheduled", slot: "morning", trigger: null,
+  observed_at: `${date}T11:05:00+09:00`, published_at: `${date}T11:09:00+09:00`,
+  headline: "코스닥 5%대 급등, 10:22 매수 사이드카", since_last: "코스닥은 개장 노트 뒤 +3.0%에서 +5.7%로 상승폭을 키웠다.",
+  watch: ["사이드카 뒤 상승폭이 유지되는지"],
+  drivers: [
+    { text: "상승 1,461개·하락 219개로 시장 전체가 올랐다", label: "데이터", sources: [] },
+    { text: "10시 22분 코스닥 매수 사이드카가 발동됐다", label: "보도", sources: [wireSource] },
+    { text: "52주 최저 뒤 저가 매수가 들어온 것으로 보인다", label: "해석", sources: [] },
+  ],
+  stocks: [{ name: "레인보우로보틱스", ticker: "277810", chg_pct: 12.21, reason: "로봇주가 함께 상한가에 오르며 테마 매수가 몰렸을 가능성",
+    label: "해석", sources: [] }],
+  sources: [wireSource],
+};
+export const sinceNote = { from: `${date}T11:05:00+09:00`, to: `${date}T11:35:00+09:00`,
+  indices: { KOSPI: { from: 1.77, to: 1.9, delta: 0.13 }, KOSDAQ: { from: 5.69, to: 6.4, delta: 0.71 } },
+  new_limit_up: [{ ticker: "277810", name: "레인보우로보틱스" }], new_limit_down: [], new_leaders: [], new_spikes: [] };
 const evidence = (key, title, detail, tone = "neutral", link = "/insight") => ({
   key,
   title,
@@ -176,6 +199,13 @@ export const deskNews = [
     sources: [{ title: "", url: "https://example.com/announcement", publisher: "시험 기관", published_at: `${date}T10:00:00+09:00` }],
     licenses: [{ url: "https://example.com/licence", name: "공공누리 제1유형" }],
   }),
+  // 장중 노트가 근거로 인용한 시황 원문. 지도의 레인보우로보틱스 옆에 '기사 1'로 이어진다.
+  article("market", `${date}T09:50:00+09:00`, {
+    origin: "desk", category: "시장", headline: "레인보우로보틱스, 로봇주 강세에 12% 급등", publisher: "시황통신",
+    summary: "11:09 장중 노트가 근거로 인용한 원문입니다.",
+    sources: [{ title: "레인보우로보틱스, 로봇주 강세에 12% 급등", url: "https://example.org/robot", publisher: "시황통신",
+      published_at: `${date}T09:50:00+09:00` }],
+  }),
   article("urgent", `${date}T09:40:00+09:00`, {
     category: "세계정세", priority: "urgent", update: true, attribution: "시험 통신", headline: "해협 통항 재개", publisher: "시험 통신",
     summary: "통항이 다시 시작됐습니다.", change: "봉쇄 해제가 공식 확인됐습니다.",
@@ -191,13 +221,16 @@ export function fixtureFor(path, params, mode, seen) {
     open: [], history: [],
   };
   if (path === "market-desk") {
-    if (mode === "empty") return { state: "awaiting", today: date, session: null, session_state: "awaiting", policy_coverage: [], board: null };
+    const notes = mode === "empty" || mode === "company" ? [] : [note];
+    const desk = { map: mode === "empty" || mode === "company" ? { state: "awaiting" } : { state: "latest", ...marketMap },
+      notes, since_note: notes.length ? sinceNote : null };
+    if (mode === "empty") return { ...desk, state: "awaiting", today: date, session: null, session_state: "awaiting", policy_coverage: [], board: null };
     const stamp = `${date}T10:15:00+09:00`;
     const filing = { id: "firm", origin: "desk", kind: "filing", status: "analysis", headline: "단일기업 공급계약",
       fact: "공급 조건이 공시됐습니다.", observation: "", interpretation: "기업 매출에 영향을 줍니다.", watch: "",
       published_at: `${date}T10:30:00+09:00`, observed_at: null, sources: [] };
     const wire = { title: "코스피, 외국인 매도세에 장중 반락", publisher: "시황통신", published_at: `${date}T09:23:00+09:00`, url: "https://example.org/index-report" };
-    return { state: mode === "stale" ? "stale" : "ready", today: date,
+    return { ...desk, state: mode === "stale" ? "stale" : "ready", today: date,
       lead: mode === "lead" ? { phase: "close", trade_date: date, as_of: `${date}T16:05:00+09:00`,
         cutoff: `${date}T16:15:00+09:00`, published_at: `${date}T16:18:00+09:00`, close_at: `${date}T15:30:00+09:00`,
         headline: "기관이 지킨 반등, 외국인은 매도 전환", reading: { text: "전일 낙폭에서 회복한 폭은 제한적입니다.", sources: [wire] },

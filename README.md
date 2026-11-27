@@ -11,7 +11,10 @@
 홈은 한국 증시 장중·마감의 대표 해설에서 현재 장세와 비교가 되는 시점, 수급·정책 등 해석에 영향을 준
 근거, 다음에 확인할 조건을 읽을 수 있다. 마감판은 실제 마감 보도, 장중판은 신선한 KRX 관측과 시황 원문이
 있을 때 기존 구독 작성 한도에서 발행된다. 각 문단에서 근거 원문을 열 수 있다.
-대표 해설이 없는 시각에는 두 지수의 장중 경로와 업종별 등락, 특정 종목의 상승·하락 기여도를 보여준다.
+대표 해설 아래 `지금 시장`은 10분 KRX 스냅샷으로 지수를 움직인 종목, 오르고 내린 종목 수, 같이 움직인 테마, 평소보다
+거래가 몰린 종목을 모델 없이 계산해 보여주고(`app/kr_intraday_map.json`), 종목 옆에 그날 기사 수를 잇는다.
+ai-company가 이 지도를 근거로 정시·급변 시 쓰는 장중 노트는 시험 운영 동안 `/notes`에서만 보인다
+([ADR-0037](docs/adr/0037-intraday-market-map-notes-and-alerts.md)).
 기존 10분 KRX 폴러가 같은 시각의 자료로 해설을 만들어 `app/market_desk/input.json`에 저장한다.
 홈은 `GET /market-desk`로 저장된 글을 읽는다. 지수 배경을 다룬 보도는 원문과 보도 시각을 표시하고,
 편집기가 특정 구간의 원인을 확인한 해설에는 해당 관측 시각과 근거를 표시한다. ai-company 편집기가 아침·마감
@@ -22,7 +25,8 @@
 뉴스는 이 발행본 하나만 읽는다. `주요 뉴스`(`/news`)는 날짜별 목록에서 분야, 긴급 여부, 핵심 사실,
 왜 중요한지를 근거 원문과 함께 보여주고, 기업 공시와 정책 발표 해설도 같은 목록에 둔다. 홈은 최신 5건을
 같은 형식으로 미리 보여준다. 뉴스 화면을 열면 마지막으로 본 시각을 기록해 기기 간에 공유하고, 그 뒤에
-발행된 글 수를 탐색에 표시한다. 편집기가 긴급으로 분류한 뉴스만 Web Push로 알린다.
+발행된 글 수를 탐색에 표시한다. 장중 노트가 인용한 시황 원문은 `시장` 분야로 실린다. 편집기가 긴급으로 분류한 뉴스와
+시장 급변(사이드카·서킷브레이커 보도, 코스피 ±2%·코스닥 ±3% 첫 돌파, 하루 3건)만 Web Push로 알린다.
 
 운영 편집기는 전용 인증서로 1시간짜리 AWS 자격을 받아 시세 파일을 읽고 해설 파일을 게시한다. 공개 인증서를 등록할 때 사용할 정책 이름은 CloudFormation `insight-invest-api` 스택의 `MarketDeskCertificatePolicy` 출력에서 확인한다.
 
@@ -102,8 +106,9 @@ EventBridge의 `insight-invest-action-poller`가 데이터 배치 뒤 09:46·20:
 동일 event/subscription 조합은 delivery receipt로 한 번만 보내며, 여러 건은 한 알림으로
 묶어 과도한 알림을 방지한다.
 
-`insight-invest-news-poller`는 2분마다 저장된 발행본을 읽어 긴급으로 분류된 새 뉴스만 보낸다.
-같은 글은 delivery receipt로 기기마다 한 번만 보내고, 발행 후 3시간이 지난 글은 뒤늦게 알리지 않는다.
+`insight-invest-news-poller`는 2분마다 저장된 발행본을 읽어 긴급으로 분류된 새 뉴스를 보내고, 발행본의 시장 조치
+보도와 `market_desk/input.json`의 지수 첫 돌파를 "시장 급변"으로 하루 3사건까지 보낸다. 같은 글·사건은 delivery receipt로
+기기마다 한 번만 보내고, 3시간이 지난 것은 뒤늦게 알리지 않는다. 한쪽 입력을 읽지 못해도 다른 쪽 알림은 나간다.
 
 `insight-invest-research-poller`는 UTC `:02/:12/...`에 Research 피드를 갱신하고
 durable pending을 같은 delivery receipt로 발행한다. 일시 실패는 pending을 남겨 해당
@@ -129,6 +134,7 @@ iPhone Safari와 홈 화면 PWA에서는 페이지 최상단에서 아래로 당
 | US 실적 일정·발표 | Finnhub Earnings Calendar + qdata 활성 US 종목 참조 + SEC 공식 제출 페이지 | 평일 09:00·19:00 KST 우선 배치 · 주요 기업 50개 + 내 종목, 과거 결과 누적 |
 | 앱 자산 ID / 포트폴리오 | `app/asset_id_registry.parquet` / `app/portfolio/` | 신규 상장·앱 저장 시 |
 | 뉴스 | ai-company 편집 발행본 `app/market_desk/board.json` | 뉴스 게시 직후, 그 밖에는 5분(야간·주말 30분)마다 |
+| 장중 시장 지도 | KRX 장중 스냅샷 → `app/kr_intraday_map.json`(당일만), 거래대금 기준선 `insight/kr_value_baseline.parquet` | 장중 10분 · 기준선은 야간 배치 |
 | 퀀트 문헌 피드 | qdata Research Radar 공개 출처 watchlist | 수집 10분, 앱 투영 최대 약 5분 후 |
 
 ## 로컬 개발
@@ -191,6 +197,7 @@ server/
 │   └── fx.py              #   환율
 ├── module/                # 백테스트·최적화·지표·레짐 엔진
 │   ├── desk_news.py      # 편집 발행본 → 뉴스 기사(분야·긴급 여부·핵심 사실)
+│   ├── market_map.py     # 장중 시장 지도(지수 기여·시장 폭·테마·거래 쏠림·지수 돌파)
 │   └── research_feed.py  # Radar canonical → 앱 투영
 ├── tests/                 # pytest (conftest가 server/를 import 루트로 설정)
 ├── Dockerfile             # Lambda 베이스 이미지 (BuildKit secret으로 qdata 설치)
@@ -207,6 +214,8 @@ docs/superpowers/          # 설계·구현계획 기록 (폐기된 것 포함)
 
 ## 이력
 
+- **v3.6 (2026-11-27)**: 장중해설을 `지금 시장` 지도로 바꾸고, ai-company 장중 노트(시험 운영 `/notes`),
+  `노트 이후` 변화, 시장 급변 Web Push, 주요 뉴스 `시장` 분야와 지도 종목별 기사 수를 추가.
 - **v3.5 (2026-11-27)**: 뉴스를 ai-company 편집 발행본으로 일원화. `주요 뉴스` 화면과 미확인 표시,
   긴급 뉴스 Web Push를 추가하고 Google News RSS 기반 `경제 뉴스 브리핑`(시간별 폴러·EC2 발행·
   텔레그램 뉴스 톱3)을 제거했다.
