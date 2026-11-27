@@ -133,7 +133,7 @@ def _build(sector: str | None = None):
     trade_date = str(latest["trade_date"].iloc[0])
 
     # 두 파일 쓰기는 원자적이지 않다 — PUT 사이 크래시는 latest=오늘/
-    # timeline=어제를 남길 수 있다(최악은 15:35 마지막 폴). 정합 없는 타임라인은
+    # timeline=어제를 남길 수 있다(최악은 15:55 마지막 폴). 정합 없는 타임라인은
     # 통째로 버린다.
     timeline = timeline[timeline["trade_date"] == trade_date]
     if timeline.empty:

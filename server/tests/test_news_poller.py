@@ -1,4 +1,4 @@
-"""뉴스 알림 폴러 — 편집팀이 긴급으로 분류한 새 뉴스만 기기마다 한 번 알린다."""
+"""알림 폴러 — 편집팀이 긴급으로 분류한 새 뉴스와 그날의 시장 급변을 기기마다 한 번 알린다."""
 
 from datetime import datetime, timedelta
 
@@ -84,13 +84,82 @@ def test_several_urgent_articles_arrive_as_one_notification(sent):
 
 
 def test_absent_board_waits_and_unreadable_board_reports_failure(sent, tmp_path):
-    assert news_poller.handler({}, None) == {"ok": True, "state": "awaiting", "urgent": 0}
+    assert news_poller.handler({}, None) == {"ok": True, "state": "awaiting", "urgent": 0, "market": 0}
     (tmp_path / "market_desk").mkdir()
     (tmp_path / "market_desk" / "board.json").write_text("{}")
-    assert news_poller.handler({}, None) == {"ok": False, "error": "ValidationError"}
+    assert news_poller.handler({}, None) == {"ok": False, "news_error": "ValidationError", "market": 0}
     assert sent == []
 
 
 def test_malformed_briefing_does_not_silence_urgent_news(sent):
     publish(report("event", 4, "urgent", "긴급 금리 결정"), briefings=[{"id": "am", "kind": "weekly"}])
     assert news_poller.run(NOW)["push"]["sent"] == 1
+
+
+# ---- 시장 급변 알림 (스펙 2026-11-27 §7): 사이드카·서킷브레이커 보도와 지수 첫 돌파, 하루 3회
+
+
+def market(*alerts, events=()):
+    publish(alerts=list(alerts))
+    storage.write_json({"version": 1, "trade_date": "2026-11-27", "events": list(events)}, "market_desk", "input.json")
+
+
+def action(identity, minutes_ago, title="코스닥 매수 사이드카 발동"):
+    published = (NOW - timedelta(minutes=minutes_ago)).isoformat()
+    return {"id": identity, "kind": "market_action", "title": title, "published_at": published,
+            "source": {"title": title, "publisher": "통신", "url": "https://example.org/a", "published_at": published}}
+
+
+def crossing(index, observed, chg):
+    return {"id": f"2026-11-27/cross/{index}/up", "index": index, "direction": "up",
+            "threshold": 3.0 if index == "KOSDAQ" else 2.0, "observed_at": observed, "chg_pct": chg}
+
+
+def test_sidecar_report_and_index_crossing_alert_once_each(sent):
+    market(action("2026-11-27/action/KOSDAQ/sidecar", 5), events=[crossing("KOSDAQ", "2026-11-27 10:15", 3.41)])
+    result = news_poller.run(NOW)
+    assert result["market"] == 2
+    assert [(p["title"], p["body"], p["url"]) for p in sent] == [("시장 급변", "코스닥 +3% 돌파 (+3.41%) 외 1건", "/home")]
+    news_poller.run(NOW + timedelta(minutes=2))
+    assert len(sent) == 1
+
+
+def test_no_more_than_three_market_alerts_a_day(sent):
+    events = [crossing("KOSDAQ", "2026-11-27 09:45", 3.0), crossing("KOSPI", "2026-11-27 10:15", 2.06)]
+    market(action("2026-11-27/action/KOSDAQ/sidecar", 20), action("2026-11-27/action/KOSPI/sidecar", 10,
+                                                                      "코스피 매수 사이드카 발동"), events=events)
+    news_poller.run(NOW)
+    assert sent[-1]["badge"] == 3
+    news_poller.run(NOW + timedelta(minutes=2))
+    assert len(sent) == 1
+
+
+def test_yesterdays_market_events_never_alert(sent):
+    market(action("2026-11-26/action/KOSDAQ/sidecar", 60 * 20), events=[crossing("KOSDAQ", "2026-11-26 14:15", 3.2)])
+    assert news_poller.run(NOW)["market"] == 0 and sent == []
+
+
+def test_an_unreadable_news_board_does_not_silence_an_index_crossing(sent, tmp_path):
+    market(events=[crossing("KOSDAQ", "2026-11-27 10:15", 3.41)])
+    (tmp_path / "market_desk" / "board.json").write_text("{}")
+    result = news_poller.run(NOW)
+    assert result["ok"] is False and result["news_error"] == "ValidationError" and result["market"] == 1
+    assert [p["body"] for p in sent] == ["코스닥 +3% 돌파 (+3.41%)"]
+
+
+def test_a_malformed_market_entry_is_left_out_and_urgent_news_still_goes(sent):
+    publish(report("event", 4, "urgent", "긴급 금리 결정"), alerts=[{"id": "broken"}])
+    storage.write_json({"version": 1, "events": [{"id": "x", "index": "NIKKEI"}, crossing("KOSPI", "2026-11-27 10:15", -2.31)
+                                                 | {"id": "2026-11-27/cross/KOSPI/down", "direction": "down", "chg_pct": -2.31}]},
+                       "market_desk", "input.json")
+    result = news_poller.run(NOW)
+    assert result["ok"] is True and result["push"]["sent"] == 1 and result["market"] == 1
+    assert [p["body"] for p in sent] == ["긴급 금리 결정", "코스피 -2% 돌파 (-2.31%)"]
+
+
+def test_a_device_subscribed_after_an_alert_still_gets_it_within_the_day_allowance(sent):
+    market(events=[crossing("KOSDAQ", "2026-11-27 10:15", 3.41)])
+    news_poller.run(NOW)
+    notifications.upsert_subscription("https://push.example.test/desktop", "q" * 32, "b" * 16)
+    news_poller.run(NOW + timedelta(minutes=2))
+    assert [p["body"] for p in sent] == ["코스닥 +3% 돌파 (+3.41%)"] * 2

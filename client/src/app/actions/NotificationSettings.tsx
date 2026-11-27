@@ -62,7 +62,7 @@ export default function NotificationSettings() {
         user_agent: navigator.userAgent,
       }).unwrap();
       setSubscription(current);
-      setMessage("이 기기로 Action, Research 업데이트와 긴급 뉴스를 알려드립니다.");
+      setMessage("이 기기로 Action, Research 업데이트와 긴급 뉴스·시장 급변을 알려드립니다.");
     } catch {
       setMessage("알림을 활성화하지 못했습니다. 홈 화면 앱에서 다시 시도해 주세요.");
     }
@@ -106,7 +106,11 @@ export default function NotificationSettings() {
         <div className="min-w-0 flex-1">
           <h2 className="font-semibold text-ink">Device Notifications</h2>
           <p className="mt-1 text-sm text-ink-secondary">
-            중요한 Action, 새로운 Research Radar 자료, 긴급으로 분류된 뉴스를 이 기기로 전송합니다.
+            중요한 Action, 새로운 Research Radar 자료, 긴급으로 분류된 뉴스와 시장 급변을 이 기기로 전송합니다.
+          </p>
+          <p className="mt-1 text-xs text-ink-muted">
+            시장 급변은 사이드카·서킷브레이커 보도와 코스피 ±2%·코스닥 ±3% 첫 돌파이며 하루 3번까지입니다. 사이드카는 보도
+            후 몇 분 안에, 지수 돌파는 약 20분 늦게 공개되는 KRX 시세를 10분마다 확인하므로 실제보다 25~35분 늦게 알려드립니다.
           </p>
 
           {!supported ? (

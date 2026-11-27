@@ -131,3 +131,95 @@ def test_session_can_publish_first_and_policy_news_is_time_bounded(tmp_path, mon
     storage.write_json({**packet, "trade_date": "2000-01-01"}, "market_desk", "input.json")
     degraded = client.get("/market-desk").json()
     assert degraded["session_state"] == "unavailable" and degraded["board"]["issues"]
+
+
+# ---- 장중 노트·시장 지도 (스펙 2026-11-27 §4·§6.7)
+
+
+def _note(identity, published, observed, **changes):
+    source = {"title": "코스닥 매수 사이드카 발동", "publisher": "연합뉴스", "url": "https://www.yna.co.kr/view/AKR1",
+              "published_at": (published - timedelta(minutes=20)).isoformat()}
+    note = {"id": identity, "kind": "scheduled", "slot": "morning", "trigger": None,
+            "observed_at": observed.isoformat(), "published_at": published.isoformat(),
+            "headline": "코스닥 5%대 급등, 매수 사이드카", "since_last": "", "watch": ["사이드카 뒤 상승폭 유지 여부"],
+            "drivers": [{"text": "상승 1,461개·하락 219개로 시장 전체가 올랐다", "label": "데이터", "sources": []},
+                        {"text": "10시 22분 코스닥 매수 사이드카가 발동됐다", "label": "보도", "sources": [source]}],
+            "stocks": [{"name": "레인보우로보틱스", "ticker": "277810", "chg_pct": 12.21,
+                        "reason": "로봇주 동반 상한가, 테마 매수 가능성", "label": "해석", "sources": []}],
+            "sources": [source]}
+    return {**note, **changes}
+
+
+def _map_file(observed, trade_date=None, kosdaq=5.69, entries=None):
+    latest = {"version": 1, "trade_date": trade_date or observed.date().isoformat(), "observed_at": observed.isoformat(),
+              "indices": {"KOSPI": {"level": 4794.49, "chg_pct": 1.77}, "KOSDAQ": {"level": 692.99, "chg_pct": kosdaq}},
+              "markets": {}, "value_spikes": [], "value_spikes_state": "unavailable", "groups": []}
+    storage.write_json({"version": 1, "trade_date": latest["trade_date"], "latest": latest, "series": entries or []},
+                       "kr_intraday_map.json")
+
+
+def _entry(observed, kosdaq, limit_up=()):
+    return {"observed_at": observed.isoformat(), "indices": {"KOSPI": 1.77, "KOSDAQ": kosdaq},
+            "limit_up": list(limit_up), "limit_down": [], "leaders": [], "spikes": [],
+            "names": {t: f"종목{t}" for t in limit_up}}
+
+
+def test_home_reads_todays_notes_in_order_and_drops_a_malformed_one(tmp_path, monkeypatch):
+    monkeypatch.setenv("APP_DATA", str(tmp_path))
+    monkeypatch.delenv("API_TOKEN", raising=False)
+    now = datetime.now(KST)
+    first, second = now - timedelta(minutes=90), now - timedelta(minutes=10)
+    yesterday = now - timedelta(days=1)
+    broken = _note("note/broken", second, second, drivers=[{"text": "근거 표시가 없는 문장", "sources": []}])
+    storage.write_json({"version": 1, "checked_at": now.isoformat(), "market_at": None, "filings_at": None, "issues": [],
+                        "briefings": [], "notes": [_note("note/b", second, second), broken, _note("note/a", first, first),
+                                                   _note("note/old", yesterday, yesterday)]},
+                       "market_desk", "board.json")
+    body = TestClient(app).get("/market-desk").json()
+    assert [n["id"] for n in body["notes"]] == ["note/a", "note/b"]
+    assert body["notes"][1]["drivers"][1]["sources"][0]["publisher"] == "연합뉴스"
+
+
+def test_map_reports_its_age_and_what_changed_since_the_latest_note(tmp_path, monkeypatch):
+    monkeypatch.setenv("APP_DATA", str(tmp_path))
+    monkeypatch.delenv("API_TOKEN", raising=False)
+    client = TestClient(app)
+    assert client.get("/market-desk").json()["map"] == {"state": "awaiting"}
+    now = datetime.now(KST).replace(second=0, microsecond=0)
+    noted, latest = now - timedelta(minutes=30), now - timedelta(minutes=5)
+    _map_file(latest, kosdaq=6.40, entries=[_entry(noted, 5.69), _entry(latest, 6.40, limit_up=["277810"])])
+    storage.write_json({"version": 1, "checked_at": now.isoformat(), "market_at": None, "filings_at": None, "issues": [],
+                        "briefings": [], "notes": [_note("note/a", noted, noted)]}, "market_desk", "board.json")
+    body = client.get("/market-desk").json()
+    assert body["map"]["state"] == "latest" and body["map"]["indices"]["KOSDAQ"]["chg_pct"] == 6.40
+    assert body["since_note"]["indices"]["KOSDAQ"] == {"from": 5.69, "to": 6.40, "delta": 0.71}
+    assert [s["ticker"] for s in body["since_note"]["new_limit_up"]] == ["277810"]
+    _map_file(now - timedelta(days=1))
+    assert client.get("/market-desk").json()["map"]["state"] == "previous"
+    _map_file(now - timedelta(minutes=40))
+    assert client.get("/market-desk").json()["map"]["state"] in {"delayed", "closed"}
+
+
+class _SessionClock(datetime):
+    """장중 평일 11:45 — 지연 판정과 당일 노트가 실제 시각에 흔들리지 않게."""
+
+    @classmethod
+    def now(cls, tz=None):
+        return datetime(2026, 11, 27, 11, 45, tzinfo=KST)
+
+
+def test_since_note_is_hidden_while_quote_collection_is_delayed(tmp_path, monkeypatch):
+    """스펙 §9: KRX 수집이 20분 넘게 늦으면 지도는 '시세 수집 지연'이고 '노트 이후'는 숨긴다."""
+    from app.routers import market_desk as router
+
+    monkeypatch.setenv("APP_DATA", str(tmp_path))
+    monkeypatch.delenv("API_TOKEN", raising=False)
+    monkeypatch.setattr(router, "datetime", _SessionClock)
+    now = _SessionClock.now()
+    noted, latest = now - timedelta(minutes=70), now - timedelta(minutes=40)
+    _map_file(latest, kosdaq=6.40, entries=[_entry(noted, 5.69), _entry(latest, 6.40, limit_up=["277810"])])
+    storage.write_json({"version": 1, "checked_at": now.isoformat(), "market_at": None, "filings_at": None, "issues": [],
+                        "briefings": [], "notes": [_note("note/a", noted, noted)]}, "market_desk", "board.json")
+    body = TestClient(app).get("/market-desk").json()
+    assert body["map"]["state"] == "delayed"
+    assert [n["id"] for n in body["notes"]] == ["note/a"] and body["since_note"] is None

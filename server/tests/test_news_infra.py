@@ -14,7 +14,7 @@ def block(start, end):
 def test_news_poller_reads_the_board_and_writes_only_delivery_state():
     role = block("NewsPollerRole", "NewsPollerFunction")
     read, write = role.split("Action: [s3:PutObject]", 1)
-    assert "app/market_desk/board.json" in read
+    assert "app/market_desk/board.json" in read and "app/market_desk/input.json" in read
     written = [line.split("/app/", 1)[1] for line in write.splitlines() if "/app/" in line]
     assert written == ["notification_subscriptions.parquet", "notification_deliveries.parquet"]
     assert "news_briefing.json" not in TEMPLATE
@@ -41,7 +41,7 @@ def test_api_can_record_the_last_news_visit_but_not_the_publication():
 
 def test_every_other_writer_of_the_delivery_receipts_runs_on_even_minutes():
     """영수증 파일은 읽고-고쳐-쓴다. 2분마다 홀수 분에 도는 뉴스 알림 폴러와 같은 분에 쓰면 한쪽 영수증이 사라져 같은 알림이
-    다시 간다."""
+    다시 가고 하루 상한이 덜 세진다."""
     import re
 
     writers = [m for m in re.finditer(r"Name: (insight-invest-(?:action|research)-poll[\w-]*)\n\s+ScheduleExpression: cron\(([^ ]+) ",

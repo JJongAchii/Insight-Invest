@@ -221,6 +221,7 @@ Resources:
                   - !Sub arn:aws:s3:::${DataBucket}/app/kr_intraday_latest.parquet
                   - !Sub arn:aws:s3:::${DataBucket}/app/kr_intraday_etf_latest.parquet
                   - !Sub arn:aws:s3:::${DataBucket}/app/kr_intraday_timeline.parquet
+                  - !Sub arn:aws:s3:::${DataBucket}/app/kr_intraday_map.json
                   - !Sub arn:aws:s3:::${DataBucket}/app/market_desk/input.json
 
   IntradayPollerFunction:
@@ -252,12 +253,13 @@ Resources:
         - Arn: !GetAtt IntradayPollerFunction.Arn
           Id: intraday-poller
 
-  # 15:05~15:35 KST 10분 간격 (UTC 06:05~06:35) — 15:35 폴이 마감치 캡처
+  # 15:05~15:55 KST 10분 간격 (UTC 06:05~06:55). KRX 시세가 약 20분 늦게 오므로 15:30 종가는 15:55 폴에 들어온다
+  # (2026-11-27: 15:35 폴은 코스피 +4.08%, 종가는 +4.3%).
   IntradayPollerCloseSchedule:
     Type: AWS::Events::Rule
     Properties:
       Name: insight-invest-intraday-poll-close
-      ScheduleExpression: cron(5,15,25,35 6 ? * MON-FRI *)
+      ScheduleExpression: cron(5,15,25,35,45,55 6 ? * MON-FRI *)
       State: ENABLED
       Targets:
         - Arn: !GetAtt IntradayPollerFunction.Arn
@@ -302,6 +304,7 @@ Resources:
                 Action: [s3:GetObject]
                 Resource:
                   - !Sub arn:aws:s3:::${DataBucket}/app/market_desk/board.json
+                  - !Sub arn:aws:s3:::${DataBucket}/app/market_desk/input.json
                   - !Sub arn:aws:s3:::${DataBucket}/app/notification_subscriptions.parquet
                   - !Sub arn:aws:s3:::${DataBucket}/app/notification_deliveries.parquet
               - Effect: Allow  # 전송 영수증과 만료 구독 해제

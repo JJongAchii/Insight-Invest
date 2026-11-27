@@ -11,7 +11,8 @@ def test_intraday_schedule_is_exactly_ten_minutes_during_market_window():
 
     # AWS cron 하나로는 마지막 UTC 시간의 45·55분만 제외할 수 없어 두 룰이 필요하다.
     assert "cron(5,15,25,35,45,55 0-5 ? * MON-FRI *)" in body
-    assert "cron(5,15,25,35 6 ? * MON-FRI *)" in body
+    # KRX 시세는 약 20분 늦다 — 15:30 종가는 15:55 폴에서야 들어온다.
+    assert "cron(5,15,25,35,45,55 6 ? * MON-FRI *)" in body
     assert "cron(5,35 0-6 ? * MON-FRI *)" not in body
 
 
@@ -21,3 +22,11 @@ def test_both_intraday_schedules_can_invoke_the_poller():
     assert "SourceArn: !GetAtt IntradayPollerSchedule.Arn" in body
     assert "SourceArn: !GetAtt IntradayPollerCloseSchedule.Arn" in body
     assert "Name: insight-invest-intraday-poll-close" in body
+
+
+def test_intraday_poller_may_write_the_market_map_and_nothing_in_the_lake():
+    body = TEMPLATE.read_text(encoding="utf-8")
+    role = body.split("  PollerRole:", 1)[1].split("  IntradayPollerFunction:", 1)[0]
+    writes = role.split("Action: [s3:PutObject]", 1)[1]
+    assert "app/kr_intraday_map.json" in writes
+    assert "qdata/" not in writes

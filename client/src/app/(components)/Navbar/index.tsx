@@ -18,6 +18,7 @@ import type { FormEvent } from "react";
 
 const routeContexts = [
   { prefix: "/news", title: "주요 뉴스", detail: "원문을 확인한 소식" },
+  { prefix: "/notes", title: "장중 노트", detail: "시험 운영" },
   { prefix: "/actions", title: "검토", detail: "지금 할 일" },
   { prefix: "/ipo", title: "공모주", detail: "상장일 매수·매도 신호" },
   { prefix: "/earnings", title: "실적 일정", detail: "주요 기업 발표와 결과" },

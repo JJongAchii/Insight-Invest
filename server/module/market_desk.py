@@ -6,6 +6,7 @@ from math import isfinite
 import numpy as np
 import pandas as pd
 
+from module import market_map
 from module.kr_intraday import KST
 
 
@@ -108,7 +109,8 @@ def _session_reading(rows, stocks):
             "sectors": sector, "watch": watch}
 
 
-def market_input(timeline: pd.DataFrame, stocks: pd.DataFrame, now: datetime) -> dict:
+def market_input(timeline: pd.DataFrame, stocks: pd.DataFrame, now: datetime, map_: dict | None = None) -> dict:
+    """편집기 입력. 지도(`map`)와 지수 첫 돌파(`events`)는 노트의 재료다. 보유·관심 종목은 싣지 않는다."""
     day = now.astimezone(KST).date().isoformat()
     cutoff = now.astimezone(KST).strftime("%Y-%m-%d %H:%M")
     rows = timeline.loc[timeline["trade_date"].eq(day) & timeline["as_of"].le(cutoff)].drop_duplicates(
@@ -145,4 +147,5 @@ def market_input(timeline: pd.DataFrame, stocks: pd.DataFrame, now: datetime) ->
             })
     large_companies = [name for name in stocks.nlargest(40, "cap")["name"] if isinstance(name, str) and name]
     return {"version": 1, "trade_date": day, "observed_at": now.isoformat(), "session": _session_reading(rows, stocks),
-            "quote_delay_minutes": 20, "large_companies": large_companies, "moves": moves}
+            "quote_delay_minutes": 20, "large_companies": large_companies, "moves": moves,
+            "map": map_, "events": market_map.index_crossings(rows)}
