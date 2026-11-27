@@ -1,43 +1,5 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 
-// Types for news operations
-export type NewsCategory =
-  | "topnews"  // Top news headlines (default)
-  | "economy"  // World economy, macro
-  | "policy"   // Central bank, Fed, interest rates
-  | "trade"    // International trade, tariffs
-  | "energy"   // Oil, gas, energy markets
-  | "tech";    // Tech industry news
-
-export type NewsRegion = "us" | "asia" | "europe" | "global" | "all" | "kr";
-
-export interface NewsArticle {
-  id: string;
-  title: string;
-  summary: string | null;
-  url: string;
-  source: string;
-  published_at: string | null;
-  category: string;
-  region: string;
-  image_url: string | null;
-  sentiment: string | null;
-}
-
-export interface NewsResponse {
-  articles: NewsArticle[];
-  total_count: number;
-  cached: boolean;
-  fetched_at: string;
-}
-
-export interface NewsQueryParams {
-  category?: NewsCategory;
-  region?: NewsRegion;
-  limit?: number;
-  search_query?: string;
-}
-
 export interface DeskArticle {
   id: string;
   origin?: "desk" | "reporter";
@@ -100,31 +62,46 @@ export interface MarketDeskResponse {
   } | null;
 }
 
-export interface NewsBriefingItem {
+/** 편집팀이 원문을 확인해 발행한 뉴스 한 건. 지수·업종 변동 해설은 포함하지 않는다. */
+export interface DeskNewsItem {
+  id: string;
+  kind: "news" | "filing";
+  origin: "desk" | "reporter";
+  status: DeskArticle["status"];
+  /** 편집기가 쓴 제목. 목록에는 title(원문 기사 제목)을 쓴다. */
+  headline: string;
+  /** 원문 기사 제목. 쓸 만한 원문 제목이 없으면 편집기 제목에서 언론사 표기를 뺀 것. */
   title: string;
-  url: string;
-  source: string;
-  published_at: string | null;
-  cluster_count: number;
-  sources: string[];
-  why?: string;
-  related_assets?: {
-    meta_id: number;
-    ticker: string;
-    name: string;
-    relation: "보유" | "관심";
-  }[];
-  related_topics?: string[];
+  publisher: string | null;
+  published_at: string;
+  category: string | null;
+  priority: "major" | "urgent" | null;
+  update: boolean;
+  attribution: string | null;
+  summary: string;
+  significance: string;
+  change: string;
+  interpretation: string;
+  watch: string;
+  /** 구조화하지 못한 발행 원문. 있으면 summary 대신 그대로 보여준다. */
+  body: string | null;
+  sources: DeskArticle["sources"];
+  followups: DeskArticle["sources"];
+  licenses: { url: string; name: string }[];
 }
 
-export interface NewsBriefingResponse {
-  active: boolean;
-  as_of?: string;
-  edition?: "morning" | "evening";
-  curated?: boolean;
-  sections?: { general: NewsBriefingItem[]; economy: NewsBriefingItem[] };
-  relevance_method?: string;
-  relevance_warning?: string;
+export interface DeskNewsStatus {
+  unseen: number;
+  latest_at: string | null;
+  seen_through: string | null;
+}
+
+export interface DeskNewsResponse {
+  state: "ready" | "awaiting" | "stale";
+  checked_at: string | null;
+  items: DeskNewsItem[];
+  seen_through: string | null;
+  unseen: number;
 }
 
 
@@ -2065,7 +2042,7 @@ export const api = createApi({
   tagTypes: [
     "Strategy",
     "Portfolio",
-    "News",
+    "DeskNews",
     "Watchlist",
     "Holdings",
     "Attention",
@@ -2476,25 +2453,22 @@ export const api = createApi({
       query: () => "/insight/spotlight",
     }),
 
-    // News endpoints
-    fetchNews: builder.query<NewsResponse, NewsQueryParams>({
-      query: (params) => ({
-        url: "/news",
-        params: {
-          category: params.category || "topnews",
-          region: params.region || "all",
-          limit: params.limit,  // Let backend decide default (10 for recent, 5 for others)
-          search_query: params.search_query,
-        },
-      }),
-      providesTags: ["News"],
-    }),
+    // 편집 발행본 — 시장 해설과 뉴스
     fetchMarketDesk: builder.query<MarketDeskResponse, void>({
       query: () => "/market-desk",
     }),
-    fetchNewsBriefing: builder.query<NewsBriefingResponse, void>({
-      query: () => "/news/briefing",
-      providesTags: ["News"],
+    fetchDeskNews: builder.query<DeskNewsResponse, void>({
+      query: () => "/market-desk/news",
+      providesTags: ["DeskNews"],
+    }),
+    fetchDeskNewsStatus: builder.query<DeskNewsStatus, void>({
+      query: () => "/market-desk/news/status",
+      providesTags: ["DeskNews"],
+    }),
+    acknowledgeDeskNewsSeen: builder.mutation<DeskNewsStatus, { through: string }>({
+      query: (body) => ({ url: "/market-desk/news/seen", method: "PUT", body }),
+      // A failed record changes nothing on the server, so there is nothing to read again.
+      invalidatesTags: (_result, error) => (error ? [] : ["DeskNews"]),
     }),
 
     // KR insight endpoints (수급·시장폭·신호)
@@ -2713,9 +2687,10 @@ export const {
   // Market spotlight hook
   useFetchSpotlightQuery,
   // News hooks
-  useFetchNewsQuery,
-  useFetchNewsBriefingQuery,
   useFetchMarketDeskQuery,
+  useFetchDeskNewsQuery,
+  useFetchDeskNewsStatusQuery,
+  useAcknowledgeDeskNewsSeenMutation,
   // KR insight hooks
   useFetchInsightFlowsTopQuery,
   useFetchInsightFlowsMarketQuery,

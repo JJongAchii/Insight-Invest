@@ -422,21 +422,6 @@ def _section_strategies() -> str | None:
     return "<b>내 전략 (저장 후)</b>\n" + "\n".join(lines)
 
 
-def _section_news() -> str | None:
-    """오늘의 뉴스 톱3 — build_news가 직전에 발행한 news_briefing.json 재사용."""
-    from datetime import datetime, timedelta, timezone
-
-    data = storage.read_json("news_briefing.json")
-    as_of = datetime.fromisoformat(data["as_of"])
-    if datetime.now(as_of.tzinfo or timezone.utc) - as_of > timedelta(hours=72):
-        return None  # 라우터의 72h 신선도와 대칭 — 낡은 발행분을 '오늘의 뉴스'로 내보내지 않는다
-    rows = (data.get("sections") or {}).get("general") or []
-    lines = [f"· {_esc(r['title'])}" for r in rows[:3] if r.get("title")]
-    if not lines:
-        return None
-    return "<b>📰 오늘의 뉴스</b>\n" + "\n".join(lines)
-
-
 def _section_summary() -> str | None:
     """룰 기반 한 줄 요약 — 다른 섹션이 채운 _ctx로 문장 1~2개 조합."""
     base = None
@@ -486,7 +471,6 @@ def compose_message() -> str:
         ("macro", _section_macro),
         ("watchlist", _section_watchlist),
         ("strategies", _section_strategies),
-        ("news", _section_news),
         ("summary", _section_summary),  # 마지막 — 앞 섹션들의 _ctx 사용
     ]:
         try:

@@ -16,7 +16,6 @@ import MarketDesk from "./MarketDesk";
 import FlowsTopCard from "./FlowsTopCard";
 import MarketTiles from "./MarketTiles";
 import MacroSnapshot from "./MacroSnapshot";
-import NewsBriefingCard from "./NewsBriefingCard";
 import ResearchPreview from "./ResearchPreview";
 import PortfolioCard from "./PortfolioCard";
 import WatchlistCard from "./WatchlistCard";
@@ -64,12 +63,7 @@ export default function Home() {
           </nav>
         </div>}
       </details>
-      <section
-        id="reading"
-        className={styles.readingGrid}
-        aria-label="경제 뉴스와 최신 리서치"
-      >
-        <NewsBriefingCard />
+      <section className={styles.reading} aria-label="최신 리서치">
         <ResearchPreview />
       </section>
       <details

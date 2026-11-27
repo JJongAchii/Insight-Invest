@@ -14,10 +14,15 @@
 대표 해설이 없는 시각에는 두 지수의 장중 경로와 업종별 등락, 특정 종목의 상승·하락 기여도를 보여준다.
 기존 10분 KRX 폴러가 같은 시각의 자료로 해설을 만들어 `app/market_desk/input.json`에 저장한다.
 홈은 `GET /market-desk`로 저장된 글을 읽는다. 지수 배경을 다룬 보도는 원문과 보도 시각을 표시하고,
-편집기가 특정 구간의 원인을 확인한 해설에는 해당 관측 시각과 근거를 표시한다. ai-company 편집기가 발송 완료한
-Slack 브리핑·속보와 새 해설을 `app/market_desk/board.json`에 게시한다. 시세 수집, 원문 발표,
+편집기가 특정 구간의 원인을 확인한 해설에는 해당 관측 시각과 근거를 표시한다. ai-company 편집기가 아침·마감
+브리핑, 원문을 확인한 뉴스, 새 해설을 `app/market_desk/board.json`에 게시한다. 시세 수집, 원문 발표,
 글 발행 시각은 각각 KST로 표시한다. 공모주 신호는 같은 홈에서 기존 배치 판정을 확인한다.
-개별 기업 공시와 정기 브리핑은 각각 전용 영역에서 읽을 수 있다. [편집기 운영 절차](https://github.com/JJongAchii/quant-ai-company/blob/main/docs/runbooks/insight-market-desk.md)
+[편집기 운영 절차](https://github.com/JJongAchii/quant-ai-company/blob/main/docs/runbooks/insight-market-desk.md)
+
+뉴스는 이 발행본 하나만 읽는다. `주요 뉴스`(`/news`)는 날짜별 목록에서 분야, 긴급 여부, 핵심 사실,
+왜 중요한지를 근거 원문과 함께 보여주고, 기업 공시와 정책 발표 해설도 같은 목록에 둔다. 홈은 최신 5건을
+같은 형식으로 미리 보여준다. 뉴스 화면을 열면 마지막으로 본 시각을 기록해 기기 간에 공유하고, 그 뒤에
+발행된 글 수를 탐색에 표시한다. 편집기가 긴급으로 분류한 뉴스만 Web Push로 알린다.
 
 운영 편집기는 전용 인증서로 1시간짜리 AWS 자격을 받아 시세 파일을 읽고 해설 파일을 게시한다. 공개 인증서를 등록할 때 사용할 정책 이름은 CloudFormation `insight-invest-api` 스택의 `MarketDeskCertificatePolicy` 출력에서 확인한다.
 
@@ -93,9 +98,12 @@ iOS/iPadOS 16.4+의 홈 화면 PWA와 데스크톱 브라우저에 표준 Web Pu
 (`.local` 주소 금지). 키가 없으면 API·화면은 정상 동작하고 Push만
 fail-closed로 비활성화된다. GitHub Actions 배포에는 같은 이름의 repository secret을 둔다.
 
-EventBridge의 `insight-invest-action-poller`가 데이터 배치 뒤 09:45·20:30 KST에 실행된다.
+EventBridge의 `insight-invest-action-poller`가 데이터 배치 뒤 09:46·20:30 KST에 실행된다.
 동일 event/subscription 조합은 delivery receipt로 한 번만 보내며, 여러 건은 한 알림으로
 묶어 과도한 알림을 방지한다.
+
+`insight-invest-news-poller`는 2분마다 저장된 발행본을 읽어 긴급으로 분류된 새 뉴스만 보낸다.
+같은 글은 delivery receipt로 기기마다 한 번만 보내고, 발행 후 3시간이 지난 글은 뒤늦게 알리지 않는다.
 
 `insight-invest-research-poller`는 UTC `:02/:12/...`에 Research 피드를 갱신하고
 durable pending을 같은 delivery receipt로 발행한다. 일시 실패는 pending을 남겨 해당
@@ -120,7 +128,7 @@ iPhone Safari와 홈 화면 PWA에서는 페이지 최상단에서 아래로 당
 | 통합 종목 마스터 | qdata KRX 주식·ETF + Massive 티커 참조 → `app/asset_master.parquet` | 매일 |
 | US 실적 일정·발표 | Finnhub Earnings Calendar + qdata 활성 US 종목 참조 + SEC 공식 제출 페이지 | 평일 09:00·19:00 KST 우선 배치 · 주요 기업 50개 + 내 종목, 과거 결과 누적 |
 | 앱 자산 ID / 포트폴리오 | `app/asset_id_registry.parquet` / `app/portfolio/` | 신규 상장·앱 저장 시 |
-| 뉴스 | Google News RSS 실시간 | 요청 시 |
+| 뉴스 | ai-company 편집 발행본 `app/market_desk/board.json` | 뉴스 게시 직후, 그 밖에는 5분(야간·주말 30분)마다 |
 | 퀀트 문헌 피드 | qdata Research Radar 공개 출처 watchlist | 수집 10분, 앱 투영 최대 약 5분 후 |
 
 ## 로컬 개발
@@ -172,7 +180,7 @@ server/
 ├── app/
 │   ├── main.py            # FastAPI + 인증 미들웨어 + Mangum 핸들러
 │   ├── schemas.py
-│   └── routers/           # meta / price / backtest / regime / insight / news
+│   └── routers/           # meta / price / backtest / regime / insight / market_desk
 │                          # optimization / watchlist / holdings / attention
 ├── datastore/             # 데이터 계층 (구 RDS·Iceberg 대체)
 │   ├── storage.py         #   APP_DATA(s3://|로컬) parquet 읽기/쓰기
@@ -181,7 +189,8 @@ server/
 │   ├── portfolio.py       #   포트폴리오 CRUD (parquet upsert)
 │   ├── watchlist.py       #   관심종목 / holdings.py 보유종목
 │   └── fx.py              #   환율
-├── module/                # 백테스트·최적화·지표·레짐·뉴스 엔진
+├── module/                # 백테스트·최적화·지표·레짐 엔진
+│   ├── desk_news.py      # 편집 발행본 → 뉴스 기사(분야·긴급 여부·핵심 사실)
 │   └── research_feed.py  # Radar canonical → 앱 투영
 ├── tests/                 # pytest (conftest가 server/를 import 루트로 설정)
 ├── Dockerfile             # Lambda 베이스 이미지 (BuildKit secret으로 qdata 설치)
@@ -198,6 +207,9 @@ docs/superpowers/          # 설계·구현계획 기록 (폐기된 것 포함)
 
 ## 이력
 
+- **v3.5 (2026-11-27)**: 뉴스를 ai-company 편집 발행본으로 일원화. `주요 뉴스` 화면과 미확인 표시,
+  긴급 뉴스 Web Push를 추가하고 Google News RSS 기반 `경제 뉴스 브리핑`(시간별 폴러·EC2 발행·
+  텔레그램 뉴스 톱3)을 제거했다.
 - **v3.4 (2026-09-02)**: Research Library의 전체·읽음·보관함·검색과 기기간 공유되는
   미확인 신규 탐색 배지 추가.
 - **v3.3 (2026-09-02)**: Research Radar 전용 PWA 피드·읽음 상태·iPhone Web Push와

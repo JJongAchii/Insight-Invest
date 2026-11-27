@@ -62,7 +62,7 @@ export default function NotificationSettings() {
         user_agent: navigator.userAgent,
       }).unwrap();
       setSubscription(current);
-      setMessage("이 기기로 Action과 Research 업데이트를 알려드립니다.");
+      setMessage("이 기기로 Action, Research 업데이트와 긴급 뉴스를 알려드립니다.");
     } catch {
       setMessage("알림을 활성화하지 못했습니다. 홈 화면 앱에서 다시 시도해 주세요.");
     }
@@ -106,7 +106,7 @@ export default function NotificationSettings() {
         <div className="min-w-0 flex-1">
           <h2 className="font-semibold text-ink">Device Notifications</h2>
           <p className="mt-1 text-sm text-ink-secondary">
-            중요한 Action과 새로운 Research Radar 자료를 이 기기로 전송합니다.
+            중요한 Action, 새로운 Research Radar 자료, 긴급으로 분류된 뉴스를 이 기기로 전송합니다.
           </p>
 
           {!supported ? (

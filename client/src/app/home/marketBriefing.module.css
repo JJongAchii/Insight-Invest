@@ -321,15 +321,28 @@ button.quoteDate {
   font-size: 13px;
   color: var(--text-muted);
 }
-.readingGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-  align-items: start;
-  gap: 20px;
-  scroll-margin-top: 24px;
-}
 .researchList > li + li {
   border-top: 1px solid var(--border);
+}
+/* 넓은 화면에서는 자료를 나란히 놓아 요약 한 줄이 읽기 좋은 길이를 넘지 않게 한다. */
+@media (min-width: 981px) {
+  .reading .researchList {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .reading .researchList > li {
+    padding-inline: 20px;
+  }
+  .reading .researchList > li:first-child {
+    padding-inline-start: 0;
+  }
+  .reading .researchList > li:last-child {
+    padding-inline-end: 0;
+  }
+  .reading .researchList > li + li {
+    border-top: 0;
+    border-left: 1px solid var(--border);
+  }
 }
 .researchLink {
   display: block;
@@ -432,8 +445,7 @@ button.quoteDate {
   .quote {
     padding: 16px;
   }
-  .horizons,
-  .readingGrid {
+  .horizons {
     grid-template-columns: 1fr;
   }
   .horizon + .horizon {

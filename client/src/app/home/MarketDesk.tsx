@@ -1,44 +1,15 @@
 "use client";
 
-import Link from "next/link";
-import { ArrowRight, ArrowUpRight, ChevronDown } from "lucide-react";
+import { ArrowUpRight, ChevronDown } from "lucide-react";
 import { useFetchMarketDeskQuery, type DeskArticle, type DeskBrief, type DeskLead } from "@/state/api";
+import { NewsPreview } from "../news/NewsFeed";
+import { PublicationText, Sources, checked, date, dayOf, refresh } from "./deskParts";
 import styles from "./marketDesk.module.css";
 
-const formatTime = new Intl.DateTimeFormat("ko-KR", {
-  timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
-});
+// 이 화면의 글은 지수·업종 변동 해설과 아침·마감 브리핑이다. 뉴스와 공시는 주요 뉴스 목록이 맡는다.
 type Entry = DeskArticle | DeskBrief;
-const refresh = { pollingInterval: 120_000, skipPollingIfUnfocused: true, refetchOnFocus: true };
 const newestFirst = (a: Entry, b: Entry) => Date.parse(b.published_at) - Date.parse(a.published_at);
-const reports = (issues: DeskArticle[]) => issues.filter(item => item.origin === "reporter").sort(newestFirst);
-const date = (stamp: string) => <time dateTime={stamp}>{formatTime.format(new Date(stamp))}</time>;
-const koreanDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" });
-const dayOf = (stamp: string) => koreanDay.format(new Date(stamp));
-const checked = (stamp: string, delayed: boolean) => <span className={styles.meta}>
-  {delayed ? "갱신 지연 · 마지막 확인 " : "마지막 확인 "}{date(stamp)} KST
-</span>;
-const edition = (item: Entry) => {
-  if (item.kind === "am") return "아침 브리핑";
-  if (item.kind === "pm") return "마감 브리핑";
-  if (item.kind === "filing") return "기업 공시";
-  if (item.kind === "move") return "시세 변화";
-  return "주요 뉴스";
-};
-const title = (item: Entry) => "headline" in item ? item.headline : edition(item);
-const decode = (s: string) => s.replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&");
-
-function PublicationText({ text }: { text: string }) {
-  // Slack's published format contains labelled links and single-asterisk emphasis. Keep text escaped by React.
-  return <div className={styles.prose}>{text.split(/(<https?:\/\/[^<>\s|]+(?:\|[^<>]*)?>|\*[^*\n]+\*)/g).map((part, i) => {
-    if (part.startsWith("<http") && part.endsWith(">")) {
-      const [href, label] = part.slice(1, -1).split("|", 2);
-      return <a key={i} href={decode(href)} target="_blank" rel="noopener noreferrer">{decode(label || href)}</a>;
-    }
-    if (part.startsWith("*") && part.endsWith("*")) return <strong key={i}>{decode(part.slice(1, -1))}</strong>;
-    return decode(part);
-  })}</div>;
-}
+const title = (item: Entry) => "headline" in item ? item.headline : item.kind === "am" ? "아침 브리핑" : "마감 브리핑";
 
 function BriefBody({ entry }: { entry: DeskBrief }) {
   const paragraphs = entry.body.trim().split(/\n\s*\n/);
@@ -52,21 +23,12 @@ function BriefBody({ entry }: { entry: DeskBrief }) {
   </>;
 }
 
-function Sources({ items, label, timeLabel = "발표" }: { items: DeskArticle["sources"]; label: string; timeLabel?: string }) {
-  return <ul className={styles.sources} aria-label={label}>{items.map(src => <li key={src.url}>
-    <a href={src.url} target="_blank" rel="noopener noreferrer">{src.title} <ArrowUpRight size={13} aria-hidden /></a>
-    <span>{src.publisher} · {timeLabel} {date(src.published_at)} KST
-      {src.license_url && <> · <a href={src.license_url} target="_blank" rel="noopener noreferrer">{src.license_name || "출처 이용 조건"}</a></>}
-    </span>
-  </li>)}</ul>;
-}
-
 function IssueBody({ entry }: { entry: DeskArticle }) {
-  const verified = entry.kind !== "move" || (entry.status === "analysis" && entry.sources.length > 0);
+  const verified = entry.status === "analysis" && entry.sources.length > 0;
   return <>
     {!verified && <p className={styles.caution}>원인 미확인</p>}
     {entry.fact !== entry.headline && <PublicationText text={entry.fact} />}
-    {verified && entry.interpretation && <div className={styles.section}><h4>{entry.kind === "filing" ? "기업에 미치는 영향" : "해석"}</h4><p>{entry.interpretation}</p></div>}
+    {verified && entry.interpretation && <div className={styles.section}><h4>해석</h4><p>{entry.interpretation}</p></div>}
     {entry.observation && entry.observation !== entry.fact && <p className={styles.meta}>{entry.observation}</p>}
     {entry.observed_at && <p className={styles.meta}>KRX 시세 수집 {date(entry.observed_at)} KST · 원천 약 20분 지연</p>}
     {entry.watch && <div className={styles.section}><h4>다음 확인할 점</h4><p>{entry.watch}</p></div>}
@@ -124,9 +86,9 @@ function SessionLead({ lead }: { lead: DeskLead }) {
 export default function MarketDesk() {
   const { data, error, isLoading, refetch } = useFetchMarketDeskQuery(undefined, refresh);
   const board = data?.board;
-  const editions = (board?.issues ?? []).filter(item => item.origin !== "reporter").sort(newestFirst);
-  const moves = editions.filter((item): item is DeskArticle & { observed_at: string } => item.kind === "move" && !!item.observed_at);
-  const today = data?.today ?? koreanDay.format(new Date());
+  const moves = (board?.issues ?? []).filter((item): item is DeskArticle & { observed_at: string } =>
+    item.origin !== "reporter" && item.kind === "move" && !!item.observed_at).sort(newestFirst);
+  const today = data?.today ?? dayOf(new Date());
   // A new day's verified observation takes precedence over a previous session's saved overview.
   const session = data?.session && (dayOf(data.session.observed_at) === today ||
     !moves.some(item => dayOf(item.observed_at) === today)) ? data.session : null;
@@ -138,8 +100,6 @@ export default function MarketDesk() {
   const marketReports = (board?.market_reports ?? []).filter(src => session && dayOf(src.published_at) === day &&
     Date.parse(src.published_at) <= Date.parse(session.observed_at) - 20 * 60_000);
   const previous = moves.filter(item => dayOf(item.observed_at) !== day);
-  const companyNews = editions.filter(item => item.kind !== "move");
-  const latestReport = board && reports(board.issues)[0];
   const policy = session ? data?.policy_coverage ?? [] : [];
   const observationsSection = <section className={styles.desk} aria-labelledby="desk-title">
     <header className={styles.header}>
@@ -203,42 +163,12 @@ export default function MarketDesk() {
         {observationsSection}
       </details>
     </> : observationsSection}
-    {latestReport && <div className={styles.desk}><Link className={styles.flash} href={`/feed?item=${encodeURIComponent(latestReport.id)}`}>
-      <span>최근 속보</span><strong>{latestReport.headline}</strong>{date(latestReport.published_at)}<ArrowRight size={15} aria-hidden />
-    </Link></div>}
     {!!board?.briefings.length && <section className={styles.desk} aria-label="아침·마감 브리핑">
       <header className={styles.header}><h2>아침·마감 브리핑</h2></header><EntryList entries={[...board.briefings].sort(newestFirst)} />
     </section>}
-    {companyNews.length > 0 && <section className={styles.desk} aria-label="기업 공시·주요 뉴스">
-      <header className={styles.header}><h2>기업 공시·주요 뉴스</h2></header><EntryList entries={companyNews} />
-    </section>}
+    <NewsPreview />
     {previous.length > 0 && <section className={styles.desk} aria-label="지난 장중 해설">
       <header className={styles.header}><h2>지난 장중 해설</h2></header><EntryList entries={previous} />
     </section>}
   </>;
-}
-
-export function ReporterFeed({ itemId }: { itemId?: string }) {
-  const { data, error, isLoading, refetch } = useFetchMarketDeskQuery(undefined, refresh);
-  const board = data?.board;
-  const entries = board ? reports(board.issues) : [];
-  return <section className={styles.desk} aria-labelledby="feed-title">
-    <header className={styles.header}>
-      <h2 id="feed-title">Slack 발송 속보</h2>
-      {board && checked(board.checked_at, !!error || data.state === "stale")}
-    </header>
-    {entries.length ? <>
-      {itemId && !entries.some(item => item.id === itemId) && <p className={styles.empty}>선택한 속보가 최근 발송 목록에서 만료됐습니다.</p>}
-      <ul className={styles.feedList}>{entries.map(item => <li key={item.id}>
-        <details open={item.id === itemId}>
-          <summary>{date(item.published_at)}<strong>{item.headline}</strong><ChevronDown size={16} aria-hidden /></summary>
-          <div className={styles.feedBody}><IssueBody entry={item} /></div>
-        </details>
-      </li>)}</ul>
-    </> : <div className={styles.empty}>
-      {error || data?.state === "unavailable" ? <>속보를 불러오지 못했습니다. <button type="button" onClick={() => refetch()}>다시 불러오기</button></>
-        : isLoading ? "최근 속보를 불러오는 중입니다."
-        : <>최근 발송된 속보가 없습니다. <Link href="/home#reading">경제 뉴스 보기</Link></>}
-    </div>}
-  </section>;
 }

@@ -1,4 +1,4 @@
-"""Serve finished publications. This endpoint has no access to an editorial runtime."""
+"""Serve finished publications. These endpoints have no access to an editorial runtime."""
 
 import logging
 from datetime import date, datetime, timedelta
@@ -7,7 +7,9 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import AwareDatetime, BaseModel, Field, HttpUrl
 
+from datastore import desk_news as news_store
 from datastore import storage
+from module import desk_news
 from module.kr_intraday import KST, is_open_kst
 
 router = APIRouter(prefix="/market-desk", tags=["market desk"])
@@ -82,6 +84,13 @@ class Issue(BaseModel):
     observation: str
     sources: list[Source] = Field(max_length=8)
     followups: list[Source] = Field(default_factory=list, max_length=3)
+    # Reporter news may arrive as fields instead of one formatted text.
+    category: str | None = None
+    priority: Literal["major", "urgent"] | None = None
+    update: bool = False
+    attribution: str | None = None
+    significance: str = ""
+    change: str = ""
 
 
 class Brief(BaseModel):
@@ -165,25 +174,109 @@ def _policy_coverage(board, reading):
     return items
 
 
+def _freshness(checked_at, now):
+    return "stale" if now - checked_at > timedelta(minutes=25 if is_open_kst(now) else 100) else "ready"
+
+
+def _saved_board(now):
+    """The publication as written and as validated, with its freshness. Raises when it cannot be read."""
+    try:
+        raw = storage.read_json("market_desk", "board.json")
+    except FileNotFoundError:
+        return None, None, "awaiting"
+    board = Board.model_validate(raw)
+    return raw, board, _freshness(board.checked_at, now)
+
+
 @router.get("")
 def get_market_desk():
     now = datetime.now(KST)
     session, session_state = _read_session(now)
-    board = None
-    lead = None
     try:
-        raw = storage.read_json("market_desk", "board.json")
-        board = Board.model_validate(raw)
-        lead = _current_lead(raw.get("lead"), now)
-    except FileNotFoundError:
-        state = "awaiting"
+        raw, board, state = _saved_board(now)
+        lead = _current_lead(raw.get("lead"), now) if raw else None
     except Exception:
         logger.exception("장중 해설 발행본 조회 실패")
         if session is None:
             raise HTTPException(503, "장중 해설을 불러올 수 없습니다.") from None
-        state = "unavailable"
-    else:
-        stale = now - board.checked_at > timedelta(minutes=25 if is_open_kst(now) else 100)
-        state = "stale" if stale else "ready"
+        board, lead, state = None, None, "unavailable"
     return {"state": state, "board": board, "lead": lead, "today": now.date(), "session": session,
             "session_state": session_state, "policy_coverage": _policy_coverage(board, session)}
+
+
+class NewsSeen(BaseModel):
+    through: AwareDatetime
+
+
+class Edition(BaseModel):
+    version: Literal[1]
+    checked_at: AwareDatetime
+
+
+NEWS_LIMIT = 200
+
+
+def saved_news(now):
+    """News articles of the saved publication, its freshness and when it was checked.
+
+    Raises when the publication itself cannot be read. News does not depend on the briefings or the market
+    explanation beside it, and one malformed article is left out instead of taking the others with it.
+    """
+    try:
+        raw = storage.read_json("market_desk", "board.json")
+    except FileNotFoundError:
+        return [], "awaiting", None
+    edition = Edition.model_validate(raw)
+    # The week list is the news page. A publisher that has not learned it still lists news for the home.
+    listed = raw["news"] if isinstance(raw.get("news"), list) else raw["issues"]
+    articles = []
+    for issue in listed[:NEWS_LIMIT]:
+        try:
+            Issue.model_validate(issue)
+        except ValueError:
+            logger.warning("뉴스 발행 형식 오류 — 한 건 제외: %s", issue.get("id") if isinstance(issue, dict) else None)
+        else:
+            articles.append(issue)
+    return desk_news.normalize(articles), _freshness(edition.checked_at, now), raw["checked_at"]
+
+
+def _news_status(items, seen):
+    stamps = [datetime.fromisoformat(item["published_at"]) for item in items]
+    return {"unseen": sum(stamp > seen for stamp in stamps) if seen else len(stamps),
+            "latest_at": items[0]["published_at"] if items else None,
+            "seen_through": seen.isoformat() if seen else None}
+
+
+def _news_for_badge(now):
+    """The navigation badge is not where a publication failure is reported; the news page is."""
+    try:
+        return saved_news(now)[0]
+    except Exception:
+        logger.exception("뉴스 발행본 조회 실패")
+        return []
+
+
+@router.get("/news")
+def get_desk_news():
+    try:
+        items, state, checked_at = saved_news(datetime.now(KST))
+    except Exception:
+        logger.exception("뉴스 발행본 조회 실패")
+        raise HTTPException(503, "뉴스를 불러올 수 없습니다.") from None
+    status = _news_status(items, news_store.load_seen_through())
+    return {"state": state, "checked_at": checked_at, "items": items,
+            "seen_through": status["seen_through"], "unseen": status["unseen"]}
+
+
+@router.get("/news/status")
+def get_desk_news_status():
+    return _news_status(_news_for_badge(datetime.now(KST)), news_store.load_seen_through())
+
+
+@router.put("/news/seen")
+def acknowledge_desk_news(request: NewsSeen):
+    now = datetime.now(KST)
+    items = _news_for_badge(now)
+    # A visit reaches the newest published article, whose clock may run ahead of this one, and nothing later.
+    newest = max([now, *(datetime.fromisoformat(item["published_at"]) for item in items[:1])])
+    return _news_status(items, news_store.save_seen_through(min(request.through, newest)))
